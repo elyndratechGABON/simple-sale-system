@@ -1,16 +1,3 @@
-<!-- LOVABLE:BEGIN -->
-
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-
-<!-- LOVABLE:END -->
-
 # Caisse POS
 
 Application de caisse offline-first. Toutes les données vivent dans IndexedDB via Dexie ;
@@ -18,24 +5,24 @@ il n'y a **aucune logique serveur**.
 
 ## Commandes
 
-| Commande | Effet |
-|---|---|
-| `npm run dev` | serveur de développement |
-| `npm run check` | typecheck + lint — la seule porte à passer avant de livrer |
-| `npm run build` | build web SSR, cible **Cloudflare Workers** (`.output/`) |
+| Commande               | Effet                                                                  |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `npm run dev`          | serveur de développement                                               |
+| `npm run check`        | typecheck + lint — la seule porte à passer avant de livrer             |
+| `npm run build`        | build web SSR, cible **Cloudflare Workers** (`.output/`)               |
 | `npm run build:static` | coquille SPA statique (`dist/client/`) — cible Vercel **et** Capacitor |
-| `npm run precache` | enchaîné après chaque build, n'a pas à être lancé à la main |
+| `npm run precache`     | enchaîné après chaque build, n'a pas à être lancé à la main            |
 
 ## Structure
 
-| Chemin | Contenu |
-|---|---|
-| `src/lib/db.ts` | **seul** module qui touche IndexedDB |
-| `src/lib/analytics.ts` | agrégations, fonctions **pures** (ni DB ni React) |
-| `src/lib/settings.ts` | préférences localStorage + thème |
-| `src/lib/exports/` | CSV, Excel, PDF, sauvegarde JSON |
-| `src/routes/` | routes générées par TanStack Router |
-| `scripts/inject-precache.mjs` | injecte les assets hashés dans le service worker |
+| Chemin                        | Contenu                                           |
+| ----------------------------- | ------------------------------------------------- |
+| `src/lib/db.ts`               | **seul** module qui touche IndexedDB              |
+| `src/lib/analytics.ts`        | agrégations, fonctions **pures** (ni DB ni React) |
+| `src/lib/settings.ts`         | préférences localStorage + thème                  |
+| `src/lib/exports/`            | CSV, Excel, PDF, sauvegarde JSON                  |
+| `src/routes/`                 | routes générées par TanStack Router               |
+| `scripts/inject-precache.mjs` | injecte les assets hashés dans le service worker  |
 
 ## Landmines
 
@@ -49,6 +36,13 @@ il n'y a **aucune logique serveur**.
   `build:static` (cf. `vercel.json`) : l'application n'ayant aucune logique serveur, une
   coquille SPA suffit. Le `rewrite` vers `/index.html` est indispensable, et sans danger
   pour `/sw.js` et `/assets/*` que Vercel sert en priorité comme fichiers statiques.
+- **L'ordre des plugins Vite compte.** `tanstackStart` doit précéder `viteReact` : il
+  génère les routes et les entrées client/serveur que le plugin React transforme ensuite.
+  Les deux configs assemblent ces plugins à la main depuis que le wrapper qui les
+  composait a été retiré ; toute modification doit être répercutée dans les **deux**.
+- **`resolve.dedupe` n'est pas décoratif.** Sans lui, une seconde copie de React ou du
+  cache TanStack Query remontée par une dépendance transitive casse les hooks à
+  l'exécution, avec une erreur qui ne désigne pas la cause.
 - **`public/sw.js` contient deux marqueurs réécrits au build** (`CACHE_VERSION`,
   `PRECACHE_ASSETS`). Les reformater casse silencieusement le précache — le service
   worker se déploie sans erreur et ne se remarque qu'hors ligne.

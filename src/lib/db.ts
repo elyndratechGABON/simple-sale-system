@@ -3,7 +3,8 @@
 // Invariants :
 //  - C'est le SEUL module qui touche IndexedDB. Aucune route n'ouvre la base directement.
 //  - Toute écriture qui touche plusieurs stores passe par une transaction atomique
-//    (produit + vente + lignes), contrat hérité de `.lovable/plan.md`.
+//    (produit + vente + lignes) : une vente enregistrée sans ses lignes, ou dont le
+//    stock n'a pas été décrémenté, corrompt silencieusement tous les rapports.
 //  - Les montants sont des entiers FCFA.
 //  - Les prix et coûts sont FIGÉS dans la ligne de vente (`price_at_sale`, `cost_at_sale`,
 //    `category_at_sale`) : modifier une fiche produit ne doit jamais réécrire l'historique.
