@@ -1,1 +1,0 @@
-var e=`pos_admin_pin`,t=`1234`;function n(){return typeof window>`u`?t:window.localStorage.getItem(e)??t}function r(t){typeof window>`u`||window.localStorage.setItem(e,t)}function i(e){return e.trim()===n()}export{i as n,r as t};
