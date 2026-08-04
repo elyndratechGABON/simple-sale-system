@@ -19,11 +19,15 @@ export function registerServiceWorker(): void {
   if (typeof window === "undefined") return;
   if (import.meta.env.DEV) return;
   if (!("serviceWorker" in navigator)) return;
-  window.addEventListener("load", () => {
+  const register = () =>
     navigator.serviceWorker.register("/sw.js").catch((error) => {
       console.error("Service worker registration failed", error);
     });
-  });
+  // Sur la coquille SPA statique, `load` peut se déclencher avant que ce module
+  // (monté via useEffect) s'exécute. Attendre un événement déjà passé ne déclencherait
+  // jamais register, et l'application resterait sans service worker — donc sans précache.
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register);
 }
 
 export async function requestPersistentStorage(): Promise<boolean> {

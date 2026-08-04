@@ -61,7 +61,20 @@ async function precacheInto(cache, urls) {
     urls.map(async (url) => {
       try {
         const res = await fetch(url, { cache: "no-cache" });
-        if (res.ok) await cache.put(url, res);
+        if (!res.ok) return;
+        // Une redirection serveur (ex. `/` → `/pos`) laisse `res.url` pointer vers la
+        // cible. Stockée telle quelle, la navigation hors-ligne vers `url` échouerait :
+        // Chrome refuse de committer une réponse dont l'URL diffère de la requête. On
+        // stocke donc un clone dont l'URL correspond à la clé demandée.
+        const entry =
+          new URL(res.url).pathname === url
+            ? res
+            : new Response(res.body, {
+                status: res.status,
+                statusText: res.statusText,
+                headers: res.headers,
+              });
+        await cache.put(url, entry);
       } catch {}
     }),
   );
