@@ -1,9 +1,9 @@
 // Service worker écrit à la main — pas de Workbox, volontairement.
 //
-// Trois stratégies suffisent ici et tiennent en 120 lignes lisibles : précache à
-// l'installation, network-first pour les navigations (une page fraîche quand le réseau
-// répond, la version en cache sinon), cache-first pour les assets (immuables, ils sont
-// hashés). Workbox apporterait une dépendance de build et une couche d'indirection pour
+// Trois stratégies suffisent ici et tiennent en 140 lignes lisibles : précache à
+// l'installation, cache-first pour les navigations (instantané, rafraîchi en arrière-plan
+// quand le réseau répond), cache-first pour les assets (immuables, ils sont hashés).
+// Workbox apporterait une dépendance de build et une couche d'indirection pour
 // exactement ce comportement.
 //
 // CACHE_VERSION et PRECACHE_ASSETS sont RÉÉCRITS AU BUILD par
@@ -110,24 +110,59 @@ self.addEventListener("fetch", (event) => {
 });
 
 async function navigationHandler(request) {
-  try {
-    const res = await fetch(request);
-    if (res.ok) {
-      const cache = await caches.open(PAGES_CACHE);
-      await cache.put(request, res.clone());
-      return res;
-    }
-  } catch {}
-
   const cache = await caches.open(PAGES_CACHE);
   const cached =
     (await cache.match(request)) || (await cache.match("/pos")) || (await cache.match("/"));
-  if (cached) return cached;
+  if (cached) {
+    // Cache-first : la page est servie immédiatement, sans attendre le réseau. Hors-ligne
+    // sur un réseau qui ne répond pas (signal faible, portail captif), une stratégie
+    // network-first laisserait le navigateur attendre l'échec du fetch — plusieurs secondes —
+    // avant de servir le cache. La coquille étant statique et les données vivant dans
+    // IndexedDB, la fraîcheur du document n'importe pas : on rafraîchit juste le cache en
+    // arrière-plan quand le réseau répond.
+    revalidateNavigation(request, cache);
+    return cached;
+  }
+
+  // Premier accès sans rien en cache : réseau d'abord, sinon page de repli.
+  try {
+    const res = await fetch(request);
+    if (res.ok) {
+      await cacheNavigationResponse(cache, request, res);
+      return res;
+    }
+  } catch {}
 
   return new Response("Hors-ligne", {
     status: 503,
     headers: { "content-type": "text/plain; charset=utf-8" },
   });
+}
+
+function revalidateNavigation(request, cache) {
+  fetch(request)
+    .then((res) => {
+      if (res.ok) cacheNavigationResponse(cache, request, res);
+    })
+    .catch(() => {});
+}
+
+// Une redirection serveur (ex. `/` → `/pos`) laisse `res.url` pointer vers la cible.
+// Stockée telle quelle, la navigation hors-ligne vers `url` échouerait : Chrome refuse de
+// committer une réponse dont l'URL diffère de la requête. On stocke donc un clone dont
+// l'URL correspond à la clé demandée — même garde-fou que dans `precacheInto`.
+async function cacheNavigationResponse(cache, request, res) {
+  const reqPath = new URL(request.url).pathname;
+  const resPath = new URL(res.url).pathname;
+  const entry =
+    reqPath === resPath
+      ? res
+      : new Response(res.body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers: res.headers,
+        });
+  await cache.put(request, entry);
 }
 
 async function assetHandler(request) {
