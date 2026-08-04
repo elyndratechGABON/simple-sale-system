@@ -72,7 +72,7 @@ export function PwaInstall() {
         size="lg"
         onClick={handleInstall}
         aria-label="Télécharger l'application"
-        className="fixed bottom-4 right-4 z-40 rounded-full shadow-lg gap-2"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-40 rounded-full shadow-lg gap-2"
       >
         <Download className="h-5 w-5" />
         Télécharger l'app

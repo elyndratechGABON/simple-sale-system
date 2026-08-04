@@ -22,7 +22,7 @@ export function Header() {
   const { workspaceName } = usePreferences();
 
   return (
-    <header className="border-b bg-card sticky top-0 z-20">
+    <header className="border-b bg-card sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         <Link to="/pos" className="flex items-center gap-2 font-bold text-lg min-w-0">
           <span className="rounded-md bg-primary px-2 py-1 text-primary-foreground shrink-0">

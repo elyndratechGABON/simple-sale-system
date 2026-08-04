@@ -12,7 +12,10 @@ export function isStandalone(): boolean {
 
 export function isIOS(): boolean {
   if (typeof window === "undefined") return false;
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (/iphone|ipad|ipod/i.test(navigator.userAgent)) return true;
+  // iPadOS 13+ se présente comme un Mac (user-agent desktop) mais reste tactile : sans
+  // ce test, l'aide à l'installation n'apparaîtrait jamais sur iPad.
+  return /Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
 }
 
 export function registerServiceWorker(): void {
