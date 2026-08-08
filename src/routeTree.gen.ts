@@ -10,76 +10,82 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ExpensesRouteImport } from './routes/expenses'
-import { Route as HistoryRouteImport } from './routes/history'
-import { Route as PosRouteImport } from './routes/pos'
-import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as StocksRouteImport } from './routes/stocks'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
+import { Route as AppHistoryRouteImport } from './routes/_app/history'
+import { Route as AppPosRouteImport } from './routes/_app/pos'
+import { Route as AppReportsRouteImport } from './routes/_app/reports'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppStocksRouteImport } from './routes/_app/stocks'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ExpensesRoute = ExpensesRouteImport.update({
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppExpensesRoute = AppExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
 } as any)
-const HistoryRoute = HistoryRouteImport.update({
+const AppHistoryRoute = AppHistoryRouteImport.update({
   id: '/history',
   path: '/history',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
 } as any)
-const PosRoute = PosRouteImport.update({
+const AppPosRoute = AppPosRouteImport.update({
   id: '/pos',
   path: '/pos',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
 } as any)
-const ReportsRoute = ReportsRouteImport.update({
+const AppReportsRoute = AppReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
+const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
 } as any)
-const StocksRoute = StocksRouteImport.update({
+const AppStocksRoute = AppStocksRouteImport.update({
   id: '/stocks',
   path: '/stocks',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/expenses': typeof ExpensesRoute
-  '/history': typeof HistoryRoute
-  '/pos': typeof PosRoute
-  '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
-  '/stocks': typeof StocksRoute
+  '/expenses': typeof AppExpensesRoute
+  '/history': typeof AppHistoryRoute
+  '/pos': typeof AppPosRoute
+  '/reports': typeof AppReportsRoute
+  '/settings': typeof AppSettingsRoute
+  '/stocks': typeof AppStocksRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/expenses': typeof ExpensesRoute
-  '/history': typeof HistoryRoute
-  '/pos': typeof PosRoute
-  '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
-  '/stocks': typeof StocksRoute
+  '/expenses': typeof AppExpensesRoute
+  '/history': typeof AppHistoryRoute
+  '/pos': typeof AppPosRoute
+  '/reports': typeof AppReportsRoute
+  '/settings': typeof AppSettingsRoute
+  '/stocks': typeof AppStocksRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/expenses': typeof ExpensesRoute
-  '/history': typeof HistoryRoute
-  '/pos': typeof PosRoute
-  '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
-  '/stocks': typeof StocksRoute
+  '/_app': typeof AppRouteWithChildren
+  '/_app/expenses': typeof AppExpensesRoute
+  '/_app/history': typeof AppHistoryRoute
+  '/_app/pos': typeof AppPosRoute
+  '/_app/reports': typeof AppReportsRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/_app/stocks': typeof AppStocksRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -103,22 +109,18 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/expenses'
-    | '/history'
-    | '/pos'
-    | '/reports'
-    | '/settings'
-    | '/stocks'
+    | '/_app'
+    | '/_app/expenses'
+    | '/_app/history'
+    | '/_app/pos'
+    | '/_app/reports'
+    | '/_app/settings'
+    | '/_app/stocks'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ExpensesRoute: typeof ExpensesRoute
-  HistoryRoute: typeof HistoryRoute
-  PosRoute: typeof PosRoute
-  ReportsRoute: typeof ReportsRoute
-  SettingsRoute: typeof SettingsRoute
-  StocksRoute: typeof StocksRoute
+  AppRoute: typeof AppRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -130,59 +132,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/expenses': {
-      id: '/expenses'
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/expenses': {
+      id: '/_app/expenses'
       path: '/expenses'
       fullPath: '/expenses'
-      preLoaderRoute: typeof ExpensesRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppExpensesRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/history': {
-      id: '/history'
+    '/_app/history': {
+      id: '/_app/history'
       path: '/history'
       fullPath: '/history'
-      preLoaderRoute: typeof HistoryRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppHistoryRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/pos': {
-      id: '/pos'
+    '/_app/pos': {
+      id: '/_app/pos'
       path: '/pos'
       fullPath: '/pos'
-      preLoaderRoute: typeof PosRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppPosRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/reports': {
-      id: '/reports'
+    '/_app/reports': {
+      id: '/_app/reports'
       path: '/reports'
       fullPath: '/reports'
-      preLoaderRoute: typeof ReportsRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/settings': {
-      id: '/settings'
+    '/_app/settings': {
+      id: '/_app/settings'
       path: '/settings'
       fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/stocks': {
-      id: '/stocks'
+    '/_app/stocks': {
+      id: '/_app/stocks'
       path: '/stocks'
       fullPath: '/stocks'
-      preLoaderRoute: typeof StocksRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppStocksRouteImport
+      parentRoute: typeof AppRoute
     }
   }
 }
 
+interface AppRouteChildren {
+  AppExpensesRoute: typeof AppExpensesRoute
+  AppHistoryRoute: typeof AppHistoryRoute
+  AppPosRoute: typeof AppPosRoute
+  AppReportsRoute: typeof AppReportsRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppStocksRoute: typeof AppStocksRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppExpensesRoute: AppExpensesRoute,
+  AppHistoryRoute: AppHistoryRoute,
+  AppPosRoute: AppPosRoute,
+  AppReportsRoute: AppReportsRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppStocksRoute: AppStocksRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ExpensesRoute: ExpensesRoute,
-  HistoryRoute: HistoryRoute,
-  PosRoute: PosRoute,
-  ReportsRoute: ReportsRoute,
-  SettingsRoute: SettingsRoute,
-  StocksRoute: StocksRoute,
+  AppRoute: AppRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

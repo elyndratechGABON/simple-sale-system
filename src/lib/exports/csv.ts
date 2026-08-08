@@ -18,9 +18,18 @@ const escape = (value: string) => (value.includes(SEP) ? `"${value.replace(/"/g,
 export function buildCsvBlob(payload: ReportPayload): Blob {
   const byId = itemsBySale(payload);
   const rows = [
-    ["type", "date", "heure", "libelle", "total", "donne", "rendu", "benefice", "clients"].join(
-      SEP,
-    ),
+    [
+      "type",
+      "date",
+      "heure",
+      "table",
+      "libelle",
+      "total",
+      "donne",
+      "rendu",
+      "benefice",
+      "clients",
+    ].join(SEP),
   ];
 
   // Ventes et dépenses dans un SEUL fichier, distinguées par la colonne `type` : un CSV
@@ -37,6 +46,10 @@ export function buildCsvBlob(payload: ReportPayload): Blob {
         "vente",
         new Date(sale.timestamp).toLocaleDateString("fr-FR"),
         formatTime(sale.timestamp),
+        // Vide sur une vente au comptoir. Cette colonne permet de regrouper le chiffre
+        // d'affaires par table dans un tableur, en complément du bloc « Par table » des
+        // rapports de l'application.
+        escape(sale.table ?? ""),
         escape(items.map((i) => `${i.quantity}x ${i.name}`).join(" | ")),
         String(sale.total),
         String(sale.cash_given),
@@ -54,6 +67,7 @@ export function buildCsvBlob(payload: ReportPayload): Blob {
         "depense",
         new Date(expense.timestamp).toLocaleDateString("fr-FR"),
         formatTime(expense.timestamp),
+        "", // colonne table : une dépense n'en a pas
         escape(`${expense.category} — ${expense.label}`),
         // Montant NÉGATIF : sommer la colonne `total` du fichier doit donner le résultat
         // net, pas un chiffre d'affaires gonflé par les sorties d'argent.
@@ -69,6 +83,42 @@ export function buildCsvBlob(payload: ReportPayload): Blob {
   // Les ventes arrivent du plus récent au plus ancien ; un tableur se lit dans l'ordre.
   for (const row of rowsByTime.sort((a, b) => a.timestamp - b.timestamp)) {
     rows.push(row.cells.join(SEP));
+  }
+
+  // Résumés en fin de fichier, séparés par une ligne vide. Même colonne `type` pour
+  // distinguer les blocs sans rien casser au croisé dynamique des lignes de détail.
+  if (payload.stats.byTable.length > 0) {
+    rows.push("");
+    rows.push(["type", "table", "tournees", "ventes", "clients", "revenus", "benefice"].join(SEP));
+    for (const t of payload.stats.byTable) {
+      rows.push(
+        [
+          "table",
+          escape(t.label),
+          String(t.rounds),
+          String(t.salesCount),
+          String(t.clients),
+          String(t.revenue),
+          String(t.profit),
+        ].join(SEP),
+      );
+    }
+  }
+  if (payload.stats.topProducts.length > 0) {
+    rows.push("");
+    rows.push(["type", "article", "categorie", "quantite", "revenus", "benefice"].join(SEP));
+    for (const p of payload.stats.topProducts) {
+      rows.push(
+        [
+          "article",
+          escape(p.name),
+          escape(p.category),
+          String(p.quantity),
+          String(p.revenue),
+          String(p.profit),
+        ].join(SEP),
+      );
+    }
   }
 
   return new Blob([BOM + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });

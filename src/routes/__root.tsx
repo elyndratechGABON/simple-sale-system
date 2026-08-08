@@ -4,17 +4,14 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+import { MotionConfig } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { Header } from "../components/Header";
-import { PwaInstall } from "../components/PwaInstall";
-import { Onboarding } from "../components/Onboarding";
+import { PwaBootstrap } from "../components/PwaBootstrap";
 import { applyTheme, getPreferences } from "../lib/settings";
 import { Toaster } from "sonner";
 
@@ -148,42 +145,15 @@ function RootComponent() {
           d'un seul endroit : les animations deviennent instantanées au lieu d'être
           simplement plus courtes. Sans ça, chaque composant animé devrait le gérer. */}
       <MotionConfig reducedMotion="user">
-        <div className="min-h-screen flex flex-col">
-          <Header />
-          <main className="flex-1">
-            <RouteTransition />
-          </main>
-        </div>
-        <Onboarding />
-        <PwaInstall />
+        {/* Rien d'autre ici que ce qui est vrai pour TOUTES les pages. L'en-tête de
+            navigation, la transition de route et l'assistant de premier lancement vivent
+            dans `src/routes/_app.tsx` : ce que la racine rend est figé dans l'unique
+            document prérendu, donc tout chrome dépendant de la page qu'on y placerait
+            casserait l'hydratation partout ailleurs. Voir l'en-tête de `_app.tsx`. */}
+        <Outlet />
+        <PwaBootstrap />
         <Toaster richColors position="top-center" />
       </MotionConfig>
     </QueryClientProvider>
-  );
-}
-
-/**
- * Fondu-glissé entre les routes.
- *
- * `mode="wait"` : sans lui les deux écrans se superposeraient une fraction de seconde,
- * et sur la caisse cela ferait clignoter le total. `initial={false}` : le premier rendu
- * ne s'anime pas — animer l'arrivée sur la page ferait perdre au démarrage le temps que
- * le rendu serveur vient de gagner.
- */
-function RouteTransition() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-
-  return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.18, ease: "easeOut" }}
-      >
-        <Outlet />
-      </motion.div>
-    </AnimatePresence>
   );
 }

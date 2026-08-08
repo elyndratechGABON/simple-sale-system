@@ -19,6 +19,17 @@ export interface Preferences {
   hue: number;
   /** Passe à true une fois l'assistant de premier lancement terminé ou passé. */
   onboarded: boolean;
+  /**
+   * Libellés des tables proposés à la caisse. La liste s'étend à la volée quand on ouvre
+   * une table qui n'y figure pas encore.
+   *
+   * Ici et non en IndexedDB : c'est de la configuration d'affichage, pas de la donnée
+   * métier. Le revers assumé — les préférences sont exclues de la sauvegarde (cf.
+   * `exportSnapshot`), donc une restauration sur un autre appareil ne ramène pas cette
+   * liste. Aucune donnée n'est perdue pour autant : le libellé de la table est FIGÉ sur
+   * chaque vente (`Sale.table`), comme les prix le sont sur chaque ligne.
+   */
+  tables: string[];
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -27,6 +38,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   // défaut fait que l'application non configurée est pixel pour pixel celle d'avant.
   hue: 155,
   onboarded: false,
+  tables: ["1", "2", "3", "4", "5", "6"],
 };
 
 /**
@@ -58,6 +70,7 @@ export function getPreferences(): Preferences {
       workspaceName: parsed.workspaceName?.trim() || DEFAULT_PREFERENCES.workspaceName,
       hue: normalizeHue(parsed.hue),
       onboarded: parsed.onboarded === true,
+      tables: normalizeTables(parsed.tables),
     };
   } catch {
     // JSON corrompu ou localStorage inaccessible (mode privé strict) : les défauts
@@ -77,6 +90,24 @@ export function savePreferences(patch: Partial<Preferences>): Preferences {
     }
   }
   return next;
+}
+
+/**
+ * Libellés nettoyés, dédoublonnés, ordre de saisie conservé.
+ *
+ * Le dédoublonnage n'est pas cosmétique : deux entrées « 3 » donneraient deux boutons
+ * identiques dans la caisse, dont l'un ouvrirait une seconde addition sur la même table.
+ * Une liste vidée retombe sur les défauts — une caisse sans aucune table à proposer
+ * n'aurait plus de bouton du tout.
+ */
+function normalizeTables(value: unknown): string[] {
+  if (!Array.isArray(value)) return DEFAULT_PREFERENCES.tables;
+  const cleaned = value
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  const unique = Array.from(new Set(cleaned));
+  return unique.length > 0 ? unique : DEFAULT_PREFERENCES.tables;
 }
 
 function normalizeHue(value: unknown): number {

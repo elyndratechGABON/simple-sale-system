@@ -28,6 +28,32 @@ export interface CategoryBucket {
   profit: number;
 }
 
+export interface TableBucket {
+  /** Libellé de la table ; « Comptoir » pour les ventes sans table. */
+  label: string;
+  revenue: number;
+  /** Bénéfice BRUT des ventes de cette table : revenus − coûts figés dans les lignes. */
+  profit: number;
+  /** Nombre de tournées : groupes de lignes partageant la même vente et le même
+   *  `ordered_at`. Une table réglée d'un coup compte autant de tournées que d'heures de
+   *  commande ; des tournées encaissées séparément comptent chacune pour une. */
+  rounds: number;
+  salesCount: number;
+  /** Personnes servies — somme des `customers_count` des ventes de la table. */
+  clients: number;
+}
+
+export interface ProductBucket {
+  /** Nom du produit à la vente. Figé dans la ligne comme le prix : une fiche renommée
+   *  laisse l'ancien nom sur ses ventes déjà enregistrées. */
+  name: string;
+  category: Category;
+  quantity: number;
+  revenue: number;
+  /** Bénéfice BRUT : revenus − coûts figés dans les lignes. */
+  profit: number;
+}
+
 export interface PeriodStats {
   revenue: number;
   /** Bénéfice BRUT : revenus − coûts d'acquisition figés dans les lignes de vente. */
@@ -59,6 +85,14 @@ export interface PeriodStats {
    *  rend « — » dans ce cas. */
   growthRate: number;
   byCategory: CategoryBucket[];
+  /** Répartition des revenus et bénéfices par table, de la plus rentable à la moins.
+   *  Les ventes sans table sont regroupées sous « Comptoir » — c'est ce qui permet de
+   *  faire la somme de la colonne sans deviner où est passé le chiffre du comptoir. */
+  byTable: TableBucket[];
+  /** Classement des produits par chiffre d'affaires décroissant. Clé : `product_id`
+   *  quand la ligne vient du catalogue, nom pour les lignes libres — deux produits du
+   *  catalogue homonymes ne fusionnent pas. */
+  topProducts: ProductBucket[];
   /** Série chronologique COMPLÈTE, jours sans vente inclus à 0 — sinon la courbe
    *  raccourcirait les creux au lieu de les montrer. */
   days: DayBucket[];
@@ -122,6 +156,7 @@ export function computePeriodStats(
   }
 
   const categories = new Map<Category, CategoryBucket>();
+  const products = new Map<string, ProductBucket>();
   let revenue = 0;
   let profit = 0;
   let itemsCount = 0;
@@ -147,6 +182,57 @@ export function computePeriodStats(
       c.profit += p;
     } else {
       categories.set(cat, { category: cat, revenue: r, profit: p });
+    }
+
+    const productKey = item.product_id ?? item.name;
+    const prod = products.get(productKey);
+    if (prod) {
+      prod.quantity += item.quantity;
+      prod.revenue += r;
+      prod.profit += p;
+    } else {
+      products.set(productKey, {
+        name: item.name,
+        category: cat,
+        quantity: item.quantity,
+        revenue: r,
+        profit: p,
+      });
+    }
+  }
+
+  // Répartition par table. La clé de tournée est (sale_id, ordered_at) : une table
+  // réglée d'un coup porte toutes ses tournées sous une seule vente, des tournées
+  // encaissées séparément portent chacune la leur — les deux comptent pareil ici.
+  const byTable = new Map<string, TableBucket>();
+  const tableRounds = new Map<string, Set<string>>();
+  const saleTable = new Map(inRange.map((s) => [s.id, s.table ?? "Comptoir"]));
+  for (const item of inRangeItems) {
+    const label = saleTable.get(item.sale_id) ?? "Comptoir";
+    let bucket = byTable.get(label);
+    if (!bucket) {
+      bucket = { label, revenue: 0, profit: 0, rounds: 0, salesCount: 0, clients: 0 };
+      byTable.set(label, bucket);
+    }
+    const r = lineRevenue(item);
+    bucket.revenue += r;
+    bucket.profit += lineProfit(item);
+    let keys = tableRounds.get(label);
+    if (!keys) {
+      keys = new Set();
+      tableRounds.set(label, keys);
+    }
+    keys.add(`${item.sale_id}::${item.ordered_at ?? 0}`);
+  }
+  for (const [label, keys] of tableRounds) {
+    const bucket = byTable.get(label);
+    if (bucket) bucket.rounds = keys.size;
+  }
+  for (const s of inRange) {
+    const bucket = byTable.get(s.table ?? "Comptoir");
+    if (bucket) {
+      bucket.salesCount += 1;
+      bucket.clients += s.customers_count ?? 1;
     }
   }
 
@@ -179,6 +265,8 @@ export function computePeriodStats(
     ),
     growthRate: computeGrowthRate(days),
     byCategory: Array.from(categories.values()).sort((a, b) => b.revenue - a.revenue),
+    byTable: Array.from(byTable.values()).sort((a, b) => b.revenue - a.revenue),
+    topProducts: Array.from(products.values()).sort((a, b) => b.revenue - a.revenue),
     days,
   };
 }

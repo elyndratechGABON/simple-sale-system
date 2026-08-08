@@ -15,14 +15,17 @@ il n'y a **aucune logique serveur**.
 
 ## Structure
 
-| Chemin                        | Contenu                                           |
-| ----------------------------- | ------------------------------------------------- |
-| `src/lib/db.ts`               | **seul** module qui touche IndexedDB              |
-| `src/lib/analytics.ts`        | agrégations, fonctions **pures** (ni DB ni React) |
-| `src/lib/settings.ts`         | préférences localStorage + thème                  |
-| `src/lib/exports/`            | CSV, Excel, PDF, sauvegarde JSON                  |
-| `src/routes/`                 | routes générées par TanStack Router               |
-| `scripts/inject-precache.mjs` | injecte les assets hashés dans le service worker  |
+| Chemin                        | Contenu                                                   |
+| ----------------------------- | --------------------------------------------------------- |
+| `src/lib/db.ts`               | **seul** module qui touche IndexedDB                      |
+| `src/lib/analytics.ts`        | agrégations, fonctions **pures** (ni DB ni React)         |
+| `src/lib/settings.ts`         | préférences localStorage + thème                          |
+| `src/lib/exports/`            | CSV, Excel, PDF, sauvegarde JSON                          |
+| `src/routes/index.tsx`        | page publique de présentation (`/`), hors app             |
+| `src/routes/_app.tsx`         | chrome de l'application : en-tête, transition, onboarding |
+| `src/routes/_app/`            | les six écrans de l'application (`/pos`, `/stocks`, …)    |
+| `src/routes/`                 | routes générées par TanStack Router                       |
+| `scripts/inject-precache.mjs` | injecte les assets hashés dans le service worker          |
 
 ## Landmines
 
@@ -49,9 +52,40 @@ il n'y a **aucune logique serveur**.
 - **Un seul lockfile.** `package-lock.json` est versionné, `bun.lock` est ignoré : les
   deux ensemble font basculer Vercel d'un gestionnaire de paquets à l'autre et invalident
   son cache à chaque build.
+- **`/` est la page de présentation, `start_url` vaut `/pos`.** Le remettre à `/` ferait
+  ouvrir la page marketing à chaque lancement de l'application installée. `scope` doit en
+  revanche **rester `/`** : sinon la présentation sort du périmètre PWA et un lien vers
+  elle rouvre un onglet de navigateur depuis l'application. `/` doit aussi rester dans
+  `PRECACHE_PAGES` — ce n'est plus une redirection, c'est un vrai document.
+- **`__root.tsx` ne doit contenir AUCUN chrome dépendant de la page.** Le build statique
+  ne prérend qu'un document, obtenu en rendant l'application à la racine `/`, et ce
+  document sert ensuite toutes les URL. Tout ce que la racine rend est donc figé dedans :
+  y placer un en-tête conditionnel a produit une coquille sans en-tête (prérendue sur `/`,
+  la page de présentation), et `/pos` comme `/reports` échouaient à l'hydratation
+  (« Hydration failed », React jetait le HTML serveur pour tout refaire côté client — sans
+  message visible pour l'utilisateur, mais l'erreur était en console à chaque ouverture).
+  Le chrome applicatif vit donc dans la route de mise en page `src/routes/_app.tsx` : le
+  contenu des routes est rendu APRÈS l'hydratation et peut différer sans rien casser.
+  C'est aussi ce qui garantit que l'assistant de premier lancement — dialogue BLOQUANT,
+  ni croix ni échappement ni clic extérieur — ne peut pas s'ouvrir par-dessus la page
+  publique : il n'y est tout simplement pas monté.
+- **Safari construit le raccourci iOS depuis la page ouverte**, pas depuis `start_url`.
+  Le bouton d'installation de `/` navigue donc vers `/pos` **avant** d'afficher la marche
+  à suivre. Inverser cet ordre produit une icône qui rouvre la page marketing.
 - **Les suppressions sont logiques**, jamais physiques (`deleted_at`). Toute nouvelle
   lecture dans `db.ts` doit filtrer via `alive()`, sinon les enregistrements supprimés
   ressortent.
+- **Une vente `status: "open"` n'est PAS du chiffre d'affaires.** C'est une addition de
+  table en cours : l'argent n'est pas dans la caisse. Elle vit dans le même store que les
+  ventes réglées, donc toute lecture de ventes passe par `listSales()` — qui applique
+  `paid()` en plus d'`alive()` — et **jamais** par `db.sales` en direct. Les additions en
+  cours se lisent par `listOpenTables()`, dont le nom dit ce qu'il rend. Oublier ce filtre
+  gonfle silencieusement revenus, marge, panier moyen et exports d'un montant que personne
+  n'a payé.
+- **Le stock d'une table part à la COMMANDE, pas au paiement** (`addRound`). La bouteille a
+  quitté le frigo au moment de la tournée : c'est ce qui rend l'alerte « stock insuffisant »
+  utile pendant le service. `cancelSale` restaure — elle sert aussi bien aux ventes réglées
+  qu'aux additions ouvertes, ne pas en écrire une seconde.
 - **Prix, coûts et catégories sont figés dans la ligne de vente** (`price_at_sale`,
   `cost_at_sale`, `category_at_sale`). Ne jamais recalculer un bénéfice par jointure sur
   la fiche produit : cela réécrirait l'historique.

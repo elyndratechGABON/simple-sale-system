@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/expenses")({
+export const Route = createFileRoute("/_app/expenses")({
   head: () => ({
     meta: [
       { title: "Dépenses — Caisse POS" },

@@ -9,15 +9,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
+  Download,
   FolderOpen,
   KeyRound,
   Palette,
   Save,
   Store,
   Upload,
+  Utensils,
+  X,
 } from "lucide-react";
 import { applyTheme, PRESET_HUES, savePreferences, swatchColor } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 import {
   canPickDirectory,
   describeSaveResult,
@@ -49,10 +53,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/settings")({
+export const Route = createFileRoute("/_app/settings")({
   head: () => ({
     meta: [
       { title: "Paramètres — Caisse POS" },
@@ -76,12 +87,77 @@ function SettingsPage() {
         </p>
       </div>
 
+      <InstallCard />
       <WorkspaceCard />
+      <TablesCard />
       <ColorCard />
       <DirectoryCard />
       <BackupCard />
       <PinCard />
     </div>
+  );
+}
+
+/**
+ * Chemin d'installation pour qui est arrivé directement sur l'application sans passer par
+ * la page de présentation.
+ *
+ * Il existait auparavant un bouton flottant en bas à droite de CHAQUE page : il recouvrait
+ * du contenu, « Valider la vente » comprise. Ici il ne gêne rien, et disparaît une fois
+ * l'application installée.
+ */
+function InstallCard() {
+  const { canInstall, installed, isIos, install } = usePwaInstall();
+  const [iosHelpOpen, setIosHelpOpen] = useState(false);
+
+  if (installed || !canInstall) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Download className="h-4 w-4" /> Installer l'application
+        </CardTitle>
+        <CardDescription>
+          Posez la caisse sur l'écran d'accueil : elle s'ouvre en plein écran et fonctionne sans
+          connexion.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Button
+          onClick={async () => {
+            const outcome = await install();
+            if (outcome === "ios-help") setIosHelpOpen(true);
+          }}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Installer
+        </Button>
+        {/* Contrairement à la page de présentation, aucune navigation préalable n'est
+            nécessaire : nous sommes déjà dans l'application, donc dans le périmètre que
+            Safari retiendra pour le raccourci. */}
+        {isIos && (
+          <p className="text-sm text-muted-foreground">
+            Sur iPhone et iPad, l'installation passe par le menu Partager de Safari.
+          </p>
+        )}
+      </CardContent>
+
+      <Dialog open={iosHelpOpen} onOpenChange={setIosHelpOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajouter à l'écran d'accueil</DialogTitle>
+            <DialogDescription asChild>
+              <ol className="mt-2 space-y-2 text-left text-sm">
+                <li>1. Touchez le bouton Partager, en bas de Safari.</li>
+                <li>2. Faites défiler puis choisissez « Ajouter à l'écran d'accueil ».</li>
+                <li>3. Confirmez avec « Ajouter ».</li>
+              </ol>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
 
@@ -124,6 +200,89 @@ function WorkspaceCard() {
       </CardContent>
     </Card>
   );
+}
+
+/**
+ * Libellés de tables proposés à la caisse.
+ *
+ * La liste s'étend aussi toute seule : ouvrir une table sous un nom inconnu depuis la
+ * caisse l'ajoute ici. Cet écran sert à la mettre en ordre, pas à la construire.
+ */
+function TablesCard() {
+  const qc = useQueryClient();
+  const { tables } = usePreferences();
+  const [draft, setDraft] = useState("");
+
+  function commit(next: string[]) {
+    savePreferences({ tables: next });
+    qc.invalidateQueries({ queryKey: ["preferences"] });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Utensils className="h-4 w-4" /> Tables
+        </CardTitle>
+        <CardDescription>
+          Proposées à l'ouverture d'une addition. Retirer une table d'ici ne touche à aucune vente
+          déjà enregistrée.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {tables.map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center gap-1 rounded-full border bg-card py-1 pl-3 pr-1 text-sm"
+            >
+              {t}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                aria-label={`Retirer la table ${t}`}
+                onClick={() => commit(tables.filter((x) => x !== t))}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </span>
+          ))}
+        </div>
+
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Label htmlFor="table-new">Ajouter une table</Label>
+            <Input
+              id="table-new"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Ex : Terrasse 1"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addTable();
+              }}
+            />
+          </div>
+          <Button onClick={addTable}>Ajouter</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  function addTable() {
+    const clean = draft.trim();
+    if (!clean) {
+      toast.error("Nom de table requis");
+      return;
+    }
+    if (tables.includes(clean)) {
+      toast.error(`« ${clean} » est déjà dans la liste`);
+      return;
+    }
+    commit([...tables, clean]);
+    setDraft("");
+    toast.success(`Table ${clean} ajoutée`);
+  }
 }
 
 function ColorCard() {

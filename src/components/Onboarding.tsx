@@ -35,6 +35,10 @@ export function Onboarding() {
   const [directory, setDirectory] = useState<string | null>(null);
   const [canPick, setCanPick] = useState(false);
 
+  // Monté par `src/routes/_app.tsx`, donc jamais sur la page publique de présentation.
+  // C'est ce qui autorise l'ouverture automatique ci-dessous : ce dialogue est BLOQUANT
+  // (ni croix, ni échappement, ni clic extérieur) et n'a rien à faire devant un visiteur
+  // qui ne sait pas encore ce qu'il regarde.
   useEffect(() => {
     const prefs = getPreferences();
     setName(prefs.workspaceName);

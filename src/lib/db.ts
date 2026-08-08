@@ -13,10 +13,14 @@
 //    supprimés ; c'est le rôle de `alive()`.
 import Dexie, { type Table } from "dexie";
 
-export type Category = "Boisson" | "Snack" | "Service" | "Autre";
+// Catégories produit. Les quatre premières sont fixes ; le `(string & {})` laisse un
+// commerce ajouter les siennes (« Chips », « Sucreries »…) — cf. `addCategory`. Garder
+// les littéraux dans l'union conserve l'autocomplétion dans l'éditeur.
+export type Category = "Boisson" | "Snack" | "Service" | "Autre" | (string & {});
 
-// Source unique de la liste : le formulaire produit et le dialogue « Article manuel »
-// la consomment tous les deux.
+// Source unique de la liste FIXE : le formulaire produit et le dialogue « Article manuel »
+// la consomment tous les deux, et `listCategories()` y ajoute les catégories créées par
+// le commerce.
 export const CATEGORIES: Category[] = ["Boisson", "Snack", "Service", "Autre"];
 
 export type ExpenseCategory = "Achat" | "Transport" | "Salaire" | "Loyer" | "Autre";
@@ -57,8 +61,20 @@ export interface Product extends SyncFields {
   category: Category;
 }
 
+/**
+ * "open"  : addition de table en cours. L'argent n'est PAS encaissé.
+ * "paid"  : vente réglée. C'est le seul état qui compte comme chiffre d'affaires.
+ *
+ * Absent sur toutes les ventes antérieures aux tables : elles sont lues comme "paid",
+ * ce qui est exact — elles ont toutes été encaissées immédiatement.
+ */
+export type SaleStatus = "open" | "paid";
+
 export interface Sale extends SyncFields {
   id: string;
+  // Moment de l'ENCAISSEMENT, et c'est lui qui date la vente dans les rapports. Une table
+  // ouverte porte ici l'heure de son ouverture, réécrite au paiement : une table ouverte
+  // la veille et réglée aujourd'hui compte sur aujourd'hui, là où l'argent est entré.
   timestamp: number;
   total: number;
   cash_given: number;
@@ -68,6 +84,12 @@ export interface Sale extends SyncFields {
   // et non une fiche client : le KPI demandé est « nombre de clients », pas un CRM.
   // Absent sur les ventes antérieures à ce suivi → compté comme 1 à l'agrégation.
   customers_count?: number;
+  /** Libellé de la table servie. Absent = vente directe au comptoir. */
+  table?: string;
+  /** Cf. SaleStatus. Absent = "paid". */
+  status?: SaleStatus;
+  /** Ouverture de la table. Absent sur une vente directe. */
+  opened_at?: number;
 }
 
 export interface SaleItem extends SyncFields {
@@ -84,6 +106,9 @@ export interface SaleItem extends SyncFields {
   // se calculer par jointure, un produit supprimé ou une ligne libre n'en aurait plus.
   // Absente sur les ventes antérieures à ce suivi → « Autre » côté agrégation.
   category_at_sale?: Category;
+  // Horodatage de la tournée, pour regrouper les lignes d'une addition à l'écran. Absent
+  // sur une vente directe et sur les ventes antérieures aux tables → une seule tournée.
+  ordered_at?: number;
 }
 
 // Sortie d'argent qui n'est pas un achat de marchandise déjà compté dans `cost_at_sale`.
@@ -174,6 +199,23 @@ class PosDatabase extends Dexie {
             });
         }
       });
+
+    // Version 4 — additions ouvertes par table. SEUL changement : l'index `status` sur
+    // `sales`, qui rend `listOpenTables()` possible en une requête indexée.
+    //
+    // AUCUN `upgrade()`, et c'est délibéré. Dexie n'indexe pas les enregistrements dont
+    // la clé est absente : les ventes déjà en base, qui n'ont pas de `status`, restent
+    // donc hors de `where("status").equals("open")` — exactement ce qu'il faut, elles ont
+    // toutes été encaissées. Réécrire des milliers de ventes réelles pour y poser un
+    // champ que la lecture sait déjà déduire (`status !== "open"`) serait un risque pris
+    // pour rien. Même logique défensive que les `?? 0` / `?? 1` de ce fichier.
+    this.version(4).stores({
+      products: "id, name, category, updated_at",
+      sales: "id, timestamp, status, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      expenses: "id, timestamp, category, updated_at",
+      settings: "key",
+    });
   }
 }
 
@@ -197,6 +239,21 @@ const touch = (): SyncFields => ({ updated_at: Date.now(), sync_status: "local" 
 
 /** Filtre des enregistrements non supprimés. Toute lecture publique passe par là. */
 const alive = <T extends SyncFields>(rows: T[]): T[] => rows.filter((r) => !r.deleted_at);
+
+/**
+ * Filtre des ventes RÉELLEMENT ENCAISSÉES. Jumeau d'`alive()`, et aussi obligatoire.
+ *
+ * Une addition de table ouverte est une vente en base dont l'argent n'est pas dans la
+ * caisse. La laisser passer la ferait compter en chiffre d'affaires : revenus, marge,
+ * panier moyen et exports gonfleraient d'un montant que personne n'a payé — sans erreur
+ * visible nulle part. `listSales()` est l'entonnoir unique de l'historique ET des
+ * rapports (`usePeriodData`, `getProfitToday`) : le filtre y est posé une fois, pour
+ * tous les lecteurs présents et futurs.
+ *
+ * Les additions en cours ne se lisent que par `listOpenTables()`, dont le nom dit ce
+ * qu'il rend.
+ */
+const paid = (rows: Sale[]): Sale[] => rows.filter((s) => s.status !== "open");
 
 // ---------- Products ----------
 export async function listProducts(): Promise<Product[]> {
@@ -256,6 +313,8 @@ export async function createSale(input: {
     change_due: input.cash_given - total,
     day_closed: false,
     customers_count: Math.max(1, input.customers_count ?? 1),
+    // Explicite bien qu'omis : une vente directe est encaissée au moment où on la crée.
+    status: "paid",
     ...touch(),
   };
   await db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
@@ -286,6 +345,7 @@ export async function createSale(input: {
   return sale;
 }
 
+/** Ventes ENCAISSÉES uniquement — cf. `paid()`. Les tables ouvertes n'en font pas partie. */
 export async function listSales(from?: number, to?: number): Promise<Sale[]> {
   const db = getDB();
   const collection =
@@ -293,7 +353,7 @@ export async function listSales(from?: number, to?: number): Promise<Sale[]> {
       ? db.sales.where("timestamp").between(from, to, true, false)
       : db.sales.toCollection();
   const all = await collection.toArray();
-  return alive(all)
+  return paid(alive(all))
     .filter((s) => (from ? s.timestamp >= from : true) && (to ? s.timestamp < to : true))
     .sort((a, b) => b.timestamp - a.timestamp);
 }
@@ -368,6 +428,218 @@ export async function closeDay(): Promise<number> {
     }
   });
   return sales.length;
+}
+
+// ---------- Tables (additions ouvertes) ----------
+//
+// Une addition de table est une `Sale` de statut "open" : même enregistrement, mêmes
+// lignes, même annulation. Rien de nouveau en base, donc rien de nouveau à sauvegarder,
+// à restaurer ou à synchroniser plus tard — et `cancelSale` fonctionne dessus telle
+// quelle. Le prix de ce choix est le filtre `paid()`, qui doit rester posé sur toute
+// lecture de ventes.
+//
+// Le stock part à la COMMANDE et non au paiement : la bouteille a quitté le frigo au
+// moment de la tournée. C'est ce qui rend l'avertissement « stock insuffisant » utile
+// pendant le service, et non deux heures trop tard.
+
+/** Additions en cours, de la plus ancienne à la plus récente — l'ordre du service. */
+export async function listOpenTables(): Promise<Sale[]> {
+  const rows = await getDB().sales.where("status").equals("open").toArray();
+  return alive(rows).sort((a, b) => (a.opened_at ?? a.timestamp) - (b.opened_at ?? b.timestamp));
+}
+
+export async function openTable(label: string): Promise<Sale> {
+  const now = Date.now();
+  const sale: Sale = {
+    id: uid(),
+    // Provisoire : réécrit par `payTable`. Tant que la table est ouverte, cette date ne
+    // sert qu'à trier — aucune lecture de chiffre d'affaires ne la voit, `paid()` filtre.
+    timestamp: now,
+    opened_at: now,
+    total: 0,
+    cash_given: 0,
+    change_due: 0,
+    day_closed: false,
+    // Une table compte pour UN client, sans jamais demander combien de personnes s'y
+    // assoient : le service n'a pas à compter des couverts pour encaisser. Le KPI
+    // « clients » ne se renseigne donc plus qu'au comptoir.
+    customers_count: 1,
+    table: label,
+    status: "open",
+    ...touch(),
+  };
+  await getDB().sales.put(sale);
+  return sale;
+}
+
+/**
+ * Libère une table ouverte sur laquelle rien n'a encore été servi.
+ *
+ * Une table s'ouvre d'un tap et se libère d'un appui long : c'est le geste inverse, pas
+ * une annulation, et il sert au cas le plus banal du service — la table ouverte par
+ * erreur, ou les clients partis avant de commander.
+ *
+ * La garde sur les lignes est le tout : dès qu'une tournée est passée, du stock est sorti
+ * et de l'argent est dû. Ce cas-là reste « Annuler la table », avec son code PIN et sa
+ * restauration de stock (`cancelSale`) — un appui long ne doit jamais pouvoir effacer une
+ * addition servie.
+ */
+export async function closeTable(saleId: string): Promise<void> {
+  const db = getDB();
+  await db.transaction("rw", db.sales, db.sale_items, async () => {
+    const sale = await db.sales.get(saleId);
+    if (!sale || sale.deleted_at) return;
+    if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
+    const items = alive(await db.sale_items.where("sale_id").equals(saleId).toArray());
+    if (items.length > 0) {
+      throw new Error("Des articles ont déjà été servis : utilisez « Annuler la table ».");
+    }
+    await db.sales.put({ ...sale, ...touch(), deleted_at: Date.now() });
+  });
+}
+
+/**
+ * Ajoute une tournée à une addition ouverte.
+ *
+ * Une seule transaction pour les lignes, le stock et le total : une tournée enregistrée
+ * sans son décrément de stock, ou un total qui ne suit pas ses lignes, se verrait à
+ * l'addition et il serait trop tard pour savoir quoi corriger.
+ */
+export async function addRound(saleId: string, lines: CartLine[]): Promise<Sale> {
+  const db = getDB();
+  const ordered_at = Date.now();
+  return db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
+    const sale = await db.sales.get(saleId);
+    if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
+    if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
+
+    for (const line of lines) {
+      await db.sale_items.put({
+        id: uid(),
+        sale_id: sale.id,
+        product_id: line.product_id,
+        name: line.name,
+        quantity: line.quantity,
+        price_at_sale: line.price,
+        cost_at_sale: line.cost,
+        category_at_sale: line.category,
+        ordered_at,
+        ...touch(),
+      });
+      if (!line.product_id) continue; // ligne libre : rien à décrémenter
+      const p = await db.products.get(line.product_id);
+      if (p && Number.isFinite(p.stock)) {
+        await db.products.put({ ...p, stock: Math.max(0, p.stock - line.quantity), ...touch() });
+      }
+    }
+
+    // Le total se RECALCULE depuis les lignes vivantes plutôt que de s'incrémenter : une
+    // addition dont le total dérive de ses lignes ne peut pas mentir, même si une tournée
+    // a été écrite deux fois.
+    const items = alive(await db.sale_items.where("sale_id").equals(sale.id).toArray());
+    const total = items.reduce((s, i) => s + i.price_at_sale * i.quantity, 0);
+    const updated: Sale = { ...sale, total, ...touch() };
+    await db.sales.put(updated);
+    return updated;
+  });
+}
+
+/** Encaisse une addition : elle devient une vente ordinaire, datée de cet instant. */
+export async function payTable(saleId: string, cashGiven: number): Promise<Sale> {
+  const db = getDB();
+  return db.transaction("rw", db.sales, db.sale_items, async () => {
+    const sale = await db.sales.get(saleId);
+    if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
+    if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
+
+    const items = alive(await db.sale_items.where("sale_id").equals(sale.id).toArray());
+    if (items.length === 0) throw new Error("Addition vide, rien à encaisser.");
+    const total = items.reduce((s, i) => s + i.price_at_sale * i.quantity, 0);
+    if (cashGiven < total) throw new Error("Montant insuffisant.");
+
+    const now = Date.now();
+    const settled: Sale = {
+      ...sale,
+      status: "paid",
+      // La vente est datée de l'ENCAISSEMENT, pas de l'ouverture : c'est aujourd'hui que
+      // l'argent est entré, et c'est aujourd'hui que les rapports doivent le voir.
+      timestamp: now,
+      total,
+      cash_given: cashGiven,
+      change_due: cashGiven - total,
+      ...touch(),
+    };
+    await db.sales.put(settled);
+    return settled;
+  });
+}
+
+/**
+ * Encaisse UNE TOURNÉE d'une addition ouverte, sans clore la table.
+ *
+ * La tournée est identifiée par son `ordered_at` — l'heure de commande que `addRound`
+ * pose sur toutes ses lignes. L'encaissement DÉPLACE ces lignes vers une vente `paid`
+ * à part entière plutôt que de les marquer : les rapports, l'historique et les exports
+ * ne lisent le chiffre d'affaires qu'au travers de `listSales()` (filtre `paid()`), et
+ * une table reste `"open"` tant qu'elle peut encore recevoir une tournée. Déplacer les
+ * lignes vers une vente réglée les fait donc compter à l'instant où l'argent entre,
+ * sans percer l'invariant « une addition ouverte n'est pas du CA » dans les rapports.
+ *
+ * Le stock, lui, est déjà sorti à la COMMANDE (`addRound`) : aucun décrément ici.
+ * L'annulation de la vente sortie (`cancelSale`) restaure — comme pour n'importe quelle
+ * vente. `closeTable` reste le geste inverse d'`openTable`, il n'est pas affecté.
+ */
+export async function payRound(
+  saleId: string,
+  orderedAt: number,
+  cashGiven: number,
+): Promise<Sale> {
+  const db = getDB();
+  return db.transaction("rw", db.sales, db.sale_items, async () => {
+    const sale = await db.sales.get(saleId);
+    if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
+    if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
+
+    const roundItems = alive(await db.sale_items.where("sale_id").equals(saleId).toArray()).filter(
+      (i) => i.ordered_at === orderedAt,
+    );
+    if (roundItems.length === 0) throw new Error("Tournée introuvable.");
+
+    const roundTotal = roundItems.reduce((s, i) => s + i.price_at_sale * i.quantity, 0);
+    if (cashGiven < roundTotal) throw new Error("Montant insuffisant.");
+
+    const now = Date.now();
+    const settled: Sale = {
+      id: uid(),
+      timestamp: now,
+      total: roundTotal,
+      cash_given: cashGiven,
+      change_due: cashGiven - roundTotal,
+      day_closed: false,
+      // Chaque encaissement est une transaction comme une vente au comptoir : il compte
+      // pour un client. Le compteur reste volontairement simple, cf. `openTable`.
+      customers_count: 1,
+      table: sale.table,
+      status: "paid",
+      ...touch(),
+    };
+    await db.sales.put(settled);
+
+    for (const item of roundItems) {
+      await db.sale_items.put({ ...item, sale_id: settled.id, ...touch() });
+    }
+
+    // Le total de la table se recalcule sur ce qui n'a pas encore été encaissé : une
+    // tournée payée sort de l'addition, la suite du service repart de ce qui reste dû.
+    const remaining = alive(await db.sale_items.where("sale_id").equals(saleId).toArray());
+    await db.sales.put({
+      ...sale,
+      total: remaining.reduce((s, i) => s + i.price_at_sale * i.quantity, 0),
+      ...touch(),
+    });
+
+    return settled;
+  });
 }
 
 // ---------- Expenses ----------
@@ -469,4 +741,28 @@ export async function getSetting<T>(key: string): Promise<T | undefined> {
 
 export async function setSetting(key: string, value: unknown): Promise<void> {
   await getDB().settings.put({ key, value });
+}
+
+// ---------- Catégories ----------
+// Les catégories fixes vivent dans `CATEGORIES` ; les catégories créées par le commerce
+// s'ajoutent à côté, dans les préférences, et la liste affichée est toujours la
+// concaténation des deux. Une catégorie qui n'a plus aucun produit n'est jamais nettoyée
+// d'office : elle est un choix du commerce, pas un artefact à récolter.
+const CUSTOM_CATEGORIES_KEY = "custom_categories";
+
+/** Catégories fixes + catégories personnalisées, dans l'ordre d'affichage. */
+export async function listCategories(): Promise<Category[]> {
+  const custom = await getSetting<string[]>(CUSTOM_CATEGORIES_KEY);
+  return [...CATEGORIES, ...(custom ?? [])];
+}
+
+/** Crée une catégorie personnalisée si elle n'existe pas déjà. Renvoie son nom exact. */
+export async function addCategory(label: string): Promise<Category> {
+  const name = label.trim();
+  if (!name) throw new Error("Nom de catégorie requis.");
+  const current = await listCategories();
+  if (current.includes(name)) return name;
+  const custom = (await getSetting<string[]>(CUSTOM_CATEGORIES_KEY)) ?? [];
+  await setSetting(CUSTOM_CATEGORIES_KEY, [...custom, name]);
+  return name;
 }

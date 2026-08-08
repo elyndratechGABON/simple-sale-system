@@ -164,6 +164,46 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
     margin: { left: margin, right: margin },
   });
 
+  // Les tableaux de répartition ne sont imprimés que s'il y a des données : une table
+  // vide dans un rapport donne l'impression d'un bug.
+  if (stats.byTable.length > 0) {
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
+    autoTable(doc, {
+      startY: y,
+      head: [["Table", "Tournées", "Ventes", "Clients", "Revenus", "Bénéfice brut"]],
+      body: stats.byTable.map((t) => [
+        t.label,
+        String(t.rounds),
+        String(t.salesCount),
+        String(t.clients),
+        money(t.revenue),
+        money(t.profit),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [22, 128, 84] },
+      margin: { left: margin, right: margin },
+    });
+  }
+
+  if (stats.topProducts.length > 0) {
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Article", "Catégorie", "Qté", "Revenus", "Bénéfice brut"]],
+      body: stats.topProducts.map((p, index) => [
+        String(index + 1),
+        p.name,
+        p.category,
+        String(p.quantity),
+        money(p.revenue),
+        money(p.profit),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [22, 128, 84] },
+      margin: { left: margin, right: margin },
+    });
+  }
+
   return doc.output("blob");
 }
 

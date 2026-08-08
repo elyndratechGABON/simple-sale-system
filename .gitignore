@@ -16,6 +16,7 @@ dist/
 .tanstack/
 
 # Lockfile : package-lock.json EST versionné (installs reproductibles sur Vercel).
-# bun.lock ne l'est pas — deux lockfiles font basculer Vercel d'un gestionnaire de
-# paquets à l'autre d'un build sur l'autre, et invalident son cache à chaque fois.
 bun.lock
+
+# Artefacts du serveur Playwright MCP (captures d'écran, journaux de session) — pas du code.
+.playwright-mcp/

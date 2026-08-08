@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import {
-  CATEGORIES,
   addProduct,
   deleteProduct,
   listProducts,
@@ -24,18 +23,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { CategorySelect } from "@/components/CategorySelect";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/stocks")({
+export const Route = createFileRoute("/_app/stocks")({
   head: () => ({
     meta: [
       { title: "Stocks & Produits — Caisse POS" },
@@ -270,18 +263,7 @@ function ProductForm({ editing, onClose }: { editing: Product | null; onClose: (
         </div>
         <div>
           <Label>Catégorie</Label>
-          <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CategorySelect value={category} onChange={setCategory} />
         </div>
       </div>
       <DialogFooter>

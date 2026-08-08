@@ -64,7 +64,7 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
   ];
 
   const ventes: Row[] = [
-    header("Date", "Heure", "Total", "Donné", "Rendu", "Bénéfice", "Clients", "Articles"),
+    header("Date", "Heure", "Table", "Total", "Donné", "Rendu", "Bénéfice", "Clients", "Articles"),
     ...[...payload.sales]
       .sort((a, b) => a.timestamp - b.timestamp)
       .map((sale): Row => {
@@ -72,6 +72,9 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
         return [
           { value: new Date(sale.timestamp), type: Date, format: "dd/mm/yyyy" },
           { value: formatTime(sale.timestamp), type: String },
+          // Vide sur une vente au comptoir. Colonne de regroupement pour qui veut son
+          // chiffre d'affaires par table dans un tableur croisé dynamique.
+          { value: sale.table ?? "", type: String },
           money(sale.total),
           money(sale.cash_given),
           money(sale.change_due),
@@ -122,6 +125,30 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
     ]),
   ];
 
+  const parTable: Row[] = [
+    header("Table", "Tournées", "Ventes", "Clients", "Revenus", "Bénéfice brut"),
+    ...stats.byTable.map((t): Row => [
+      { value: t.label, type: String },
+      { value: t.rounds, type: Number },
+      { value: t.salesCount, type: Number },
+      { value: t.clients, type: Number },
+      money(t.revenue),
+      money(t.profit),
+    ]),
+  ];
+
+  const topArticles: Row[] = [
+    header("Rang", "Article", "Catégorie", "Quantité", "Revenus", "Bénéfice brut"),
+    ...stats.topProducts.map((p, index): Row => [
+      { value: index + 1, type: Number },
+      { value: p.name, type: String },
+      { value: p.category, type: String },
+      { value: p.quantity, type: Number },
+      money(p.revenue),
+      money(p.profit),
+    ]),
+  ];
+
   // La clé du nom d'onglet est `sheet`, pas `name` (cf. SheetOptions de la lib).
   const sheets: Sheet<never>[] = [
     { sheet: "Résumé", data: resume },
@@ -129,6 +156,8 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
     { sheet: "Dépenses", data: depenses },
     { sheet: "Par jour", data: parJour },
     { sheet: "Par catégorie", data: parCategorie },
+    { sheet: "Par table", data: parTable },
+    { sheet: "Top articles", data: topArticles },
   ];
 
   return writeXlsxFile(sheets).toBlob();
