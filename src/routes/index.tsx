@@ -27,7 +27,6 @@ import {
   Share,
   Smartphone,
   WifiOff,
-  Wallet,
 } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { formatFCFA } from "@/lib/format";
@@ -82,12 +81,9 @@ function LandingHeader() {
           <span className="rounded-md bg-primary px-2 py-1 text-primary-foreground">POS</span>
           <span>Caisse</span>
         </span>
-        <Link
-          to="/pos"
-          className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Ouvrir la caisse
-        </Link>
+        <span className="hidden sm:block text-sm font-medium text-muted-foreground">
+          Vente · Stock · Bénéfices
+        </span>
       </div>
     </header>
   );
@@ -143,141 +139,155 @@ function Hero() {
     });
 
   return (
-    <section className="mx-auto max-w-5xl px-4 pt-12 pb-16 sm:pt-20 grid gap-10 lg:grid-cols-[1fr_420px] lg:items-center">
-      <div className="space-y-6">
-        <h1 className="text-4xl sm:text-5xl font-bold leading-[1.05] tracking-tight">
-          Votre caisse.
-          <br />
-          <span className="text-primary">Sans réseau.</span>
-        </h1>
-        <p className="text-lg text-muted-foreground max-w-md">
-          Encaissez, rendez la monnaie juste, suivez vos stocks et vos bénéfices. Depuis votre
-          téléphone, même quand la connexion tombe.
-        </p>
-        <InstallCta />
-        <p className="text-sm text-muted-foreground">
-          Gratuit · rien à créer · aucun compte
-          <span className="hidden sm:inline"> · fonctionne dès l'installation</span>
-        </p>
-      </div>
-
-      {/* La caisse jouable. C'est le produit lui-même, pas une capture. */}
-      <div className="rounded-2xl border bg-card shadow-xl p-4 space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {DEMO_PRODUCTS.map((p) => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => add(p.name)}
-              className="rounded-full border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-accent active:scale-[0.97]"
-            >
-              <Plus className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
-              {p.name} {formatFCFA(p.price)}
-            </button>
-          ))}
+    <section className="relative overflow-hidden">
+      {/* Halo décoratif, purement CSS : aucune image ni police distante — la page doit
+          rester servable hors ligne, cf. l'en-tête du fichier. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 h-80 w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+      />
+      <div className="relative mx-auto max-w-5xl px-4 pt-12 pb-16 sm:pt-20 grid gap-10 lg:grid-cols-[1fr_420px] lg:items-center">
+        <div className="space-y-6">
+          <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            <WifiOff className="h-3.5 w-3.5 text-primary" /> 100 % hors ligne · aucune connexion
+            requise
+          </span>
+          <h1 className="text-4xl sm:text-5xl font-bold leading-[1.05] tracking-tight">
+            Votre caisse.
+            <br />
+            <span className="text-primary">Sans réseau.</span>
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-md">
+            Encaissez, rendez la monnaie juste, suivez vos stocks et vos bénéfices. Depuis votre
+            téléphone, même quand la connexion tombe.
+          </p>
+          <InstallCta />
+          <p className="text-sm text-muted-foreground">
+            Gratuit · rien à créer · aucun compte
+            <span className="hidden sm:inline"> · fonctionne dès l'installation</span>
+          </p>
         </div>
 
-        <div className="min-h-[76px] space-y-2">
-          {lines.length === 0 ? (
-            <p className="py-5 text-center text-sm text-muted-foreground">
-              Touchez un article pour commencer.
-            </p>
-          ) : (
-            lines.map((l) => (
-              <div key={l.name} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 font-medium">{l.name}</span>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  aria-label={`Retirer un ${l.name}`}
-                  onClick={() => remove(l.name)}
-                >
-                  <Minus className="h-3 w-3" />
-                </Button>
-                <span className="w-5 text-center font-semibold tabular-nums">{l.quantity}</span>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  className="h-7 w-7"
-                  aria-label={`Ajouter un ${l.name}`}
-                  onClick={() => add(l.name)}
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-                <span className="w-20 text-right font-semibold tabular-nums">
-                  {formatFCFA(l.price * l.quantity)}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="border-t pt-3 flex items-center justify-between">
-          <span className="font-semibold">Total</span>
-          <span className="text-2xl font-bold text-primary tabular-nums">{formatFCFA(total)}</span>
-        </div>
-
-        <div className="space-y-2">
-          <label htmlFor="demo-cash" className="text-sm font-medium">
-            Argent donné
-          </label>
-          <Input
-            id="demo-cash"
-            inputMode="numeric"
-            value={cashGiven}
-            onChange={(e) => setCashGiven(e.target.value.replace(/\D/g, ""))}
-            placeholder="0"
-            className="h-12 text-xl text-right font-bold tabular-nums"
-          />
-          <div className="flex flex-wrap gap-1">
-            {QUICK_AMOUNTS.map((amt) => (
-              <Button
-                key={amt}
-                variant="secondary"
-                size="sm"
-                onClick={() => setCashGiven(String((Number(cashGiven) || 0) + amt))}
+        {/* La caisse jouable. C'est le produit lui-même, pas une capture. */}
+        <div className="rounded-2xl border bg-card shadow-xl p-4 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {DEMO_PRODUCTS.map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => add(p.name)}
+                className="rounded-full border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-accent active:scale-[0.97]"
               >
-                +{formatFCFA(amt)}
-              </Button>
+                <Plus className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
+                {p.name} {formatFCFA(p.price)}
+              </button>
             ))}
-            <Button variant="ghost" size="sm" onClick={() => setCashGiven("")}>
-              Vider
-            </Button>
           </div>
-        </div>
 
-        <div
-          className={cn(
-            "rounded-xl p-4 flex items-center justify-between",
-            insufficient ? "bg-destructive/10" : "bg-accent",
-          )}
-        >
-          <span className="font-semibold">{insufficient ? "Manque" : "À rendre"}</span>
-          {/* La clé fait rejouer l'animation à chaque nouveau montant : c'est le chiffre
-              que le commerçant cherche des yeux cinquante fois par jour. */}
-          <motion.span
-            key={change}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
+          <div className="min-h-[76px] space-y-2">
+            {lines.length === 0 ? (
+              <p className="py-5 text-center text-sm text-muted-foreground">
+                Touchez un article pour commencer.
+              </p>
+            ) : (
+              lines.map((l) => (
+                <div key={l.name} className="flex items-center gap-2 text-sm">
+                  <span className="flex-1 font-medium">{l.name}</span>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7"
+                    aria-label={`Retirer un ${l.name}`}
+                    onClick={() => remove(l.name)}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                  <span className="w-5 text-center font-semibold tabular-nums">{l.quantity}</span>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7"
+                    aria-label={`Ajouter un ${l.name}`}
+                    onClick={() => add(l.name)}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                  <span className="w-20 text-right font-semibold tabular-nums">
+                    {formatFCFA(l.price * l.quantity)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="border-t pt-3 flex items-center justify-between">
+            <span className="font-semibold">Total</span>
+            <span className="text-2xl font-bold text-primary tabular-nums">
+              {formatFCFA(total)}
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="demo-cash" className="text-sm font-medium">
+              Argent donné
+            </label>
+            <Input
+              id="demo-cash"
+              inputMode="numeric"
+              value={cashGiven}
+              onChange={(e) => setCashGiven(e.target.value.replace(/\D/g, ""))}
+              placeholder="0"
+              className="h-12 text-xl text-right font-bold tabular-nums"
+            />
+            <div className="flex flex-wrap gap-1">
+              {QUICK_AMOUNTS.map((amt) => (
+                <Button
+                  key={amt}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCashGiven(String((Number(cashGiven) || 0) + amt))}
+                >
+                  +{formatFCFA(amt)}
+                </Button>
+              ))}
+              <Button variant="ghost" size="sm" onClick={() => setCashGiven("")}>
+                Vider
+              </Button>
+            </div>
+          </div>
+
+          <div
             className={cn(
-              "text-4xl font-bold tabular-nums",
-              insufficient ? "text-destructive" : "text-primary",
+              "rounded-xl p-4 flex items-center justify-between",
+              insufficient ? "bg-destructive/10" : "bg-accent",
             )}
           >
-            {formatFCFA(Math.abs(change))}
-          </motion.span>
-        </div>
+            <span className="font-semibold">{insufficient ? "Manque" : "À rendre"}</span>
+            {/* La clé fait rejouer l'animation à chaque nouveau montant : c'est le chiffre
+              que le commerçant cherche des yeux cinquante fois par jour. */}
+            <motion.span
+              key={change}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className={cn(
+                "text-4xl font-bold tabular-nums",
+                insufficient ? "text-destructive" : "text-primary",
+              )}
+            >
+              {formatFCFA(Math.abs(change))}
+            </motion.span>
+          </div>
 
-        {/* La région live reste MONTÉE en permanence et c'est son contenu qui apparaît :
+          {/* La région live reste MONTÉE en permanence et c'est son contenu qui apparaît :
             c'est la condition pour qu'un lecteur d'écran annonce le message au bon moment.
             Masquer la phrase par `opacity-0` la laisserait dans l'arbre d'accessibilité,
             donc lue avant même qu'un calcul ait eu lieu. */}
-        <p className="min-h-[1rem] text-center text-xs text-muted-foreground" aria-live="polite">
-          {settled &&
-            "Ce calcul vient de tourner sur votre téléphone. Rien n'est parti sur Internet."}
-        </p>
+          <p className="min-h-[1rem] text-center text-xs text-muted-foreground" aria-live="polite">
+            {settled &&
+              "Ce calcul vient de tourner sur votre téléphone. Rien n'est parti sur Internet."}
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -296,7 +306,7 @@ const PROOFS = [
   {
     icon: Smartphone,
     title: "Vos chiffres restent chez vous",
-    body: "Ventes, stocks et dépenses sont enregistrés dans la mémoire du téléphone. Vous les exportez quand vous le décidez, vers Excel, PDF ou une sauvegarde.",
+    body: "Ventes et stocks sont enregistrés dans la mémoire du téléphone. Vous les exportez quand vous le décidez, vers Excel, PDF ou une sauvegarde.",
   },
   {
     icon: Check,
@@ -313,7 +323,7 @@ function Proofs() {
           const Icon = p.icon;
           return (
             <div key={p.title} className="space-y-2">
-              <span className="inline-flex rounded-lg bg-accent p-2 text-accent-foreground">
+              <span className="inline-flex rounded-lg bg-primary/10 p-2 text-primary">
                 <Icon className="h-5 w-5" />
               </span>
               <h2 className="font-semibold">{p.title}</h2>
@@ -343,14 +353,9 @@ const FEATURES = [
     body: "Chaque vente décrémente le stock. Prix d'achat et prix de vente sont enregistrés à part, pour que le bénéfice soit réel.",
   },
   {
-    icon: Wallet,
-    title: "Noter les dépenses",
-    body: "Loyer, transport, salaires, achats : ce qui sort de la caisse sans être une marchandise. C'est ce qui sépare le bénéfice brut du bénéfice net.",
-  },
-  {
     icon: BarChart3,
     title: "Voir ce que vous avez gagné",
-    body: "Revenus, bénéfice net, marge, panier moyen, meilleur jour. Sur aujourd'hui, sur 7 jours, sur 30 jours ou sur les dates de votre choix.",
+    body: "Revenus, bénéfice, marge, panier moyen, meilleur jour. Sur aujourd'hui, sur 7 jours, sur 30 jours ou sur les dates de votre choix.",
   },
   {
     icon: FileSpreadsheet,
@@ -372,8 +377,13 @@ function Features() {
         {FEATURES.map((f) => {
           const Icon = f.icon;
           return (
-            <div key={f.title} className="rounded-xl border bg-card p-5 space-y-2">
-              <Icon className="h-5 w-5 text-primary" />
+            <div
+              key={f.title}
+              className="rounded-xl border bg-card p-5 space-y-3 transition-all hover:border-primary/40 hover:shadow-sm"
+            >
+              <span className="inline-flex rounded-lg bg-accent p-2 text-primary ring-1 ring-primary/10">
+                <Icon className="h-5 w-5" />
+              </span>
               <h3 className="font-semibold">{f.title}</h3>
               <p className="text-sm text-muted-foreground">{f.body}</p>
             </div>

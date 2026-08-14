@@ -8,17 +8,13 @@
 // Le bénéfice se lit toujours dans la ligne de vente (`cost_at_sale`), jamais dans la
 // fiche produit — cf. l'invariant de src/lib/db.ts.
 import { eachDayOfInterval, startOfDay, subDays } from "date-fns";
-import type { Category, Expense, Sale, SaleItem } from "./db";
+import type { Category, Sale, SaleItem } from "./db";
 
 export interface DayBucket {
   day: number; // minuit local, en ms — même clé de regroupement que src/routes/history.tsx
   revenue: number;
-  /** Bénéfice BRUT du jour : revenus − coûts d'acquisition. Hors dépenses. */
+  /** Bénéfice du jour : revenus − coûts d'acquisition. */
   profit: number;
-  /** Dépenses enregistrées ce jour-là. */
-  expenses: number;
-  /** Bénéfice NET : `profit − expenses`. Peut être négatif. */
-  netProfit: number;
   salesCount: number;
 }
 
@@ -56,28 +52,20 @@ export interface ProductBucket {
 
 export interface PeriodStats {
   revenue: number;
-  /** Bénéfice BRUT : revenus − coûts d'acquisition figés dans les lignes de vente. */
+  /** Bénéfice : revenus − coûts d'acquisition figés dans les lignes de vente. */
   profit: number;
-  /** Somme des dépenses de la période. */
-  expenses: number;
-  /** Bénéfice NET : `profit − expenses`. C'est le vrai résultat, et il peut être négatif. */
-  netProfit: number;
   salesCount: number;
   itemsCount: number;
   /** Nombre de personnes servies. Une vente sans `customers_count` compte pour 1. */
   customersCount: number;
-  /** profit / revenue, dans [0,1]. 0 quand il n'y a pas de revenu. Marge BRUTE. */
+  /** profit / revenue, dans [0,1]. 0 quand il n'y a pas de revenu. */
   marginRate: number;
-  /** netProfit / revenue. Peut être négatif quand les dépenses dépassent le bénéfice brut. */
-  netMarginRate: number;
   /** revenue / salesCount, 0 quand il n'y a pas de vente. */
   averageBasket: number;
   /** Jour au chiffre d'affaires le plus élevé. */
   bestDay: DayBucket | null;
-  /** Jour le moins rentable — bénéfice NET minimum PARMI LES JOURS AYANT EU DE L'ACTIVITÉ
-   *  (vente ou dépense). Sans ce filtre le résultat serait toujours un jour de fermeture,
-   *  ce qui n'apprend rien. Le net et non le brut : une journée sans vente mais avec un
-   *  loyer à payer est exactement la journée qu'on cherche à repérer. */
+  /** Jour le moins rentable — bénéfice minimum PARMI LES JOURS AYANT EU DES VENTES. Sans
+   *  ce filtre le résultat serait toujours un jour de fermeture, ce qui n'apprend rien. */
   worstDay: DayBucket | null;
   /** Croissance entre la 1re et la 2e moitié de la période. `NaN` quand la 1re moitié
    *  n'a rien vendu : il n'y a pas de base de comparaison, et afficher « +0 % » ferait
@@ -122,13 +110,11 @@ export function computePeriodStats(
   items: SaleItem[],
   from: number,
   to: number,
-  expenses: Expense[] = [],
 ): PeriodStats {
   const inRange = sales.filter((s) => s.timestamp >= from && s.timestamp < to);
   const saleIds = new Set(inRange.map((s) => s.id));
   const inRangeItems = items.filter((i) => saleIds.has(i.sale_id));
   const saleDay = new Map(inRange.map((s) => [s.id, dayKey(s.timestamp)]));
-  const inRangeExpenses = expenses.filter((e) => e.timestamp >= from && e.timestamp < to);
 
   // Squelette : tous les jours de l'intervalle, à zéro.
   const buckets = new Map<number, DayBucket>();
@@ -137,8 +123,6 @@ export function computePeriodStats(
       day: d.getTime(),
       revenue: 0,
       profit: 0,
-      expenses: 0,
-      netProfit: 0,
       salesCount: 0,
     });
   }
@@ -146,13 +130,6 @@ export function computePeriodStats(
   for (const s of inRange) {
     const b = buckets.get(dayKey(s.timestamp));
     if (b) b.salesCount += 1;
-  }
-
-  let expensesTotal = 0;
-  for (const e of inRangeExpenses) {
-    expensesTotal += e.amount;
-    const b = buckets.get(dayKey(e.timestamp));
-    if (b) b.expenses += e.amount;
   }
 
   const categories = new Map<Category, CategoryBucket>();
@@ -237,32 +214,21 @@ export function computePeriodStats(
   }
 
   const days = Array.from(buckets.values()).sort((a, b) => a.day - b.day);
-  for (const d of days) d.netProfit = d.profit - d.expenses;
 
   const sold = days.filter((d) => d.salesCount > 0);
-  // Le pire jour se cherche parmi les jours ACTIFS — vente OU dépense. Une journée
-  // fermée avec un loyer prélevé est un jour à perte réel, pas un artefact.
-  const active = days.filter((d) => d.salesCount > 0 || d.expenses > 0);
-  const netProfit = profit - expensesTotal;
 
   return {
     revenue,
     profit,
-    expenses: expensesTotal,
-    netProfit,
     salesCount: inRange.length,
     itemsCount,
     // `?? 1` : les ventes antérieures au compteur n'ont pas le champ, elles valent
     // une personne chacune — la lecture la plus proche de la réalité.
     customersCount: inRange.reduce((s, sale) => s + (sale.customers_count ?? 1), 0),
     marginRate: revenue > 0 ? profit / revenue : 0,
-    netMarginRate: revenue > 0 ? netProfit / revenue : 0,
     averageBasket: inRange.length > 0 ? revenue / inRange.length : 0,
     bestDay: sold.reduce<DayBucket | null>((a, d) => (!a || d.revenue > a.revenue ? d : a), null),
-    worstDay: active.reduce<DayBucket | null>(
-      (a, d) => (!a || d.netProfit < a.netProfit ? d : a),
-      null,
-    ),
+    worstDay: sold.reduce<DayBucket | null>((a, d) => (!a || d.profit < a.profit ? d : a), null),
     growthRate: computeGrowthRate(days),
     byCategory: Array.from(categories.values()).sort((a, b) => b.revenue - a.revenue),
     byTable: Array.from(byTable.values()).sort((a, b) => b.revenue - a.revenue),

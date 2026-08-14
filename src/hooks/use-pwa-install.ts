@@ -7,7 +7,7 @@
 // Rien n'est évalué pendant le rendu : `isIOS` et `isStandalone` lisent `navigator`, qui
 // n'existe pas au rendu serveur. Les lire dans le corps du composant produirait un HTML
 // serveur différent du premier rendu client, donc une erreur d'hydratation.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type BeforeInstallPromptEvent, isIOS, isStandalone } from "@/lib/pwa";
 
 /** Résultat d'une tentative d'installation. `ios-help` = à l'appelant d'afficher la marche à suivre. */
@@ -27,6 +27,7 @@ export function usePwaInstall(): PwaInstallState {
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [isIos, setIsIos] = useState(false);
+  const autoShown = useRef(false);
 
   useEffect(() => {
     setIsIos(isIOS());
@@ -59,14 +60,39 @@ export function usePwaInstall(): PwaInstallState {
   }, []);
 
   const install = useCallback(async (): Promise<InstallOutcome> => {
-    if (prompt) {
+    // `autoShown` : le déclenchement automatique (pointerdown) consomme déjà le prompt
+    // sur ce même clic — ne pas rappeler `prompt()` une seconde fois (Chrome le refuse).
+    if (prompt && !autoShown.current) {
+      autoShown.current = true;
       const choice = await prompt.prompt().then(() => prompt.userChoice);
       if (choice.outcome === "accepted") setInstalled(true);
+      setPrompt(null);
       return choice.outcome;
     }
     if (isIos) return "ios-help";
     return "unavailable";
   }, [prompt, isIos]);
+
+  // Déclenchement automatique : Chrome n'autorise le dialogue d'installation qu'en
+  // réponse à un geste utilisateur. Dès que l'app est installable, le PREMIER tap/clic
+  // où que ce soit sur la page ouvre la boîte d'installation — sans aucune autre action.
+  // `{ once: true }` + `autoShown` : un seul essai par session, pas de relance agaçante.
+  useEffect(() => {
+    if (!prompt || installed || isIos || autoShown.current) return;
+    const onGesture = () => {
+      autoShown.current = true;
+      void prompt
+        .prompt()
+        .then(() => prompt.userChoice)
+        .then((choice) => {
+          if (choice.outcome === "accepted") setInstalled(true);
+          setPrompt(null);
+        })
+        .catch(() => setPrompt(null));
+    };
+    document.addEventListener("pointerdown", onGesture, { once: true, capture: true });
+    return () => document.removeEventListener("pointerdown", onGesture, { capture: true });
+  }, [prompt, installed, isIos]);
 
   return { canInstall: prompt !== null || isIos, installed, isIos, install };
 }

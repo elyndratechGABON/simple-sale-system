@@ -23,16 +23,6 @@ export type Category = "Boisson" | "Snack" | "Service" | "Autre" | (string & {})
 // le commerce.
 export const CATEGORIES: Category[] = ["Boisson", "Snack", "Service", "Autre"];
 
-export type ExpenseCategory = "Achat" | "Transport" | "Salaire" | "Loyer" | "Autre";
-
-export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
-  "Achat",
-  "Transport",
-  "Salaire",
-  "Loyer",
-  "Autre",
-];
-
 // ---------- Champs de synchronisation ----------
 // Présents sur TOUT enregistrement métier. Aucun code réseau ne les lit aujourd'hui :
 // ils existent pour qu'une synchronisation cloud future se branche sans toucher à la
@@ -90,6 +80,12 @@ export interface Sale extends SyncFields {
   status?: SaleStatus;
   /** Ouverture de la table. Absent sur une vente directe. */
   opened_at?: number;
+  /**
+   * Tournées déjà encaissées d'une addition encore ouverte (« Encaisser cette tournée »).
+   * Absent = aucune : rien n'a été payé, tout reste dû. Posé dans `payRound`, il reste
+   * sur la vente si la table est ensuite réglée entièrement (`payTable`), sans servir.
+   */
+  rounds_paid?: number;
 }
 
 export interface SaleItem extends SyncFields {
@@ -111,15 +107,27 @@ export interface SaleItem extends SyncFields {
   ordered_at?: number;
 }
 
-// Sortie d'argent qui n'est pas un achat de marchandise déjà compté dans `cost_at_sale`.
-// Le bénéfice BRUT (revenus − coûts d'acquisition) vit dans les lignes de vente ; les
-// dépenses s'en retranchent pour donner le bénéfice NET.
-export interface Expense extends SyncFields {
+/**
+ * Abonnement d'un client : formule payée périodiquement (abonnement de bar/salle de
+ * sport, redevance mensuelle…). L'état affiché est DÉDUIT des dates et de `paid` :
+ *  - "payé"    : le client a payé la période en cours ;
+ *  - "en attente" : la période n'est pas réglée ;
+ *  - "expiré"  : la date de fin est passée.
+ * Ne rien stocker de plus — un statut calculé ne peut pas diverger de ses dates.
+ */
+export interface Subscription extends SyncFields {
   id: string;
-  timestamp: number;
-  label: string;
-  amount: number; // FCFA, entier positif
-  category: ExpenseCategory;
+  clientName: string;
+  phone?: string;
+  /** Formule : « Mensuel », « Trimestriel », « Annuel »… */
+  plan: string;
+  /** Montant de la période, en FCFA. */
+  price: number;
+  /** Début de la période, en millisecondes (début de journée). */
+  startDate: number;
+  /** Fin de la période, en millisecondes (début de journée). */
+  endDate: number;
+  paid: boolean;
 }
 
 export interface Setting {
@@ -127,12 +135,42 @@ export interface Setting {
   value: unknown;
 }
 
+/**
+ * Identité de l'établissement qui utilise la caisse : c'est l'inscription de la boutique
+ * dans l'orchestrateur (le PC du commerçant). Quatre infos saisies une fois dans
+ * Paramètres, pré-enregistrées localement, puis poussées à chaque synchronisation.
+ *
+ * `deviceId` est l'identifiant d'appareil que l'orchestrateur voit : généré une seule
+ * fois à la création, stable ensuite. `registrationDate` ne change jamais. `expiryDate`
+ * est fixée localement à l'essai de 30 jours, puis ÉCRASÉE par l'orchestrateur, qui fait
+ * foi sur les prolongations.
+ */
+export interface ShopProfile extends SyncFields {
+  /** Clé fixe « me » : un seul profil par appareil. */
+  id: string;
+  /** Identifiant d'appareil pour l'orchestrateur. */
+  deviceId: string;
+  /** Nom du propriétaire de la boutique. */
+  ownerName: string;
+  /** Nom de la boutique. */
+  storeName: string;
+  phone?: string;
+  location?: string;
+  /** Horodatage de l'inscription, en millisecondes. Ne change jamais. */
+  registrationDate: number;
+  /** Échéance de la licence, en millisecondes. */
+  expiryDate: number;
+  /** Dernier envoi réussi vers l'orchestrateur. */
+  lastSyncedAt?: number;
+}
+
 class PosDatabase extends Dexie {
   products!: Table<Product, string>;
   sales!: Table<Sale, string>;
   sale_items!: Table<SaleItem, string>;
-  expenses!: Table<Expense, string>;
   settings!: Table<Setting, string>;
+  subscriptions!: Table<Subscription, string>;
+  shop_profiles!: Table<ShopProfile, string>;
 
   constructor() {
     super("pos-db");
@@ -215,6 +253,44 @@ class PosDatabase extends Dexie {
       sale_items: "id, sale_id, updated_at",
       expenses: "id, timestamp, category, updated_at",
       settings: "key",
+    });
+
+    // Version 5 — suppression du module Dépenses (décision produit). Le store `expenses`
+    // est DROPPÉ (`null`), pas vidé : plus rien ne doit le lire, l'écrire ni le sauvegarder.
+    // Aucune donnée à préserver : les sorties d'argent ne sont pas rejouables.
+    //
+    // Les sauvegardes v1/v2 qui contenaient des dépenses restent restaurables — le champ
+    // est ignoré à la restauration (cf. src/lib/exports/json.ts).
+    this.version(5).stores({
+      products: "id, name, category, updated_at",
+      sales: "id, timestamp, status, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      expenses: null,
+      settings: "key",
+    });
+
+    // Version 6 — abonnements clients. UN SEUL nouveau store, indexé sur `id` (lecture
+    // et suppression par clé) et `updated_at` (la clé du futur pull incrémental, comme
+    // partout ailleurs). AUCUN upgrade() : c'est un store neuf, il n'y a rien à migrer.
+    this.version(6).stores({
+      products: "id, name, category, updated_at",
+      sales: "id, timestamp, status, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+    });
+
+    // Version 7 — profil boutique (inscription auprès de l'orchestrateur). UN SEUL
+    // enregistrement par appareil, clé fixe « me » : un store dédié plutôt qu'une ligne
+    // dans `settings`, car c'est de la donnée qui se synchronise — elle doit porter les
+    // champs de synchronisation comme le reste.
+    this.version(7).stores({
+      products: "id, name, category, updated_at",
+      sales: "id, timestamp, status, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
     });
   }
 }
@@ -400,7 +476,7 @@ export async function cancelSale(saleId: string): Promise<void> {
   await db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
     const sale = await db.sales.get(saleId);
     if (!sale || sale.deleted_at) return;
-    if (sale.day_closed) {
+    if (isClosed(sale)) {
       throw new Error("Journée clôturée, annulation impossible.");
     }
     const deleted_at = Date.now();
@@ -428,6 +504,45 @@ export async function closeDay(): Promise<number> {
     }
   });
   return sales.length;
+}
+
+// ---------- Clôture automatique ----------
+// La clôture manuelle (« Clôturer la journée ») reste disponible, mais une vente réglée
+// se verrouille aussi d'elle-même 24 h après son encaissement : le commerce qui oublie
+// de clôturer ne laisse pas des ventes annulables indéfiniment.
+//
+// Les additions ouvertes (`status: "open"`) échappent volontairement à cette règle : ce
+// sont des « ventes non effectuées » qui roulent sur le jour suivant — l'argent n'est
+// pas encore dans la caisse, elles ne sont donc ni verrouillées ni clôturées, et se
+// régleront le jour où l'encaissement a lieu.
+
+const AUTO_CLOSE_MS = 24 * 60 * 60 * 1000;
+
+/** Vente verrouillée : clôturée à la main, ou encaissée il y a plus de 24 h. */
+export function isClosed(sale: Sale): boolean {
+  if (sale.day_closed) return true;
+  if (sale.status === "open") return false;
+  return sale.timestamp + AUTO_CLOSE_MS <= Date.now();
+}
+
+/**
+ * Persiste la clôture automatique : marque `day_closed` sur les ventes réglées encaissées
+ * il y a plus de 24 h. L'affichage s'appuie déjà sur `isClosed()`, qui lit l'heure — cette
+ * écriture ne fait que rendre l'état durable dans la base (exports et sauvegardes inclus).
+ * Sans objet quand il n'y a rien à clôturer : aucun écrit, donc aucun coût.
+ */
+export async function autoCloseDay(): Promise<void> {
+  const db = getDB();
+  const cutoff = Date.now() - AUTO_CLOSE_MS;
+  const expired = (await db.sales.where("timestamp").below(cutoff).toArray()).filter(
+    (s) => !s.deleted_at && !s.day_closed && s.status !== "open",
+  );
+  if (expired.length === 0) return;
+  await db.transaction("rw", db.sales, async () => {
+    for (const s of expired) {
+      await db.sales.put({ ...s, day_closed: true, ...touch() });
+    }
+  });
 }
 
 // ---------- Tables (additions ouvertes) ----------
@@ -635,6 +750,9 @@ export async function payRound(
     await db.sales.put({
       ...sale,
       total: remaining.reduce((s, i) => s + i.price_at_sale * i.quantity, 0),
+      // La table a maintenant déjà encaissé au moins une tournée : le plan de salle la
+      // distingue d'une table servie mais rien payée.
+      rounds_paid: (sale.rounds_paid ?? 0) + 1,
       ...touch(),
     });
 
@@ -642,50 +760,16 @@ export async function payRound(
   });
 }
 
-// ---------- Expenses ----------
-export async function listExpenses(from?: number, to?: number): Promise<Expense[]> {
-  const db = getDB();
-  const collection =
-    from !== undefined && to !== undefined
-      ? db.expenses.where("timestamp").between(from, to, true, false)
-      : db.expenses.toCollection();
-  return alive(await collection.toArray()).sort((a, b) => b.timestamp - a.timestamp);
-}
-
-export async function addExpense(
-  e: Omit<Expense, "id" | keyof SyncFields> & { timestamp?: number },
-): Promise<Expense> {
-  const expense: Expense = {
-    ...e,
-    id: uid(),
-    timestamp: e.timestamp ?? Date.now(),
-    ...touch(),
-  };
-  await getDB().expenses.put(expense);
-  return expense;
-}
-
-export async function updateExpense(e: Expense): Promise<void> {
-  await getDB().expenses.put({ ...e, ...touch() });
-}
-
-export async function deleteExpense(id: string): Promise<void> {
-  const db = getDB();
-  const e = await db.expenses.get(id);
-  if (!e) return;
-  await db.expenses.put({ ...e, ...touch(), deleted_at: Date.now() });
-}
-
 // ---------- Sauvegarde / restauration ----------
 export interface DatabaseSnapshot {
   products: Product[];
   sales: Sale[];
   sale_items: SaleItem[];
-  expenses: Expense[];
+  subscriptions: Subscription[];
 }
 
 /**
- * Copie BRUTE des quatre stores métier, enregistrements supprimés compris.
+ * Copie BRUTE des trois stores métier, enregistrements supprimés compris.
  *
  * Le `alive()` des lectures publiques est délibérément court-circuité ici : une
  * sauvegarde qui jetterait les pierres tombales (`deleted_at`) ferait réapparaître,
@@ -694,13 +778,13 @@ export interface DatabaseSnapshot {
  */
 export async function exportSnapshot(): Promise<DatabaseSnapshot> {
   const db = getDB();
-  const [products, sales, sale_items, expenses] = await Promise.all([
+  const [products, sales, sale_items, subscriptions] = await Promise.all([
     db.products.toArray(),
     db.sales.toArray(),
     db.sale_items.toArray(),
-    db.expenses.toArray(),
+    db.subscriptions.toArray(),
   ]);
-  return { products, sales, sale_items, expenses };
+  return { products, sales, sale_items, subscriptions };
 }
 
 /**
@@ -715,19 +799,142 @@ export async function exportSnapshot(): Promise<DatabaseSnapshot> {
  */
 export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> {
   const db = getDB();
-  await db.transaction("rw", db.products, db.sales, db.sale_items, db.expenses, async () => {
+  await db.transaction("rw", db.products, db.sales, db.sale_items, db.subscriptions, async () => {
     await Promise.all([
       db.products.clear(),
       db.sales.clear(),
       db.sale_items.clear(),
-      db.expenses.clear(),
+      db.subscriptions.clear(),
     ]);
     await Promise.all([
       db.products.bulkPut(snapshot.products),
       db.sales.bulkPut(snapshot.sales),
       db.sale_items.bulkPut(snapshot.sale_items),
-      db.expenses.bulkPut(snapshot.expenses),
+      // `?? []` : une sauvegarde restaurée par un code antérieur aux abonnements
+      // (ou un fichier v1/v2/v3) ne porte pas le champ — rien à écrire, store vide.
+      db.subscriptions.bulkPut(snapshot.subscriptions ?? []),
     ]);
+  });
+}
+
+// ---------- Abonnements ----------
+// Fiches d'abonnés, créées depuis l'interface cachée (5 appuis sur le logo POS). Les
+// suppressions sont logiques comme partout (`alive()` filtre). Tri par échéance : c'est
+// la colonne vertébrale de l'écran — les renouvellements à venir en premier, les plus
+// en retard tout en haut.
+
+export async function listSubscriptions(): Promise<Subscription[]> {
+  const all = await getDB().subscriptions.toArray();
+  return alive(all).sort((a, b) => a.endDate - b.endDate);
+}
+
+export async function addSubscription(
+  s: Omit<Subscription, "id" | keyof SyncFields>,
+): Promise<Subscription> {
+  const sub: Subscription = { ...s, id: uid(), ...touch() };
+  await getDB().subscriptions.put(sub);
+  return sub;
+}
+
+export async function updateSubscription(s: Subscription): Promise<void> {
+  await getDB().subscriptions.put({ ...s, ...touch() });
+}
+
+export async function deleteSubscription(id: string): Promise<void> {
+  const db = getDB();
+  const sub = await db.subscriptions.get(id);
+  if (!sub) return;
+  await db.subscriptions.put({ ...sub, ...touch(), deleted_at: Date.now() });
+}
+
+// ---------- Profil boutique (licence) ----------
+// L'identité de l'établissement, pré-enregistrée localement et poussée à l'orchestrateur.
+// La durée de l'essai est le miroir de `orchestrator/src/config.ts` : le SERVEUR calcule
+// et renvoie l'échéance, ceci n'est que la valeur affichée tant qu'aucune synchronisation
+// n'a eu lieu.
+
+const TRIAL_DAYS = 30;
+const TRIAL_DAYS_MS = TRIAL_DAYS * 86_400_000;
+
+/** Le profil de l'appareil, ou null s'il n'est pas encore inscrit. */
+export async function getShopProfile(): Promise<ShopProfile | null> {
+  return (await getDB().shop_profiles.get("me")) ?? null;
+}
+
+/**
+ * Crée la fiche au premier accès, sans démarche : la boutique se déclare d'elle-même
+ * quand l'application s'ouvre, avec le nom de l'espace de travail choisi à l'onboarding
+ * comme nom de boutique. Le propriétaire, le téléphone et le lieu — inconnus à ce stade —
+ * se complètent dans Paramètres, où `saveShopProfile` enrichit la même fiche (même
+ * `deviceId`, pas de doublon chez l'orchestrateur).
+ */
+export async function ensureShopProfile(storeName: string): Promise<ShopProfile> {
+  const db = getDB();
+  const existing = await db.shop_profiles.get("me");
+  if (existing) return existing;
+  const now = Date.now();
+  const profile: ShopProfile = {
+    id: "me",
+    deviceId: uid(),
+    ownerName: "",
+    storeName: storeName.trim() || "Ma boutique",
+    registrationDate: now,
+    expiryDate: now + TRIAL_DAYS_MS,
+    ...touch(),
+  };
+  await db.shop_profiles.put(profile);
+  return profile;
+}
+
+/**
+ * Crée ou met à jour le profil. À la création : inscription datée de maintenant, essai
+ * de 30 jours, identifiant d'appareil généré une fois pour toutes. À la mise à jour :
+ * seules les quatre infos changent, dates et identifiant restent stables.
+ */
+export async function saveShopProfile(
+  input: Omit<
+    ShopProfile,
+    "id" | "deviceId" | "registrationDate" | "expiryDate" | keyof SyncFields
+  >,
+): Promise<ShopProfile> {
+  const db = getDB();
+  const existing = await db.shop_profiles.get("me");
+  const now = Date.now();
+  const profile: ShopProfile = existing
+    ? { ...existing, ...input, ...touch() }
+    : {
+        ...input,
+        id: "me",
+        deviceId: uid(),
+        registrationDate: now,
+        expiryDate: now + TRIAL_DAYS_MS,
+        ...touch(),
+      };
+  await db.shop_profiles.put(profile);
+  return profile;
+}
+
+/**
+ * Échéance reçue de l'orchestrateur : le serveur fait foi sur les prolongations, sa
+ * valeur remplace l'essai local calculé à l'inscription.
+ */
+export async function setShopExpiry(expiryDate: number): Promise<void> {
+  const db = getDB();
+  const profile = await db.shop_profiles.get("me");
+  if (!profile) return;
+  await db.shop_profiles.put({ ...profile, expiryDate, ...touch() });
+}
+
+/** Marque un envoi réussi vers l'orchestrateur. */
+export async function markShopSynced(syncedAt: number): Promise<void> {
+  const db = getDB();
+  const profile = await db.shop_profiles.get("me");
+  if (!profile) return;
+  await db.shop_profiles.put({
+    ...profile,
+    ...touch(),
+    lastSyncedAt: syncedAt,
+    sync_status: "synced",
   });
 }
 

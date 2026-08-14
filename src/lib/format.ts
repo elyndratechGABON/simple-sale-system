@@ -28,6 +28,15 @@ export function formatDayShort(ts: number): string {
   return new Date(ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
 }
 
+/** Date complète pour une fiche d'abonnement : « 29/07/2026 ». */
+export function formatDateShort(ts: number): string {
+  return new Date(ts).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export function formatDay(ts: number): string {
   const day = new Date(ts).setHours(0, 0, 0, 0);
   const today = new Date().setHours(0, 0, 0, 0);

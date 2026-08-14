@@ -3,7 +3,15 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay, startOfMonth, startOfWeek, startOfYear } from "date-fns";
 import { History, ChevronDown, ChevronUp, X } from "lucide-react";
-import { cancelSale, getSaleItems, listSales, type Sale } from "@/lib/db";
+import {
+  cancelSale,
+  getSaleItems,
+  getSaleItemsForSales,
+  isClosed,
+  listSales,
+  type Sale,
+} from "@/lib/db";
+import { lineProfit } from "@/lib/analytics";
 import { formatDay, formatFCFA, formatTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -118,6 +126,23 @@ function HistoryPage() {
     return sales.filter((s) => s.table === scope);
   }, [sales, scope]);
 
+  // Le bénéfice vit dans les lignes (`cost_at_sale`), pas dans la vente : il faut les
+  // charger pour l'afficher. La clé porte les id des ventes filtrées — une annulation
+  // change la liste et relance la requête sans laisser un cache périmé.
+  const { data: periodItems } = useQuery({
+    queryKey: ["sale_items", "history", scope, filtered.map((s) => s.id).join(",")],
+    queryFn: () => getSaleItemsForSales(filtered.map((s) => s.id)),
+    enabled: filtered.length > 0,
+  });
+
+  const profitBySale = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of periodItems ?? []) {
+      map.set(item.sale_id, (map.get(item.sale_id) ?? 0) + lineProfit(item));
+    }
+    return map;
+  }, [periodItems]);
+
   const total = filtered.reduce((s, x) => s + x.total, 0);
 
   const [period, setPeriod] = useState<Period>("day");
@@ -127,19 +152,24 @@ function HistoryPage() {
    *  Les périodes vides n'ont pas de carte : un calendrier plein de « 0 F » ferait
    *  chercher les journées travaillées au lieu de les montrer. */
   const buckets = useMemo(() => {
-    const map = new Map<number, { total: number; count: number }>();
+    const map = new Map<number, { total: number; count: number; profit: number }>();
     for (const s of filtered) {
       const key = bucketStart[period](s.timestamp);
       const bucket = map.get(key);
       if (bucket) {
         bucket.total += s.total;
         bucket.count += 1;
+        bucket.profit += profitBySale.get(s.id) ?? 0;
       } else {
-        map.set(key, { total: s.total, count: 1 });
+        map.set(key, {
+          total: s.total,
+          count: 1,
+          profit: profitBySale.get(s.id) ?? 0,
+        });
       }
     }
     return Array.from(map, ([start, b]) => ({ start, ...b })).sort((a, b) => b.start - a.start);
-  }, [filtered, period]);
+  }, [filtered, period, profitBySale]);
 
   /** Carte ouverte, DÉRIVÉE de la liste : changer de granularité ou de table fait
    *  retomber la sélection sur la période la plus récente au lieu de pointer une carte
@@ -244,6 +274,9 @@ function HistoryPage() {
                 <div className="text-lg font-bold tabular-nums text-primary">
                   {formatFCFA(b.total)}
                 </div>
+                <div className="text-xs font-medium tabular-nums text-emerald-600">
+                  {formatFCFA(b.profit)} de bénéfice
+                </div>
                 <div className="text-xs text-muted-foreground">
                   {b.count} vente{b.count > 1 ? "s" : ""}
                 </div>
@@ -324,7 +357,7 @@ function SaleRow({ sale }: { sale: Sale }) {
             </div>
           </div>
           <div className="text-xl font-bold text-primary">{formatFCFA(sale.total)}</div>
-          {sale.day_closed && <Badge variant="secondary">clôturée</Badge>}
+          {isClosed(sale) && <Badge variant="secondary">clôturée</Badge>}
           <Button variant="ghost" size="icon" onClick={() => setOpen((o) => !o)}>
             {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
@@ -332,7 +365,7 @@ function SaleRow({ sale }: { sale: Sale }) {
             variant="ghost"
             size="icon"
             onClick={() => setPinOpen(true)}
-            disabled={sale.day_closed}
+            disabled={isClosed(sale)}
           >
             <X className="h-4 w-4 text-destructive" />
           </Button>

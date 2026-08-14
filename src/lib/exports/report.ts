@@ -2,7 +2,7 @@
 // `computePeriodStats` : un chiffre affiché à l'écran et le même chiffre dans le PDF ne
 // peuvent pas diverger.
 import type { PeriodStats } from "../analytics";
-import type { Expense, Sale, SaleItem } from "../db";
+import type { Sale, SaleItem } from "../db";
 
 export interface ReportPayload {
   /** Libellé de la période, tel qu'affiché à l'écran (« 7 derniers jours »). */
@@ -12,7 +12,6 @@ export interface ReportPayload {
   stats: PeriodStats;
   sales: Sale[];
   items: SaleItem[];
-  expenses: Expense[];
   /** Nom du commerce, en tête des documents. Voir src/lib/settings.ts. */
   workspaceName?: string;
 }

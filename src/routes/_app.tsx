@@ -18,16 +18,30 @@
 // par construction — plus aucune condition sur le chemin nulle part.
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
 
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/Nav";
 import { Onboarding } from "../components/Onboarding";
+import { SuspendedScreen } from "../components/SuspendedScreen";
+import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
+import { ensureShopProfile } from "../lib/db";
+import { getPreferences } from "../lib/settings";
+import { backgroundSync } from "../lib/sync";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
 function AppLayout() {
+  // Monté uniquement dans l'application (jamais sur la page publique `/`) : c'est le
+  // premier accès du commerçant. La fiche boutique se crée d'elle-même — nom repris de
+  // l'espace de travail — puis `backgroundSync` la pousse à l'orchestrateur aussitôt,
+  // au retour en ligne et toutes les minutes. Aucune démarche d'inscription à faire.
+  useEffect(() => {
+    void ensureShopProfile(getPreferences().workspaceName).then(() => backgroundSync());
+  }, []);
+
   return (
     <>
       <div className="min-h-screen flex flex-col">
@@ -41,6 +55,8 @@ function AppLayout() {
       </div>
       <BottomNav />
       <Onboarding />
+      <GatekeeperAlerts />
+      <SuspendedScreen />
     </>
   );
 }

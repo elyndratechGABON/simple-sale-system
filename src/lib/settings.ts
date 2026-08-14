@@ -1,7 +1,7 @@
 // Préférences utilisateur : nom de l'espace de travail, couleur principale, drapeau
 // d'onboarding. Elles vivent dans localStorage et NON dans IndexedDB.
 //
-// Pourquoi cette séparation : IndexedDB est la base métier (ventes, produits, dépenses),
+// Pourquoi cette séparation : IndexedDB est la base métier (ventes, produits, lignes),
 // elle sera un jour synchronisée entre appareils. Une préférence d'affichage n'a rien à
 // y faire — elle est propre à l'appareil, doit se lire de façon SYNCHRONE au premier
 // rendu (localStorage l'est, IndexedDB ne l'est pas) et sa perte est sans gravité.
@@ -12,6 +12,10 @@
 
 const KEY = "pos_preferences";
 
+/** Nature du commerce. Oriente le mode de service proposé à l'onboarding : un restaurant
+ * commande avant d'encaisser, un snack encaisse sur-le-champ. */
+export type BusinessType = "snack" | "restaurant";
+
 export interface Preferences {
   /** Nom de l'entreprise. Affiché dans l'en-tête et en tête des documents exportés. */
   workspaceName: string;
@@ -19,6 +23,13 @@ export interface Preferences {
   hue: number;
   /** Passe à true une fois l'assistant de premier lancement terminé ou passé. */
   onboarded: boolean;
+  /** Snack/bar — service direct — ou restaurant/fastfood — commande puis encaissement. */
+  businessType: BusinessType;
+  /**
+   * Système de tables : commande servie puis encaissée en fin de service (restaurant) vs
+   * service direct au comptoir (snack/bar). Faux → la caisse n'affiche que le comptoir.
+   */
+  tablesEnabled: boolean;
   /**
    * Libellés des tables proposés à la caisse. La liste s'étend à la volée quand on ouvre
    * une table qui n'y figure pas encore.
@@ -38,6 +49,10 @@ export const DEFAULT_PREFERENCES: Preferences = {
   // défaut fait que l'application non configurée est pixel pour pixel celle d'avant.
   hue: 155,
   onboarded: false,
+  // Restaurant + tables = le comportement historique de l'application (plan de salle
+  // toujours affiché) : les comptes déjà enregistrés ne changent pas de mode.
+  businessType: "restaurant",
+  tablesEnabled: true,
   tables: ["1", "2", "3", "4", "5", "6"],
 };
 
@@ -70,6 +85,11 @@ export function getPreferences(): Preferences {
       workspaceName: parsed.workspaceName?.trim() || DEFAULT_PREFERENCES.workspaceName,
       hue: normalizeHue(parsed.hue),
       onboarded: parsed.onboarded === true,
+      businessType: normalizeBusinessType(parsed.businessType),
+      // `!== false` et non `=== true` : un enregistrement écrit avant l'introduction de
+      // cette préférence ne porte pas la clé, et le comportement historique est tables
+      // activées — la lire comme fausse ferait basculer tous les comptes existants.
+      tablesEnabled: parsed.tablesEnabled !== false,
       tables: normalizeTables(parsed.tables),
     };
   } catch {
@@ -114,6 +134,10 @@ function normalizeHue(value: unknown): number {
   const n = Number(value);
   if (!Number.isFinite(n)) return DEFAULT_PREFERENCES.hue;
   return ((n % 360) + 360) % 360;
+}
+
+function normalizeBusinessType(value: unknown): BusinessType {
+  return value === "snack" || value === "restaurant" ? value : DEFAULT_PREFERENCES.businessType;
 }
 
 /**

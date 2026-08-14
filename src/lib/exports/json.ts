@@ -9,8 +9,11 @@ import { exportSnapshot, replaceAllData, type DatabaseSnapshot } from "../db";
 
 // v1 : products / sales / sale_items, sans champs de synchronisation.
 // v2 : ajoute le store `expenses`, les champs de synchronisation et `customers_count`.
-// Les fichiers v1 restent lisibles — cf. les valeurs par défaut du schéma ci-dessous.
-export const BACKUP_FORMAT_VERSION = 2;
+// v3 : supprime `expenses` (module Dépenses retiré du produit). Les fichiers v1 et v2
+// restent restaurables : le champ est ignoré par la validation, cf. `parseBackup`.
+// v4 : ajoute le store `subscriptions` (abonnements clients). Le champ est OPTIONNEL à
+// la lecture : une sauvegarde v3 restaure un stock d'abonnements vide, jamais une erreur.
+export const BACKUP_FORMAT_VERSION = 4;
 
 export interface BackupFile extends DatabaseSnapshot {
   format: "caisse-pos-backup";
@@ -50,6 +53,9 @@ const saleSchema = z.object({
   change_due: z.number(),
   day_closed: z.boolean(),
   customers_count: z.number().optional(),
+  // Tournées encaissées d'une addition ouverte : sans lui, zod retirerait la clé à la
+  // restauration et une table partiellement encaissée reparaîtrait « rien payé ».
+  rounds_paid: z.number().optional(),
   ...syncFields,
 });
 
@@ -65,12 +71,15 @@ const saleItemSchema = z.object({
   ...syncFields,
 });
 
-const expenseSchema = z.object({
+const subscriptionSchema = z.object({
   id: z.string(),
-  timestamp: z.number(),
-  label: z.string(),
-  amount: z.number(),
-  category: z.enum(["Achat", "Transport", "Salaire", "Loyer", "Autre"]),
+  clientName: z.string(),
+  phone: z.string().optional(),
+  plan: z.string(),
+  price: z.number(),
+  startDate: z.number(),
+  endDate: z.number(),
+  paid: z.boolean(),
   ...syncFields,
 });
 
@@ -81,7 +90,10 @@ const backupSchema = z.object({
   products: z.array(productSchema),
   sales: z.array(saleSchema),
   sale_items: z.array(saleItemSchema),
-  expenses: z.array(expenseSchema).optional(), // absent des sauvegardes v1
+  // `expenses` n'existe plus en v3. Le champ des fichiers v1/v2 est simplement ignoré :
+  // zod laisse passer les clés inconnues, et la migration Dexie v5 a déjà purgé le store.
+  // `subscriptions` n'existe qu'en v4 : absent d'un fichier v3, lu comme liste vide.
+  subscriptions: z.array(subscriptionSchema).optional(),
 });
 
 export async function buildBackupBlob(): Promise<Blob> {
@@ -107,7 +119,7 @@ export interface BackupSummary {
   exportedAt?: string;
   products: number;
   sales: number;
-  expenses: number;
+  subscriptions: number;
 }
 
 /**
@@ -161,7 +173,7 @@ export function parseBackup(text: string): { snapshot: DatabaseSnapshot; summary
       ...normalize(i),
       cost_at_sale: i.cost_at_sale ?? 0,
     })),
-    expenses: (data.expenses ?? []).map((e) => normalize(e, e.timestamp)),
+    subscriptions: (data.subscriptions ?? []).map((s) => normalize(s)),
   };
 
   return {
@@ -171,7 +183,7 @@ export function parseBackup(text: string): { snapshot: DatabaseSnapshot; summary
       exportedAt: data.exportedAt,
       products: snapshot.products.length,
       sales: snapshot.sales.length,
-      expenses: snapshot.expenses.length,
+      subscriptions: snapshot.subscriptions.length,
     },
   };
 }

@@ -8,7 +8,9 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   // `android` est le projet natif généré par `npx cap add android` : des milliers de
   // fichiers Gradle/Java qui font expirer le lint si on ne les écarte pas.
-  { ignores: ["dist", ".output", ".vinxi", "android", ".playwright-mcp"] },
+  {
+    ignores: ["dist", ".output", ".vinxi", "android", ".playwright-mcp"],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

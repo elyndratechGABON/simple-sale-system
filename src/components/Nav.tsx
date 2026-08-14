@@ -2,25 +2,17 @@
 //
 // Mobile — barre d'onglets en bas. C'est le seul endroit qu'un pouce atteint sans
 // changer de prise sur le téléphone, et la caisse se tient à une main pendant qu'on sert.
-// L'ancienne barre haute réduisait les six entrées à des icônes de 40×32 px, sous le
+// L'ancienne barre haute réduisait les cinq entrées à des icônes de 40×32 px, sous le
 // minimum de 44 px recommandé et sans libellé : on ne pouvait ni viser ni deviner.
 //
 // Bureau (`lg`) — la barre haute reprend sa place, où la largeur permet les libellés et
 // où le pointeur n'a pas de zone hors de portée.
 import { Link } from "@tanstack/react-router";
-import {
-  ShoppingCart,
-  Package,
-  History,
-  BarChart3,
-  Wallet,
-  Settings as SettingsIcon,
-} from "lucide-react";
+import { ShoppingCart, Package, History, BarChart3, Settings as SettingsIcon } from "lucide-react";
 
 export const NAV_LINKS = [
   { to: "/pos", label: "Caisse", icon: ShoppingCart },
   { to: "/stocks", label: "Stocks", icon: Package },
-  { to: "/expenses", label: "Dépenses", icon: Wallet },
   { to: "/history", label: "Historique", icon: History },
   { to: "/reports", label: "Rapports", icon: BarChart3 },
   { to: "/settings", label: "Réglages", icon: SettingsIcon },
@@ -51,9 +43,8 @@ export function TopNav() {
 /**
  * Barre d'onglets basse, jusqu'à `lg`.
  *
- * Six onglets sur 390 px font 65 px chacun : au-dessus des 44 px minimum, et le libellé
- * tient sous l'icône. Un menu « Plus » aurait été plus élégant mais cacherait deux
- * destinations derrière un geste de plus, pour gagner une place dont on ne manque pas.
+ * Cinq onglets sur 390 px font 78 px chacun : au-dessus des 44 px minimum, et le libellé
+ * tient sous l'icône.
  *
  * `pb-[env(safe-area-inset-bottom)]` remonte la barre au-dessus de l'indicateur d'accueil
  * des iPhone sans encoche matérielle — sans lui, le dernier onglet est à moitié couvert.
@@ -61,7 +52,7 @@ export function TopNav() {
 export function BottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
-      <div className="mx-auto grid max-w-lg grid-cols-6">
+      <div className="mx-auto grid max-w-lg grid-cols-5">
         {NAV_LINKS.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}

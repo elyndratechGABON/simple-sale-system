@@ -1,7 +1,9 @@
 # Caisse POS
 
 Application de caisse offline-first. Toutes les données vivent dans IndexedDB via Dexie ;
-il n'y a **aucune logique serveur**.
+il n'y a **aucune logique serveur** dans l'app — l'orchestrateur (backend + dashboard +
+base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via son API
+(`VITE_ORCHESTRATOR_URL`).
 
 ## Commandes
 
@@ -20,6 +22,9 @@ il n'y a **aucune logique serveur**.
 | `src/lib/db.ts`               | **seul** module qui touche IndexedDB                      |
 | `src/lib/analytics.ts`        | agrégations, fonctions **pures** (ni DB ni React)         |
 | `src/lib/settings.ts`         | préférences localStorage + thème                          |
+| `src/lib/gatekeeper.ts`       | handshake, verrou suspend, messages — appliqués avant toute sync |
+| `src/lib/sync.ts`             | orchestration `backgroundSync`/`syncNow` (agrégats 7 j)   |
+| `src/components/SuspendedScreen.tsx` | écran blocage dur si suspension                    |
 | `src/lib/exports/`            | CSV, Excel, PDF, sauvegarde JSON                          |
 | `src/routes/index.tsx`        | page publique de présentation (`/`), hors app             |
 | `src/routes/_app.tsx`         | chrome de l'application : en-tête, transition, onboarding |
@@ -29,6 +34,12 @@ il n'y a **aucune logique serveur**.
 
 ## Landmines
 
+- **La suspension est un blocage dur** : `SuspendedScreen` (ni croix ni échappement) tant
+  que le compte n'est pas relancé. Une vente passée sous suspension resterait non-réglée.
+- **Ack implicite + idempotence.** `delivered_at` est posé au handshake suivant
+  (`last_applied_command_id`) ; `superseded_at` rend le double clic sur Prolonger inoffensif.
+- **Sync = profil + agrégats légers** (7 j, `computePeriodStats`), jamais les lignes de
+  vente brutes.
 - **`.gitignore` doit rester en UTF-8 sans BOM.** Il a été committé une fois en UTF-16LE :
   git ne parse que l'UTF-8, le fichier devenait un binaire à ses yeux, plus rien n'était
   ignoré et 39 109 fichiers de `node_modules` sont entrés dans le dépôt. Le build Vercel

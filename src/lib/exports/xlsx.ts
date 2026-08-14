@@ -33,9 +33,7 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
       { value: payload.label, type: String },
     ],
     [{ value: "Revenus", type: String }, money(stats.revenue)],
-    [{ value: "Bénéfice brut", type: String }, money(stats.profit)],
-    [{ value: "Dépenses", type: String }, money(stats.expenses)],
-    [{ value: "Bénéfice net", type: String }, money(stats.netProfit)],
+    [{ value: "Bénéfices", type: String }, money(stats.profit)],
     [
       { value: "Ventes", type: String },
       { value: stats.salesCount, type: Number },
@@ -49,12 +47,8 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
       { value: stats.itemsCount, type: Number },
     ],
     [
-      { value: "Marge brute", type: String },
+      { value: "Marge", type: String },
       { value: stats.marginRate, type: Number, format: "0.0%" },
-    ],
-    [
-      { value: "Marge nette", type: String },
-      { value: stats.netMarginRate, type: Number, format: "0.0%" },
     ],
     [{ value: "Panier moyen", type: String }, money(stats.averageBasket)],
     [
@@ -87,26 +81,12 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
 
   // Onglet séparé plutôt que fondu dans « Ventes » : contrairement au CSV qui est
   // mono-tabulaire, un classeur peut se permettre de garder les deux natures distinctes.
-  const depenses: Row[] = [
-    header("Date", "Catégorie", "Libellé", "Montant"),
-    ...[...payload.expenses]
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .map((e): Row => [
-        { value: new Date(e.timestamp), type: Date, format: "dd/mm/yyyy" },
-        { value: e.category, type: String },
-        { value: e.label, type: String },
-        money(e.amount),
-      ]),
-  ];
-
   const parJour: Row[] = [
-    header("Jour", "Revenus", "Bénéfice brut", "Dépenses", "Bénéfice net", "Ventes"),
+    header("Jour", "Revenus", "Bénéfice", "Ventes"),
     ...stats.days.map((d): Row => [
       { value: new Date(d.day), type: Date, format: "dd/mm/yyyy" },
       money(d.revenue),
       money(d.profit),
-      money(d.expenses),
-      money(d.netProfit),
       { value: d.salesCount, type: Number },
     ]),
   ];
@@ -126,7 +106,7 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
   ];
 
   const parTable: Row[] = [
-    header("Table", "Tournées", "Ventes", "Clients", "Revenus", "Bénéfice brut"),
+    header("Table", "Tournées", "Ventes", "Clients", "Revenus", "Bénéfice"),
     ...stats.byTable.map((t): Row => [
       { value: t.label, type: String },
       { value: t.rounds, type: Number },
@@ -138,7 +118,7 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
   ];
 
   const topArticles: Row[] = [
-    header("Rang", "Article", "Catégorie", "Quantité", "Revenus", "Bénéfice brut"),
+    header("Rang", "Article", "Catégorie", "Quantité", "Revenus", "Bénéfice"),
     ...stats.topProducts.map((p, index): Row => [
       { value: index + 1, type: Number },
       { value: p.name, type: String },
@@ -153,7 +133,6 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
   const sheets: Sheet<never>[] = [
     { sheet: "Résumé", data: resume },
     { sheet: "Ventes", data: ventes },
-    { sheet: "Dépenses", data: depenses },
     { sheet: "Par jour", data: parJour },
     { sheet: "Par catégorie", data: parCategorie },
     { sheet: "Par table", data: parTable },

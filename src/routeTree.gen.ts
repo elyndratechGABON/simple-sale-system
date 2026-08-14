@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
-import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppPosRouteImport } from './routes/_app/pos'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
@@ -26,11 +25,6 @@ const IndexRoute = IndexRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AppExpensesRoute = AppExpensesRouteImport.update({
-  id: '/expenses',
-  path: '/expenses',
-  getParentRoute: () => AppRoute,
 } as any)
 const AppHistoryRoute = AppHistoryRouteImport.update({
   id: '/history',
@@ -60,7 +54,6 @@ const AppStocksRoute = AppStocksRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/expenses': typeof AppExpensesRoute
   '/history': typeof AppHistoryRoute
   '/pos': typeof AppPosRoute
   '/reports': typeof AppReportsRoute
@@ -69,7 +62,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/expenses': typeof AppExpensesRoute
   '/history': typeof AppHistoryRoute
   '/pos': typeof AppPosRoute
   '/reports': typeof AppReportsRoute
@@ -80,7 +72,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
-  '/_app/expenses': typeof AppExpensesRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/pos': typeof AppPosRoute
   '/_app/reports': typeof AppReportsRoute
@@ -89,28 +80,13 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/expenses'
-    | '/history'
-    | '/pos'
-    | '/reports'
-    | '/settings'
-    | '/stocks'
+  fullPaths: '/' | '/history' | '/pos' | '/reports' | '/settings' | '/stocks'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/expenses'
-    | '/history'
-    | '/pos'
-    | '/reports'
-    | '/settings'
-    | '/stocks'
+  to: '/' | '/history' | '/pos' | '/reports' | '/settings' | '/stocks'
   id:
     | '__root__'
     | '/'
     | '/_app'
-    | '/_app/expenses'
     | '/_app/history'
     | '/_app/pos'
     | '/_app/reports'
@@ -138,13 +114,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_app/expenses': {
-      id: '/_app/expenses'
-      path: '/expenses'
-      fullPath: '/expenses'
-      preLoaderRoute: typeof AppExpensesRouteImport
-      parentRoute: typeof AppRoute
     }
     '/_app/history': {
       id: '/_app/history'
@@ -185,7 +154,6 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
-  AppExpensesRoute: typeof AppExpensesRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppPosRoute: typeof AppPosRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -194,7 +162,6 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppExpensesRoute: AppExpensesRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppPosRoute: AppPosRoute,
   AppReportsRoute: AppReportsRoute,

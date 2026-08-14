@@ -10,11 +10,35 @@
 // paramètres, via le hook `usePwaInstall`.
 import { useEffect } from "react";
 import { registerServiceWorker, requestPersistentStorage } from "@/lib/pwa";
+import { autoCloseDay } from "@/lib/db";
+import { backgroundSync } from "@/lib/sync";
+import { loadLockState } from "@/lib/gatekeeper";
+
+// Relance de la synchronisation d'arrière-plan : toutes les minutes tant que l'app est
+// ouverte. C'est elle qui fait arriver les données quand le PC du commerçant s'allume
+// après la caisse — l'échec d'une tentative ne condamne pas l'envoi.
+const SYNC_INTERVAL_MS = 60_000;
 
 export function PwaBootstrap() {
   useEffect(() => {
     registerServiceWorker();
     requestPersistentStorage();
+    // Clôture automatique : les ventes encaissées il y a plus de 24 h passent
+    // `day_closed` à chaque démarrage. L'affichage s'appuie sur `isClosed()`, qui lit
+    // l'heure, donc ce n'est pas ce qui verrouille ; c'est ce qui rend l'état durable.
+    autoCloseDay();
+    // Restaure un éventuel verrou de suspension persisté (AVANT le handshake, pour que
+    // la caisse reste bloquée même sans réseau), puis synchronise en silence : hors
+    // ligne ou serveur éteint, rien ne se passe et on réessaiera — au retour en ligne et
+    // toutes les minutes.
+    void loadLockState().then(() => backgroundSync());
+    const onOnline = () => void backgroundSync();
+    window.addEventListener("online", onOnline);
+    const interval = window.setInterval(() => void backgroundSync(), SYNC_INTERVAL_MS);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.clearInterval(interval);
+    };
   }, []);
 
   return null;

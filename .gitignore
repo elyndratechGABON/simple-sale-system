@@ -20,3 +20,10 @@ bun.lock
 
 # Artefacts du serveur Playwright MCP (captures d'écran, journaux de session) — pas du code.
 .playwright-mcp/
+
+# Secrets locaux (.env) : jamais versionnés.
+.env
+
+# Journaux (dev-server.log, etc.) : jamais versionnés.
+*.log
+

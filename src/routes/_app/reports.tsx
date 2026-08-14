@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { DateRange } from "react-day-picker";
-import { closeDay, startOfToday } from "@/lib/db";
+import { closeDay, listSalesToday } from "@/lib/db";
 import { computePeriodStats, lastDaysRange, type ProductBucket } from "@/lib/analytics";
 import { usePeriodData } from "@/hooks/use-period-data";
 import { usePreferences } from "@/hooks/use-preferences";
@@ -38,6 +38,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { describeSaveResult, getDocumentsDirectoryName, saveDocument } from "@/lib/files";
+import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { buildCsvBlob } from "@/lib/exports/csv";
 import { buildPdfBlob, captureChartPng, pdfFilename } from "@/lib/exports/pdf";
 import { buildXlsxBlob, xlsxFilename } from "@/lib/exports/xlsx";
@@ -66,7 +67,6 @@ type PresetKey = "today" | "7" | "30" | "custom";
 const chartConfig = {
   revenue: { label: "Revenus", color: "var(--chart-1)" },
   profit: { label: "Bénéfices", color: "var(--chart-2)" },
-  expenses: { label: "Dépenses", color: "var(--chart-5)" },
 } satisfies ChartConfig;
 
 function ReportsPage() {
@@ -100,16 +100,11 @@ function ReportsPage() {
   const { data } = usePeriodData(from, to);
   const sales = useMemo(() => data?.sales ?? [], [data]);
   const items = useMemo(() => data?.items ?? [], [data]);
-  const expenses = useMemo(() => data?.expenses ?? [], [data]);
 
-  const stats = useMemo(
-    () => computePeriodStats(sales, items, from, to, expenses),
-    [sales, items, from, to, expenses],
-  );
+  const stats = useMemo(() => computePeriodStats(sales, items, from, to), [sales, items, from, to]);
 
   // Période de même durée juste avant : pour « Aujourd'hui » c'est hier, pour « 7 jours »
-  // les 7 jours d'avant, pour une plage personnalisée la même longueur. Les dépenses de
-  // l'ancienne période voyagent avec les ventes (cf. usePeriodData).
+  // les 7 jours d'avant, pour une plage personnalisée la même longueur.
   const prevRange = useMemo(() => {
     const length = to - from;
     return { from: from - length, to: from };
@@ -122,7 +117,6 @@ function ReportsPage() {
         prev.data?.items ?? [],
         prevRange.from,
         prevRange.to,
-        prev.data?.expenses ?? [],
       ),
     [prev.data, prevRange.from, prevRange.to],
   );
@@ -139,7 +133,6 @@ function ReportsPage() {
     stats,
     sales,
     items,
-    expenses,
     workspaceName,
   };
 
@@ -147,7 +140,6 @@ function ReportsPage() {
     day: formatDayShort(d.day),
     revenue: d.revenue,
     profit: d.profit,
-    expenses: d.expenses,
   }));
 
   const closeMut = useMutation({
@@ -158,9 +150,14 @@ function ReportsPage() {
     },
   });
 
-  const salesToday = sales.filter(
-    (s) => s.timestamp >= startOfToday() && s.timestamp < startOfToday() + 86400000,
-  ).length;
+  // Les ventes du jour en propre, indépendamment de la période affichée : la clôture
+  // verrouille AUJOURD'HUI, même si le rapport montre les 30 derniers jours ou une
+  // plage personnalisée du passé.
+  const { data: salesToday = [] } = useQuery({
+    queryKey: ["sales", "today"],
+    queryFn: listSalesToday,
+  });
+  const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
@@ -210,51 +207,32 @@ function ReportsPage() {
         <>
           {/* Vue Simple : la synthèse qu'on lit en dix secondes — 4 KPI, le top des
               ventes, et la clôture. Pas de graphique ni de tableaux croisés. */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Revenus" value={formatFCFA(stats.revenue)} highlight large />
-            <StatCard
-              label="Bénéfices"
-              value={formatFCFA(stats.netProfit)}
-              hint="net, dépenses déduites"
-              highlight
-              large
-            />
-            <StatCard label="Dépenses" value={formatFCFA(stats.expenses)} large />
+            <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
             <StatCard label="Ventes" value={String(stats.salesCount)} large />
           </div>
 
           <TopArticlesCard products={topSimple} rest={topRestSimple} />
 
           <CloseCard
-            salesToday={salesToday}
+            salesCount={salesToday.length}
+            total={todayTotal}
             busy={closeMut.isPending}
-            onClose={() => {
-              if (
-                confirm("Clôturer la journée ? Les ventes ne pourront plus être annulées sans PIN.")
-              ) {
-                closeMut.mutate();
-              }
-            }}
+            onClose={() => closeMut.mutate()}
           />
         </>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Revenus" value={formatFCFA(stats.revenue)} highlight large />
-            <StatCard
-              label="Bénéfices"
-              value={formatFCFA(stats.netProfit)}
-              hint="net, dépenses déduites"
-              highlight
-              large
-            />
-            <StatCard label="Dépenses" value={formatFCFA(stats.expenses)} large />
+            <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
             <StatCard label="Ventes" value={String(stats.salesCount)} />
             <StatCard label="Clients" value={String(stats.customersCount)} />
             <StatCard
               label="Marge"
-              value={formatPercent(stats.netMarginRate)}
-              hint="bénéfice net ÷ revenus"
+              value={formatPercent(stats.marginRate)}
+              hint="bénéfice ÷ revenus"
             />
             <StatCard label="Panier moyen" value={formatFCFA(stats.averageBasket)} />
             <StatCard label="Articles vendus" value={String(stats.itemsCount)} />
@@ -284,15 +262,9 @@ function ReportsPage() {
                   isMoney
                 />
                 <ComparisonCell
-                  label="Bénéfice net"
-                  value={stats.netProfit}
-                  previous={prevStats.netProfit}
-                  isMoney
-                />
-                <ComparisonCell
-                  label="Dépenses"
-                  value={stats.expenses}
-                  previous={prevStats.expenses}
+                  label="Bénéfices"
+                  value={stats.profit}
+                  previous={prevStats.profit}
                   isMoney
                 />
                 <ComparisonCell
@@ -312,8 +284,8 @@ function ReportsPage() {
                   previous={prevStats.itemsCount}
                 />
               </div>
-              {/* Les deux jours qui racontent la période : le pic de vente et le jour à perte.
-              Tout le reste (marges, croissance) est déjà dans les KPI ci-dessus. */}
+              {/* Les deux jours qui racontent la période : le pic de vente et le jour le
+              moins rentable. Tout le reste (marges, croissance) est déjà dans les KPI. */}
               <div className="border-t pt-3 grid gap-2 text-sm">
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Meilleur jour de vente</span>
@@ -327,7 +299,7 @@ function ReportsPage() {
                   <span className="text-muted-foreground">Jour le moins rentable</span>
                   <span className="font-medium text-right">
                     {stats.worstDay
-                      ? `${formatDay(stats.worstDay.day)} — ${formatFCFA(stats.worstDay.netProfit)} net`
+                      ? `${formatDay(stats.worstDay.day)} — ${formatFCFA(stats.worstDay.profit)}`
                       : "aucune activité sur la période"}
                   </span>
                 </div>
@@ -364,17 +336,6 @@ function ReportsPage() {
                       type="monotone"
                       stroke="var(--color-profit)"
                       strokeWidth={2}
-                      dot={false}
-                    />
-                    {/* Pointillés : les dépenses sont une série de nature différente des
-                    deux autres, la ligner pleine les mettrait sur le même plan. */}
-                    <Line
-                      dataKey="expenses"
-                      name="Dépenses"
-                      type="monotone"
-                      stroke="var(--color-expenses)"
-                      strokeWidth={2}
-                      strokeDasharray="4 4"
                       dot={false}
                     />
                   </LineChart>
@@ -449,7 +410,7 @@ function ReportsPage() {
                       <TableHead className="text-right">Ventes</TableHead>
                       <TableHead className="text-right">Clients</TableHead>
                       <TableHead className="text-right">Revenus</TableHead>
-                      <TableHead className="text-right">Bénéfice brut</TableHead>
+                      <TableHead className="text-right">Bénéfice</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -476,15 +437,10 @@ function ReportsPage() {
           <ExportCard payload={payload} chartRef={chartRef} />
 
           <CloseCard
-            salesToday={salesToday}
+            salesCount={salesToday.length}
+            total={todayTotal}
             busy={closeMut.isPending}
-            onClose={() => {
-              if (
-                confirm("Clôturer la journée ? Les ventes ne pourront plus être annulées sans PIN.")
-              ) {
-                closeMut.mutate();
-              }
-            }}
+            onClose={() => closeMut.mutate()}
           />
         </>
       )}
@@ -581,24 +537,44 @@ function TopArticlesCard({ products, rest }: { products: ProductBucket[]; rest: 
 }
 
 function CloseCard({
-  salesToday,
+  salesCount,
+  total,
   busy,
   onClose,
 }: {
-  salesToday: number;
+  salesCount: number;
+  total: number;
   busy: boolean;
   onClose: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Clôture</CardTitle>
       </CardHeader>
       <CardContent>
-        <Button variant="destructive" onClick={onClose} disabled={salesToday === 0 || busy}>
+        <Button
+          variant="destructive"
+          onClick={() => setOpen(true)}
+          disabled={salesCount === 0 || busy}
+        >
           <Lock className="h-4 w-4 mr-2" /> Clôturer la journée
         </Button>
-        <p className="mt-2 text-sm text-muted-foreground">{salesToday} vente(s) aujourd'hui.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {salesCount} vente{salesCount > 1 ? "s" : ""} aujourd'hui.
+        </p>
+        <CloseDayDialog
+          open={open}
+          onOpenChange={setOpen}
+          salesCount={salesCount}
+          total={total}
+          busy={busy}
+          onConfirm={() => {
+            setOpen(false);
+            onClose();
+          }}
+        />
       </CardContent>
     </Card>
   );

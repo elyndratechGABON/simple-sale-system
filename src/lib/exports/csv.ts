@@ -18,23 +18,13 @@ const escape = (value: string) => (value.includes(SEP) ? `"${value.replace(/"/g,
 export function buildCsvBlob(payload: ReportPayload): Blob {
   const byId = itemsBySale(payload);
   const rows = [
-    [
-      "type",
-      "date",
-      "heure",
-      "table",
-      "libelle",
-      "total",
-      "donne",
-      "rendu",
-      "benefice",
-      "clients",
-    ].join(SEP),
+    ["date", "heure", "table", "libelle", "total", "donne", "rendu", "benefice", "clients"].join(
+      SEP,
+    ),
   ];
 
-  // Ventes et dépenses dans un SEUL fichier, distinguées par la colonne `type` : un CSV
-  // est mono-tabulaire, et deux fichiers séparés obligeraient l'utilisateur à les
-  // recroiser à la main pour retrouver le bénéfice net. Le tri est chronologique global.
+  // Une ligne par vente, triée du plus ancien au plus récent : un tableur se lit dans
+  // l'ordre du service.
   const rowsByTime: { timestamp: number; cells: string[] }[] = [];
 
   for (const sale of payload.sales) {
@@ -43,7 +33,6 @@ export function buildCsvBlob(payload: ReportPayload): Blob {
     rowsByTime.push({
       timestamp: sale.timestamp,
       cells: [
-        "vente",
         new Date(sale.timestamp).toLocaleDateString("fr-FR"),
         formatTime(sale.timestamp),
         // Vide sur une vente au comptoir. Cette colonne permet de regrouper le chiffre
@@ -60,33 +49,13 @@ export function buildCsvBlob(payload: ReportPayload): Blob {
     });
   }
 
-  for (const expense of payload.expenses) {
-    rowsByTime.push({
-      timestamp: expense.timestamp,
-      cells: [
-        "depense",
-        new Date(expense.timestamp).toLocaleDateString("fr-FR"),
-        formatTime(expense.timestamp),
-        "", // colonne table : une dépense n'en a pas
-        escape(`${expense.category} — ${expense.label}`),
-        // Montant NÉGATIF : sommer la colonne `total` du fichier doit donner le résultat
-        // net, pas un chiffre d'affaires gonflé par les sorties d'argent.
-        String(-expense.amount),
-        "",
-        "",
-        String(-expense.amount),
-        "",
-      ],
-    });
-  }
-
   // Les ventes arrivent du plus récent au plus ancien ; un tableur se lit dans l'ordre.
   for (const row of rowsByTime.sort((a, b) => a.timestamp - b.timestamp)) {
     rows.push(row.cells.join(SEP));
   }
 
-  // Résumés en fin de fichier, séparés par une ligne vide. Même colonne `type` pour
-  // distinguer les blocs sans rien casser au croisé dynamique des lignes de détail.
+  // Résumés en fin de fichier, séparés par une ligne vide. Première colonne de chaque
+  // bloc pour distinguer les sections sans rien casser au croisé dynamique.
   if (payload.stats.byTable.length > 0) {
     rows.push("");
     rows.push(["type", "table", "tournees", "ventes", "clients", "revenus", "benefice"].join(SEP));

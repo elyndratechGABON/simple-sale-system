@@ -2,15 +2,27 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Minus, Trash2, ShoppingCart, CheckCircle2, X, Store, Utensils } from "lucide-react";
+import {
+  Plus,
+  Minus,
+  Trash2,
+  ShoppingCart,
+  CheckCircle2,
+  X,
+  Store,
+  Utensils,
+  Lock,
+} from "lucide-react";
 import {
   addRound,
   cancelSale,
+  closeDay,
   closeTable,
   createSale,
   getSaleItems,
   listOpenTables,
   listProducts,
+  listSalesToday,
   openTable,
   payRound,
   payTable,
@@ -36,8 +48,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
+import { ProductForm } from "@/components/ProductForm";
+import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +105,7 @@ type Cashing = null | { kind: "table" } | { kind: "round"; orderedAt: number };
 
 function PosPage() {
   const qc = useQueryClient();
-  const { tables: tableLabels } = usePreferences();
+  const { tables: tableLabels, tablesEnabled } = usePreferences();
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
@@ -101,6 +116,14 @@ function PosPage() {
     queryKey: ["sales", "open"],
     queryFn: listOpenTables,
   });
+
+  // Ventes réglées du jour : la barre « Aujourd'hui » donne au serveur le total courant
+  // sans quitter la caisse, et porte la clôture de fin de service.
+  const { data: salesToday = [] } = useQuery({
+    queryKey: ["sales", "today"],
+    queryFn: listSalesToday,
+  });
+  const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 
   const [target, setTarget] = useState<Target>({ kind: "direct" });
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -123,6 +146,8 @@ function PosPage() {
   // et ce commutateur change la STRUCTURE (panneau latéral ou feuille), pas juste le style.
   const compact = useIsMobile(1024);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   // Table DÉRIVÉE de la liste des additions ouvertes, jamais copiée dans l'état local :
   // une table encaissée ou annulée disparaît de la liste, `activeTable` retombe à null et
@@ -337,6 +362,16 @@ function PosPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const closeDayMut = useMutation({
+    mutationFn: closeDay,
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      setCloseOpen(false);
+      toast.success(`${n} vente(s) clôturée(s)`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   /** Change de destination et remet à zéro tout ce qui n'a de sens que pour la précédente. */
   function selectTarget(next: Target) {
     setTarget(next);
@@ -417,45 +452,88 @@ function PosPage() {
         compact && (activeTable !== null || lines.length > 0) && "pb-20",
       )}
     >
+      {/* Barre du jour. Absente tant qu'aucune vente n'est encaissée : rien à clôturer.
+          Ensuite elle tient le total courant sous les yeux du serveur et porte la clôture
+          de fin de service — finir la journée ne demande plus de changer d'écran. */}
+      {salesToday.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-2.5">
+          <span className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Aujourd'hui</span>
+            <span className="font-bold tabular-nums">{formatFCFA(todayTotal)}</span>
+            <span className="text-muted-foreground">
+              · {salesToday.length} vente{salesToday.length > 1 ? "s" : ""}
+            </span>
+          </span>
+          <Button variant="outline" size="sm" onClick={() => setCloseOpen(true)}>
+            <Lock className="h-4 w-4 mr-1" /> Clôturer la journée
+          </Button>
+        </div>
+      )}
+
       {/* Plan de salle. Toutes les tables sont là, occupées ou non, TOUJOURS à la même
           place : c'est ce qui permet de lire l'état du service d'un coup d'œil au lieu de
           chercher un nom dans une liste qui bouge. Un tap sur une table libre l'ouvre
-          directement, un appui long sur une table occupée la libère. */}
-      <div className="space-y-2">
-        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
-          {floorPlan.map(({ label, table }) => (
-            <TableCard
-              key={label}
-              label={label}
-              table={table}
-              active={activeTable?.table === label}
-              disabled={openMut.isPending || closeMut.isPending}
-              onClick={() =>
-                table ? selectTarget({ kind: "table", saleId: table.id }) : openMut.mutate(label)
-              }
-              onLongPress={table ? () => closeMut.mutate(table.id) : undefined}
+          directement, un appui long sur une table occupée la libère.
+          Masqué pour un commerce sans système de tables (snack/bar) : la caisse se réduit
+          alors au comptoir et à l'encaissement immédiat. */}
+      {tablesEnabled && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
+            {floorPlan.map(({ label, table }) => (
+              <TableCard
+                key={label}
+                label={label}
+                table={table}
+                active={activeTable?.table === label}
+                disabled={openMut.isPending || closeMut.isPending}
+                onClick={() =>
+                  table ? selectTarget({ kind: "table", saleId: table.id }) : openMut.mutate(label)
+                }
+                onLongPress={table ? () => closeMut.mutate(table.id) : undefined}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <TargetChip
+              active={activeTable === null}
+              onClick={() => selectTarget({ kind: "direct" })}
+              icon={Store}
+              label="Comptoir"
             />
-          ))}
+            <Button variant="outline" className="h-11" onClick={addTable}>
+              <Plus className="h-4 w-4 mr-1" /> Nouvelle table
+            </Button>
+          </div>
+          {/* Légende du code couleur des étapes : toujours affichée, elle est ce qui rend
+              la lecture d'un coup d'œil possible pour un serveur qui ne connaît pas encore
+              le code. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-border" />
+              Libre
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-warning" />
+              Commande à prendre
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-primary" />
+              En service
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-info" />
+              Encaissée en partie
+            </span>
+          </div>
+          {/* Le geste est invisible sans ce rappel, et il n'existe qu'une fois qu'une table
+              est occupée : afficher la phrase en permanence apprendrait un geste inutile. */}
+          {openTables.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Appui long sur une table occupée pour la libérer.
+            </p>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <TargetChip
-            active={activeTable === null}
-            onClick={() => selectTarget({ kind: "direct" })}
-            icon={Store}
-            label="Comptoir"
-          />
-          <Button variant="outline" className="h-11" onClick={addTable}>
-            <Plus className="h-4 w-4 mr-1" /> Nouvelle table
-          </Button>
-        </div>
-        {/* Le geste est invisible sans ce rappel, et il n'existe qu'une fois qu'une table
-            est occupée : afficher la phrase en permanence apprendrait un geste inutile. */}
-        {openTables.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Appui long sur une table occupée pour la libérer.
-          </p>
-        )}
-      </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
         {/* Products */}
@@ -503,14 +581,33 @@ function PosPage() {
             })}
           </div>
           {products.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Aucun produit au catalogue. Utilisez « Article manuel » dans le panier pour encaisser
-              tout de suite, ou{" "}
-              <Link to="/stocks" className="text-primary underline">
-                ajoutez vos produits
-              </Link>
-              .
-            </p>
+            // Catalogue vide : c'est le tout premier lancement, et la main est déjà ici.
+            // Créer le premier produit sans quitter la caisse évite au nouveau commerçant
+            // de chercher l'écran Stocks au moment où il n'a encore rien à vendre.
+            <Card>
+              <CardContent className="space-y-3 p-8 text-center">
+                <p className="font-semibold">Votre catalogue est vide.</p>
+                <p className="text-sm text-muted-foreground">
+                  Créez votre premier produit pour commencer à vendre.
+                </p>
+                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="lg">
+                      <Plus className="h-5 w-5 mr-1" /> Créer un produit
+                    </Button>
+                  </DialogTrigger>
+                  <ProductForm editing={null} onClose={() => setCreateOpen(false)} />
+                </Dialog>
+                <p className="text-sm text-muted-foreground">
+                  Vous pouvez aussi utiliser « Article manuel » dans le panier pour encaisser sans
+                  catalogue, ou gérer vos produits dans{" "}
+                  <Link to="/stocks" className="text-primary underline">
+                    Stocks
+                  </Link>
+                  .
+                </p>
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -898,6 +995,15 @@ function PosPage() {
         onAdd={(l) => setFreeLines((f) => [...f, l])}
       />
 
+      <CloseDayDialog
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
+        salesCount={salesToday.length}
+        total={todayTotal}
+        busy={closeDayMut.isPending}
+        onConfirm={() => closeDayMut.mutate()}
+      />
+
       <Dialog open={cancelPinOpen} onOpenChange={setCancelPinOpen}>
         <DialogContent>
           <DialogHeader>
@@ -997,6 +1103,32 @@ function nextTableLabel(labels: string[]): string {
 const LONG_PRESS_MS = 500;
 
 /**
+ * Étape d'une table, lue sur les données existantes — aucun geste supplémentaire.
+ *
+ *  - "libre"    : aucune addition ouverte.
+ *  - "awaiting" : table ouverte, rien de servi (`total === 0`) — la commande n'est pas
+ *                 encore prise, c'est l'étape la plus urgente du service.
+ *  - "service"  : table ouverte avec du service (`total > 0`) — le travail de la table
+ *                 est en cours, du stock est sorti et de l'argent est dû.
+ *  - "paid"     : table ouverte dont au moins une TOURNÉE a déjà été encaissée
+ *                 (`rounds_paid` posé par `payRound`) — l'argent entre au passage, la
+ *                 table reste ouverte sur ce qui reste dû. C'est la différence demandée :
+ *                 distinguer une table qui a déjà encaissé d'une table servie mais dont
+ *                 rien n'a encore été payé.
+ *
+ * Chaque étape a sa couleur sur le plan de salle, expliquée par la légende : libre est
+ * neutre, « commande à prendre » est ambre, « en service » est la couleur de marque,
+ * « déjà encaissée » est bleue.
+ */
+type TableStage = "libre" | "awaiting" | "service" | "paid";
+
+function tableStage(table: Sale | null): TableStage {
+  if (!table) return "libre";
+  if ((table.rounds_paid ?? 0) > 0) return "paid";
+  return table.total > 0 ? "service" : "awaiting";
+}
+
+/**
  * Une table du plan de salle.
  *
  * Libre ou occupée, la carte garde la même taille et la même place : c'est ce qui rend la
@@ -1018,6 +1150,9 @@ function TableCard({
   onClick: () => void;
   onLongPress?: () => void;
 }) {
+  const stage = tableStage(table);
+  // `busy` sert aussi de narrowing : TypeScript ne sait pas déduire `table` depuis
+  // `stage`, il sait depuis `busy`.
   const busy = table !== null;
   const timer = useRef<number | null>(null);
   // Le `pointerup` qui suit un appui long déclenche aussi le `click` : sans ce drapeau,
@@ -1055,9 +1190,15 @@ function TableCard({
       disabled={disabled}
       aria-pressed={active}
       aria-label={
-        busy
-          ? `Table ${label}, ${formatFCFA(table.total)} en cours. Appui long pour libérer.`
-          : `Table ${label}, libre`
+        !busy
+          ? `Table ${label}, libre`
+          : stage === "awaiting"
+            ? `Table ${label}, ouverte, en attente de commande`
+            : stage === "paid"
+              ? table.total > 0
+                ? `Table ${label}, partiellement encaissée, ${formatFCFA(table.total)} restants`
+                : `Table ${label}, réglée. Appui long pour libérer.`
+              : `Table ${label}, ${formatFCFA(table.total)} en cours. Appui long pour libérer.`
       }
       className={cn(
         "select-none [-webkit-touch-callout:none]",
@@ -1066,15 +1207,50 @@ function TableCard({
         // le serveur touche le plus souvent.
         "flex min-h-[64px] flex-col rounded-lg border px-2 py-1.5 text-left transition-all",
         "hover:border-primary active:scale-[0.98] disabled:opacity-60",
-        busy ? "border-primary/40 bg-accent" : "bg-card",
+        stage === "libre" && "bg-card",
+        stage === "awaiting" && "border-warning/60 bg-warning/15",
+        stage === "service" && "border-primary/40 bg-accent",
+        stage === "paid" && "border-info/60 bg-info/15",
         active && "ring-2 ring-primary ring-offset-1",
       )}
     >
       <span className="flex items-center justify-between gap-1">
         <span className="truncate text-sm font-semibold leading-tight">{label}</span>
-        {busy && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+        {stage !== "libre" && (
+          <span
+            className={cn(
+              "h-2 w-2 shrink-0 rounded-full",
+              stage === "awaiting" ? "bg-warning" : stage === "paid" ? "bg-info" : "bg-primary",
+            )}
+          />
+        )}
       </span>
-      {busy ? (
+      {!busy ? (
+        <span className="text-xs leading-tight text-muted-foreground">libre</span>
+      ) : stage === "awaiting" ? (
+        <>
+          <span className="font-bold leading-tight text-warning tabular-nums">commande</span>
+          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
+            {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+          </span>
+        </>
+      ) : stage === "paid" && table.total <= 0 ? (
+        <>
+          <span className="font-bold leading-tight text-info tabular-nums">réglée</span>
+          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
+            {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+          </span>
+        </>
+      ) : stage === "paid" ? (
+        <>
+          <span className="font-bold leading-tight text-info tabular-nums">
+            {formatFCFA(table.total)}
+          </span>
+          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
+            encaissée · {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+          </span>
+        </>
+      ) : (
         <>
           <span className="font-bold leading-tight text-primary tabular-nums">
             {formatFCFA(table.total)}
@@ -1083,8 +1259,6 @@ function TableCard({
             {table.opened_at ? formatTime(table.opened_at) : "occupée"}
           </span>
         </>
-      ) : (
-        <span className="text-xs leading-tight text-muted-foreground">libre</span>
       )}
     </button>
   );

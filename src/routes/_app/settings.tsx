@@ -9,6 +9,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
+  ChefHat,
+  CupSoda,
   Download,
   FolderOpen,
   KeyRound,
@@ -19,7 +21,13 @@ import {
   Utensils,
   X,
 } from "lucide-react";
-import { applyTheme, PRESET_HUES, savePreferences, swatchColor } from "@/lib/settings";
+import {
+  applyTheme,
+  PRESET_HUES,
+  savePreferences,
+  swatchColor,
+  type Preferences,
+} from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import {
@@ -39,10 +47,12 @@ import {
 } from "@/lib/exports/json";
 import { setPin, verifyPin } from "@/lib/pin";
 import type { DatabaseSnapshot } from "@/lib/db";
+import { ShopCard } from "@/components/ShopCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +88,10 @@ export const Route = createFileRoute("/_app/settings")({
 });
 
 function SettingsPage() {
+  // La carte « Tables » est hors service tant que le système de tables est coupé : le
+  // mode se réactive depuis la carte « Type de commerce », où vit l'interrupteur.
+  const { tablesEnabled } = usePreferences();
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
       <div>
@@ -88,13 +102,125 @@ function SettingsPage() {
       </div>
 
       <InstallCard />
+      <ShopCard />
       <WorkspaceCard />
-      <TablesCard />
+      <BusinessCard />
+      {tablesEnabled && <TablesCard />}
       <ColorCard />
       <DirectoryCard />
       <BackupCard />
       <PinCard />
     </div>
+  );
+}
+
+/**
+ * Type de commerce et système de tables — les deux choix faits à l'onboarding.
+ *
+ * L'interrupteur de tables vit ici et non dans la carte « Tables » : une carte masquée
+ * ne peut pas rendre son propre interrupteur. La carte « Tables » (gestion des libellés)
+ * n'apparaît, elle, que lorsque le système est actif.
+ */
+function BusinessCard() {
+  const qc = useQueryClient();
+  const { businessType, tablesEnabled } = usePreferences();
+
+  function commit(patch: Partial<Preferences>) {
+    savePreferences(patch);
+    qc.invalidateQueries({ queryKey: ["preferences"] });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Store className="h-4 w-4" /> Type de commerce
+        </CardTitle>
+        <CardDescription>
+          Restaurant : on prend la commande, on sert, puis on encaisse. Snack/bar : encaissement
+          immédiat à la commande.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <TypeOption
+            selected={businessType === "snack"}
+            onClick={() => commit({ businessType: "snack" })}
+            icon={CupSoda}
+            title="Snack / Bar"
+            description="Service direct au comptoir."
+          />
+          <TypeOption
+            selected={businessType === "restaurant"}
+            onClick={() => commit({ businessType: "restaurant" })}
+            icon={ChefHat}
+            title="Restaurant / Fastfood"
+            description="Commande puis encaissement."
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+          <div>
+            <div className="flex items-center gap-2 font-medium">
+              <Utensils className="h-4 w-4" /> Système de tables
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {tablesEnabled
+                ? "Commandes par table, encaissées en fin de service."
+                : "Service direct : chaque vente est encaissée à la commande."}
+            </p>
+          </div>
+          <Switch
+            checked={tablesEnabled}
+            onCheckedChange={(v) => commit({ tablesEnabled: v })}
+            aria-label="Activer le système de tables"
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Bouton de choix du type de commerce, dans Paramètres. */
+function TypeOption({
+  selected,
+  onClick,
+  icon: Icon,
+  title,
+  description,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  icon: typeof Store;
+  title: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        "flex items-start gap-3 rounded-xl border p-3 text-left transition-all",
+        selected
+          ? "border-primary bg-accent ring-2 ring-primary ring-offset-1"
+          : "bg-card hover:border-primary hover:bg-accent",
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 rounded-lg p-2",
+          selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <span>
+        <span className="block font-semibold">{title}</span>
+        <span className="block text-sm text-muted-foreground">{description}</span>
+      </span>
+      {selected && <Check className="ml-auto mt-1 h-5 w-5 shrink-0 text-primary" />}
+    </button>
   );
 }
 
@@ -447,7 +573,7 @@ function BackupCard() {
           <Save className="h-4 w-4" /> Sauvegarde et restauration
         </CardTitle>
         <CardDescription>
-          La sauvegarde contient toute la base : produits, ventes, lignes et dépenses.
+          La sauvegarde contient toute la base : produits, ventes et lignes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -491,7 +617,9 @@ function BackupCard() {
                   <ul className="text-sm space-y-0.5">
                     <li>{pending.summary.products} produit(s)</li>
                     <li>{pending.summary.sales} vente(s)</li>
-                    <li>{pending.summary.expenses} dépense(s)</li>
+                    {pending.summary.subscriptions > 0 && (
+                      <li>{pending.summary.subscriptions} abonnement(s)</li>
+                    )}
                     {pending.summary.exportedAt && (
                       <li className="text-muted-foreground">
                         Sauvegarde du {new Date(pending.summary.exportedAt).toLocaleString("fr-FR")}

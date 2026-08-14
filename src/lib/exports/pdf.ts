@@ -78,14 +78,11 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
     head: [["Indicateur", "Valeur"]],
     body: [
       ["Revenus", money(stats.revenue)],
-      ["Bénéfice brut", money(stats.profit)],
-      ["Dépenses", money(stats.expenses)],
-      ["Bénéfice net", money(stats.netProfit)],
+      ["Bénéfices", money(stats.profit)],
       ["Ventes", String(stats.salesCount)],
       ["Clients", String(stats.customersCount)],
       ["Articles vendus", String(stats.itemsCount)],
-      ["Marge brute", formatPercent(stats.marginRate)],
-      ["Marge nette", formatPercent(stats.netMarginRate)],
+      ["Marge", formatPercent(stats.marginRate)],
       ["Panier moyen", money(stats.averageBasket)],
       ["Taux de croissance", formatPercent(stats.growthRate, true)],
       [
@@ -97,7 +94,7 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
       [
         "Jour le moins rentable",
         stats.worstDay
-          ? `${formatDayShort(stats.worstDay.day)} — ${money(stats.worstDay.netProfit)} net`
+          ? `${formatDayShort(stats.worstDay.day)} — ${money(stats.worstDay.profit)}`
           : "—",
       ],
     ],
@@ -119,13 +116,11 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
 
   autoTable(doc, {
     startY: y,
-    head: [["Jour", "Revenus", "Brut", "Dépenses", "Net", "Ventes"]],
+    head: [["Jour", "Revenus", "Bénéfice", "Ventes"]],
     body: stats.days.map((d) => [
       formatDayShort(d.day),
       money(d.revenue),
       money(d.profit),
-      money(d.expenses),
-      money(d.netProfit),
       String(d.salesCount),
     ]),
     theme: "grid",
@@ -133,22 +128,6 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
     margin: { left: margin, right: margin },
   });
   y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
-
-  // Le détail des dépenses n'est imprimé que s'il y en a : une table vide dans un
-  // rapport donne l'impression d'un bug.
-  if (payload.expenses.length > 0) {
-    autoTable(doc, {
-      startY: y,
-      head: [["Date", "Catégorie", "Libellé", "Montant"]],
-      body: [...payload.expenses]
-        .sort((a, b) => a.timestamp - b.timestamp)
-        .map((e) => [formatDayShort(e.timestamp), e.category, e.label, money(e.amount)]),
-      theme: "grid",
-      headStyles: { fillColor: [22, 128, 84] },
-      margin: { left: margin, right: margin },
-    });
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
-  }
 
   autoTable(doc, {
     startY: y,
@@ -170,7 +149,7 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
     autoTable(doc, {
       startY: y,
-      head: [["Table", "Tournées", "Ventes", "Clients", "Revenus", "Bénéfice brut"]],
+      head: [["Table", "Tournées", "Ventes", "Clients", "Revenus", "Bénéfice"]],
       body: stats.byTable.map((t) => [
         t.label,
         String(t.rounds),
@@ -189,7 +168,7 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 24;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Article", "Catégorie", "Qté", "Revenus", "Bénéfice brut"]],
+      head: [["#", "Article", "Catégorie", "Qté", "Revenus", "Bénéfice"]],
       body: stats.topProducts.map((p, index) => [
         String(index + 1),
         p.name,
