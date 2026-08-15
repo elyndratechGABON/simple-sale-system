@@ -7,6 +7,10 @@
 import { useSyncExternalStore } from "react";
 import { LockKeyhole } from "lucide-react";
 import { getLockSnapshot, subscribeLock } from "@/lib/gatekeeper";
+import { Button } from "@/components/ui/button";
+
+// Lien WhatsApp du service client (à adapter si le numéro change).
+const SUPPORT_WHATSAPP = "https://wa.me/24176505254";
 
 export function SuspendedScreen() {
   const locked = useSyncExternalStore(subscribeLock, getLockSnapshot);
@@ -21,7 +25,15 @@ export function SuspendedScreen() {
         <h1 className="text-lg font-semibold text-card-foreground">Abonnement suspendu</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Votre abonnement a été suspendu. La caisse est bloquée tant que le renouvellement n'est
-          pas enregistré. Contactez le commerçant pour régulariser votre situation.
+          pas enregistré.
+        </p>
+        <Button asChild className="mt-6 w-full">
+          <a href={SUPPORT_WHATSAPP} target="_blank" rel="noreferrer">
+            Contacter le service client
+          </a>
+        </Button>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Renouvelez votre abonnement via WhatsApp, votre caisse sera relancée rapidement.
         </p>
       </div>
     </div>
