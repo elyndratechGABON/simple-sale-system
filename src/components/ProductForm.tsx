@@ -85,7 +85,7 @@ export function ProductForm({
             placeholder="Optionnel"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        {productType === "service" ? (
           <div>
             <Label htmlFor="price">Prix de vente</Label>
             <Input
@@ -96,28 +96,43 @@ export function ProductForm({
               placeholder="300"
             />
           </div>
-          <div>
-            <Label htmlFor="stock">Stock</Label>
-            <Input
-              id="stock"
-              inputMode="numeric"
-              value={stock}
-              onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
-              placeholder="50"
-              disabled={unlimited}
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="unlimited"
-            checked={unlimited}
-            onCheckedChange={(v) => setUnlimited(Boolean(v))}
-          />
-          <Label htmlFor="unlimited" className="cursor-pointer">
-            Stock illimité (service)
-          </Label>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="price">Prix de vente</Label>
+                <Input
+                  id="price"
+                  inputMode="numeric"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+                  placeholder="300"
+                />
+              </div>
+              <div>
+                <Label htmlFor="stock">Stock</Label>
+                <Input
+                  id="stock"
+                  inputMode="numeric"
+                  value={stock}
+                  onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
+                  placeholder="50"
+                  disabled={unlimited}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="unlimited"
+                checked={unlimited}
+                onCheckedChange={(v) => setUnlimited(Boolean(v))}
+              />
+              <Label htmlFor="unlimited" className="cursor-pointer">
+                Stock illimité
+              </Label>
+            </div>
+          </>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>Type</Label>
@@ -135,7 +150,10 @@ export function ProductForm({
                 type="button"
                 variant={productType === "service" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setProductType("service")}
+                onClick={() => {
+                  setProductType("service");
+                  setUnlimited(true);
+                }}
                 className="flex-1"
               >
                 Prestation
