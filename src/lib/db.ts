@@ -102,6 +102,8 @@ export interface Sale extends SyncFields {
   rounds_paid?: number;
   /** Nom du client (services : coiffeur, salon, etc.). Absent sur les ventes classiques. */
   client_name?: string;
+  /** Référence vers le registre clients. Absent si le client n'est pas enregistré. */
+  client_id?: string;
 }
 
 export interface SaleItem extends SyncFields {
@@ -146,6 +148,21 @@ export interface Subscription extends SyncFields {
   paid: boolean;
 }
 
+/**
+ * Registre clients du salon (cluster service). Fiche simple : nom, téléphone,
+ * date de naissance (pour les anniversaires), et notes libres.
+ * L'historique des visites se déduit des ventes liées via `client_id`.
+ */
+export interface Client extends SyncFields {
+  id: string;
+  name: string;
+  phone?: string;
+  /** Timestamp (début de journée) pour les rappels d'anniversaire. */
+  birthday?: number;
+  /** Notes libres (allergies, préférences, etc.). */
+  notes?: string;
+}
+
 export interface Setting {
   key: string;
   value: unknown;
@@ -170,6 +187,27 @@ export interface ConsignmentTransaction extends SyncFields {
   sale_id?: string;
   /** Nombre de bouteilles. */
   quantity: number;
+}
+
+/**
+ * Coût d'acquisition saisi manuellement pour un produit donné sur une période.
+ * Un seul enregistrement par (product_id, period_from) : si l'utilisateur met
+ * à jour le coût, on fait un upsert.
+ *
+ * Le bénéfice est calculé dans analytics.ts comme :
+ *   profit = revenue - Σ(expenses.cost)
+ */
+export interface ProductExpense {
+  id?: number;
+  /** Identifiant du produit (clé catalogue). Pour les lignes libres (sans product_id),
+   *  on utilise le nom du produit comme clé. */
+  product_id: string;
+  /** Début de période (timestamp jour, minuit local). */
+  period_from: number;
+  /** Fin de période (timestamp jour, exclusif). */
+  period_to: number;
+  /** Coût d'acquisition total saisi pour ce produit sur cette période. */
+  cost: number;
 }
 
 /**
@@ -209,6 +247,8 @@ class PosDatabase extends Dexie {
   subscriptions!: Table<Subscription, string>;
   shop_profiles!: Table<ShopProfile, string>;
   consignment_transactions!: Table<ConsignmentTransaction, string>;
+  clients!: Table<Client, string>;
+  product_expenses!: Table<ProductExpense, number>;
 
   constructor() {
     super("pos-db");
@@ -378,12 +418,41 @@ class PosDatabase extends Dexie {
     // est neuf, rien à migrer.
     this.version(11).stores({
       products: "id, name, category, barcode, updated_at",
-      sales: "id, timestamp, status, client_name, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
       sale_items: "id, sale_id, updated_at",
       settings: "key",
       subscriptions: "id, updated_at",
       shop_profiles: "id, updated_at",
       consignment_transactions: "id, product_id, kind, updated_at",
+    });
+
+    // Version 12 — registre clients (cluster service) + index `client_id` sur les ventes.
+    // Le store `clients` est neuf, rien à migrer. L'index `client_id` sur `sales` ne
+    // crée pas d'index pour les ventes existantes qui n'ont pas ce champ (Dexie ignore
+    // les clés absentes), ce qui est exact.
+    this.version(12).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+      consignment_transactions: "id, product_id, kind, updated_at",
+      clients: "id, name, phone, updated_at",
+    });
+
+    // Version 13 — coûts d'acquisition saisis dans les rapports (par produit, par période).
+    // Le store `product_expenses` est neuf, rien à migrer.
+    this.version(13).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+      consignment_transactions: "id, product_id, kind, updated_at",
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
     });
   }
 }
@@ -486,6 +555,7 @@ export async function createSale(input: {
   cash_given: number;
   customers_count?: number;
   client_name?: string;
+  client_id?: string;
 }): Promise<Sale> {
   const db = getDB();
   const total = input.lines.reduce((s, l) => s + l.price * l.quantity, 0);
@@ -500,6 +570,7 @@ export async function createSale(input: {
     // Explicite bien qu'omis : une vente directe est encaissée au moment où on la crée.
     status: "paid",
     ...(input.client_name ? { client_name: input.client_name } : {}),
+    ...(input.client_id ? { client_id: input.client_id } : {}),
     ...touch(),
   };
   await db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
@@ -870,6 +941,41 @@ export async function payRound(
   });
 }
 
+// ---------- Coûts d'acquisition (rapports) ----------
+/**
+ * Enregistre ou met à jour le coût d'acquisition d'un produit pour une période donnée.
+ * Upsert : si un enregistrement existe déjà pour (product_id, period_from), on le met
+ * à jour ; sinon on en crée un nouveau.
+ */
+export async function saveProductExpense(
+  productId: string,
+  periodFrom: number,
+  periodTo: number,
+  cost: number,
+): Promise<void> {
+  const db = getDB();
+  const existing = await db.product_expenses
+    .where("[product_id+period_from]")
+    .equals([productId, periodFrom])
+    .first();
+  if (existing) {
+    await db.product_expenses.put({ ...existing, cost, period_to: periodTo });
+  } else {
+    await db.product_expenses.add({
+      product_id: productId,
+      period_from: periodFrom,
+      period_to: periodTo,
+      cost,
+    });
+  }
+}
+
+/** Récupère tous les coûts d'acquisition d'une période. */
+export async function getProductExpenses(from: number, to: number): Promise<ProductExpense[]> {
+  const db = getDB();
+  return db.product_expenses.where("period_from").between(from, to, true, false).toArray();
+}
+
 // ---------- Sauvegarde / restauration ----------
 export interface DatabaseSnapshot {
   products: Product[];
@@ -877,6 +983,8 @@ export interface DatabaseSnapshot {
   sale_items: SaleItem[];
   subscriptions: Subscription[];
   consignment_transactions?: ConsignmentTransaction[];
+  clients?: Client[];
+  product_expenses?: ProductExpense[];
 }
 
 /**
@@ -889,14 +997,32 @@ export interface DatabaseSnapshot {
  */
 export async function exportSnapshot(): Promise<DatabaseSnapshot> {
   const db = getDB();
-  const [products, sales, sale_items, subscriptions, consignment_transactions] = await Promise.all([
+  const [
+    products,
+    sales,
+    sale_items,
+    subscriptions,
+    consignment_transactions,
+    clients,
+    product_expenses,
+  ] = await Promise.all([
     db.products.toArray(),
     db.sales.toArray(),
     db.sale_items.toArray(),
     db.subscriptions.toArray(),
     db.consignment_transactions.toArray(),
+    db.clients.toArray(),
+    db.product_expenses.toArray(),
   ]);
-  return { products, sales, sale_items, subscriptions, consignment_transactions };
+  return {
+    products,
+    sales,
+    sale_items,
+    subscriptions,
+    consignment_transactions,
+    clients,
+    product_expenses,
+  };
 }
 
 /**
@@ -913,11 +1039,15 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
   const db = getDB();
   await db.transaction(
     "rw",
-    db.products,
-    db.sales,
-    db.sale_items,
-    db.subscriptions,
-    db.consignment_transactions,
+    [
+      db.products,
+      db.sales,
+      db.sale_items,
+      db.subscriptions,
+      db.consignment_transactions,
+      db.clients,
+      db.product_expenses,
+    ],
     async () => {
       await Promise.all([
         db.products.clear(),
@@ -925,6 +1055,8 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
         db.sale_items.clear(),
         db.subscriptions.clear(),
         db.consignment_transactions.clear(),
+        db.clients.clear(),
+        db.product_expenses.clear(),
       ]);
       await Promise.all([
         db.products.bulkPut(snapshot.products),
@@ -932,6 +1064,8 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
         db.sale_items.bulkPut(snapshot.sale_items),
         db.subscriptions.bulkPut(snapshot.subscriptions ?? []),
         db.consignment_transactions.bulkPut(snapshot.consignment_transactions ?? []),
+        db.clients.bulkPut(snapshot.clients ?? []),
+        db.product_expenses.bulkPut(snapshot.product_expenses ?? []),
       ]);
     },
   );
@@ -957,6 +1091,8 @@ export async function purgeAllData(): Promise<void> {
       db.subscriptions,
       db.shop_profiles,
       db.consignment_transactions,
+      db.clients,
+      db.product_expenses,
     ],
     async () => {
       await Promise.all([
@@ -967,6 +1103,8 @@ export async function purgeAllData(): Promise<void> {
         db.subscriptions.clear(),
         db.shop_profiles.clear(),
         db.consignment_transactions.clear(),
+        db.clients.clear(),
+        db.product_expenses.clear(),
       ]);
     },
   );
@@ -1147,6 +1285,55 @@ export async function getTotalConsignmentBalance(): Promise<number> {
       (tx.kind === "deposit" ? tx.deposit_price * tx.quantity : -tx.deposit_price * tx.quantity),
     0,
   );
+}
+
+// ---------- Clients (cluster service) ----------
+// Registre de fiches clients pour les salons, coiffeurs, etc. L'historique des visites
+// se déduit des ventes liées via `client_id`. Pas de CRM lourd : nom, tél, anniversaire.
+
+export async function listClients(): Promise<Client[]> {
+  const all = await getDB().clients.toArray();
+  return alive(all).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function searchClients(query: string): Promise<Client[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return listClients();
+  const all = await getDB().clients.toArray();
+  return alive(all).filter(
+    (c) => c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q)),
+  );
+}
+
+export async function addClient(c: Omit<Client, "id" | keyof SyncFields>): Promise<Client> {
+  const client: Client = { ...c, id: uid(), ...touch() };
+  await getDB().clients.put(client);
+  return client;
+}
+
+export async function updateClient(c: Client): Promise<void> {
+  await getDB().clients.put({ ...c, ...touch() });
+}
+
+export async function deleteClient(id: string): Promise<void> {
+  const db = getDB();
+  const c = await db.clients.get(id);
+  if (!c) return;
+  await db.clients.put({ ...c, ...touch(), deleted_at: Date.now() });
+}
+
+/** Nombre de visites (ventes payées) et total dépensé pour un client. */
+export async function getClientStats(
+  clientId: string,
+): Promise<{ visits: number; totalSpent: number; lastVisit: number | null }> {
+  const db = getDB();
+  const sales = alive(await db.sales.where("client_id").equals(clientId).toArray()).filter(
+    (s) => s.status !== "open" && !s.deleted_at,
+  );
+  const visits = sales.length;
+  const totalSpent = sales.reduce((s, x) => s + x.total, 0);
+  const lastVisit = visits > 0 ? Math.max(...sales.map((s) => s.timestamp)) : null;
+  return { visits, totalSpent, lastVisit };
 }
 
 // ---------- Catégories ----------

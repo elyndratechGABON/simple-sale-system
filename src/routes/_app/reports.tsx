@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -14,15 +14,15 @@ import {
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { DateRange } from "react-day-picker";
-import { closeDay, listSalesToday } from "@/lib/db";
+import { closeDay, getProductExpenses, listSalesToday, saveProductExpense } from "@/lib/db";
 import { computePeriodStats, lastDaysRange, type ProductBucket } from "@/lib/analytics";
 import { usePeriodData } from "@/hooks/use-period-data";
 import { usePreferences } from "@/hooks/use-preferences";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { formatDay, formatDayShort, formatFCFA, formatPercent } from "@/lib/format";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -72,10 +72,142 @@ const chartConfig = {
   profit: { label: "Bénéfices", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
+/**
+ * Carte de saisie des coûts d'acquisition par produit. Le coût est saisi une fois par
+ * produit pour toute la période ; il est persisté dans IndexedDB (table product_expenses)
+ * et recalculé dès que l'utilisateur quitte le champ.
+ */
+function ExpenseInputCard({
+  products,
+  from,
+  to,
+  productExpenses,
+}: {
+  products: ProductBucket[];
+  from: number;
+  to: number;
+  productExpenses: { product_id: string; cost: number }[];
+}) {
+  const qc = useQueryClient();
+  const [localCosts, setLocalCosts] = useState<Record<string, string>>({});
+
+  const costsByProduct = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of productExpenses) map.set(e.product_id, e.cost);
+    return map;
+  }, [productExpenses]);
+
+  const saveMut = useMutation({
+    mutationFn: async ({ productId, cost }: { productId: string; cost: number }) => {
+      await saveProductExpense(productId, from, to, cost);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["product-expenses", from, to] });
+    },
+  });
+
+  const handleChange = useCallback((productId: string, value: string) => {
+    setLocalCosts((prev) => ({ ...prev, [productId]: value }));
+  }, []);
+
+  const handleBlur = useCallback(
+    (productId: string) => {
+      setLocalCosts((prev) => {
+        const raw = prev[productId];
+        if (raw === undefined) return prev;
+        const num = Number(raw.replace(/\D/g, "")) || 0;
+        saveMut.mutate({ productId, cost: num });
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
+    },
+    [saveMut],
+  );
+
+  if (products.length === 0) return null;
+
+  let totalRevenue = 0;
+  let totalCost = 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Coûts d'acquisition</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Saisissez ce que vous avez payé pour chaque produit. Le bénéfice se calcule
+          automatiquement.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Produit</TableHead>
+              <TableHead className="text-right">Qté</TableHead>
+              <TableHead className="text-right">Revenus</TableHead>
+              <TableHead className="text-right w-32">Coût acq.</TableHead>
+              <TableHead className="text-right">Bénéfice</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((p) => {
+              const cost = costsByProduct.get(p.name) ?? 0;
+              const displayCost =
+                localCosts[p.name] !== undefined
+                  ? localCosts[p.name]
+                  : cost > 0
+                    ? String(cost)
+                    : "";
+              const profit = p.revenue - cost;
+              totalRevenue += p.revenue;
+              totalCost += cost;
+              return (
+                <TableRow key={p.name}>
+                  <TableCell className="font-medium">
+                    {p.name}
+                    <span className="ml-2 text-xs text-muted-foreground">{p.category}</span>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{p.quantity}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatFCFA(p.revenue)}</TableCell>
+                  <TableCell className="text-right">
+                    <Input
+                      inputMode="numeric"
+                      value={displayCost}
+                      onChange={(e) => handleChange(p.name, e.target.value.replace(/\D/g, ""))}
+                      onBlur={() => handleBlur(p.name)}
+                      placeholder="0"
+                      className="h-8 w-28 text-right tabular-nums ml-auto"
+                    />
+                  </TableCell>
+                  <TableCell
+                    className={
+                      "text-right tabular-nums font-medium " +
+                      (profit >= 0 ? "text-emerald-600" : "text-red-600")
+                    }
+                  >
+                    {formatFCFA(profit)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+        <div className="mt-3 flex justify-end gap-6 text-sm font-medium border-t pt-3">
+          <span>Revenus : {formatFCFA(totalRevenue)}</span>
+          <span>Coûts : {formatFCFA(totalCost)}</span>
+          <span className={totalRevenue - totalCost >= 0 ? "text-emerald-600" : "text-red-600"}>
+            Bénéfice : {formatFCFA(totalRevenue - totalCost)}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ReportsPage() {
   const qc = useQueryClient();
   const { workspaceName } = usePreferences();
-  const features = useClusterFeatures();
   const [preset, setPreset] = useState<PresetKey>("today");
   const [showDetail, setShowDetail] = useState(false);
   const [range, setRange] = useState<DateRange | undefined>();
@@ -105,7 +237,15 @@ function ReportsPage() {
   const sales = useMemo(() => data?.sales ?? [], [data]);
   const items = useMemo(() => data?.items ?? [], [data]);
 
-  const stats = useMemo(() => computePeriodStats(sales, items, from, to), [sales, items, from, to]);
+  const { data: productExpenses = [] } = useQuery({
+    queryKey: ["product-expenses", from, to],
+    queryFn: () => getProductExpenses(from, to),
+  });
+
+  const stats = useMemo(
+    () => computePeriodStats(sales, items, from, to, productExpenses),
+    [sales, items, from, to, productExpenses],
+  );
 
   // Période de même durée juste avant : pour « Aujourd'hui » c'est hier, pour « 7 jours »
   // les 7 jours d'avant, pour une plage personnalisée la même longueur.
@@ -114,6 +254,10 @@ function ReportsPage() {
     return { from: from - length, to: from };
   }, [from, to]);
   const prev = usePeriodData(prevRange.from, prevRange.to);
+  const { data: prevExpenses = [] } = useQuery({
+    queryKey: ["product-expenses", prevRange.from, prevRange.to],
+    queryFn: () => getProductExpenses(prevRange.from, prevRange.to),
+  });
   const prevStats = useMemo(
     () =>
       computePeriodStats(
@@ -121,8 +265,9 @@ function ReportsPage() {
         prev.data?.items ?? [],
         prevRange.from,
         prevRange.to,
+        prevExpenses,
       ),
-    [prev.data, prevRange.from, prevRange.to],
+    [prev.data, prevRange.from, prevRange.to, prevExpenses],
   );
 
   const topProducts = stats.topProducts.slice(0, 10);
@@ -198,9 +343,7 @@ function ReportsPage() {
       {/* Vue simplifiée : KPI + top articles + clôture */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Revenus" value={formatFCFA(stats.revenue)} highlight large />
-        {features.showCostPrice && (
-          <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
-        )}
+        <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
         <StatCard label="Ventes" value={String(stats.salesCount)} large />
         <StatCard label="Panier moyen" value={formatFCFA(stats.averageBasket)} />
         <StatCard label="Articles vendus" value={String(stats.itemsCount)} />
@@ -210,7 +353,13 @@ function ReportsPage() {
       <TopArticlesCard
         products={topProducts.slice(0, 5)}
         rest={Math.max(0, topProducts.length - 5)}
-        showCostPrice={features.showCostPrice}
+      />
+
+      <ExpenseInputCard
+        products={topProducts}
+        from={from}
+        to={to}
+        productExpenses={productExpenses}
       />
 
       <Button variant="outline" className="w-full" onClick={() => setShowDetail((d) => !d)}>
@@ -225,69 +374,67 @@ function ReportsPage() {
       {/* Vue détaillée : graphique, comparaison, exports */}
       {showDetail && (
         <>
-          {features.showCostPrice && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" /> Comparaison avec la période précédente
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  du {formatDayShort(prevRange.from)} au {formatDayShort(prevRange.to - 1)} — même
-                  durée que la période affichée
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <ComparisonCell
-                    label="Revenus"
-                    value={stats.revenue}
-                    previous={prevStats.revenue}
-                    isMoney
-                  />
-                  <ComparisonCell
-                    label="Bénéfices"
-                    value={stats.profit}
-                    previous={prevStats.profit}
-                    isMoney
-                  />
-                  <ComparisonCell
-                    label="Ventes"
-                    value={stats.salesCount}
-                    previous={prevStats.salesCount}
-                  />
-                  <ComparisonCell
-                    label="Panier moyen"
-                    value={stats.averageBasket}
-                    previous={prevStats.averageBasket}
-                    isMoney
-                  />
-                  <ComparisonCell
-                    label="Articles vendus"
-                    value={stats.itemsCount}
-                    previous={prevStats.itemsCount}
-                  />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" /> Comparaison avec la période précédente
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                du {formatDayShort(prevRange.from)} au {formatDayShort(prevRange.to - 1)} — même
+                durée que la période affichée
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <ComparisonCell
+                  label="Revenus"
+                  value={stats.revenue}
+                  previous={prevStats.revenue}
+                  isMoney
+                />
+                <ComparisonCell
+                  label="Bénéfices"
+                  value={stats.profit}
+                  previous={prevStats.profit}
+                  isMoney
+                />
+                <ComparisonCell
+                  label="Ventes"
+                  value={stats.salesCount}
+                  previous={prevStats.salesCount}
+                />
+                <ComparisonCell
+                  label="Panier moyen"
+                  value={stats.averageBasket}
+                  previous={prevStats.averageBasket}
+                  isMoney
+                />
+                <ComparisonCell
+                  label="Articles vendus"
+                  value={stats.itemsCount}
+                  previous={prevStats.itemsCount}
+                />
+              </div>
+              <div className="border-t pt-3 grid gap-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Meilleur jour de vente</span>
+                  <span className="font-medium text-right">
+                    {stats.bestDay
+                      ? `${formatDay(stats.bestDay.day)} — ${formatFCFA(stats.bestDay.revenue)}`
+                      : "aucune vente sur la période"}
+                  </span>
                 </div>
-                <div className="border-t pt-3 grid gap-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Meilleur jour de vente</span>
-                    <span className="font-medium text-right">
-                      {stats.bestDay
-                        ? `${formatDay(stats.bestDay.day)} — ${formatFCFA(stats.bestDay.revenue)}`
-                        : "aucune vente sur la période"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Jour le moins rentable</span>
-                    <span className="font-medium text-right">
-                      {stats.worstDay
-                        ? `${formatDay(stats.worstDay.day)} — ${formatFCFA(stats.worstDay.profit)}`
-                        : "aucune activité sur la période"}
-                    </span>
-                  </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Jour le moins rentable</span>
+                  <span className="font-medium text-right">
+                    {stats.worstDay
+                      ? `${formatDay(stats.worstDay.day)} — ${formatFCFA(stats.worstDay.profit)}`
+                      : "aucune activité sur la période"}
+                  </span>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="pb-2">
@@ -327,11 +474,7 @@ function ReportsPage() {
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <TopArticlesCard
-              products={topProducts}
-              rest={topRest}
-              showCostPrice={features.showCostPrice}
-            />
+            <TopArticlesCard products={topProducts} rest={topRest} />
 
             <Card>
               <CardHeader className="pb-2">
@@ -394,9 +537,7 @@ function ReportsPage() {
                       <TableHead className="text-right">Ventes</TableHead>
                       <TableHead className="text-right">Clients</TableHead>
                       <TableHead className="text-right">Revenus</TableHead>
-                      {features.showCostPrice && (
-                        <TableHead className="text-right">Bénéfice</TableHead>
-                      )}
+                      <TableHead className="text-right">Bénéfice</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -409,11 +550,9 @@ function ReportsPage() {
                         <TableCell className="text-right tabular-nums">
                           {formatFCFA(t.revenue)}
                         </TableCell>
-                        {features.showCostPrice && (
-                          <TableCell className="text-right tabular-nums text-primary">
-                            {formatFCFA(t.profit)}
-                          </TableCell>
-                        )}
+                        <TableCell className="text-right tabular-nums text-primary">
+                          {formatFCFA(t.profit)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -472,15 +611,7 @@ function ComparisonCell({
   );
 }
 
-function TopArticlesCard({
-  products,
-  rest,
-  showCostPrice,
-}: {
-  products: ProductBucket[];
-  rest: number;
-  showCostPrice: boolean;
-}) {
+function TopArticlesCard({ products, rest }: { products: ProductBucket[]; rest: number }) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -498,7 +629,7 @@ function TopArticlesCard({
                   <TableHead>Article</TableHead>
                   <TableHead className="text-right">Qté</TableHead>
                   <TableHead className="text-right">Revenus</TableHead>
-                  {showCostPrice && <TableHead className="text-right">Bénéfice</TableHead>}
+                  <TableHead className="text-right">Bénéfice</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -513,11 +644,9 @@ function TopArticlesCard({
                     <TableCell className="text-right tabular-nums">
                       {formatFCFA(p.revenue)}
                     </TableCell>
-                    {showCostPrice && (
-                      <TableCell className="text-right tabular-nums text-primary">
-                        {formatFCFA(p.profit)}
-                      </TableCell>
-                    )}
+                    <TableCell className="text-right tabular-nums text-primary">
+                      {formatFCFA(p.profit)}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

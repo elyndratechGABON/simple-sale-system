@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { toast } from "sonner";
 
 export function ProductForm({
@@ -23,10 +22,8 @@ export function ProductForm({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const features = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [barcode, setBarcode] = useState(editing?.barcode ?? "");
-  const [cost, setCost] = useState<string>(editing?.cost ? String(editing.cost) : "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
   const [stock, setStock] = useState<string>(
@@ -40,7 +37,7 @@ export function ProductForm({
     mutationFn: async () => {
       const p = {
         name: name.trim(),
-        cost: Number(cost) || 0,
+        cost: 0,
         price: Number(price) || 0,
         stock: unlimited ? Number.POSITIVE_INFINITY : Number(stock) || 0,
         category,
@@ -88,19 +85,7 @@ export function ProductForm({
             placeholder="Optionnel"
           />
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {features.showCostPrice && (
-            <div>
-              <Label htmlFor="cost">Prix d'achat</Label>
-              <Input
-                id="cost"
-                inputMode="numeric"
-                value={cost}
-                onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
-                placeholder="200"
-              />
-            </div>
-          )}
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="price">Prix de vente</Label>
             <Input

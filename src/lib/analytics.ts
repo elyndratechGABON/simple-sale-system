@@ -5,10 +5,10 @@
 // quatre exports de partager exactement les mêmes chiffres, et de vérifier un KPI en
 // recalculant à la main.
 //
-// Le bénéfice se lit toujours dans la ligne de vente (`cost_at_sale`), jamais dans la
-// fiche produit — cf. l'invariant de src/lib/db.ts.
+// Le bénéfice est calculé depuis les coûts d'acquisition saisis dans les rapports
+// (table `product_expenses`), pas depuis `cost_at_sale` figé dans les lignes de vente.
 import { eachDayOfInterval, startOfDay, subDays } from "date-fns";
-import type { Category, Sale, SaleItem } from "./db";
+import type { Category, ProductExpense, Sale, SaleItem } from "./db";
 
 export interface DayBucket {
   day: number; // minuit local, en ms — même clé de regroupement que src/routes/history.tsx
@@ -110,9 +110,10 @@ export function computePeriodStats(
   items: SaleItem[],
   from: number,
   to: number,
+  productExpenses?: ProductExpense[],
 ): PeriodStats {
   const inRange = sales.filter((s) => s.timestamp >= from && s.timestamp < to);
-  const saleIds = new Set(inRange.map((s) => s.id));
+  const saleIds = new Map(inRange.map((s) => [s.id, true]));
   const inRangeItems = items.filter((i) => saleIds.has(i.sale_id));
   const saleDay = new Map(inRange.map((s) => [s.id, dayKey(s.timestamp)]));
 
@@ -132,6 +133,14 @@ export function computePeriodStats(
     if (b) b.salesCount += 1;
   }
 
+  // Map product_id → cost saisi pour cette période (upsert par product_id).
+  const expenseByProduct = new Map<string, number>();
+  if (productExpenses) {
+    for (const e of productExpenses) {
+      expenseByProduct.set(e.product_id, e.cost);
+    }
+  }
+
   const categories = new Map<Category, CategoryBucket>();
   const products = new Map<string, ProductBucket>();
   let revenue = 0;
@@ -140,42 +149,62 @@ export function computePeriodStats(
 
   for (const item of inRangeItems) {
     const r = lineRevenue(item);
-    const p = lineProfit(item);
     revenue += r;
-    profit += p;
     itemsCount += item.quantity;
 
     const day = saleDay.get(item.sale_id);
     const bucket = day === undefined ? undefined : buckets.get(day);
     if (bucket) {
       bucket.revenue += r;
-      bucket.profit += p;
     }
 
     const cat = lineCategory(item);
-    const c = categories.get(cat);
-    if (c) {
-      c.revenue += r;
-      c.profit += p;
-    } else {
-      categories.set(cat, { category: cat, revenue: r, profit: p });
-    }
-
     const productKey = item.product_id ?? item.name;
+
+    // Profit par produit = coût d'acquisition saisi (0 si pas encore saisi).
+    // On accumule les revenus par produit, puis on calcule le profit à la fin.
     const prod = products.get(productKey);
     if (prod) {
       prod.quantity += item.quantity;
       prod.revenue += r;
-      prod.profit += p;
     } else {
       products.set(productKey, {
         name: item.name,
         category: cat,
         quantity: item.quantity,
         revenue: r,
-        profit: p,
+        profit: 0, // calculé plus bas
       });
     }
+
+    // Catégorie : on accumule les revenus, profit calculé après.
+    const c = categories.get(cat);
+    if (c) {
+      c.revenue += r;
+    } else {
+      categories.set(cat, { category: cat, revenue: r, profit: 0 });
+    }
+  }
+
+  // Calcul du profit par produit : on retire le coût d'acquisition du revenu du produit.
+  for (const [key, prod] of products) {
+    const cost = expenseByProduct.get(key) ?? 0;
+    prod.profit = prod.revenue - cost;
+  }
+
+  // Profit par catégorie = somme des profits des produits de la catégorie.
+  for (const [, cat] of categories) {
+    cat.profit = 0;
+  }
+  for (const [, prod] of products) {
+    const cat = categories.get(prod.category);
+    if (cat) cat.profit += prod.profit;
+  }
+
+  // Profit global = somme des profits par produit.
+  profit = 0;
+  for (const [, prod] of products) {
+    profit += prod.profit;
   }
 
   // Répartition par table. La clé de tournée est (sale_id, ordered_at) : une table
@@ -193,7 +222,6 @@ export function computePeriodStats(
     }
     const r = lineRevenue(item);
     bucket.revenue += r;
-    bucket.profit += lineProfit(item);
     let keys = tableRounds.get(label);
     if (!keys) {
       keys = new Set();
@@ -222,8 +250,6 @@ export function computePeriodStats(
     profit,
     salesCount: inRange.length,
     itemsCount,
-    // `?? 1` : les ventes antérieures au compteur n'ont pas le champ, elles valent
-    // une personne chacune — la lecture la plus proche de la réalité.
     customersCount: inRange.reduce((s, sale) => s + (sale.customers_count ?? 1), 0),
     marginRate: revenue > 0 ? profit / revenue : 0,
     averageBasket: inRange.length > 0 ? revenue / inRange.length : 0,

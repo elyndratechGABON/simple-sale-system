@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ProductForm } from "@/components/ProductForm";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/stocks")({
@@ -43,7 +42,6 @@ export const Route = createFileRoute("/_app/stocks")({
 
 function StocksPage() {
   const qc = useQueryClient();
-  const features = useClusterFeatures();
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
@@ -226,12 +224,7 @@ function StocksPage() {
                   <div className="min-w-0">
                     <div className="font-medium truncate">{p.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {features.showCostPrice && p.cost > 0 && <>Achat {formatFCFA(p.cost)} · </>}
-                      Vente {formatFCFA(p.price)}
-                      {features.showCostPrice && p.cost > 0 && (
-                        <> · Marge {formatFCFA(p.price - p.cost)}</>
-                      )}{" "}
-                      · Stock&nbsp;:{" "}
+                      Vente {formatFCFA(p.price)} · Stock&nbsp;:{" "}
                       <span
                         className={
                           Number.isFinite(p.stock) && p.stock <= 5

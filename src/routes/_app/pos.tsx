@@ -58,6 +58,7 @@ import {
 } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
 import { ProductForm } from "@/components/ProductForm";
+import { ClientSelect } from "@/components/ClientSelect";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -143,6 +144,7 @@ function PosPage() {
   const [customers, setCustomers] = useState(1);
   // Nom du client (services : coiffeur, salon, etc.). Optionnel.
   const [clientName, setClientName] = useState("");
+  const [clientId, setClientId] = useState<string | undefined>(undefined);
   // Le panneau d'encaissement ne s'ouvre qu'à la demande : tant qu'il est fermé, aucun
   // champ « argent donné » ne traîne à l'écran pendant le service, et on ne peut pas
   // confondre « ajouter une tournée » avec « faire payer ». Il vise soit TOUTE la table
@@ -316,6 +318,7 @@ function PosPage() {
         cash_given: cash,
         customers_count: customers,
         ...(clientName.trim() ? { client_name: clientName.trim() } : {}),
+        ...(clientId ? { client_id: clientId } : {}),
       }),
     onSuccess: (sale) => {
       qc.invalidateQueries({ queryKey: ["products"] });
@@ -452,6 +455,7 @@ function PosPage() {
     setCashGiven("");
     setCustomers(1);
     setClientName("");
+    setClientId(undefined);
     setSheetOpen(false);
   }
 
@@ -1022,12 +1026,12 @@ function PosPage() {
                   <label className="text-sm font-medium" htmlFor="client-name">
                     Nom du client
                   </label>
-                  <Input
-                    id="client-name"
+                  <ClientSelect
                     value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="Ex : Mme Kombila"
-                    className="h-11"
+                    onChange={(name, id) => {
+                      setClientName(name);
+                      setClientId(id);
+                    }}
                   />
                 </div>
               )}
@@ -1526,14 +1530,12 @@ function FreeLineDialog({
   onAdd: (line: FreeLine) => void;
 }) {
   const [name, setName] = useState("");
-  const [cost, setCost] = useState("");
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [category, setCategory] = useState<Category>("Boisson");
 
   function reset() {
     setName("");
-    setCost("");
     setPrice("");
     setQuantity("1");
     setCategory("Boisson");
@@ -1552,7 +1554,7 @@ function FreeLineDialog({
     onAdd({
       key: `libre_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       name: label,
-      cost: Number(cost) || 0,
+      cost: 0,
       price: Number(price),
       category,
       quantity: Math.max(1, Number(quantity) || 1),
@@ -1584,17 +1586,7 @@ function FreeLineDialog({
               autoFocus
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label htmlFor="free-cost">Prix d'achat</Label>
-              <Input
-                id="free-cost"
-                inputMode="numeric"
-                value={cost}
-                onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
-                placeholder="200"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="free-price">Prix de vente</Label>
               <Input
@@ -1621,7 +1613,7 @@ function FreeLineDialog({
             <CategorySelect value={category} onChange={setCategory} />
           </div>
           <p className="text-xs text-muted-foreground">
-            Sans prix d'achat, cette vente comptera entièrement comme bénéfice dans les rapports.
+            Saisissez le prix de vente. Le coût d'acquisition se renseigne dans les Rapports.
           </p>
         </div>
         <DialogFooter>

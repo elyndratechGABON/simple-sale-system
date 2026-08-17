@@ -1,4 +1,3 @@
-import { lineProfit } from "../analytics";
 import { formatTime } from "../format";
 import { itemsBySale, type ReportPayload } from "./report";
 
@@ -18,9 +17,7 @@ const escape = (value: string) => (value.includes(SEP) ? `"${value.replace(/"/g,
 export function buildCsvBlob(payload: ReportPayload): Blob {
   const byId = itemsBySale(payload);
   const rows = [
-    ["date", "heure", "table", "libelle", "total", "donne", "rendu", "benefice", "clients"].join(
-      SEP,
-    ),
+    ["date", "heure", "table", "libelle", "total", "donne", "rendu", "clients"].join(SEP),
   ];
 
   // Une ligne par vente, triée du plus ancien au plus récent : un tableur se lit dans
@@ -29,21 +26,16 @@ export function buildCsvBlob(payload: ReportPayload): Blob {
 
   for (const sale of payload.sales) {
     const items = byId.get(sale.id) ?? [];
-    const profit = items.reduce((sum, i) => sum + lineProfit(i), 0);
     rowsByTime.push({
       timestamp: sale.timestamp,
       cells: [
         new Date(sale.timestamp).toLocaleDateString("fr-FR"),
         formatTime(sale.timestamp),
-        // Vide sur une vente au comptoir. Cette colonne permet de regrouper le chiffre
-        // d'affaires par table dans un tableur, en complément du bloc « Par table » des
-        // rapports de l'application.
         escape(sale.table ?? ""),
         escape(items.map((i) => `${i.quantity}x ${i.name}`).join(" | ")),
         String(sale.total),
         String(sale.cash_given),
         String(sale.change_due),
-        String(profit),
         String(sale.customers_count ?? 1),
       ],
     });

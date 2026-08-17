@@ -2,7 +2,6 @@
 // Choisi plutôt qu'exceljs (~1 Mo, pensé pour Node) et que SheetJS/`xlsx` (figé en 0.18.5
 // sur npm avec des CVE ouvertes ; les versions à jour ne sont diffusées que par leur CDN).
 import writeXlsxFile, { type Sheet } from "write-excel-file/browser";
-import { lineProfit } from "../analytics";
 import { formatTime } from "../format";
 import { itemsBySale, type ReportPayload, reportFilename } from "./report";
 
@@ -58,7 +57,7 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
   ];
 
   const ventes: Row[] = [
-    header("Date", "Heure", "Table", "Total", "Donné", "Rendu", "Bénéfice", "Clients", "Articles"),
+    header("Date", "Heure", "Table", "Total", "Donné", "Rendu", "Clients", "Articles"),
     ...[...payload.sales]
       .sort((a, b) => a.timestamp - b.timestamp)
       .map((sale): Row => {
@@ -66,13 +65,10 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
         return [
           { value: new Date(sale.timestamp), type: Date, format: "dd/mm/yyyy" },
           { value: formatTime(sale.timestamp), type: String },
-          // Vide sur une vente au comptoir. Colonne de regroupement pour qui veut son
-          // chiffre d'affaires par table dans un tableur croisé dynamique.
           { value: sale.table ?? "", type: String },
           money(sale.total),
           money(sale.cash_given),
           money(sale.change_due),
-          money(items.reduce((sum, i) => sum + lineProfit(i), 0)),
           { value: sale.customers_count ?? 1, type: Number },
           { value: items.map((i) => `${i.quantity}x ${i.name}`).join(" | "), type: String },
         ];

@@ -13,7 +13,7 @@ import { exportSnapshot, replaceAllData, type DatabaseSnapshot } from "../db";
 // restent restaurables : le champ est ignoré par la validation, cf. `parseBackup`.
 // v4 : ajoute le store `subscriptions` (abonnements clients). Le champ est OPTIONNEL à
 // la lecture : une sauvegarde v3 restaure un stock d'abonnements vide, jamais une erreur.
-export const BACKUP_FORMAT_VERSION = 4;
+export const BACKUP_FORMAT_VERSION = 5;
 
 export interface BackupFile extends DatabaseSnapshot {
   format: "caisse-pos-backup";
@@ -83,6 +83,15 @@ const subscriptionSchema = z.object({
   ...syncFields,
 });
 
+const productExpenseSchema = z.object({
+  id: z.number().optional(),
+  product_id: z.string(),
+  period_from: z.number(),
+  period_to: z.number(),
+  cost: z.number(),
+  ...syncFields,
+});
+
 const backupSchema = z.object({
   format: z.literal("caisse-pos-backup"),
   version: z.number(),
@@ -94,6 +103,7 @@ const backupSchema = z.object({
   // zod laisse passer les clés inconnues, et la migration Dexie v5 a déjà purgé le store.
   // `subscriptions` n'existe qu'en v4 : absent d'un fichier v3, lu comme liste vide.
   subscriptions: z.array(subscriptionSchema).optional(),
+  product_expenses: z.array(productExpenseSchema).optional(),
 });
 
 export async function buildBackupBlob(): Promise<Blob> {
@@ -120,6 +130,7 @@ export interface BackupSummary {
   products: number;
   sales: number;
   subscriptions: number;
+  productExpenses: number;
 }
 
 /**
@@ -174,6 +185,10 @@ export function parseBackup(text: string): { snapshot: DatabaseSnapshot; summary
       cost_at_sale: i.cost_at_sale ?? 0,
     })),
     subscriptions: (data.subscriptions ?? []).map((s) => normalize(s)),
+    product_expenses: (data.product_expenses ?? []).map((e) => ({
+      ...normalize(e),
+      cost: e.cost ?? 0,
+    })),
   };
 
   return {
@@ -184,6 +199,7 @@ export function parseBackup(text: string): { snapshot: DatabaseSnapshot; summary
       products: snapshot.products.length,
       sales: snapshot.sales.length,
       subscriptions: snapshot.subscriptions.length,
+      productExpenses: snapshot.product_expenses?.length ?? 0,
     },
   };
 }
