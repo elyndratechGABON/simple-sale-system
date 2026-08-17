@@ -560,7 +560,7 @@ function ClientsCard() {
     },
   });
 
-  if (cluster !== "service") return null;
+  if (cluster !== "service" && cluster !== "clothing" && cluster !== "magasin") return null;
 
   return (
     <Card>

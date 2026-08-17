@@ -10,7 +10,7 @@
 // Les deux ne s'affichent qu'une seule fois.  Le guide vient après le wizard :
 // il n'apparaît que si le wizard est terminé mais que le guide n'a pas été vu.
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -21,21 +21,20 @@ import {
   Phone,
   Settings,
   ShoppingCart,
-  Store,
   BarChart3,
   User,
 } from "lucide-react";
-import { ChefHat, Coffee, Scissors, ShoppingBag, Shirt, Weight, Wrench } from "lucide-react";
+import { ChefHat, Coffee, Scissors, ShoppingBag, Shirt, Weight, Store } from "lucide-react";
 import {
   applyTheme,
   CLUSTER_MAP,
   getPreferences,
-  inferCluster,
+  ACTIVE_CLUSTERS,
   PRESET_HUES,
-  PRODUCT_TYPES,
   savePreferences,
   swatchColor,
   type ClusterId,
+  type SubCategory,
 } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,7 +162,7 @@ const ICON_MAP: Record<string, typeof Store> = {
   Scissors,
   Shirt,
   Weight,
-  Wrench,
+  Store,
 };
 
 function resolveIcon(name: string): typeof Store {
@@ -179,11 +178,12 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [phone, setPhone] = useState("");
   const [quarter, setQuarter] = useState("");
   const [ownerName, setOwnerName] = useState("");
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedCluster, setSelectedCluster] = useState<ClusterId | null>(null);
+  const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategory | null>(null);
 
-  const cluster: ClusterId = useMemo(() => inferCluster(selectedTypes), [selectedTypes]);
-  const clusterConfig = CLUSTER_MAP[cluster];
-  const hasTables = clusterConfig.workflow.hasTables;
+  const clusterConfig = selectedCluster ? CLUSTER_MAP[selectedCluster] : null;
+  const hasTables = clusterConfig?.workflow.hasTables ?? false;
+  const isMagasin = selectedCluster === "magasin";
 
   useEffect(() => {
     const prefs = getPreferences();
@@ -198,12 +198,6 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
     applyTheme(hue);
   }, [hue]);
 
-  function toggleType(typeId: string) {
-    setSelectedTypes((prev) =>
-      prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId],
-    );
-  }
-
   function finish() {
     savePreferences({
       workspaceName: name.trim() || getPreferences().workspaceName,
@@ -211,8 +205,9 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
       phone: phone.trim(),
       quarter: quarter.trim(),
       ownerName: ownerName.trim(),
-      cluster,
-      businessType: cluster === "restaurant" ? "restaurant" : "snack",
+      cluster: selectedCluster ?? "retail",
+      subCategory: isMagasin ? (selectedSubCategory ?? undefined) : undefined,
+      businessType: selectedCluster === "restaurant" ? "restaurant" : "snack",
       tablesEnabled: hasTables,
       onboarded: true,
     });
@@ -227,11 +222,64 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
     onComplete();
   }
 
+  // Étape 5 = choix cluster, 5b = sous-catégorie magasin (si applicable)
+  // Le total d'étapes est 7 + 1 éventuelle = 8 max
+  const hasSubStep = step >= 5 && isMagasin && !selectedSubCategory;
+  const effectiveStep = step;
+  const WIZARD_TOTAL = isMagasin && selectedCluster && step >= 5 ? 8 : 7;
+
   function canNext(): boolean {
     if (step === 0) return name.trim().length > 0;
-    if (step === 5) return selectedTypes.length > 0;
+    if (step === 5) return selectedCluster !== null;
+    if (step === 6 && isMagasin) return selectedSubCategory !== null;
     return true;
   }
+
+  function goNext() {
+    // Si on est à l'étape 5 et qu'on a choisi magasin, on passe à la sous-catégorie
+    if (step === 5 && isMagasin && !selectedSubCategory) {
+      setStep(6);
+      return;
+    }
+    setStep((s) => s + 1);
+  }
+
+  function goPrev() {
+    // Si on est à l'étape 6 et qu'on vient du cluster (magasin), on retourne à 5
+    if (step === 6 && isMagasin) {
+      setStep(5);
+      return;
+    }
+    setStep((s) => s - 1);
+  }
+
+  // Sous-catégories du magasin
+  const MAGASIN_SUBS: { id: SubCategory; label: string; icon: string; description: string }[] = [
+    {
+      id: "electronics",
+      label: "Électronique",
+      icon: "📱",
+      description: "Téléphones, ordinateurs, accessoires. Numéros de série.",
+    },
+    {
+      id: "appliance",
+      label: "Électroménager",
+      icon: "🧊",
+      description: "Réfrigérateurs, cuisinières, appareils ménagers.",
+    },
+    {
+      id: "furniture",
+      label: "Meubles",
+      icon: "🛋️",
+      description: "Tables, chaises, armoires, canapés.",
+    },
+    {
+      id: "hardware_store",
+      label: "Quincaillerie",
+      icon: "🔧",
+      description: "Peinture, vis, outils. Unités : pièce, mètre, litre.",
+    },
+  ];
 
   return (
     <DialogContent
@@ -248,13 +296,13 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
             key={i}
             className={cn(
               "h-1 flex-1 rounded-full transition-colors",
-              i <= step ? "bg-primary" : "bg-muted",
+              i <= effectiveStep ? "bg-primary" : "bg-muted",
             )}
           />
         ))}
       </div>
       <p className="text-center text-xs text-muted-foreground">
-        Étape {step + 1} sur {WIZARD_TOTAL}
+        Étape {effectiveStep + 1} sur {WIZARD_TOTAL}
       </p>
 
       <div className="min-h-[260px] py-2">
@@ -272,7 +320,7 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
               placeholder="Ex : Alimentation Chez Marie"
               className="h-12 text-lg"
               autoFocus
-              onKeyDown={(e) => e.key === "Enter" && canNext() && setStep(1)}
+              onKeyDown={(e) => e.key === "Enter" && canNext() && goNext()}
             />
           </StepShell>
         )}
@@ -371,19 +419,19 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
 
         {step === 5 && (
           <StepShell
-            icon={ShoppingBag}
-            title="Que vendez-vous ?"
-            description="Sélectionnez tout ce que vous proposez. L'application s'adaptera automatiquement."
+            icon={Store}
+            title="Votre activité"
+            description="Choisissez votre type de commerce. L'application s'adaptera automatiquement."
           >
             <div className="grid grid-cols-2 gap-2">
-              {PRODUCT_TYPES.map((pt) => {
-                const Icon = resolveIcon(pt.icon);
-                const active = selectedTypes.includes(pt.id);
+              {ACTIVE_CLUSTERS.map((c) => {
+                const Icon = resolveIcon(c.icon);
+                const active = selectedCluster === c.id;
                 return (
                   <button
-                    key={pt.id}
+                    key={c.id}
                     type="button"
-                    onClick={() => toggleType(pt.id)}
+                    onClick={() => setSelectedCluster(c.id)}
                     aria-pressed={active}
                     className={cn(
                       "flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-all",
@@ -402,21 +450,53 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
                     >
                       <Icon className="h-4 w-4" />
                     </span>
-                    <span className="font-medium">{pt.label}</span>
+                    <span className="font-medium">{c.label.split("/")[0].trim()}</span>
                   </button>
                 );
               })}
             </div>
-            {selectedTypes.length > 0 && (
+            {selectedCluster && (
               <p className="text-center text-xs text-muted-foreground">
-                Mode détecté :{" "}
-                <span className="font-medium text-foreground">{clusterConfig.label}</span>
+                Mode sélectionné :{" "}
+                <span className="font-medium text-foreground">{clusterConfig?.label}</span>
               </p>
             )}
           </StepShell>
         )}
 
-        {step === 6 && (
+        {step === 6 && isMagasin && (
+          <StepShell
+            icon={Store}
+            title="Type de magasin"
+            description="Précisez votre activité pour adapter les champs du formulaire."
+          >
+            <div className="grid grid-cols-2 gap-2">
+              {MAGASIN_SUBS.map((sub) => {
+                const active = selectedSubCategory === sub.id;
+                return (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSelectedSubCategory(sub.id)}
+                    aria-pressed={active}
+                    className={cn(
+                      "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
+                      active
+                        ? "border-primary bg-accent ring-1 ring-primary"
+                        : "bg-card hover:border-primary/50",
+                    )}
+                  >
+                    <span className="text-lg">{sub.icon}</span>
+                    <span className="font-medium">{sub.label}</span>
+                    <span className="text-xs text-muted-foreground">{sub.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </StepShell>
+        )}
+
+        {step === (isMagasin && selectedSubCategory ? 7 : 6) && (
           <StepShell
             icon={Check}
             title="C'est prêt"
@@ -424,7 +504,12 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
           >
             <div className="space-y-2 rounded-lg border p-4 text-sm">
               <Row label="Commerce">{name.trim() || getPreferences().workspaceName}</Row>
-              <Row label="Mode">{clusterConfig.label}</Row>
+              <Row label="Mode">{clusterConfig?.label ?? "Épicerie"}</Row>
+              {isMagasin && selectedSubCategory && (
+                <Row label="Type">
+                  {MAGASIN_SUBS.find((s) => s.id === selectedSubCategory)?.label}
+                </Row>
+              )}
               {hasTables && <Row label="Tables">Activées</Row>}
               {phone && <Row label="Téléphone">{phone}</Row>}
               {quarter && <Row label="Quartier">{quarter}</Row>}
@@ -446,12 +531,12 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
         </Button>
         <div className="flex gap-2">
           {step > 0 && (
-            <Button variant="outline" onClick={() => setStep((s) => s - 1)}>
+            <Button variant="outline" onClick={goPrev}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Retour
             </Button>
           )}
-          {step < WIZARD_TOTAL - 1 ? (
-            <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext()}>
+          {effectiveStep < WIZARD_TOTAL - 1 ? (
+            <Button onClick={goNext} disabled={!canNext()}>
               Suivant <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (

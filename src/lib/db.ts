@@ -63,6 +63,8 @@ export interface Product extends SyncFields {
   expiryDate?: number;
   /** Numéro de série / IMEI (électronique, SAV). Absent = pas de suivi. */
   serialNumber?: string;
+  /** Unité de vente (quincaillerie) : pièce, mètre, litre, etc. Absent = pièce par défaut. */
+  unit?: "piece" | "meter" | "liter";
 }
 
 /**
@@ -94,6 +96,8 @@ export interface Sale extends SyncFields {
   status?: SaleStatus;
   /** Ouverture de la table. Absent sur une vente directe. */
   opened_at?: number;
+  /** Moment où la commande a été servie (restaurant). Absent = pas encore servi. */
+  served_at?: number;
   /**
    * Tournées déjà encaissées d'une addition encore ouverte (« Encaisser cette tournée »).
    * Absent = aucune : rien n'a été payé, tout reste dû. Posé dans `payRound`, il reste
@@ -123,6 +127,8 @@ export interface SaleItem extends SyncFields {
   // Horodatage de la tournée, pour regrouper les lignes d'une addition à l'écran. Absent
   // sur une vente directe et sur les ventes antérieures aux tables → une seule tournée.
   ordered_at?: number;
+  /** Numéro de série de l'article (électronique). Absent si non applicable. */
+  serial_number?: string;
 }
 
 /**
@@ -444,6 +450,24 @@ class PosDatabase extends Dexie {
     // Version 13 — coûts d'acquisition saisis dans les rapports (par produit, par période).
     // Le store `product_expenses` est neuf, rien à migrer.
     this.version(13).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+      consignment_transactions: "id, product_id, kind, updated_at",
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+    });
+
+    // Version 14 — champs pour le workflow restaurant simplifié et le cluster magasin :
+    //  - `served_at` sur les ventes (table servie mais pas encore payée)
+    //  - `serial_number` sur les lignes de vente (électronique)
+    //  - `unit` sur les produits (quincaillerie : pièce, mètre, litre)
+    // Aucun upgrade() : les enregistrements existants sans ces champs lus comme
+    // `undefined`, ce qui est exact pour des champs optionnels.
+    this.version(14).stores({
       products: "id, name, category, barcode, updated_at",
       sales: "id, timestamp, status, client_name, client_id, updated_at",
       sale_items: "id, sale_id, updated_at",
@@ -792,6 +816,19 @@ export async function closeTable(saleId: string): Promise<void> {
     }
     await db.sales.put({ ...sale, ...touch(), deleted_at: Date.now() });
   });
+}
+
+/**
+ * Marque une table comme servie (restaurant) : la commande est prête, le paiement est
+ * débloqué. Identifie le moment où le plat a quitté la cuisine — c'est la clé du workflow
+ * simplifié (pending → served → paid).
+ */
+export async function serveTable(saleId: string): Promise<void> {
+  const db = getDB();
+  const sale = await db.sales.get(saleId);
+  if (!sale || sale.deleted_at) return;
+  if (sale.status !== "open") return;
+  await db.sales.put({ ...sale, served_at: Date.now(), ...touch() });
 }
 
 /**

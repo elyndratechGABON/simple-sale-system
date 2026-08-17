@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ProductForm } from "@/components/ProductForm";
+import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/stocks")({
@@ -42,12 +43,14 @@ export const Route = createFileRoute("/_app/stocks")({
 
 function StocksPage() {
   const qc = useQueryClient();
+  const { isService } = useClusterFeatures();
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
   });
   const [editing, setEditing] = useState<Product | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [prestationOpen, setPrestationOpen] = useState(false);
 
   // ── Ajout de stock manuel ──────────────────────────────────────────────────
   const [stockOpen, setStockOpen] = useState(false);
@@ -200,6 +203,30 @@ function StocksPage() {
               }}
             />
           </Dialog>
+          {isService && (
+            <Dialog
+              open={prestationOpen}
+              onOpenChange={(v) => {
+                setPrestationOpen(v);
+                if (!v) setEditing(null);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button size="lg" variant="outline" onClick={() => setEditing(null)}>
+                  <Plus className="h-5 w-5 mr-1" /> Nouvelle prestation
+                </Button>
+              </DialogTrigger>
+              <ProductForm
+                editing={editing}
+                onClose={() => {
+                  setPrestationOpen(false);
+                  setEditing(null);
+                }}
+                defaultCategory="Service"
+                defaultType="service"
+              />
+            </Dialog>
+          )}
         </div>
       </div>
 

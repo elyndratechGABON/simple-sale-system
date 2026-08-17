@@ -18,7 +18,10 @@ export type BusinessType = "snack" | "restaurant";
 
 /** Identifiant unique d'un cluster métier. */
 export type ClusterId =
-  "retail" | "restaurant" | "bar" | "service" | "clothing" | "weight" | "hardware";
+  "retail" | "restaurant" | "bar" | "service" | "clothing" | "weight" | "magasin";
+
+/** Sous-catégorie du cluster "Magasin" — détermine les champs spécifiques dans le formulaire produit. */
+export type SubCategory = "electronics" | "appliance" | "furniture" | "hardware_store";
 
 /** Rétrocompat : l'alias `Cluster` est encore utilisé par de nombreux fichiers. */
 export type Cluster = ClusterId;
@@ -30,6 +33,8 @@ export interface ClusterWorkflow {
   mode: "direct" | "order-first";
   hasTables: boolean;
   hasKitchenPrint: boolean;
+  /** Les tables existent mais sont optionnelles — l'utilisateur les active dans Réglages. */
+  hasTablesOptional?: boolean;
 }
 
 export interface ClusterStock {
@@ -70,6 +75,8 @@ export interface Preferences {
   businessType: BusinessType;
   /** Profil métier déterminant le comportement de l'interface. */
   cluster: Cluster;
+  /** Sous-catégorie du cluster Magasin (optionnel). */
+  subCategory?: SubCategory;
   /**
    * Système de tables : commande servie puis encaissée en fin de service (restaurant) vs
    * service direct au comptoir (snack/bar). Faux → la caisse n'affiche que le comptoir.
@@ -105,8 +112,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   // Restaurant + tables = le comportement historique de l'application (plan de salle
   // toujours affiché) : les comptes déjà enregistrés ne changent pas de mode.
   businessType: "restaurant",
-  cluster: "restaurant",
-  tablesEnabled: true,
+  cluster: "retail",
+  tablesEnabled: false,
   tables: ["1", "2", "3", "4", "5", "6"],
   phone: "",
   quarter: "",
@@ -134,16 +141,14 @@ export const PRESET_HUES: { label: string; hue: number }[] = [
 /**
  * Registre complet des 7 clusters métier.
  *
- * Les 4 premiers sont `active: true` (V1). Les 3 suivants sont `active: false` :
- * leur configuration existe pour préparer la base de données et l'architecture,
- * mais ils n'apparaissent pas dans l'UI tant que leurs features (variantes, poids,
- * numéros de série) ne sont pas développées.
+ * Les 7 premiers sont `active: true` (V1) : retail, restaurant, bar, service,
+ * clothing, weight, magasin. Tous apparaissent dans l'UI d'onboarding et de réglages.
  */
 export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
   /* ── V1 : clusters actifs ─────────────────────────────────────────────── */
   retail: {
     id: "retail",
-    label: "Épicerie / Boutique",
+    label: "Épicerie / Dépôt",
     icon: "ShoppingBag",
     description: "Vente directe : on encaisse sur-le-champ. Prix d'achat visible pour la marge.",
     workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
@@ -151,7 +156,7 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: false,
+      hasExpiryDate: true,
       hasSerialNumber: false,
     },
     flags: { allowServiceBooking: false, allowDeposit: false, hasWeightInput: false },
@@ -176,10 +181,11 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
   },
   bar: {
     id: "bar",
-    label: "Bar / Maquis",
+    label: "Snack Bar / Night Club",
     icon: "Coffee",
-    description: "Service direct au comptoir. Prix d'achat visible. Gestion des consignes.",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
+    description:
+      "Service direct au comptoir. Prix d'achat visible. Gestion des consignes. Tables optionnelles.",
+    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false, hasTablesOptional: true },
     stock: {
       unitType: "unit",
       hasVariants: false,
@@ -192,27 +198,25 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
   },
   service: {
     id: "service",
-    label: "Coiffeur / Salon",
+    label: "Coiffeur / Barbier",
     icon: "Scissors",
     description: "Prestations et produits physiques mêlés. Nom du client, stock actif.",
     workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
     stock: {
       unitType: "unit",
       hasVariants: false,
-      showCostPrice: false,
+      showCostPrice: true,
       hasExpiryDate: false,
       hasSerialNumber: false,
     },
     flags: { allowServiceBooking: true, allowDeposit: false, hasWeightInput: false },
     active: true,
   },
-
-  /* ── V2 : clusters pré-configurés mais désactivés ─────────────────────── */
   clothing: {
     id: "clothing",
-    label: "Habillement / Chaussures",
+    label: "Boutique (Vêtements & Accessoires)",
     icon: "Shirt",
-    description: "Boutique de pagnes, vêtements, chaussures. Variantes taille + couleur.",
+    description: "Vêtements, pagnes, chaussures, accessoires. Variantes taille + couleur.",
     workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
     stock: {
       unitType: "unit",
@@ -222,11 +226,27 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasSerialNumber: false,
     },
     flags: { allowServiceBooking: false, allowDeposit: false, hasWeightInput: false },
-    active: false,
+    active: true,
+  },
+  magasin: {
+    id: "magasin",
+    label: "Magasin",
+    icon: "Store",
+    description: "Électronique, électroménager, meubles, quincaillerie. Sous-catégorie au choix.",
+    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
+    stock: {
+      unitType: "mixed",
+      hasVariants: false,
+      showCostPrice: true,
+      hasExpiryDate: false,
+      hasSerialNumber: false,
+    },
+    flags: { allowServiceBooking: false, allowDeposit: false, hasWeightInput: false },
+    active: true,
   },
   weight: {
     id: "weight",
-    label: "Boucherie / Poissonnerie",
+    label: "Boucherie / Charcuterie",
     icon: "Weight",
     description: "Vente au poids (kg). Prix et stock en kilogrammes. Dates de péremption.",
     workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
@@ -238,23 +258,7 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasSerialNumber: false,
     },
     flags: { allowServiceBooking: false, allowDeposit: false, hasWeightInput: true },
-    active: false,
-  },
-  hardware: {
-    id: "hardware",
-    label: "Quincaillerie / Électronique",
-    icon: "Wrench",
-    description: "Câbles, peinture, téléphones. Unités + mètres + litres. Numéros de série.",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
-    stock: {
-      unitType: "mixed",
-      hasVariants: false,
-      showCostPrice: true,
-      hasExpiryDate: false,
-      hasSerialNumber: true,
-    },
-    flags: { allowServiceBooking: false, allowDeposit: false, hasWeightInput: false },
-    active: false,
+    active: true,
   },
 };
 
@@ -283,17 +287,16 @@ export const PRODUCT_TYPES: ProductType[] = [
     clusters: ["retail"],
   },
   { id: "boissons", label: "Boissons", icon: "Coffee", clusters: ["bar", "retail"] },
+  { id: "snack_bar", label: "Snack / Bar à cocktails", icon: "Coffee", clusters: ["bar"] },
   { id: "restauration", label: "Restauration", icon: "ChefHat", clusters: ["restaurant"] },
   { id: "coiffure", label: "Coiffure / Beauté", icon: "Scissors", clusters: ["service"] },
   {
     id: "vetements",
     label: "Vêtements / Accessoires",
     icon: "Shirt",
-    clusters: ["clothing", "retail"],
+    clusters: ["clothing"],
   },
-  { id: "viande", label: "Viande / Poisson", icon: "Weight", clusters: ["weight", "retail"] },
-  { id: "electronique", label: "Électronique", icon: "Wrench", clusters: ["hardware", "retail"] },
-  { id: "quincaillerie", label: "Quincaillerie", icon: "Wrench", clusters: ["hardware", "retail"] },
+  { id: "viande", label: "Viande / Poisson", icon: "Weight", clusters: ["weight"] },
 ];
 
 /**
@@ -328,7 +331,7 @@ export function inferCluster(selectedTypeIds: string[]): ClusterId {
     "restaurant",
     "weight",
     "clothing",
-    "hardware",
+    "magasin",
     "bar",
     "retail",
   ];
@@ -355,6 +358,7 @@ export function getPreferences(): Preferences {
       onboarded: parsed.onboarded === true,
       businessType: normalizeBusinessType(parsed.businessType),
       cluster: migrateCluster(parsed.cluster, parsed.businessType),
+      subCategory: normalizeSubCategory(parsed.subCategory),
       // `!== false` et non `=== true` : un enregistrement écrit avant l'introduction de
       // cette préférence ne porte pas la clé, et le comportement historique est tables
       // activées — la lire comme fausse ferait basculer tous les comptes existants.
@@ -425,6 +429,19 @@ function migrateCluster(cluster: unknown, businessType: unknown): ClusterId {
   if (businessType === "snack") return "retail";
   if (businessType === "restaurant") return "restaurant";
   return DEFAULT_PREFERENCES.cluster;
+}
+
+const VALID_SUB_CATEGORIES: SubCategory[] = [
+  "electronics",
+  "appliance",
+  "furniture",
+  "hardware_store",
+];
+
+function normalizeSubCategory(value: unknown): SubCategory | undefined {
+  if (typeof value === "string" && (VALID_SUB_CATEGORIES as string[]).includes(value))
+    return value as SubCategory;
+  return undefined;
 }
 
 /**

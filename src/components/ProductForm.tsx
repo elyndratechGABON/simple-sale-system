@@ -13,15 +13,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
 import { toast } from "sonner";
+import { useClusterFeatures } from "@/hooks/use-cluster-features";
 
 export function ProductForm({
   editing,
   onClose,
+  defaultCategory,
+  defaultType,
 }: {
   editing: Product | null;
   onClose: () => void;
+  defaultCategory?: Category;
+  defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
+  const { hasSerialNumber, unitType, hasExpiryDate, allowDeposit } = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [barcode, setBarcode] = useState(editing?.barcode ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
@@ -29,9 +35,18 @@ export function ProductForm({
   const [stock, setStock] = useState<string>(
     editing && Number.isFinite(editing.stock) ? String(editing.stock) : "",
   );
-  const [category, setCategory] = useState<Category>(editing?.category ?? "Boisson");
-  const [productType, setProductType] = useState<"product" | "service">(editing?.type ?? "product");
+  const [category, setCategory] = useState<Category>(
+    editing?.category ?? defaultCategory ?? "Boisson",
+  );
+  const [productType, setProductType] = useState<"product" | "service">(
+    editing?.type ?? defaultType ?? "product",
+  );
   const [hasConsignment, setHasConsignment] = useState(editing?.hasConsignment ?? false);
+  const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
+  const [unit, setUnit] = useState<"piece" | "meter" | "liter">(editing?.unit ?? "piece");
+  const [expiryDate, setExpiryDate] = useState(
+    editing?.expiryDate ? new Date(editing.expiryDate).toISOString().split("T")[0] : "",
+  );
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -43,7 +58,10 @@ export function ProductForm({
         category,
         barcode: barcode.trim() || null,
         type: productType,
-        hasConsignment,
+        hasConsignment: allowDeposit ? hasConsignment : false,
+        serialNumber: serialNumber.trim() || undefined,
+        unit: unitType === "mixed" || unitType === "weight" ? unit : undefined,
+        expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
       };
       if (!p.name) throw new Error("Nom requis");
       if (p.price <= 0) throw new Error("Prix invalide");
@@ -160,19 +178,75 @@ export function ProductForm({
               </Button>
             </div>
           </div>
-          <div className="flex items-end">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="consignment"
-                checked={hasConsignment}
-                onCheckedChange={(v) => setHasConsignment(Boolean(v))}
-              />
-              <Label htmlFor="consignment" className="cursor-pointer">
-                Consigne
-              </Label>
+          {allowDeposit && (
+            <div className="flex items-end">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="consignment"
+                  checked={hasConsignment}
+                  onCheckedChange={(v) => setHasConsignment(Boolean(v))}
+                />
+                <Label htmlFor="consignment" className="cursor-pointer">
+                  Consigne
+                </Label>
+              </div>
+            </div>
+          )}
+        </div>
+        {hasSerialNumber && productType === "product" && (
+          <div>
+            <Label htmlFor="serialNumber">Numéro de série / IMEI</Label>
+            <Input
+              id="serialNumber"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              placeholder="Optionnel — ex: IMEI ou N° série"
+            />
+          </div>
+        )}
+        {(unitType === "mixed" || unitType === "weight") && productType === "product" && (
+          <div>
+            <Label>Unité de vente</Label>
+            <div className="flex gap-2 mt-1">
+              <Button
+                type="button"
+                variant={unit === "piece" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUnit("piece")}
+              >
+                Pièce
+              </Button>
+              <Button
+                type="button"
+                variant={unit === "meter" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUnit("meter")}
+              >
+                Mètre
+              </Button>
+              <Button
+                type="button"
+                variant={unit === "liter" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUnit("liter")}
+              >
+                Litre
+              </Button>
             </div>
           </div>
-        </div>
+        )}
+        {hasExpiryDate && productType === "product" && (
+          <div>
+            <Label htmlFor="expiryDate">Date de péremption</Label>
+            <Input
+              id="expiryDate"
+              type="date"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              placeholder="Optionnel"
+            />
+          </div>
+        )}
         <div>
           <Label>Catégorie</Label>
           <CategorySelect value={category} onChange={setCategory} />

@@ -29,6 +29,7 @@ import {
   openTable,
   payRound,
   payTable,
+  serveTable,
   addConsignmentTransaction,
   getTotalConsignmentBalance,
   type CartLine,
@@ -159,6 +160,7 @@ function PosPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
   // Onglet Prestations/Produits (cluster service uniquement)
   const [serviceTab, setServiceTab] = useState<"prestations" | "produits">("prestations");
   // Dialog de retour de consigne (cluster bar)
@@ -349,6 +351,16 @@ function PosPage() {
       qc.invalidateQueries({ queryKey: ["sales"] });
       if (target.kind === "table" && target.saleId === saleId) selectTarget({ kind: "direct" });
       toast.success("Table libérée");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Marquer une table comme servie (restaurant) : le paiement est débloqué.
+  const serveMut = useMutation({
+    mutationFn: (saleId: string) => serveTable(saleId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Commande servie — paiement débloqué");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -584,15 +596,15 @@ function PosPage() {
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-warning" />
-              Commande à prendre
+              En cours
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-orange-500" />
+              Servi
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-primary" />
-              En service
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-info" />
-              Encaissée en partie
+              Payé
             </span>
           </div>
           {/* Le geste est invisible sans ce rappel, et il n'existe qu'une fois qu'une table
@@ -601,6 +613,21 @@ function PosPage() {
             <p className="text-xs text-muted-foreground">
               Appui long sur une table occupée pour la libérer.
             </p>
+          )}
+          {/* Bouton "Commandes en cours" — accès rapide au panneau latéral */}
+          {openTables.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setOrdersOpen(true)}
+            >
+              <Utensils className="h-4 w-4" />
+              Commandes en cours
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary tabular-nums">
+                {openTables.length}
+              </span>
+            </Button>
           )}
         </div>
       )}
@@ -696,7 +723,12 @@ function PosPage() {
                       <Plus className="h-5 w-5 mr-1" /> Créer un produit
                     </Button>
                   </DialogTrigger>
-                  <ProductForm editing={null} onClose={() => setCreateOpen(false)} />
+                  <ProductForm
+                    editing={null}
+                    onClose={() => setCreateOpen(false)}
+                    defaultCategory={features.isService ? "Service" : undefined}
+                    defaultType={features.isService ? "service" : undefined}
+                  />
                 </Dialog>
                 <p className="text-sm text-muted-foreground">
                   Vous pouvez aussi utiliser « Article manuel » dans le panier pour encaisser sans
@@ -1086,17 +1118,32 @@ function PosPage() {
                 onClick={() => roundMut.mutate(activeTable.id)}
               >
                 <Plus className="h-5 w-5" />
-                Ajouter à la table {activeTable.table}
+                Prendre la commande
               </Button>
+              {/* « Servir » n'apparaît que si la table n'est pas encore marquée servie.
+                  C'est le verrou : tant que le plat n'a pas quitté la cuisine, le
+                  paiement reste bloqué. */}
+              {!activeTable.served_at && activeTable.total > 0 && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full h-12 gap-2 border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                  disabled={serveMut.isPending}
+                  onClick={() => serveMut.mutate(activeTable.id)}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Servir la commande
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="lg"
                 className="w-full h-12 gap-2"
-                disabled={activeTable.total <= 0}
+                disabled={!activeTable.served_at || activeTable.total <= 0}
                 onClick={() => setCashing({ kind: "table" })}
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Encaisser {formatFCFA(activeTable.total)}
+                Payer {formatFCFA(activeTable.total)}
               </Button>
             </div>
           )}
@@ -1223,6 +1270,83 @@ function PosPage() {
         onConfirm={() => closeDayMut.mutate()}
       />
 
+      {/* ── Panneau "Commandes en cours" ─────────────────────────────────── */}
+      <Drawer open={ordersOpen} onOpenChange={setOrdersOpen}>
+        <DrawerContent>
+          <DrawerTitle className="px-4 pt-2">Commandes en cours</DrawerTitle>
+          <div className="max-h-[70vh] overflow-y-auto px-4 pb-4">
+            {openTables.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Aucune commande en cours.
+              </p>
+            ) : (
+              <div className="space-y-2 pt-2">
+                {openTables
+                  .slice()
+                  .sort((a, b) => {
+                    // pending d'abord (plus urgent), puis served, puis paid
+                    const order: Record<string, number> = { pending: 0, served: 1, paid: 2 };
+                    const sa = order[tableStage(a)] ?? 3;
+                    const sb = order[tableStage(b)] ?? 3;
+                    return sa - sb || (a.opened_at ?? 0) - (b.opened_at ?? 0);
+                  })
+                  .map((t) => {
+                    const stage = tableStage(t);
+                    return (
+                      <div
+                        key={t.id}
+                        className={cn(
+                          "flex items-center justify-between gap-3 rounded-lg border p-3",
+                          stage === "pending" && "border-warning/40 bg-warning/5",
+                          stage === "served" &&
+                            "border-orange-400/40 bg-orange-50/50 dark:bg-orange-950/10",
+                          stage === "paid" && "border-primary/30 bg-accent/50",
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">Table {t.table}</span>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                                stage === "pending" && "bg-warning/20 text-warning-foreground",
+                                stage === "served" &&
+                                  "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+                                stage === "paid" && "bg-primary/10 text-primary",
+                              )}
+                            >
+                              {stage === "pending"
+                                ? "en cours"
+                                : stage === "served"
+                                  ? "servi"
+                                  : "payé"}
+                            </span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {formatFCFA(t.total)} · {t.opened_at ? formatTime(t.opened_at) : ""}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setOrdersOpen(false);
+                              selectTarget({ kind: "table", saleId: t.id });
+                            }}
+                          >
+                            Ouvrir
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
+
       <Dialog open={cancelPinOpen} onOpenChange={setCancelPinOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1324,27 +1448,24 @@ const LONG_PRESS_MS = 500;
 /**
  * Étape d'une table, lue sur les données existantes — aucun geste supplémentaire.
  *
- *  - "libre"    : aucune addition ouverte.
- *  - "awaiting" : table ouverte, rien de servi (`total === 0`) — la commande n'est pas
- *                 encore prise, c'est l'étape la plus urgente du service.
- *  - "service"  : table ouverte avec du service (`total > 0`) — le travail de la table
- *                 est en cours, du stock est sorti et de l'argent est dû.
- *  - "paid"     : table ouverte dont au moins une TOURNÉE a déjà été encaissée
- *                 (`rounds_paid` posé par `payRound`) — l'argent entre au passage, la
- *                 table reste ouverte sur ce qui reste dû. C'est la différence demandée :
- *                 distinguer une table qui a déjà encaissé d'une table servie mais dont
- *                 rien n'a encore été payé.
+ *  - "libre"   : aucune addition ouverte.
+ *  - "pending" : table ouverte, commande pas encore servie (`served_at` absent).
+ *  - "served"  : table ouverte, commande servie mais pas encore payée (`served_at` défini).
+ *  - "paid"    : table ouverte dont au moins une tournée a été encaissée (`rounds_paid`)
+ *                ou entièrement réglée.
  *
- * Chaque étape a sa couleur sur le plan de salle, expliquée par la légende : libre est
- * neutre, « commande à prendre » est ambre, « en service » est la couleur de marque,
- * « déjà encaissée » est bleue.
+ * Chaque étape a sa couleur sur le plan de salle, expliquée par la légende.
  */
-type TableStage = "libre" | "awaiting" | "service" | "paid";
+type TableStage = "libre" | "pending" | "served" | "paid";
 
 function tableStage(table: Sale | null): TableStage {
   if (!table) return "libre";
-  if ((table.rounds_paid ?? 0) > 0) return "paid";
-  return table.total > 0 ? "service" : "awaiting";
+  // Réglée (totalement ou partiellement encaissée)
+  if ((table.rounds_paid ?? 0) > 0 || table.total <= 0) return "paid";
+  // Servie : la commande a été livrée, paiement débloqué
+  if (table.served_at) return "served";
+  // En cours : table ouverte, commande pas encore prise / servie
+  return "pending";
 }
 
 /**
@@ -1411,25 +1532,24 @@ function TableCard({
       aria-label={
         !busy
           ? `Table ${label}, libre`
-          : stage === "awaiting"
-            ? `Table ${label}, ouverte, en attente de commande`
-            : stage === "paid"
+          : stage === "pending"
+            ? `Table ${label}, commande en cours`
+            : stage === "served"
               ? table.total > 0
+                ? `Table ${label}, servie, ${formatFCFA(table.total)} à encaisser`
+                : `Table ${label}, servie. Appui long pour libérer.`
+              : table.total > 0
                 ? `Table ${label}, partiellement encaissée, ${formatFCFA(table.total)} restants`
                 : `Table ${label}, réglée. Appui long pour libérer.`
-              : `Table ${label}, ${formatFCFA(table.total)} en cours. Appui long pour libérer.`
       }
       className={cn(
         "select-none [-webkit-touch-callout:none]",
-        // Hauteur mesurée, pas généreuse : sept tables font déjà trois rangées sur un
-        // téléphone, et chaque pixel pris ici repousse la grille d'articles — l'écran que
-        // le serveur touche le plus souvent.
         "flex min-h-[64px] flex-col rounded-lg border px-2 py-1.5 text-left transition-all",
         "hover:border-primary active:scale-[0.98] disabled:opacity-60",
         stage === "libre" && "bg-card",
-        stage === "awaiting" && "border-warning/60 bg-warning/15",
-        stage === "service" && "border-primary/40 bg-accent",
-        stage === "paid" && "border-info/60 bg-info/15",
+        stage === "pending" && "border-warning/60 bg-warning/15",
+        stage === "served" && "border-orange-400/60 bg-orange-50 dark:bg-orange-950/20",
+        stage === "paid" && "border-primary/40 bg-accent",
         active && "ring-2 ring-primary ring-offset-1",
       )}
     >
@@ -1439,34 +1559,38 @@ function TableCard({
           <span
             className={cn(
               "h-2 w-2 shrink-0 rounded-full",
-              stage === "awaiting" ? "bg-warning" : stage === "paid" ? "bg-info" : "bg-primary",
+              stage === "pending"
+                ? "bg-warning"
+                : stage === "served"
+                  ? "bg-orange-500"
+                  : "bg-primary",
             )}
           />
         )}
       </span>
       {!busy ? (
         <span className="text-xs leading-tight text-muted-foreground">libre</span>
-      ) : stage === "awaiting" ? (
+      ) : stage === "pending" ? (
         <>
-          <span className="font-bold leading-tight text-warning tabular-nums">commande</span>
+          <span className="font-bold leading-tight text-warning tabular-nums">en cours</span>
           <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
             {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+          </span>
+        </>
+      ) : stage === "served" ? (
+        <>
+          <span className="font-bold leading-tight text-orange-600 dark:text-orange-400 tabular-nums">
+            servi
+          </span>
+          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
+            {formatFCFA(table.total)} · {table.opened_at ? formatTime(table.opened_at) : "occupée"}
           </span>
         </>
       ) : stage === "paid" && table.total <= 0 ? (
         <>
-          <span className="font-bold leading-tight text-info tabular-nums">réglée</span>
+          <span className="font-bold leading-tight text-primary tabular-nums">réglée</span>
           <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
             {table.opened_at ? formatTime(table.opened_at) : "occupée"}
-          </span>
-        </>
-      ) : stage === "paid" ? (
-        <>
-          <span className="font-bold leading-tight text-info tabular-nums">
-            {formatFCFA(table.total)}
-          </span>
-          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
-            encaissée · {table.opened_at ? formatTime(table.opened_at) : "occupée"}
           </span>
         </>
       ) : (
@@ -1475,7 +1599,7 @@ function TableCard({
             {formatFCFA(table.total)}
           </span>
           <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
-            {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+            payée partiel · {table.opened_at ? formatTime(table.opened_at) : "occupée"}
           </span>
         </>
       )}

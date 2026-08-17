@@ -31,6 +31,9 @@ import {
   Coffee,
   Utensils,
   Scissors,
+  Shirt,
+  Weight,
+  Store,
 } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { formatFCFA } from "@/lib/format";
@@ -352,25 +355,43 @@ const CLUSTER_CARDS = [
     icon: ShoppingBag,
     title: "Épicerie",
     description: "Gérez vos produits, stocks et ventes au quotidien.",
-    emoji: "🏪",
+    emoji: "🛒",
   },
   {
     icon: Coffee,
-    title: "Bar",
-    description: "Consignes, tournées et suivi des boissons en temps réel.",
+    title: "Snack Bar",
+    description: "Consignes, tournées et suivi des boissons. Tables optionnelles.",
     emoji: "🍺",
-  },
-  {
-    icon: Utensils,
-    title: "Restaurant",
-    description: "Tables, commandes et encaissement en quelques tapes.",
-    emoji: "🍽️",
   },
   {
     icon: Scissors,
     title: "Coiffeur",
-    description: "Prestations, clients et planning de rendez-vous.",
+    description: "Prestations, clients et suivi des visites.",
     emoji: "✂️",
+  },
+  {
+    icon: Shirt,
+    title: "Boutique",
+    description: "Vêtements, accessoires. Variantes taille et couleur.",
+    emoji: "👗",
+  },
+  {
+    icon: Store,
+    title: "Magasin",
+    description: "Électronique, meubles, quincaillerie. Sous-catégorie au choix.",
+    emoji: "🏪",
+  },
+  {
+    icon: Utensils,
+    title: "Restaurant",
+    description: "Tables, commandes, service et paiement en 3 étapes.",
+    emoji: "🍽️",
+  },
+  {
+    icon: Weight,
+    title: "Boucherie",
+    description: "Vente au poids, stock en kg, dates de péremption.",
+    emoji: "🥩",
   },
 ] as const;
 

@@ -6,9 +6,10 @@ import {
   type ClusterWorkflow,
   type ClusterStock,
   type ClusterFlags,
+  type SubCategory,
 } from "@/lib/settings";
 
-export type { ClusterConfig, ClusterId, ClusterWorkflow, ClusterStock, ClusterFlags };
+export type { ClusterConfig, ClusterId, ClusterWorkflow, ClusterStock, ClusterFlags, SubCategory };
 
 /**
  * Résout le `ClusterConfig` complet + helpers dérivés.
@@ -22,6 +23,7 @@ export function useClusterFeatures(): ClusterConfig & {
   showCostPrice: boolean;
   isOrderFirst: boolean;
   isService: boolean;
+  isMagasin: boolean;
   // Nouveaux helpers (V2, prêts à l'emploi)
   hasWeightInput: boolean;
   hasVariants: boolean;
@@ -31,9 +33,12 @@ export function useClusterFeatures(): ClusterConfig & {
   // Flags dépliés au top-level
   allowDeposit: boolean;
   allowServiceBooking: boolean;
+  hasTablesOptional: boolean;
+  // Sous-catégorie magasin
+  subCategory?: SubCategory;
 } {
-  const { cluster } = usePreferences();
-  const config = CLUSTER_MAP[cluster as ClusterId] ?? CLUSTER_MAP.restaurant;
+  const { cluster, subCategory } = usePreferences();
+  const config = CLUSTER_MAP[cluster as ClusterId] ?? CLUSTER_MAP.retail;
   return {
     ...config,
     // Rétrocompat
@@ -41,6 +46,7 @@ export function useClusterFeatures(): ClusterConfig & {
     showCostPrice: config.stock.showCostPrice,
     isOrderFirst: config.workflow.mode === "order-first",
     isService: config.id === "service",
+    isMagasin: config.id === "magasin",
     // Nouveaux
     hasWeightInput: config.flags.hasWeightInput,
     hasVariants: config.stock.hasVariants,
@@ -50,5 +56,8 @@ export function useClusterFeatures(): ClusterConfig & {
     // Flags
     allowDeposit: config.flags.allowDeposit,
     allowServiceBooking: config.flags.allowServiceBooking,
+    hasTablesOptional: config.workflow.hasTablesOptional ?? false,
+    // Sous-catégorie
+    subCategory,
   };
 }
