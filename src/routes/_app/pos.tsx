@@ -12,6 +12,9 @@ import {
   Store,
   Utensils,
   Lock,
+  Wine,
+  Scissors,
+  Package,
 } from "lucide-react";
 import {
   addRound,
@@ -26,6 +29,8 @@ import {
   openTable,
   payRound,
   payTable,
+  addConsignmentTransaction,
+  getTotalConsignmentBalance,
   type CartLine,
   type Category,
   type Product,
@@ -34,6 +39,7 @@ import {
 } from "@/lib/db";
 import { formatFCFA, formatTime } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
+import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { savePreferences } from "@/lib/settings";
 import { verifyPin } from "@/lib/pin";
 import { Button } from "@/components/ui/button";
@@ -84,7 +90,7 @@ interface FreeLine {
 }
 
 // `key` sert au rendu et aux handlers du panier ; CartLine reste le type envoyé à la DB.
-type UiLine = CartLine & { key: string };
+type UiLine = CartLine & { key: string; productType?: "product" | "service" };
 
 /**
  * Destination de ce que l'on est en train de saisir.
@@ -105,7 +111,8 @@ type Cashing = null | { kind: "table" } | { kind: "round"; orderedAt: number };
 
 function PosPage() {
   const qc = useQueryClient();
-  const { tables: tableLabels, tablesEnabled } = usePreferences();
+  const { tables: tableLabels } = usePreferences();
+  const features = useClusterFeatures();
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
@@ -134,6 +141,8 @@ function PosPage() {
   // Nombre de personnes servies par cette vente. Alimente le KPI « clients » des
   // rapports. Reste à 1 dans le cas courant — un client, une vente.
   const [customers, setCustomers] = useState(1);
+  // Nom du client (services : coiffeur, salon, etc.). Optionnel.
+  const [clientName, setClientName] = useState("");
   // Le panneau d'encaissement ne s'ouvre qu'à la demande : tant qu'il est fermé, aucun
   // champ « argent donné » ne traîne à l'écran pendant le service, et on ne peut pas
   // confondre « ajouter une tournée » avec « faire payer ». Il vise soit TOUTE la table
@@ -148,6 +157,12 @@ function PosPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
+  // Onglet Prestations/Produits (cluster service uniquement)
+  const [serviceTab, setServiceTab] = useState<"prestations" | "produits">("prestations");
+  // Dialog de retour de consigne (cluster bar)
+  const [consignmentOpen, setConsignmentOpen] = useState(false);
+  const [consignmentProductId, setConsignmentProductId] = useState("");
+  const [consignmentQty, setConsignmentQty] = useState("");
 
   // Table DÉRIVÉE de la liste des additions ouvertes, jamais copiée dans l'état local :
   // une table encaissée ou annulée disparaît de la liste, `activeTable` retombe à null et
@@ -185,6 +200,7 @@ function PosPage() {
           cost: p.cost,
           category: p.category,
           quantity: qty,
+          productType: p.type,
         };
       })
       .filter((x): x is UiLine => Boolean(x));
@@ -241,7 +257,57 @@ function PosPage() {
     ? dueNow > 0 && cash >= dueNow
     : lines.length > 0 && cash >= total && total > 0;
 
-  const filtered = filter === "Tous" ? products : products.filter((p) => p.category === filter);
+  const filtered = useMemo(() => {
+    let list = products;
+    // Cluster service : filtrer par type (prestations vs produits)
+    if (features.isService) {
+      list = products.filter((p) =>
+        serviceTab === "prestations" ? p.type === "service" : p.type !== "service",
+      );
+    }
+    // Filtre par catégorie (tous clusters sauf service)
+    if (!features.isService && filter !== "Tous") {
+      list = list.filter((p) => p.category === filter);
+    }
+    return list;
+  }, [products, filter, features.isService, serviceTab]);
+
+  // ── Consigne (cluster bar) ──────────────────────────────────────────────
+  const consignmentProducts = useMemo(
+    () => products.filter((p) => p.hasConsignment && !p.deleted_at),
+    [products],
+  );
+
+  const { data: totalConsignmentBalance = 0 } = useQuery({
+    queryKey: ["consignment", "balance"],
+    queryFn: getTotalConsignmentBalance,
+    enabled: consignmentProducts.length > 0,
+  });
+
+  const selectedConsignmentProduct =
+    consignmentProducts.find((p) => p.id === consignmentProductId) ?? null;
+
+  const returnConsignmentMut = useMutation({
+    mutationFn: () => {
+      if (!selectedConsignmentProduct) throw new Error("Sélectionnez un produit.");
+      const qty = Number(consignmentQty) || 0;
+      if (qty <= 0) throw new Error("Quantité invalide.");
+      return addConsignmentTransaction({
+        kind: "return",
+        product_id: selectedConsignmentProduct.id,
+        deposit_price: selectedConsignmentProduct.price,
+        quantity: qty,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["consignment"] });
+      toast.success("Consigne retournée");
+      setConsignmentOpen(false);
+      setConsignmentProductId("");
+      setConsignmentQty("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const saleMut = useMutation({
     mutationFn: () =>
@@ -249,6 +315,7 @@ function PosPage() {
         lines: lines.map(({ key: _key, ...line }): CartLine => line),
         cash_given: cash,
         customers_count: customers,
+        ...(clientName.trim() ? { client_name: clientName.trim() } : {}),
       }),
     onSuccess: (sale) => {
       qc.invalidateQueries({ queryKey: ["products"] });
@@ -384,8 +451,7 @@ function PosPage() {
     setFreeLines([]);
     setCashGiven("");
     setCustomers(1);
-    // La feuille se referme avec le panier qu'elle affichait : la laisser ouverte sur un
-    // panier vide masquerait la grille d'articles juste après une vente.
+    setClientName("");
     setSheetOpen(false);
   }
 
@@ -476,7 +542,7 @@ function PosPage() {
           directement, un appui long sur une table occupée la libère.
           Masqué pour un commerce sans système de tables (snack/bar) : la caisse se réduit
           alors au comptoir et à l'encaissement immédiat. */}
-      {tablesEnabled && (
+      {features.hasTables && (
         <div className="space-y-2">
           <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
             {floorPlan.map(({ label, table }) => (
@@ -539,19 +605,49 @@ function PosPage() {
         {/* Products */}
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="text-xl font-bold">Articles</h2>
-            <div className="flex gap-1 flex-wrap">
-              <FilterChip active={filter === "Tous"} onClick={() => setFilter("Tous")}>
-                Tous
-              </FilterChip>
-              {categories.map((c) => (
-                <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>
-                  {c}
+            <h2 className="text-xl font-bold">
+              {features.isService
+                ? serviceTab === "prestations"
+                  ? "Prestations"
+                  : "Produits"
+                : "Articles"}
+            </h2>
+            {features.isService ? (
+              <div className="flex gap-1">
+                <FilterChip
+                  active={serviceTab === "prestations"}
+                  onClick={() => setServiceTab("prestations")}
+                >
+                  <Scissors className="h-3.5 w-3.5 mr-1" /> Prestations
                 </FilterChip>
-              ))}
-            </div>
+                <FilterChip
+                  active={serviceTab === "produits"}
+                  onClick={() => setServiceTab("produits")}
+                >
+                  <Package className="h-3.5 w-3.5 mr-1" /> Produits
+                </FilterChip>
+              </div>
+            ) : (
+              <div className="flex gap-1 flex-wrap">
+                <FilterChip active={filter === "Tous"} onClick={() => setFilter("Tous")}>
+                  Tous
+                </FilterChip>
+                {categories.map((c) => (
+                  <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>
+                    {c}
+                  </FilterChip>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div
+            className={cn(
+              "grid gap-3",
+              features.hasTables
+                ? "grid-cols-2 sm:grid-cols-3"
+                : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
+            )}
+          >
             {filtered.map((p) => {
               const inCart = cart[p.id] ?? 0;
               const out = Number.isFinite(p.stock) && p.stock - inCart <= 0;
@@ -643,6 +739,19 @@ function PosPage() {
               </Button>
             )}
           </div>
+
+          {/* Solde consigne visible sur desktop (cluster bar) */}
+          {features.allowDeposit && consignmentProducts.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setConsignmentOpen(true)}
+              className="hidden lg:flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm transition hover:bg-muted/70"
+            >
+              <Wine className="h-4 w-4" />
+              <span className="text-muted-foreground">Consigne :</span>
+              <span className="font-bold tabular-nums">{formatFCFA(totalConsignmentBalance)}</span>
+            </button>
+          )}
 
           {/* L'addition déjà servie, tournée par tournée. C'est ce que la table doit
               pouvoir vérifier avant de payer. Chaque tournée s'encaisse indépendamment :
@@ -743,7 +852,21 @@ function PosPage() {
                         className="flex items-center gap-2"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{l.name}</div>
+                          <div className="font-medium truncate flex items-center gap-1.5">
+                            {l.name}
+                            {features.isService && l.productType && (
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                                  l.productType === "service"
+                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+                                )}
+                              >
+                                {l.productType === "service" ? "P" : "Pr"}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground">
                             {formatFCFA(l.price)} × {l.quantity}
                           </div>
@@ -893,15 +1016,31 @@ function PosPage() {
           {/* Action principale. Son libellé dit exactement ce qui va se passer : ajouter
               une tournée n'engage pas d'argent, encaisser clôt l'addition. */}
           {!activeTable ? (
-            <Button
-              size="lg"
-              className="w-full h-16 text-lg gap-2"
-              disabled={!canValidate || saleMut.isPending}
-              onClick={() => saleMut.mutate()}
-            >
-              <CheckCircle2 className="h-5 w-5" />
-              Valider la vente
-            </Button>
+            <>
+              {features.isService && lines.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium" htmlFor="client-name">
+                    Nom du client
+                  </label>
+                  <Input
+                    id="client-name"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="Ex : Mme Kombila"
+                    className="h-11"
+                  />
+                </div>
+              )}
+              <Button
+                size="lg"
+                className="w-full h-16 text-lg gap-2"
+                disabled={!canValidate || saleMut.isPending}
+                onClick={() => saleMut.mutate()}
+              >
+                <CheckCircle2 className="h-5 w-5" />
+                Valider la vente
+              </Button>
+            </>
           ) : cashing ? (
             <div className="space-y-2">
               <Button
@@ -959,6 +1098,82 @@ function PosPage() {
           )}
         </CartShell>
       </div>
+
+      {/* ── Bouton flottant retour consigne (cluster bar) ───────────────────── */}
+      {features.allowDeposit && consignmentProducts.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setConsignmentOpen(true)}
+            className="fixed right-4 bottom-24 z-30 flex items-center gap-2 rounded-full border bg-card px-4 py-3 text-sm font-semibold shadow-lg transition hover:shadow-xl hover:border-primary lg:hidden"
+          >
+            <Wine className="h-4 w-4" /> Retour consigne
+            {totalConsignmentBalance > 0 && (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary tabular-nums">
+                {formatFCFA(totalConsignmentBalance)}
+              </span>
+            )}
+          </button>
+          <Dialog open={consignmentOpen} onOpenChange={setConsignmentOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Retour de consigne</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Bouteille</Label>
+                  <select
+                    className="flex h-12 w-full items-center rounded-md border bg-transparent px-3 text-base"
+                    value={consignmentProductId}
+                    onChange={(e) => setConsignmentProductId(e.target.value)}
+                  >
+                    <option value="">Choisir…</option>
+                    {consignmentProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — consigne {formatFCFA(p.price)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedConsignmentProduct && (
+                  <div>
+                    <Label htmlFor="consignment-qty">Quantité retournée</Label>
+                    <Input
+                      id="consignment-qty"
+                      inputMode="numeric"
+                      value={consignmentQty}
+                      onChange={(e) => setConsignmentQty(e.target.value.replace(/\D/g, ""))}
+                      placeholder="0"
+                      autoFocus
+                      className="h-12 text-lg font-bold"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && Number(consignmentQty) > 0)
+                          returnConsignmentMut.mutate();
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setConsignmentOpen(false)}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={() => returnConsignmentMut.mutate()}
+                  disabled={
+                    !selectedConsignmentProduct ||
+                    !consignmentQty ||
+                    Number(consignmentQty) <= 0 ||
+                    returnConsignmentMut.isPending
+                  }
+                >
+                  {returnConsignmentMut.isPending ? "Enregistrement…" : "Retourner la consigne"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
 
       {/* Barre de résumé, téléphone uniquement. Le total et l'action principale restent
           sous le pouce en permanence : sans elle, sur un écran de 844 px, « Valider la

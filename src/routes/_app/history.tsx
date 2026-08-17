@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay, startOfMonth, startOfWeek, startOfYear } from "date-fns";
-import { History, ChevronDown, ChevronUp, X } from "lucide-react";
+import { History, ChevronDown, ChevronUp, User, X } from "lucide-react";
 import {
   cancelSale,
   getSaleItems,
@@ -42,19 +42,12 @@ export const Route = createFileRoute("/_app/history")({
   component: HistoryPage,
 });
 
-// Sentinelles des onglets. Préfixées `__` pour ne pas pouvoir entrer en collision avec un
-// libellé de table réel — rien n'empêche un commerçant de nommer une table « Tous ».
 const ALL = "__all";
 const COUNTER = "__counter";
 
 const scopeLabel = (scope: string) =>
   scope === ALL ? "Toutes" : scope === COUNTER ? "Comptoir" : `Table ${scope}`;
 
-/**
- * Découpage du calendrier. Une seule granularité à l'écran à la fois : l'écran répond à
- * « combien a fait cette journée / cette semaine / ce mois / cette année », et un montant
- * ne se lit sans ambiguïté que si toutes les cartes couvrent la même durée.
- */
 type Period = "day" | "week" | "month" | "year";
 
 const PERIODS: { key: Period; label: string }[] = [
@@ -64,8 +57,6 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: "year", label: "Année" },
 ];
 
-// Semaine au lundi : la semaine commerciale au Gabon comme dans toute l'Europe
-// francophone. Le défaut de date-fns est le dimanche, il décalerait chaque carte d'un jour.
 const bucketStart: Record<Period, (ts: number) => number> = {
   day: (ts) => startOfDay(ts).getTime(),
   week: (ts) => startOfWeek(ts, { weekStartsOn: 1 }).getTime(),
@@ -90,22 +81,13 @@ function bucketLabel(period: Period, start: number): string {
 }
 
 function HistoryPage() {
-  // Tout l'historique, pas seulement le jour en cours : les ventes d'hier restent
-  // consultables. La clé garde le préfixe ["sales"] déjà invalidé par les mutations.
   const { data: sales = [] } = useQuery({
     queryKey: ["sales", "all"],
     queryFn: () => listSales(),
   });
 
-  // « Tous », « Comptoir » (ventes sans table), ou le libellé d'une table.
   const [scope, setScope] = useState<string>(ALL);
 
-  /**
-   * Les onglets se construisent sur les ventes RÉELLEMENT enregistrées, pas sur la liste
-   * de tables des Réglages : l'historique raconte ce qui s'est passé. Une table retirée
-   * des Réglages garde donc son onglet tant qu'elle a des ventes, et une table jamais
-   * servie n'en crée pas un pour rien.
-   */
   const scopes = useMemo(() => {
     const labels = new Set<string>();
     let comptoir = false;
@@ -126,9 +108,7 @@ function HistoryPage() {
     return sales.filter((s) => s.table === scope);
   }, [sales, scope]);
 
-  // Le bénéfice vit dans les lignes (`cost_at_sale`), pas dans la vente : il faut les
-  // charger pour l'afficher. La clé porte les id des ventes filtrées — une annulation
-  // change la liste et relance la requête sans laisser un cache périmé.
+  // Profit par vente — chargé uniquement pour les ventes filtrées
   const { data: periodItems } = useQuery({
     queryKey: ["sale_items", "history", scope, filtered.map((s) => s.id).join(",")],
     queryFn: () => getSaleItemsForSales(filtered.map((s) => s.id)),
@@ -148,9 +128,6 @@ function HistoryPage() {
   const [period, setPeriod] = useState<Period>("day");
   const [picked, setPicked] = useState<number | null>(null);
 
-  /** Une carte par période AYANT eu des ventes, de la plus récente à la plus ancienne.
-   *  Les périodes vides n'ont pas de carte : un calendrier plein de « 0 F » ferait
-   *  chercher les journées travaillées au lieu de les montrer. */
   const buckets = useMemo(() => {
     const map = new Map<number, { total: number; count: number; profit: number }>();
     for (const s of filtered) {
@@ -171,13 +148,8 @@ function HistoryPage() {
     return Array.from(map, ([start, b]) => ({ start, ...b })).sort((a, b) => b.start - a.start);
   }, [filtered, period, profitBySale]);
 
-  /** Carte ouverte, DÉRIVÉE de la liste : changer de granularité ou de table fait
-   *  retomber la sélection sur la période la plus récente au lieu de pointer une carte
-   *  qui n'existe plus. */
   const active = buckets.find((b) => b.start === picked) ?? buckets[0] ?? null;
 
-  // listSales trie déjà du plus récent au plus ancien : l'ordre d'insertion de la Map
-  // donne donc les jours dans le bon ordre.
   const days = useMemo(() => {
     if (!active) return [];
     const map = new Map<number, Sale[]>();
@@ -204,9 +176,6 @@ function HistoryPage() {
         </p>
       </div>
 
-      {/* Un onglet par table : c'est l'addition d'une table qu'on vient rechercher, pas
-          une liste globale à faire défiler. Masqué tant qu'aucune vente n'a de table —
-          une caisse de comptoir n'a rien à filtrer. */}
       {scopes.length > 2 && (
         <div className="flex flex-wrap gap-1">
           {scopes.map((s) => (
@@ -228,9 +197,6 @@ function HistoryPage() {
         </div>
       )}
 
-      {/* Le calendrier : une carte par période, avec le montant EXACT encaissé dessus.
-          C'est la question qu'on vient poser à l'historique — « combien a fait samedi ? » —
-          et elle doit se lire sans dérouler une liste de ventes. */}
       {filtered.length > 0 && (
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1">
@@ -240,8 +206,6 @@ function HistoryPage() {
                 type="button"
                 onClick={() => {
                   setPeriod(p.key);
-                  // La sélection ne survit pas au changement de granularité : un début de
-                  // journée n'est pas un début de mois, elle ne désignerait plus rien.
                   setPicked(null);
                 }}
                 aria-pressed={period === p.key}
@@ -298,8 +262,6 @@ function HistoryPage() {
         days.map(([day, daySales]) => (
           <section key={day} className="space-y-2">
             <div className="flex items-baseline justify-between gap-2 pt-2">
-              {/* first-letter et non capitalize : en français seul le premier mot prend
-                  la majuscule (« mercredi 29 juillet 2026 »). */}
               <h2 className="font-semibold first-letter:uppercase">{formatDay(day)}</h2>
               <span className="text-sm text-muted-foreground">
                 {daySales.length} vente{daySales.length > 1 ? "s" : ""} ·{" "}
@@ -309,7 +271,7 @@ function HistoryPage() {
               </span>
             </div>
             {daySales.map((s) => (
-              <SaleRow key={s.id} sale={s} />
+              <SaleRow key={s.id} sale={s} profit={profitBySale.get(s.id) ?? 0} />
             ))}
           </section>
         ))
@@ -318,7 +280,7 @@ function HistoryPage() {
   );
 }
 
-function SaleRow({ sale }: { sale: Sale }) {
+function SaleRow({ sale, profit }: { sale: Sale; profit: number }) {
   const [open, setOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState("");
@@ -329,6 +291,11 @@ function SaleRow({ sale }: { sale: Sale }) {
     queryFn: () => getSaleItems(sale.id),
     enabled: open,
   });
+
+  const itemCount = useMemo(() => {
+    if (items.data) return items.data.reduce((s, i) => s + i.quantity, 0);
+    return 0;
+  }, [items.data]);
 
   const cancelMut = useMutation({
     mutationFn: () => cancelSale(sale.id),
@@ -344,42 +311,82 @@ function SaleRow({ sale }: { sale: Sale }) {
 
   return (
     <Card>
-      <CardContent className="p-4">
+      <CardContent className="p-3">
+        {/* Ligne simplifiée : heure · table · client · nb articles · total */}
         <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold">{formatTime(sale.timestamp)}</span>
-              {/* Absent sur une vente au comptoir : il n'y a pas de table à nommer. */}
-              {sale.table && <Badge variant="outline">Table {sale.table}</Badge>}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold tabular-nums">{formatTime(sale.timestamp)}</span>
+              {sale.table && (
+                <Badge variant="outline" className="text-xs">
+                  Table {sale.table}
+                </Badge>
+              )}
+              {sale.client_name && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <User className="h-3 w-3" />
+                  {sale.client_name}
+                </Badge>
+              )}
             </div>
-            <div className="text-sm text-muted-foreground">
-              Donné {formatFCFA(sale.cash_given)} · Rendu {formatFCFA(sale.change_due)}
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {itemCount > 0
+                ? `${itemCount} article${itemCount > 1 ? "s" : ""}`
+                : items.isLoading
+                  ? "…"
+                  : ""}
+              {isClosed(sale) && <span className="ml-2">· clôturée</span>}
             </div>
           </div>
-          <div className="text-xl font-bold text-primary">{formatFCFA(sale.total)}</div>
-          {isClosed(sale) && <Badge variant="secondary">clôturée</Badge>}
-          <Button variant="ghost" size="icon" onClick={() => setOpen((o) => !o)}>
+          <div className="text-lg font-bold text-primary tabular-nums">
+            {formatFCFA(sale.total)}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => setOpen((o) => !o)}
+          >
             {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
           <Button
             variant="ghost"
             size="icon"
+            className="h-8 w-8 shrink-0"
             onClick={() => setPinOpen(true)}
             disabled={isClosed(sale)}
           >
             <X className="h-4 w-4 text-destructive" />
           </Button>
         </div>
+
+        {/* Détail déplié : articles, cash, rendu, bénéfice */}
         {open && (
-          <div className="mt-3 border-t pt-3 space-y-1 text-sm">
+          <div className="mt-3 border-t pt-3 space-y-2 text-sm">
             {items.data?.map((it) => (
               <div key={it.id} className="flex justify-between">
-                <span>
+                <span className="text-muted-foreground">
                   {it.quantity} × {it.name}
                 </span>
                 <span className="font-medium">{formatFCFA(it.price_at_sale * it.quantity)}</span>
               </div>
             ))}
+            <div className="border-t pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>
+                Donné{" "}
+                <span className="font-medium text-foreground">{formatFCFA(sale.cash_given)}</span>
+              </span>
+              <span>
+                Rendu{" "}
+                <span className="font-medium text-foreground">{formatFCFA(sale.change_due)}</span>
+              </span>
+              {profit > 0 && (
+                <span>
+                  Bénéfice{" "}
+                  <span className="font-medium text-emerald-600">{formatFCFA(profit)}</span>
+                </span>
+              )}
+            </div>
           </div>
         )}
       </CardContent>

@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/button";
 const SUPPORT_WHATSAPP = "https://wa.me/24176505254";
 
 export function SuspendedScreen() {
-  const locked = useSyncExternalStore(subscribeLock, getLockSnapshot);
+  // getServerSnapshot empêche l'erreur SSR "Missing getServerSnapshot" : côté serveur,
+  // on rend false (non bloqué) — le gatekeeper n'est monté qu'en/client.
+  const locked = useSyncExternalStore(subscribeLock, getLockSnapshot, () => false);
   if (!locked) return null;
 
   return (

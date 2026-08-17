@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   Download,
   FileSpreadsheet,
   FileText,
@@ -16,6 +18,7 @@ import { closeDay, listSalesToday } from "@/lib/db";
 import { computePeriodStats, lastDaysRange, type ProductBucket } from "@/lib/analytics";
 import { usePeriodData } from "@/hooks/use-period-data";
 import { usePreferences } from "@/hooks/use-preferences";
+import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { formatDay, formatDayShort, formatFCFA, formatPercent } from "@/lib/format";
 import { StatCard } from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -72,8 +75,9 @@ const chartConfig = {
 function ReportsPage() {
   const qc = useQueryClient();
   const { workspaceName } = usePreferences();
+  const features = useClusterFeatures();
   const [preset, setPreset] = useState<PresetKey>("today");
-  const [mode, setMode] = useState<"simple" | "detail">("simple");
+  const [showDetail, setShowDetail] = useState(false);
   const [range, setRange] = useState<DateRange | undefined>();
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -123,8 +127,6 @@ function ReportsPage() {
 
   const topProducts = stats.topProducts.slice(0, 10);
   const topRest = stats.topProducts.length - topProducts.length;
-  const topSimple = stats.topProducts.slice(0, 5);
-  const topRestSimple = stats.topProducts.length - topSimple.length;
 
   const payload: ReportPayload = {
     label,
@@ -191,121 +193,101 @@ function ReportsPage() {
           </Popover>
         )}
         <span className="text-sm text-muted-foreground">{label}</span>
-        <Tabs
-          value={mode}
-          onValueChange={(v) => setMode(v as "simple" | "detail")}
-          className="ml-auto"
-        >
-          <TabsList>
-            <TabsTrigger value="simple">Simple</TabsTrigger>
-            <TabsTrigger value="detail">Détail</TabsTrigger>
-          </TabsList>
-        </Tabs>
       </div>
 
-      {mode === "simple" ? (
+      {/* Vue simplifiée : KPI + top articles + clôture */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard label="Revenus" value={formatFCFA(stats.revenue)} highlight large />
+        {features.showCostPrice && (
+          <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
+        )}
+        <StatCard label="Ventes" value={String(stats.salesCount)} large />
+        <StatCard label="Panier moyen" value={formatFCFA(stats.averageBasket)} />
+        <StatCard label="Articles vendus" value={String(stats.itemsCount)} />
+        <StatCard label="Clients" value={String(stats.customersCount)} />
+      </div>
+
+      <TopArticlesCard
+        products={topProducts.slice(0, 5)}
+        rest={Math.max(0, topProducts.length - 5)}
+        showCostPrice={features.showCostPrice}
+      />
+
+      <Button variant="outline" className="w-full" onClick={() => setShowDetail((d) => !d)}>
+        {showDetail ? (
+          <ChevronUp className="h-4 w-4 mr-2" />
+        ) : (
+          <ChevronDown className="h-4 w-4 mr-2" />
+        )}
+        {showDetail ? "Masquer le rapport détaillé" : "Voir le rapport complet"}
+      </Button>
+
+      {/* Vue détaillée : graphique, comparaison, exports */}
+      {showDetail && (
         <>
-          {/* Vue Simple : la synthèse qu'on lit en dix secondes — 4 KPI, le top des
-              ventes, et la clôture. Pas de graphique ni de tableaux croisés. */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Revenus" value={formatFCFA(stats.revenue)} highlight large />
-            <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
-            <StatCard label="Ventes" value={String(stats.salesCount)} large />
-          </div>
-
-          <TopArticlesCard products={topSimple} rest={topRestSimple} />
-
-          <CloseCard
-            salesCount={salesToday.length}
-            total={todayTotal}
-            busy={closeMut.isPending}
-            onClose={() => closeMut.mutate()}
-          />
-        </>
-      ) : (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Revenus" value={formatFCFA(stats.revenue)} highlight large />
-            <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
-            <StatCard label="Ventes" value={String(stats.salesCount)} />
-            <StatCard label="Clients" value={String(stats.customersCount)} />
-            <StatCard
-              label="Marge"
-              value={formatPercent(stats.marginRate)}
-              hint="bénéfice ÷ revenus"
-            />
-            <StatCard label="Panier moyen" value={formatFCFA(stats.averageBasket)} />
-            <StatCard label="Articles vendus" value={String(stats.itemsCount)} />
-            <StatCard
-              label="Croissance"
-              value={formatPercent(stats.growthRate, true)}
-              hint="2ᵉ moitié vs 1re moitié"
-            />
-          </div>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" /> Comparaison avec la période précédente
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                du {formatDayShort(prevRange.from)} au {formatDayShort(prevRange.to - 1)} — même
-                durée que la période affichée
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <ComparisonCell
-                  label="Revenus"
-                  value={stats.revenue}
-                  previous={prevStats.revenue}
-                  isMoney
-                />
-                <ComparisonCell
-                  label="Bénéfices"
-                  value={stats.profit}
-                  previous={prevStats.profit}
-                  isMoney
-                />
-                <ComparisonCell
-                  label="Ventes"
-                  value={stats.salesCount}
-                  previous={prevStats.salesCount}
-                />
-                <ComparisonCell
-                  label="Panier moyen"
-                  value={stats.averageBasket}
-                  previous={prevStats.averageBasket}
-                  isMoney
-                />
-                <ComparisonCell
-                  label="Articles vendus"
-                  value={stats.itemsCount}
-                  previous={prevStats.itemsCount}
-                />
-              </div>
-              {/* Les deux jours qui racontent la période : le pic de vente et le jour le
-              moins rentable. Tout le reste (marges, croissance) est déjà dans les KPI. */}
-              <div className="border-t pt-3 grid gap-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Meilleur jour de vente</span>
-                  <span className="font-medium text-right">
-                    {stats.bestDay
-                      ? `${formatDay(stats.bestDay.day)} — ${formatFCFA(stats.bestDay.revenue)}`
-                      : "aucune vente sur la période"}
-                  </span>
+          {features.showCostPrice && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" /> Comparaison avec la période précédente
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  du {formatDayShort(prevRange.from)} au {formatDayShort(prevRange.to - 1)} — même
+                  durée que la période affichée
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <ComparisonCell
+                    label="Revenus"
+                    value={stats.revenue}
+                    previous={prevStats.revenue}
+                    isMoney
+                  />
+                  <ComparisonCell
+                    label="Bénéfices"
+                    value={stats.profit}
+                    previous={prevStats.profit}
+                    isMoney
+                  />
+                  <ComparisonCell
+                    label="Ventes"
+                    value={stats.salesCount}
+                    previous={prevStats.salesCount}
+                  />
+                  <ComparisonCell
+                    label="Panier moyen"
+                    value={stats.averageBasket}
+                    previous={prevStats.averageBasket}
+                    isMoney
+                  />
+                  <ComparisonCell
+                    label="Articles vendus"
+                    value={stats.itemsCount}
+                    previous={prevStats.itemsCount}
+                  />
                 </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Jour le moins rentable</span>
-                  <span className="font-medium text-right">
-                    {stats.worstDay
-                      ? `${formatDay(stats.worstDay.day)} — ${formatFCFA(stats.worstDay.profit)}`
-                      : "aucune activité sur la période"}
-                  </span>
+                <div className="border-t pt-3 grid gap-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Meilleur jour de vente</span>
+                    <span className="font-medium text-right">
+                      {stats.bestDay
+                        ? `${formatDay(stats.bestDay.day)} — ${formatFCFA(stats.bestDay.revenue)}`
+                        : "aucune vente sur la période"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Jour le moins rentable</span>
+                    <span className="font-medium text-right">
+                      {stats.worstDay
+                        ? `${formatDay(stats.worstDay.day)} — ${formatFCFA(stats.worstDay.profit)}`
+                        : "aucune activité sur la période"}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-2">
@@ -345,7 +327,11 @@ function ReportsPage() {
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <TopArticlesCard products={topProducts} rest={topRest} />
+            <TopArticlesCard
+              products={topProducts}
+              rest={topRest}
+              showCostPrice={features.showCostPrice}
+            />
 
             <Card>
               <CardHeader className="pb-2">
@@ -375,8 +361,6 @@ function ReportsPage() {
                         <Bar dataKey="revenue" fill="var(--color-revenue)" radius={4} />
                       </BarChart>
                     </ChartContainer>
-                    {/* Le tableau chiffré double le graphique à dessein : sur un écran de
-                    téléphone les barres seules ne se lisent pas. */}
                     <div className="mt-3 space-y-1 text-sm">
                       {stats.byCategory.map((c) => (
                         <div key={c.category} className="flex justify-between gap-2">
@@ -410,7 +394,9 @@ function ReportsPage() {
                       <TableHead className="text-right">Ventes</TableHead>
                       <TableHead className="text-right">Clients</TableHead>
                       <TableHead className="text-right">Revenus</TableHead>
-                      <TableHead className="text-right">Bénéfice</TableHead>
+                      {features.showCostPrice && (
+                        <TableHead className="text-right">Bénéfice</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -423,9 +409,11 @@ function ReportsPage() {
                         <TableCell className="text-right tabular-nums">
                           {formatFCFA(t.revenue)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums text-primary">
-                          {formatFCFA(t.profit)}
-                        </TableCell>
+                        {features.showCostPrice && (
+                          <TableCell className="text-right tabular-nums text-primary">
+                            {formatFCFA(t.profit)}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -435,15 +423,15 @@ function ReportsPage() {
           </Card>
 
           <ExportCard payload={payload} chartRef={chartRef} />
-
-          <CloseCard
-            salesCount={salesToday.length}
-            total={todayTotal}
-            busy={closeMut.isPending}
-            onClose={() => closeMut.mutate()}
-          />
         </>
       )}
+
+      <CloseCard
+        salesCount={salesToday.length}
+        total={todayTotal}
+        busy={closeMut.isPending}
+        onClose={() => closeMut.mutate()}
+      />
     </div>
   );
 }
@@ -484,7 +472,15 @@ function ComparisonCell({
   );
 }
 
-function TopArticlesCard({ products, rest }: { products: ProductBucket[]; rest: number }) {
+function TopArticlesCard({
+  products,
+  rest,
+  showCostPrice,
+}: {
+  products: ProductBucket[];
+  rest: number;
+  showCostPrice: boolean;
+}) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -502,7 +498,7 @@ function TopArticlesCard({ products, rest }: { products: ProductBucket[]; rest: 
                   <TableHead>Article</TableHead>
                   <TableHead className="text-right">Qté</TableHead>
                   <TableHead className="text-right">Revenus</TableHead>
-                  <TableHead className="text-right">Bénéfice</TableHead>
+                  {showCostPrice && <TableHead className="text-right">Bénéfice</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -517,9 +513,11 @@ function TopArticlesCard({ products, rest }: { products: ProductBucket[]; rest: 
                     <TableCell className="text-right tabular-nums">
                       {formatFCFA(p.revenue)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-primary">
-                      {formatFCFA(p.profit)}
-                    </TableCell>
+                    {showCostPrice && (
+                      <TableCell className="text-right tabular-nums text-primary">
+                        {formatFCFA(p.profit)}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

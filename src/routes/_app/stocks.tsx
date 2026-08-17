@@ -1,14 +1,31 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Package } from "lucide-react";
-import { deleteProduct, listProducts, type Product } from "@/lib/db";
+import { Plus, Pencil, Trash2, Package, PackagePlus } from "lucide-react";
+import { addStock, deleteProduct, listProducts, type Product } from "@/lib/db";
 import { formatFCFA } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ProductForm } from "@/components/ProductForm";
+import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/stocks")({
@@ -26,12 +43,37 @@ export const Route = createFileRoute("/_app/stocks")({
 
 function StocksPage() {
   const qc = useQueryClient();
+  const features = useClusterFeatures();
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
   });
   const [editing, setEditing] = useState<Product | null>(null);
-  const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  // ── Ajout de stock manuel ──────────────────────────────────────────────────
+  const [stockOpen, setStockOpen] = useState(false);
+  const [stockProductId, setStockProductId] = useState<string>("");
+  const [addQty, setAddQty] = useState("");
+
+  const selectedProduct = products.find((p) => p.id === stockProductId) ?? null;
+
+  const addStockMut = useMutation({
+    mutationFn: () => {
+      if (!selectedProduct) throw new Error("Sélectionnez un produit.");
+      const qty = Number(addQty) || 0;
+      if (qty <= 0) throw new Error("Quantité invalide.");
+      return addStock(selectedProduct.id, qty);
+    },
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      toast.success(`${updated.name} : +${addQty} (total ${updated.stock})`);
+      setStockOpen(false);
+      setStockProductId("");
+      setAddQty("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const removeMut = useMutation({
     mutationFn: deleteProduct,
@@ -51,7 +93,7 @@ function StocksPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Package className="h-6 w-6" /> Stocks & Produits
@@ -60,26 +102,107 @@ function StocksPage() {
             Créez et mettez à jour vos articles avant de vendre.
           </p>
         </div>
-        <Dialog
-          open={open}
-          onOpenChange={(v) => {
-            setOpen(v);
-            if (!v) setEditing(null);
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button size="lg" onClick={() => setEditing(null)}>
-              <Plus className="h-5 w-5 mr-1" /> Nouveau produit
-            </Button>
-          </DialogTrigger>
-          <ProductForm
-            editing={editing}
-            onClose={() => {
-              setOpen(false);
-              setEditing(null);
+        <div className="flex gap-2">
+          <Dialog
+            open={stockOpen}
+            onOpenChange={(v) => {
+              setStockOpen(v);
+              if (!v) {
+                setStockProductId("");
+                setAddQty("");
+              }
             }}
-          />
-        </Dialog>
+          >
+            <DialogTrigger asChild>
+              <Button variant="outline" size="lg">
+                <PackagePlus className="h-5 w-5 mr-1" /> Ajouter du stock
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Ajouter du stock</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Produit</Label>
+                  <Select value={stockProductId} onValueChange={setStockProductId}>
+                    <SelectTrigger className="h-12 text-base">
+                      <SelectValue placeholder="Choisir un produit…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products
+                        .filter((p) => Number.isFinite(p.stock))
+                        .map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name} — stock actuel : {p.stock}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedProduct && (
+                  <>
+                    <div>
+                      <Label htmlFor="add-qty">Quantité à ajouter</Label>
+                      <Input
+                        id="add-qty"
+                        inputMode="numeric"
+                        value={addQty}
+                        onChange={(e) => setAddQty(e.target.value.replace(/\D/g, ""))}
+                        placeholder="0"
+                        autoFocus
+                        className="h-12 text-lg font-bold"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && Number(addQty) > 0) addStockMut.mutate();
+                        }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Nouveau total&nbsp;:{" "}
+                      <span className="font-medium">
+                        {selectedProduct.stock + (Number(addQty) || 0)}
+                      </span>
+                    </p>
+                  </>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setStockOpen(false)}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={() => addStockMut.mutate()}
+                  disabled={
+                    !selectedProduct || !addQty || Number(addQty) <= 0 || addStockMut.isPending
+                  }
+                >
+                  {addStockMut.isPending ? "Ajout…" : "Ajouter au stock"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={editOpen}
+            onOpenChange={(v) => {
+              setEditOpen(v);
+              if (!v) setEditing(null);
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button size="lg" onClick={() => setEditing(null)}>
+                <Plus className="h-5 w-5 mr-1" /> Nouveau produit
+              </Button>
+            </DialogTrigger>
+            <ProductForm
+              editing={editing}
+              onClose={() => {
+                setEditOpen(false);
+                setEditing(null);
+              }}
+            />
+          </Dialog>
+        </div>
       </div>
 
       {products.length === 0 ? (
@@ -103,9 +226,12 @@ function StocksPage() {
                   <div className="min-w-0">
                     <div className="font-medium truncate">{p.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {p.cost > 0 && <>Achat {formatFCFA(p.cost)} · </>}
+                      {features.showCostPrice && p.cost > 0 && <>Achat {formatFCFA(p.cost)} · </>}
                       Vente {formatFCFA(p.price)}
-                      {p.cost > 0 && <> · Marge {formatFCFA(p.price - p.cost)}</>} · Stock&nbsp;:{" "}
+                      {features.showCostPrice && p.cost > 0 && (
+                        <> · Marge {formatFCFA(p.price - p.cost)}</>
+                      )}{" "}
+                      · Stock&nbsp;:{" "}
                       <span
                         className={
                           Number.isFinite(p.stock) && p.stock <= 5
@@ -123,7 +249,7 @@ function StocksPage() {
                       variant="ghost"
                       onClick={() => {
                         setEditing(p);
-                        setOpen(true);
+                        setEditOpen(true);
                       }}
                     >
                       <Pencil className="h-4 w-4" />

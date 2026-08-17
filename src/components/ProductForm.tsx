@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
+import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { toast } from "sonner";
 
 export function ProductForm({
@@ -22,7 +23,9 @@ export function ProductForm({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const features = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
+  const [barcode, setBarcode] = useState(editing?.barcode ?? "");
   const [cost, setCost] = useState<string>(editing?.cost ? String(editing.cost) : "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
@@ -30,6 +33,8 @@ export function ProductForm({
     editing && Number.isFinite(editing.stock) ? String(editing.stock) : "",
   );
   const [category, setCategory] = useState<Category>(editing?.category ?? "Boisson");
+  const [productType, setProductType] = useState<"product" | "service">(editing?.type ?? "product");
+  const [hasConsignment, setHasConsignment] = useState(editing?.hasConsignment ?? false);
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -39,6 +44,9 @@ export function ProductForm({
         price: Number(price) || 0,
         stock: unlimited ? Number.POSITIVE_INFINITY : Number(stock) || 0,
         category,
+        barcode: barcode.trim() || null,
+        type: productType,
+        hasConsignment,
       };
       if (!p.name) throw new Error("Nom requis");
       if (p.price <= 0) throw new Error("Prix invalide");
@@ -71,17 +79,28 @@ export function ProductForm({
             placeholder="Ex : Regab"
           />
         </div>
+        <div>
+          <Label htmlFor="barcode">Code-barres</Label>
+          <Input
+            id="barcode"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            placeholder="Optionnel"
+          />
+        </div>
         <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label htmlFor="cost">Prix d'achat</Label>
-            <Input
-              id="cost"
-              inputMode="numeric"
-              value={cost}
-              onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
-              placeholder="200"
-            />
-          </div>
+          {features.showCostPrice && (
+            <div>
+              <Label htmlFor="cost">Prix d'achat</Label>
+              <Input
+                id="cost"
+                inputMode="numeric"
+                value={cost}
+                onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
+                placeholder="200"
+              />
+            </div>
+          )}
           <div>
             <Label htmlFor="price">Prix de vente</Label>
             <Input
@@ -113,6 +132,43 @@ export function ProductForm({
           <Label htmlFor="unlimited" className="cursor-pointer">
             Stock illimité (service)
           </Label>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Type</Label>
+            <div className="flex gap-2 mt-1">
+              <Button
+                type="button"
+                variant={productType === "product" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setProductType("product")}
+                className="flex-1"
+              >
+                Produit
+              </Button>
+              <Button
+                type="button"
+                variant={productType === "service" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setProductType("service")}
+                className="flex-1"
+              >
+                Prestation
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-end">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="consignment"
+                checked={hasConsignment}
+                onCheckedChange={(v) => setHasConsignment(Boolean(v))}
+              />
+              <Label htmlFor="consignment" className="cursor-pointer">
+                Consigne
+              </Label>
+            </div>
+          </div>
         </div>
         <div>
           <Label>Catégorie</Label>

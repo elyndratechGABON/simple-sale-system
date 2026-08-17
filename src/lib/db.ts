@@ -49,6 +49,20 @@ export interface Product extends SyncFields {
   price: number; // prix de revente FCFA
   stock: number; // Number.POSITIVE_INFINITY when unlimited
   category: Category;
+  barcode?: string | null;
+  /** Type métier : 'product' = bien physique (défaut), 'service' = prestation. */
+  type?: "product" | "service";
+  /** Suivi consigne (cluster bar) : le produit est une bouteille consignée. */
+  hasConsignment?: boolean;
+  // ── V2 : champs pré-configurés (V10) ──────────────────────────────────
+  /** Unité de stock : 'unit' = pièces (défaut), 'weight' = kg. */
+  unitType?: "unit" | "weight";
+  /** Libellé de l'unité de poids : 'kg', 'g', 'L'… Défaut : 'kg'. */
+  weightUnit?: string;
+  /** Timestamp de date de péremption (produits périssables). Absent = pas de suivi. */
+  expiryDate?: number;
+  /** Numéro de série / IMEI (électronique, SAV). Absent = pas de suivi. */
+  serialNumber?: string;
 }
 
 /**
@@ -86,6 +100,8 @@ export interface Sale extends SyncFields {
    * sur la vente si la table est ensuite réglée entièrement (`payTable`), sans servir.
    */
   rounds_paid?: number;
+  /** Nom du client (services : coiffeur, salon, etc.). Absent sur les ventes classiques. */
+  client_name?: string;
 }
 
 export interface SaleItem extends SyncFields {
@@ -136,6 +152,27 @@ export interface Setting {
 }
 
 /**
+ * Transaction de consigne (cluster bar) : suivi des bouteilles consignées.
+ * - "deposit" : le client a déposé une bouteille (stock augmente, argent retenu).
+ * - "return"  : le client récupère sa consigne (stock diminue, argent rendu).
+ */
+export interface ConsignmentTransaction extends SyncFields {
+  id: string;
+  /** 'deposit' = mise en consigne, 'return' = retour de consigne. */
+  kind: "deposit" | "return";
+  /** Produit concerné (doit avoir `hasConsignment: true`). */
+  product_id: string;
+  /** Prix de la consigne (figé au moment de la transaction). */
+  deposit_price: number;
+  /** Nom du client (optionnel). */
+  client_name?: string;
+  /** Identifiant de la vente liée si la consigne est attachée à une commande. */
+  sale_id?: string;
+  /** Nombre de bouteilles. */
+  quantity: number;
+}
+
+/**
  * Identité de l'établissement qui utilise la caisse : c'est l'inscription de la boutique
  * dans l'orchestrateur (le PC du commerçant). Quatre infos saisies une fois dans
  * Paramètres, pré-enregistrées localement, puis poussées à chaque synchronisation.
@@ -171,6 +208,7 @@ class PosDatabase extends Dexie {
   settings!: Table<Setting, string>;
   subscriptions!: Table<Subscription, string>;
   shop_profiles!: Table<ShopProfile, string>;
+  consignment_transactions!: Table<ConsignmentTransaction, string>;
 
   constructor() {
     super("pos-db");
@@ -292,6 +330,61 @@ class PosDatabase extends Dexie {
       subscriptions: "id, updated_at",
       shop_profiles: "id, updated_at",
     });
+
+    // Version 8 — index barcode sur les produits pour le scan code-barres. Aucun
+    // upgrade() : les produits existants n'ont pas de `barcode`, Dexie n'indexe pas
+    // les enregistrements dont la clé est absente, et `findProductByBarcode` lit
+    // via `where("barcode").equals()` — retourne simplement `undefined`.
+    this.version(8).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+    });
+
+    // Version 9 — champ `client_name` sur les ventes pour les services (coiffeur, salon).
+    // Aucun upgrade() : les ventes existantes n'ont pas de `client_name`, Dexie n'indexe
+    // pas les enregistrements dont la clé est absente. Requête par nom via
+    // `where("client_name").equals()` retournera simplement `undefined`.
+    this.version(9).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+    });
+
+    // Version 10 — champs V2 sur les produits : unitType, weightUnit, expiryDate,
+    // serialNumber. Prépare le terrain pour les clusters poids (boucherie), habillement
+    // (variantes) et quincaillerie (numéros de série). Aucun upgrade() : les produits
+    // existants n'ont pas ces champs, Dexie n'indexe pas les clés absentes, et la lecture
+    // retourne `undefined` — exactement le comportement voulu pour des champs optionnels.
+    this.version(10).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+    });
+
+    // Version 11 — type de produit (product/service), consigne (hasConsignment), et store
+    // `consignment_transactions` pour le cluster bar. Aucun upgrade() : les produits
+    // existants lus sans `type` ou `hasConsignment` valent `undefined` — traités comme
+    // des produits physiques sans consigne, ce qui est exact. Le store consignment
+    // est neuf, rien à migrer.
+    this.version(11).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+      consignment_transactions: "id, product_id, kind, updated_at",
+    });
   }
 }
 
@@ -364,6 +457,20 @@ export async function deleteProduct(id: string): Promise<void> {
   await db.products.put({ ...p, ...touch(), deleted_at: Date.now() });
 }
 
+/**
+ * Ajoute une quantité au stock d'un produit. Stock illimité : opération sans effet
+ * (rien à incrémenter). Retourne le produit mis à jour pour affichage immédiat.
+ */
+export async function addStock(productId: string, quantity: number): Promise<Product> {
+  const db = getDB();
+  const p = await db.products.get(productId);
+  if (!p || p.deleted_at) throw new Error("Produit introuvable.");
+  if (!Number.isFinite(p.stock)) throw new Error("Stock illimité, pas d'initiation possible.");
+  const updated: Product = { ...p, stock: p.stock + Math.max(0, quantity), ...touch() };
+  await db.products.put(updated);
+  return updated;
+}
+
 // ---------- Sales ----------
 export interface CartLine {
   product_id?: string; // absent = ligne libre, aucun stock à décrémenter
@@ -378,6 +485,7 @@ export async function createSale(input: {
   lines: CartLine[];
   cash_given: number;
   customers_count?: number;
+  client_name?: string;
 }): Promise<Sale> {
   const db = getDB();
   const total = input.lines.reduce((s, l) => s + l.price * l.quantity, 0);
@@ -391,6 +499,7 @@ export async function createSale(input: {
     customers_count: Math.max(1, input.customers_count ?? 1),
     // Explicite bien qu'omis : une vente directe est encaissée au moment où on la crée.
     status: "paid",
+    ...(input.client_name ? { client_name: input.client_name } : {}),
     ...touch(),
   };
   await db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
@@ -563,7 +672,7 @@ export async function listOpenTables(): Promise<Sale[]> {
   return alive(rows).sort((a, b) => (a.opened_at ?? a.timestamp) - (b.opened_at ?? b.timestamp));
 }
 
-export async function openTable(label: string): Promise<Sale> {
+export async function openTable(label: string, clientName?: string): Promise<Sale> {
   const now = Date.now();
   const sale: Sale = {
     id: uid(),
@@ -581,6 +690,7 @@ export async function openTable(label: string): Promise<Sale> {
     customers_count: 1,
     table: label,
     status: "open",
+    ...(clientName ? { client_name: clientName } : {}),
     ...touch(),
   };
   await getDB().sales.put(sale);
@@ -766,6 +876,7 @@ export interface DatabaseSnapshot {
   sales: Sale[];
   sale_items: SaleItem[];
   subscriptions: Subscription[];
+  consignment_transactions?: ConsignmentTransaction[];
 }
 
 /**
@@ -778,13 +889,14 @@ export interface DatabaseSnapshot {
  */
 export async function exportSnapshot(): Promise<DatabaseSnapshot> {
   const db = getDB();
-  const [products, sales, sale_items, subscriptions] = await Promise.all([
+  const [products, sales, sale_items, subscriptions, consignment_transactions] = await Promise.all([
     db.products.toArray(),
     db.sales.toArray(),
     db.sale_items.toArray(),
     db.subscriptions.toArray(),
+    db.consignment_transactions.toArray(),
   ]);
-  return { products, sales, sale_items, subscriptions };
+  return { products, sales, sale_items, subscriptions, consignment_transactions };
 }
 
 /**
@@ -799,22 +911,65 @@ export async function exportSnapshot(): Promise<DatabaseSnapshot> {
  */
 export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> {
   const db = getDB();
-  await db.transaction("rw", db.products, db.sales, db.sale_items, db.subscriptions, async () => {
-    await Promise.all([
-      db.products.clear(),
-      db.sales.clear(),
-      db.sale_items.clear(),
-      db.subscriptions.clear(),
-    ]);
-    await Promise.all([
-      db.products.bulkPut(snapshot.products),
-      db.sales.bulkPut(snapshot.sales),
-      db.sale_items.bulkPut(snapshot.sale_items),
-      // `?? []` : une sauvegarde restaurée par un code antérieur aux abonnements
-      // (ou un fichier v1/v2/v3) ne porte pas le champ — rien à écrire, store vide.
-      db.subscriptions.bulkPut(snapshot.subscriptions ?? []),
-    ]);
-  });
+  await db.transaction(
+    "rw",
+    db.products,
+    db.sales,
+    db.sale_items,
+    db.subscriptions,
+    db.consignment_transactions,
+    async () => {
+      await Promise.all([
+        db.products.clear(),
+        db.sales.clear(),
+        db.sale_items.clear(),
+        db.subscriptions.clear(),
+        db.consignment_transactions.clear(),
+      ]);
+      await Promise.all([
+        db.products.bulkPut(snapshot.products),
+        db.sales.bulkPut(snapshot.sales),
+        db.sale_items.bulkPut(snapshot.sale_items),
+        db.subscriptions.bulkPut(snapshot.subscriptions ?? []),
+        db.consignment_transactions.bulkPut(snapshot.consignment_transactions ?? []),
+      ]);
+    },
+  );
+}
+
+/**
+ * Purge TOTALE, toutes stores compris (boutique, ventes, produits, réglages, profil).
+ *
+ * C'est l'équivalent local de « Supprimer la boutique » : après cet appel l'appareil
+ * repart comme au premier lancement — `ensureShopProfile` recréera une fiche avec un
+ * NOUVEAU `deviceId` au prochain montage. Tous les stores dans une transaction : un
+ * effacement interrompu laisserait une base à moitié purgée.
+ */
+export async function purgeAllData(): Promise<void> {
+  const db = getDB();
+  await db.transaction(
+    "rw",
+    [
+      db.products,
+      db.sales,
+      db.sale_items,
+      db.settings,
+      db.subscriptions,
+      db.shop_profiles,
+      db.consignment_transactions,
+    ],
+    async () => {
+      await Promise.all([
+        db.products.clear(),
+        db.sales.clear(),
+        db.sale_items.clear(),
+        db.settings.clear(),
+        db.subscriptions.clear(),
+        db.shop_profiles.clear(),
+        db.consignment_transactions.clear(),
+      ]);
+    },
+  );
 }
 
 // ---------- Abonnements ----------
@@ -948,6 +1103,50 @@ export async function getSetting<T>(key: string): Promise<T | undefined> {
 
 export async function setSetting(key: string, value: unknown): Promise<void> {
   await getDB().settings.put({ key, value });
+}
+
+// ---------- Consigne (cluster bar) ----------
+// Les bouteilles consignées suivent un cycle deposit/return. Le stock du produit
+// lui-même suit le stock physique ; la consigne suit le cycle d'engagement client.
+
+export async function listConsignmentTransactions(
+  productId?: string,
+): Promise<ConsignmentTransaction[]> {
+  const db = getDB();
+  const all = productId
+    ? await db.consignment_transactions.where("product_id").equals(productId).toArray()
+    : await db.consignment_transactions.toArray();
+  return alive(all).sort((a, b) => b.updated_at - a.updated_at);
+}
+
+export async function addConsignmentTransaction(
+  tx: Omit<ConsignmentTransaction, "id" | keyof SyncFields>,
+): Promise<ConsignmentTransaction> {
+  const record: ConsignmentTransaction = { ...tx, id: uid(), ...touch() };
+  await getDB().consignment_transactions.put(record);
+  return record;
+}
+
+/** Solde net de consigne pour un produit : dépôts - retours (en FCFA). */
+export async function getConsignmentBalance(productId: string): Promise<number> {
+  const txs = await listConsignmentTransactions(productId);
+  return txs.reduce(
+    (sum, tx) =>
+      sum +
+      (tx.kind === "deposit" ? tx.deposit_price * tx.quantity : -tx.deposit_price * tx.quantity),
+    0,
+  );
+}
+
+/** Solde consigne global (tous produits). */
+export async function getTotalConsignmentBalance(): Promise<number> {
+  const txs = await listConsignmentTransactions();
+  return txs.reduce(
+    (sum, tx) =>
+      sum +
+      (tx.kind === "deposit" ? tx.deposit_price * tx.quantity : -tx.deposit_price * tx.quantity),
+    0,
+  );
 }
 
 // ---------- Catégories ----------

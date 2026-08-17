@@ -14,14 +14,24 @@ import {
   Download,
   FolderOpen,
   KeyRound,
+  MapPin,
   Palette,
+  Phone,
   Save,
+  Scissors,
+  ShoppingBag,
+  Shirt,
   Store,
+  Trash2,
   Upload,
+  User,
   Utensils,
+  Weight,
+  Wrench,
   X,
 } from "lucide-react";
 import {
+  ACTIVE_CLUSTERS,
   applyTheme,
   PRESET_HUES,
   savePreferences,
@@ -47,6 +57,8 @@ import {
 } from "@/lib/exports/json";
 import { setPin, verifyPin } from "@/lib/pin";
 import type { DatabaseSnapshot } from "@/lib/db";
+import { getShopProfile, purgeAllData } from "@/lib/db";
+import { deleteShopRemote, resetGatekeeper } from "@/lib/gatekeeper";
 import { ShopCard } from "@/components/ShopCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,20 +122,36 @@ function SettingsPage() {
       <DirectoryCard />
       <BackupCard />
       <PinCard />
+      <DeleteShopCard />
     </div>
   );
 }
 
 /**
- * Type de commerce et système de tables — les deux choix faits à l'onboarding.
+ * Type de commerce (cluster) et système de tables — les choix faits à l'onboarding.
  *
  * L'interrupteur de tables vit ici et non dans la carte « Tables » : une carte masquée
  * ne peut pas rendre son propre interrupteur. La carte « Tables » (gestion des libellés)
  * n'apparaît, elle, que lorsque le système est actif.
  */
+/** Résout le nom d'icône (string) en composant Lucide réel. */
+const ICON_MAP: Record<string, typeof Store> = {
+  ShoppingBag,
+  ChefHat,
+  Coffee: CupSoda,
+  Scissors,
+  Shirt,
+  Weight,
+  Wrench,
+};
+
+function resolveIcon(name: string): typeof Store {
+  return ICON_MAP[name] ?? Store;
+}
+
 function BusinessCard() {
   const qc = useQueryClient();
-  const { businessType, tablesEnabled } = usePreferences();
+  const { cluster, tablesEnabled } = usePreferences();
 
   function commit(patch: Partial<Preferences>) {
     savePreferences(patch);
@@ -137,26 +165,21 @@ function BusinessCard() {
           <Store className="h-4 w-4" /> Type de commerce
         </CardTitle>
         <CardDescription>
-          Restaurant : on prend la commande, on sert, puis on encaisse. Snack/bar : encaissement
-          immédiat à la commande.
+          Définit le comportement de la caisse : gestion de tables, prix d'achat, etc.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <TypeOption
-            selected={businessType === "snack"}
-            onClick={() => commit({ businessType: "snack" })}
-            icon={CupSoda}
-            title="Snack / Bar"
-            description="Service direct au comptoir."
-          />
-          <TypeOption
-            selected={businessType === "restaurant"}
-            onClick={() => commit({ businessType: "restaurant" })}
-            icon={ChefHat}
-            title="Restaurant / Fastfood"
-            description="Commande puis encaissement."
-          />
+        <div className="grid grid-cols-2 gap-3">
+          {ACTIVE_CLUSTERS.map((c) => (
+            <TypeOption
+              key={c.id}
+              selected={cluster === c.id}
+              onClick={() => commit({ cluster: c.id })}
+              icon={resolveIcon(c.icon)}
+              title={c.label.split("/")[0].trim()}
+              description={c.description}
+            />
+          ))}
         </div>
 
         <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
@@ -291,10 +314,32 @@ function WorkspaceCard() {
   const qc = useQueryClient();
   const prefs = usePreferences();
   const [name, setName] = useState(prefs.workspaceName);
+  const [phone, setPhone] = useState(prefs.phone);
+  const [quarter, setQuarter] = useState(prefs.quarter);
+  const [ownerName, setOwnerName] = useState(prefs.ownerName);
 
   // `prefs` arrive après montage (localStorage n'est pas lisible au rendu serveur) :
-  // sans cette resynchronisation, le champ resterait bloqué sur la valeur par défaut.
+  // sans cette resynchronisation, les champs resteraient bloqués sur les valeurs par défaut.
   useEffect(() => setName(prefs.workspaceName), [prefs.workspaceName]);
+  useEffect(() => setPhone(prefs.phone), [prefs.phone]);
+  useEffect(() => setQuarter(prefs.quarter), [prefs.quarter]);
+  useEffect(() => setOwnerName(prefs.ownerName), [prefs.ownerName]);
+
+  function save() {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error("Le nom ne peut pas être vide");
+      return;
+    }
+    savePreferences({
+      workspaceName: trimmed,
+      phone: phone.trim(),
+      quarter: quarter.trim(),
+      ownerName: ownerName.trim(),
+    });
+    qc.invalidateQueries({ queryKey: ["preferences"] });
+    toast.success("Enregistré");
+  }
 
   return (
     <Card>
@@ -305,23 +350,48 @@ function WorkspaceCard() {
         <CardDescription>Affiché dans l'en-tête et en tête des documents exportés.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div>
-          <Label htmlFor="ws-name">Nom de l'entreprise</Label>
-          <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="space-y-2">
+          <div>
+            <Label htmlFor="ws-name">Nom de l'entreprise</Label>
+            <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="ws-phone" className="flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5" /> Téléphone
+            </Label>
+            <Input
+              id="ws-phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Ex : +243 81 234 5678"
+            />
+          </div>
+          <div>
+            <Label htmlFor="ws-quarter" className="flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5" /> Quartier
+            </Label>
+            <Input
+              id="ws-quarter"
+              value={quarter}
+              onChange={(e) => setQuarter(e.target.value)}
+              placeholder="Ex : Commune de la Gombe"
+            />
+          </div>
+          <div>
+            <Label htmlFor="ws-owner" className="flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5" /> Nom du propriétaire
+            </Label>
+            <Input
+              id="ws-owner"
+              value={ownerName}
+              onChange={(e) => setOwnerName(e.target.value)}
+              placeholder="Ex : Marie Kabongo"
+            />
+          </div>
         </div>
-        <Button
-          onClick={() => {
-            const trimmed = name.trim();
-            if (!trimmed) {
-              toast.error("Le nom ne peut pas être vide");
-              return;
-            }
-            savePreferences({ workspaceName: trimmed });
-            qc.invalidateQueries({ queryKey: ["preferences"] });
-            toast.success("Nom enregistré");
-          }}
-        >
-          Enregistrer
+        <Button onClick={save}>
+          <Save className="h-4 w-4 mr-2" /> Enregistrer
         </Button>
       </CardContent>
     </Card>
@@ -700,6 +770,100 @@ function PinCard() {
         >
           Modifier le PIN
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Zone rouge : suppression de la boutique.
+ *
+ * Le serveur d'abord, la base locale ensuite — tout ou rien. Si le réseau manque, rien
+ * n'est effacé : on ne veut pas d'un appareil dont le serveur croirait encore le compte
+ * actif, qui ressusciterait au prochain handshake (auto-provisionnement). Après la purge,
+ * l'application revient au premier lancement : l'assistant rouvre, un nouveau `deviceId`
+ * est généré au prochain montage, et le serveur recrée une boutique à l'essai.
+ */
+function DeleteShopCard() {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const deleteMut = useMutation({
+    mutationFn: async () => {
+      const profile = await getShopProfile();
+      if (!profile) throw new Error("Aucune boutique enregistrée sur cet appareil.");
+      const remote = await deleteShopRemote(profile.deviceId, profile.storeName);
+      if (!remote.ok) {
+        // Le serveur a refusé ou est injoignable (CORS, panne) : on prévient mais on
+        // continue la purge locale — l'utilisateur ne doit pas rester bloqué.
+        toast.warning(`Serveur : ${remote.error ?? "injoignable"}. Purge locale quand même.`);
+      }
+      await purgeAllData();
+      resetGatekeeper();
+      savePreferences({ onboarded: false });
+    },
+    onSuccess: () => {
+      toast.success("Boutique supprimée — au premier lancement !");
+      window.location.reload();
+    },
+    onError: (e: Error) => {
+      setConfirmOpen(false);
+      toast.error(e.message);
+    },
+  });
+
+  return (
+    <Card className="border-destructive/40">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Trash2 className="h-4 w-4 text-destructive" /> Supprimer la boutique
+        </CardTitle>
+        <CardDescription>
+          Efface ce terminal et le compte de la boutique chez l'orchestrateur : historique des
+          ventes, paiements, commandes et données synchronisées.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="destructive" onClick={() => setConfirmOpen(true)}>
+          <Trash2 className="h-4 w-4 mr-2" /> Supprimer la boutique
+        </Button>
+
+        <AlertDialog open={confirmOpen} onOpenChange={(v) => !v && setConfirmOpen(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" /> Tout effacer ?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2">
+                  <p>
+                    Les données de <strong>cet appareil</strong> et le compte de la boutique sur le
+                    serveur seront <strong>définitivement effacés</strong> : ventes, produits,
+                    paiements et abonnement. Cette action est irréversible.
+                  </p>
+                  <p>
+                    L'application repart au premier lancement, avec une base vierge et un essai
+                    renouvelé.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(e) => {
+                  // Empêche Radix de fermer le dialogue pendant la suppression : il
+                  // reste ouvert tant que le réseau travaille, et se referme en cas
+                  // d'échec (onError) — en cas de succès, la page se recharge.
+                  e.preventDefault();
+                  deleteMut.mutate();
+                }}
+                disabled={deleteMut.isPending}
+              >
+                {deleteMut.isPending ? "Suppression…" : "Tout effacer"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
