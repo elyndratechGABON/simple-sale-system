@@ -30,7 +30,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_app/stocks")({
   head: () => ({
     meta: [
-      { title: "Stocks & Produits — Caisse POS" },
+      { title: "Stocks & Produits — Indra Caisse" },
       {
         name: "description",
         content: "Ajoutez et gérez vos produits, prix et stocks.",

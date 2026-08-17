@@ -101,7 +101,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
     meta: [
-      { title: "Paramètres — Caisse POS" },
+      { title: "Paramètres — Indra Caisse" },
       {
         name: "description",
         content:

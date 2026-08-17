@@ -27,6 +27,10 @@ import {
   Share,
   Smartphone,
   WifiOff,
+  ShoppingBag,
+  Coffee,
+  Utensils,
+  Scissors,
 } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { formatFCFA } from "@/lib/format";
@@ -44,7 +48,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Caisse POS — la caisse qui marche sans réseau" },
+      { title: "Indra Caisse — la caisse qui marche sans réseau" },
       {
         name: "description",
         content:
@@ -61,6 +65,7 @@ function LandingPage() {
       <LandingHeader />
       <Hero />
       <Proofs />
+      <ForWhom />
       <Features />
       <Steps />
       <FinalCall />
@@ -78,8 +83,10 @@ function LandingHeader() {
     <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
         <span className="flex items-center gap-2 font-bold text-lg">
-          <span className="rounded-md bg-primary px-2 py-1 text-primary-foreground">POS</span>
-          <span>Caisse</span>
+          <span className="rounded-md bg-primary px-2 py-1 text-primary-foreground text-sm">
+            IC
+          </span>
+          <span>Indra Caisse</span>
         </span>
         <span className="hidden sm:block text-sm font-medium text-muted-foreground">
           Vente · Stock · Bénéfices
@@ -337,6 +344,65 @@ function Proofs() {
 }
 
 // ============================================================================
+// Pour qui ?
+// ============================================================================
+
+const CLUSTER_CARDS = [
+  {
+    icon: ShoppingBag,
+    title: "Épicerie",
+    description: "Gérez vos produits, stocks et ventes au quotidien.",
+    emoji: "🏪",
+  },
+  {
+    icon: Coffee,
+    title: "Bar",
+    description: "Consignes, tournées et suivi des boissons en temps réel.",
+    emoji: "🍺",
+  },
+  {
+    icon: Utensils,
+    title: "Restaurant",
+    description: "Tables, commandes et encaissement en quelques tapes.",
+    emoji: "🍽️",
+  },
+  {
+    icon: Scissors,
+    title: "Coiffeur",
+    description: "Prestations, clients et planning de rendez-vous.",
+    emoji: "✂️",
+  },
+] as const;
+
+function ForWhom() {
+  return (
+    <section className="mx-auto max-w-5xl px-4 py-16 space-y-8">
+      <div className="text-center space-y-2">
+        <h2 className="text-2xl font-bold tracking-tight">Pour qui ?</h2>
+        <p className="text-muted-foreground max-w-md mx-auto">
+          Indra Caisse s'adapte à votre métier. Choisissez votre activité, l'application se
+          configure automatiquement.
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {CLUSTER_CARDS.map((c) => (
+          <div
+            key={c.title}
+            className="rounded-xl border bg-card p-5 text-center space-y-3 transition-all hover:border-primary/40 hover:shadow-sm"
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-2xl">
+              {c.emoji}
+            </div>
+            <h3 className="font-semibold">{c.title}</h3>
+            <p className="text-sm text-muted-foreground">{c.description}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
 // Fonctionnalités
 // ============================================================================
 
@@ -458,7 +524,7 @@ function Footer() {
   return (
     <footer className="border-t">
       <div className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">
-        Caisse POS — application hors ligne. Vos données ne quittent pas votre appareil.
+        Indra Caisse — application hors ligne. Vos données ne quittent pas votre appareil.
       </div>
     </footer>
   );

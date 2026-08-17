@@ -8,12 +8,12 @@
 // Bureau (`lg`) — la barre haute reprend sa place, où la largeur permet les libellés et
 // où le pointeur n'a pas de zone hors de portée.
 import { Link } from "@tanstack/react-router";
-import { ShoppingCart, Package, History, BarChart3, Settings as SettingsIcon } from "lucide-react";
+import { Home, ShoppingCart, Package, BarChart3, Settings as SettingsIcon } from "lucide-react";
 
 export const NAV_LINKS = [
+  { to: "/dashboard", label: "Accueil", icon: Home },
   { to: "/pos", label: "Caisse", icon: ShoppingCart },
   { to: "/stocks", label: "Stocks", icon: Package },
-  { to: "/history", label: "Historique", icon: History },
   { to: "/reports", label: "Rapports", icon: BarChart3 },
   { to: "/settings", label: "Réglages", icon: SettingsIcon },
 ] as const;

@@ -92,6 +92,8 @@ export interface Preferences {
   quarter: string;
   /** Nom du propriétaire du commerce. */
   ownerName: string;
+  /** Passe à true une fois le guide fonctionnel terminé ou passé. */
+  onboardingCompleted: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -109,6 +111,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   phone: "",
   quarter: "",
   ownerName: "",
+  onboardingCompleted: false,
 };
 
 /**
@@ -360,6 +363,7 @@ export function getPreferences(): Preferences {
       phone: parsed.phone?.trim() || "",
       quarter: parsed.quarter?.trim() || "",
       ownerName: parsed.ownerName?.trim() || "",
+      onboardingCompleted: parsed.onboardingCompleted === true,
     };
   } catch {
     // JSON corrompu ou localStorage inaccessible (mode privé strict) : les défauts

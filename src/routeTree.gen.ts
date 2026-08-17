@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppPosRouteImport } from './routes/_app/pos'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppHistoryRoute = AppHistoryRouteImport.update({
   id: '/history',
@@ -54,6 +60,7 @@ const AppStocksRoute = AppStocksRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
   '/pos': typeof AppPosRoute
   '/reports': typeof AppReportsRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
   '/pos': typeof AppPosRoute
   '/reports': typeof AppReportsRoute
@@ -72,6 +80,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/_app/dashboard': typeof AppDashboardRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/pos': typeof AppPosRoute
   '/_app/reports': typeof AppReportsRoute
@@ -80,13 +89,28 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/pos' | '/reports' | '/settings' | '/stocks'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/history'
+    | '/pos'
+    | '/reports'
+    | '/settings'
+    | '/stocks'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/pos' | '/reports' | '/settings' | '/stocks'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/history'
+    | '/pos'
+    | '/reports'
+    | '/settings'
+    | '/stocks'
   id:
     | '__root__'
     | '/'
     | '/_app'
+    | '/_app/dashboard'
     | '/_app/history'
     | '/_app/pos'
     | '/_app/reports'
@@ -114,6 +138,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/history': {
       id: '/_app/history'
@@ -154,6 +185,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppDashboardRoute: typeof AppDashboardRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppPosRoute: typeof AppPosRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -162,6 +194,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppDashboardRoute: AppDashboardRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppPosRoute: AppPosRoute,
   AppReportsRoute: AppReportsRoute,

@@ -18,10 +18,11 @@
 // par construction — plus aucune condition sur le chemin nulle part.
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/Nav";
+import { LoadingScreen } from "../components/LoadingScreen";
 import { Onboarding } from "../components/Onboarding";
 import { RenewalBanner } from "../components/RenewalBanner";
 import { SuspendedScreen } from "../components/SuspendedScreen";
@@ -35,13 +36,17 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
-  // Monté uniquement dans l'application (jamais sur la page publique `/`) : c'est le
-  // premier accès du commerçant. La fiche boutique se crée d'elle-même — nom repris de
-  // l'espace de travail — puis `backgroundSync` la pousse à l'orchestrateur aussitôt,
-  // au retour en ligne et toutes les minutes. Aucune démarche d'inscription à faire.
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    void ensureShopProfile(getPreferences().workspaceName).then(() => backgroundSync());
+    const minDelay = new Promise((r) => setTimeout(r, 1800));
+    const profileReady = ensureShopProfile(getPreferences().workspaceName).then(() =>
+      backgroundSync(),
+    );
+    void Promise.all([minDelay, profileReady]).then(() => setLoading(false));
   }, []);
+
+  if (loading) return <LoadingScreen />;
 
   return (
     <>
