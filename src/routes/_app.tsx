@@ -23,6 +23,7 @@ import { useEffect } from "react";
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/Nav";
 import { Onboarding } from "../components/Onboarding";
+import { RenewalBanner } from "../components/RenewalBanner";
 import { SuspendedScreen } from "../components/SuspendedScreen";
 import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
 import { ensureShopProfile } from "../lib/db";
@@ -46,6 +47,7 @@ function AppLayout() {
     <>
       <div className="min-h-screen flex flex-col">
         <Header />
+        <RenewalBanner />
         {/* `pb-24` réserve la hauteur de la barre d'onglets basse, qui est en `fixed` et
             ne pousse donc rien : sans cette réserve elle recouvre la fin de chaque page —
             le bouton « Valider la vente », le dernier produit, le dernier réglage. */}

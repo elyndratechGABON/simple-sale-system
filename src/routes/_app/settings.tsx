@@ -16,7 +16,9 @@ import {
   KeyRound,
   MapPin,
   Palette,
+  Pencil,
   Phone,
+  Plus,
   Save,
   Scissors,
   ShoppingBag,
@@ -25,6 +27,7 @@ import {
   Trash2,
   Upload,
   User,
+  Users,
   Utensils,
   Weight,
   Wrench,
@@ -57,7 +60,15 @@ import {
 } from "@/lib/exports/json";
 import { setPin, verifyPin } from "@/lib/pin";
 import type { DatabaseSnapshot } from "@/lib/db";
-import { getShopProfile, purgeAllData } from "@/lib/db";
+import {
+  getShopProfile,
+  purgeAllData,
+  listClients,
+  addClient,
+  updateClient,
+  deleteClient,
+  type Client,
+} from "@/lib/db";
 import { deleteShopRemote, resetGatekeeper } from "@/lib/gatekeeper";
 import { ShopCard } from "@/components/ShopCard";
 import { Button } from "@/components/ui/button";
@@ -79,8 +90,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -118,6 +131,7 @@ function SettingsPage() {
       <WorkspaceCard />
       <BusinessCard />
       {tablesEnabled && <TablesCard />}
+      <ClientsCard />
       <ColorCard />
       <DirectoryCard />
       <BackupCard />
@@ -479,6 +493,195 @@ function TablesCard() {
     setDraft("");
     toast.success(`Table ${clean} ajoutée`);
   }
+}
+
+function ClientsCard() {
+  const qc = useQueryClient();
+  const { cluster } = usePreferences();
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients"],
+    queryFn: listClients,
+  });
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<Client | null>(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
+
+  function reset() {
+    setName("");
+    setPhone("");
+    setNotes("");
+    setEditing(null);
+    setAddOpen(false);
+  }
+
+  function openEdit(c: Client) {
+    setEditing(c);
+    setName(c.name);
+    setPhone(c.phone ?? "");
+    setNotes(c.notes ?? "");
+    setAddOpen(true);
+  }
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      const n = name.trim();
+      if (!n) throw new Error("Nom requis");
+      if (editing) {
+        await updateClient({
+          ...editing,
+          name: n,
+          phone: phone.trim() || undefined,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        await addClient({
+          name: n,
+          phone: phone.trim() || undefined,
+          notes: notes.trim() || undefined,
+        });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      toast.success(editing ? "Client mis à jour" : "Client ajouté");
+      reset();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: deleteClient,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Client supprimé");
+    },
+  });
+
+  if (cluster !== "service") return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Users className="h-4 w-4" /> Clients
+        </CardTitle>
+        <CardDescription>
+          Registre de vos clients. Sélectionnez un nom en caisse pour suivre l'historique.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {clients.length > 0 && (
+          <div className="space-y-1">
+            {clients.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between rounded-lg border px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{c.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {c.phone && <span>{c.phone}</span>}
+                    {c.phone && c.notes && <span> · </span>}
+                    {c.notes && <span className="truncate">{c.notes}</span>}
+                    {!c.phone && !c.notes && (
+                      <span className="text-muted-foreground/60">Pas de détails</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => {
+                      if (confirm(`Supprimer "${c.name}" ?`)) removeMut.mutate(c.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {clients.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-2">
+            Aucun client enregistré. Ajoutez vos clients réguliers pour suivre leur historique.
+          </p>
+        )}
+
+        <Dialog
+          open={addOpen}
+          onOpenChange={(v) => {
+            setAddOpen(v);
+            if (!v) reset();
+          }}
+        >
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                reset();
+                setAddOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" /> Nouveau client
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editing ? "Modifier le client" : "Nouveau client"}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="client-nom">Nom *</Label>
+                <Input
+                  id="client-nom"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex : Mme Kombila"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label htmlFor="client-tel">Téléphone</Label>
+                <Input
+                  id="client-tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Optionnel"
+                />
+              </div>
+              <div>
+                <Label htmlFor="client-notes">Notes</Label>
+                <Input
+                  id="client-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Allergies, préférences…"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={reset}>
+                Annuler
+              </Button>
+              <Button onClick={() => saveMut.mutate()} disabled={!name.trim() || saveMut.isPending}>
+                {saveMut.isPending ? "Enregistrement…" : "Enregistrer"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
 }
 
 function ColorCard() {
