@@ -1,4 +1,4 @@
-# Caisse POS
+# ECAISSE
 
 Application de caisse offline-first. Toutes les données vivent dans IndexedDB via Dexie ;
 il n'y a **aucune logique serveur** dans l'app — l'orchestrateur (backend + dashboard +
