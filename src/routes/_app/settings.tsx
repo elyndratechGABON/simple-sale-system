@@ -13,6 +13,7 @@ import {
   CupSoda,
   Download,
   FolderOpen,
+  Info,
   KeyRound,
   MapPin,
   Palette,
@@ -137,6 +138,7 @@ function SettingsPage() {
       <BackupCard />
       <PinCard />
       <DeleteShopCard />
+      <AboutCard />
     </div>
   );
 }
@@ -1067,6 +1069,29 @@ function DeleteShopCard() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AboutCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Info className="h-4 w-4" /> À propos
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <p>
+          <span className="font-semibold text-foreground">Indra Caisse</span> — La caisse qui marche
+          sans réseau.
+        </p>
+        <p>Développé par ELYNDRA TECH.</p>
+        <p>
+          Vos données sont stockées localement sur cet appareil. Aucune donnée n'est envoyée sans
+          votre accord.
+        </p>
       </CardContent>
     </Card>
   );

@@ -54,6 +54,11 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
       { value: "Taux de croissance", type: String },
       { value: stats.growthRate, type: Number, format: "+0.0%;-0.0%" },
     ],
+    [],
+    [
+      { value: "Généré par", type: String },
+      { value: "Indra Caisse — ELYNDRA TECH", type: String },
+    ],
   ];
 
   const ventes: Row[] = [

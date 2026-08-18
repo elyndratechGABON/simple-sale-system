@@ -101,6 +101,8 @@ export interface Preferences {
   ownerName: string;
   /** Passe à true une fois le guide fonctionnel terminé ou passé. */
   onboardingCompleted: boolean;
+  /** L'utilisateur a accepté la politique de confidentialité. */
+  privacyAccepted: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -119,6 +121,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   quarter: "",
   ownerName: "",
   onboardingCompleted: false,
+  privacyAccepted: false,
 };
 
 /**
@@ -368,6 +371,7 @@ export function getPreferences(): Preferences {
       quarter: parsed.quarter?.trim() || "",
       ownerName: parsed.ownerName?.trim() || "",
       onboardingCompleted: parsed.onboardingCompleted === true,
+      privacyAccepted: parsed.privacyAccepted === true,
     };
   } catch {
     // JSON corrompu ou localStorage inaccessible (mode privé strict) : les défauts

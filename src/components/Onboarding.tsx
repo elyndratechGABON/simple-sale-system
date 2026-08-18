@@ -23,6 +23,7 @@ import {
   ShoppingCart,
   BarChart3,
   User,
+  Shield,
 } from "lucide-react";
 import { ChefHat, Coffee, Scissors, ShoppingBag, Shirt, Weight, Store } from "lucide-react";
 import {
@@ -39,6 +40,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -180,6 +182,7 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [ownerName, setOwnerName] = useState("");
   const [selectedCluster, setSelectedCluster] = useState<ClusterId | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategory | null>(null);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   const clusterConfig = selectedCluster ? CLUSTER_MAP[selectedCluster] : null;
   const hasTables = clusterConfig?.workflow.hasTables ?? false;
@@ -210,6 +213,7 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
       businessType: selectedCluster === "restaurant" ? "restaurant" : "snack",
       tablesEnabled: hasTables,
       onboarded: true,
+      privacyAccepted,
     });
     applyTheme(hue);
     qc.invalidateQueries({ queryKey: ["preferences"] });
@@ -223,15 +227,17 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
   }
 
   // Étape 5 = choix cluster, 5b = sous-catégorie magasin (si applicable)
-  // Le total d'étapes est 7 + 1 éventuelle = 8 max
-  const hasSubStep = step >= 5 && isMagasin && !selectedSubCategory;
+  // Après cluster: privacy, puis confirmation
+  const WIZARD_TOTAL = isMagasin && selectedCluster ? 9 : 8;
   const effectiveStep = step;
-  const WIZARD_TOTAL = isMagasin && selectedCluster && step >= 5 ? 8 : 7;
 
   function canNext(): boolean {
     if (step === 0) return name.trim().length > 0;
     if (step === 5) return selectedCluster !== null;
     if (step === 6 && isMagasin) return selectedSubCategory !== null;
+    // Privacy step
+    const privacyStep = isMagasin ? 7 : 6;
+    if (step === privacyStep) return privacyAccepted;
     return true;
   }
 
@@ -241,11 +247,22 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
       setStep(6);
       return;
     }
+    // Si on est à la sous-catégorie magasin, on passe à la confidentialité
+    if (step === 6 && isMagasin) {
+      setStep(7);
+      return;
+    }
     setStep((s) => s + 1);
   }
 
   function goPrev() {
-    // Si on est à l'étape 6 et qu'on vient du cluster (magasin), on retourne à 5
+    // Si on est à la confidentialité et qu'on vient du magasin, on retourne à la sous-catégorie
+    const privacyStep = isMagasin ? 7 : 6;
+    if (step === privacyStep && isMagasin) {
+      setStep(6);
+      return;
+    }
+    // Si on est à la sous-catégorie magasin, on retourne au cluster
     if (step === 6 && isMagasin) {
       setStep(5);
       return;
@@ -496,7 +513,41 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
           </StepShell>
         )}
 
-        {step === (isMagasin && selectedSubCategory ? 7 : 6) && (
+        {step === (isMagasin ? 7 : 6) && (
+          <StepShell
+            icon={Shield}
+            title="Confidentialité"
+            description="Vos données vous appartiennent."
+          >
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                Chez <span className="font-semibold text-foreground">ELYNDRA TECH</span>, vos
+                données vous appartiennent.
+              </p>
+              <p>
+                Elles sont stockées uniquement sur votre appareil et ne sont jamais envoyées sur nos
+                serveurs sans votre accord.
+              </p>
+              <p>
+                Nous utilisons vos données pour améliorer l'application, synchroniser (si vous
+                activez l'option) et vous proposer des rapports utiles.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Checkbox
+                id="privacy-accept"
+                checked={privacyAccepted}
+                onCheckedChange={(v) => setPrivacyAccepted(Boolean(v))}
+              />
+              <Label htmlFor="privacy-accept" className="cursor-pointer text-sm">
+                J'accepte que mes données soient utilisées pour améliorer l'application et les
+                fonctionnalités.
+              </Label>
+            </div>
+          </StepShell>
+        )}
+
+        {step === (isMagasin ? 8 : 7) && (
           <StepShell
             icon={Check}
             title="C'est prêt"
