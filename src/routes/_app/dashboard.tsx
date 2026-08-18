@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({
-    meta: [{ title: "Accueil — Indra Caisse" }],
+    meta: [{ title: "Accueil — ELYNDRA CAISSE" }],
   }),
   component: DashboardPage,
 });

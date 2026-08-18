@@ -32,7 +32,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/_app/history")({
   head: () => ({
     meta: [
-      { title: "Historique des ventes — Indra Caisse" },
+      { title: "Historique des ventes — ELYNDRA CAISSE" },
       {
         name: "description",
         content: "Toutes les ventes enregistrées, groupées par jour, avec annulation.",

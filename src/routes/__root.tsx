@@ -77,13 +77,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Indra Caisse — Ventes, stocks et monnaie" },
+      { title: "ELYNDRA CAISSE — Ventes, stocks et monnaie" },
       {
         name: "description",
         content:
           "Application de caisse simple et hors-ligne : gestion des stocks, prise de commande, calcul de la monnaie à rendre et historique des ventes.",
       },
-      { property: "og:title", content: "Indra Caisse — Ventes, stocks et monnaie" },
+      { property: "og:title", content: "ELYNDRA CAISSE — Ventes, stocks et monnaie" },
       {
         property: "og:description",
         content: "Prenez vos commandes, calculez la monnaie et suivez vos stocks en temps réel.",
@@ -93,7 +93,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#059669" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-title", content: "Indra Caisse" },
+      { name: "apple-mobile-web-app-title", content: "ELYNDRA CAISSE" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
     ],
 

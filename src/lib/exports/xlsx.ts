@@ -57,7 +57,7 @@ export async function buildXlsxBlob(payload: ReportPayload): Promise<Blob> {
     [],
     [
       { value: "Généré par", type: String },
-      { value: "Indra Caisse — ELYNDRA TECH", type: String },
+      { value: "ELYNDRA CAISSE — ELYNDRA TECH", type: String },
     ],
   ];
 

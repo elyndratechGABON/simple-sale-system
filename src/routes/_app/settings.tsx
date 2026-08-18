@@ -102,7 +102,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/_app/settings")({
   head: () => ({
     meta: [
-      { title: "Paramètres — Indra Caisse" },
+      { title: "Paramètres — ELYNDRA CAISSE" },
       {
         name: "description",
         content:
@@ -1084,8 +1084,8 @@ function AboutCard() {
       </CardHeader>
       <CardContent className="space-y-2 text-sm text-muted-foreground">
         <p>
-          <span className="font-semibold text-foreground">Indra Caisse</span> — La caisse qui marche
-          sans réseau.
+          <span className="font-semibold text-foreground">ELYNDRA CAISSE</span> — La caisse qui
+          marche sans réseau.
         </p>
         <p>Développé par ELYNDRA TECH.</p>
         <p>

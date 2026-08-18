@@ -1,5 +1,5 @@
 // Écran de chargement animé affiché au démarrage de l'application.
-// Le texte "Indra Caisse" s'étire puis se contracte (Framer Motion),
+// Le texte "ELYNDRA CAISSE" s'étire puis se contracte (Framer Motion),
 // donnant un signal visuel pendant l'initialisation de Dexie.
 import { motion } from "framer-motion";
 
@@ -24,7 +24,7 @@ export function LoadingScreen() {
             repeatDelay: 0.4,
           }}
         >
-          Indra
+          ELYNDRA
         </motion.span>
         <motion.span
           className="text-foreground"
@@ -39,7 +39,7 @@ export function LoadingScreen() {
             delay: 0.15,
           }}
         >
-          Caisse
+          CAISSE
         </motion.span>
       </motion.div>
       <motion.p

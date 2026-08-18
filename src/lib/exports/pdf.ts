@@ -187,7 +187,7 @@ export function buildPdfBlob(payload: ReportPayload, chartPng: string | null): B
   const pageHeight = doc.internal.pageSize.getHeight();
   doc.setFontSize(8);
   doc.setTextColor(150);
-  doc.text(pdfText("Généré par Indra Caisse — ELYNDRA TECH"), margin, pageHeight - 20);
+  doc.text(pdfText("Généré par ELYNDRA CAISSE — ELYNDRA TECH"), margin, pageHeight - 20);
 
   return doc.output("blob");
 }

@@ -83,7 +83,7 @@ export function buildCsvBlob(payload: ReportPayload): Blob {
   }
 
   rows.push("");
-  rows.push(["", "Généré par Indra Caisse — ELYNDRA TECH"].join(SEP));
+  rows.push(["", "Généré par ELYNDRA CAISSE — ELYNDRA TECH"].join(SEP));
 
   return new Blob([BOM + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
 }

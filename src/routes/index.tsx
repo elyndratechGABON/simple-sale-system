@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Indra Caisse — la caisse qui marche sans réseau" },
+      { title: "ELYNDRA CAISSE — la caisse qui marche sans réseau" },
       {
         name: "description",
         content:
@@ -89,7 +89,7 @@ function LandingHeader() {
           <span className="rounded-md bg-primary px-2 py-1 text-primary-foreground text-sm">
             IC
           </span>
-          <span>Indra Caisse</span>
+          <span>ELYNDRA CAISSE</span>
         </span>
         <span className="hidden sm:block text-sm font-medium text-muted-foreground">
           Vente · Stock · Bénéfices
@@ -401,7 +401,7 @@ function ForWhom() {
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold tracking-tight">Pour qui ?</h2>
         <p className="text-muted-foreground max-w-md mx-auto">
-          Indra Caisse s'adapte à votre métier. Choisissez votre activité, l'application se
+          ELYNDRA CAISSE s'adapte à votre métier. Choisissez votre activité, l'application se
           configure automatiquement.
         </p>
       </div>
@@ -545,7 +545,7 @@ function Footer() {
   return (
     <footer className="border-t">
       <div className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">
-        Indra Caisse — application hors ligne. Vos données ne quittent pas votre appareil.
+        ELYNDRA CAISSE — application hors ligne. Vos données ne quittent pas votre appareil.
       </div>
     </footer>
   );
