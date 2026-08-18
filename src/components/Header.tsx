@@ -4,7 +4,7 @@ import { usePreferences } from "@/hooks/use-preferences";
 import { TopNav } from "@/components/Nav";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 
-// Accès caché à la gestion des abonnements : 5 appuis sur le logo « POS ».
+// Accès caché à la gestion des abonnements : 5 appuis sur le logo « ECAISSE ».
 // Le compteur se remet à zéro si deux appuis sont espacés de plus de deux secondes, pour
 // qu'un appui ici et là pendant la journée n'ouvre rien par mégarde.
 const HIDDEN_ACCESS_CLICKS = 5;
@@ -35,8 +35,9 @@ export function Header() {
           className="flex items-center gap-2 font-bold text-lg min-w-0"
           onClick={onLogoClick}
         >
-          <span className="rounded-md bg-primary px-2 py-1 text-primary-foreground shrink-0">
-            POS
+          <span className="flex flex-col items-center rounded-md bg-primary px-2 py-1 text-primary-foreground leading-none shrink-0">
+            <span className="text-[0.6em] font-bold tracking-wide">ECAISSE</span>
+            <span className="text-[0.4em] opacity-80">ELYNDRA CAISSE</span>
           </span>
           {/* Le nom du commerce tient désormais sur téléphone : la navigation est partie
               en bas, l'en-tête n'a plus qu'à porter la marque. */}

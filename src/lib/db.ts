@@ -1148,7 +1148,7 @@ export async function purgeAllData(): Promise<void> {
 }
 
 // ---------- Abonnements ----------
-// Fiches d'abonnés, créées depuis l'interface cachée (5 appuis sur le logo POS). Les
+// Fiches d'abonnés, créées depuis l'interface cachée (5 appuis sur le logo ECAISSE). Les
 // suppressions sont logiques comme partout (`alive()` filtre). Tri par échéance : c'est
 // la colonne vertébrale de l'écran — les renouvellements à venir en premier, les plus
 // en retard tout en haut.

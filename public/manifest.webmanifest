@@ -1,7 +1,7 @@
 {
-  "name": "Caisse POS",
-  "short_name": "Caisse",
-  "description": "Caisse simple et hors-ligne : stocks, ventes, monnaie à rendre et historique.",
+  "name": "ECAISSE",
+  "short_name": "ECAISSE",
+  "description": "ELYNDRA CAISSE — application de caisse hors-ligne : stocks, ventes, monnaie à rendre et historique.",
   "lang": "fr",
   "id": "/",
   "start_url": "/pos",

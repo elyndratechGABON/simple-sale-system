@@ -1,5 +1,5 @@
 // Interface cachée de gestion des abonnements clients, ouverte par 5 appuis sur le logo
-// « POS » de l'en-tête (cf. src/components/Header.tsx). Volontairement absente de la
+// « ECAISSE » de l'en-tête (cf. src/components/Header.tsx). Volontairement absente de la
 // navigation : c'est un outil de régie, pas un écran de service.
 //
 // Fiches clients + statuts : nom, téléphone, formule, montant, dates de la période et
