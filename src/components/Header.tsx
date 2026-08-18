@@ -35,10 +35,7 @@ export function Header() {
           className="flex items-center gap-2 font-bold text-lg min-w-0"
           onClick={onLogoClick}
         >
-          <span className="flex flex-col items-center rounded-md bg-primary px-2 py-1 text-primary-foreground leading-none shrink-0">
-            <span className="text-[0.6em] font-bold tracking-wide">ECAISSE</span>
-            <span className="text-[0.4em] opacity-80">ELYNDRA CAISSE</span>
-          </span>
+          <img src="/icon-192.png" alt="ECAISSE" className="h-8 w-8 shrink-0" />
           {/* Le nom du commerce tient désormais sur téléphone : la navigation est partie
               en bas, l'en-tête n'a plus qu'à porter la marque. */}
           <span className="truncate text-foreground">{workspaceName}</span>

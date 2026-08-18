@@ -1083,10 +1083,13 @@ function AboutCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm text-muted-foreground">
-        <p>
-          <span className="font-semibold text-foreground">ELYNDRA CAISSE</span> — La caisse qui
-          marche sans réseau.
-        </p>
+        <div className="flex items-center gap-3">
+          <img src="/icon-192.png" alt="ECAISSE" className="h-10 w-10" />
+          <div>
+            <p className="font-semibold text-foreground">ELYNDRA CAISSE</p>
+            <p>La caisse qui marche sans réseau.</p>
+          </div>
+        </div>
         <p>Développé par ELYNDRA TECH.</p>
         <p>
           Vos données sont stockées localement sur cet appareil. Aucune donnée n'est envoyée sans

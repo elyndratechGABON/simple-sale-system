@@ -86,9 +86,7 @@ function LandingHeader() {
     <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
         <span className="flex items-center gap-2 font-bold text-lg">
-          <span className="rounded-md bg-primary px-2 py-1 text-primary-foreground text-sm">
-            IC
-          </span>
+          <img src="/icon-192.png" alt="ECAISSE" className="h-8 w-8" />
           <span>ELYNDRA CAISSE</span>
         </span>
         <span className="hidden sm:block text-sm font-medium text-muted-foreground">
