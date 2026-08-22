@@ -12,7 +12,6 @@ import {
   Store,
   Utensils,
   Lock,
-  Wine,
   Scissors,
   Package,
 } from "lucide-react";
@@ -30,8 +29,6 @@ import {
   payRound,
   payTable,
   serveTable,
-  addConsignmentTransaction,
-  getTotalConsignmentBalance,
   type CartLine,
   type Category,
   type Product,
@@ -163,10 +160,6 @@ function PosPage() {
   const [ordersOpen, setOrdersOpen] = useState(false);
   // Onglet Prestations/Produits (cluster service uniquement)
   const [serviceTab, setServiceTab] = useState<"prestations" | "produits">("prestations");
-  // Dialog de retour de consigne (cluster bar)
-  const [consignmentOpen, setConsignmentOpen] = useState(false);
-  const [consignmentProductId, setConsignmentProductId] = useState("");
-  const [consignmentQty, setConsignmentQty] = useState("");
 
   // Table DÉRIVÉE de la liste des additions ouvertes, jamais copiée dans l'état local :
   // une table encaissée ou annulée disparaît de la liste, `activeTable` retombe à null et
@@ -275,43 +268,6 @@ function PosPage() {
     }
     return list;
   }, [products, filter, features.isService, serviceTab]);
-
-  // ── Consigne (cluster bar) ──────────────────────────────────────────────
-  const consignmentProducts = useMemo(
-    () => products.filter((p) => p.hasConsignment && !p.deleted_at),
-    [products],
-  );
-
-  const { data: totalConsignmentBalance = 0 } = useQuery({
-    queryKey: ["consignment", "balance"],
-    queryFn: getTotalConsignmentBalance,
-    enabled: consignmentProducts.length > 0,
-  });
-
-  const selectedConsignmentProduct =
-    consignmentProducts.find((p) => p.id === consignmentProductId) ?? null;
-
-  const returnConsignmentMut = useMutation({
-    mutationFn: () => {
-      if (!selectedConsignmentProduct) throw new Error("Sélectionnez un produit.");
-      const qty = Number(consignmentQty) || 0;
-      if (qty <= 0) throw new Error("Quantité invalide.");
-      return addConsignmentTransaction({
-        kind: "return",
-        product_id: selectedConsignmentProduct.id,
-        deposit_price: selectedConsignmentProduct.price,
-        quantity: qty,
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["consignment"] });
-      toast.success("Consigne retournée");
-      setConsignmentOpen(false);
-      setConsignmentProductId("");
-      setConsignmentQty("");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
 
   const saleMut = useMutation({
     mutationFn: () =>
@@ -690,9 +646,18 @@ function PosPage() {
                   className={cn(
                     "relative rounded-xl border bg-card p-4 text-left min-h-[100px] transition-all",
                     "hover:border-primary hover:shadow-md active:scale-[0.98]",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     out && "opacity-50 cursor-not-allowed",
                   )}
                 >
+                  {p.photo ? (
+                    <img
+                      src={p.photo}
+                      alt=""
+                      className="mb-2 h-20 w-full rounded-lg object-cover"
+                      loading="lazy"
+                    />
+                  ) : null}
                   <div className="font-semibold leading-tight">{p.name}</div>
                   <div className="mt-1 text-lg font-bold text-primary">{formatFCFA(p.price)}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
@@ -775,19 +740,6 @@ function PosPage() {
               </Button>
             )}
           </div>
-
-          {/* Solde consigne visible sur desktop (cluster bar) */}
-          {features.allowDeposit && consignmentProducts.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setConsignmentOpen(true)}
-              className="hidden lg:flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm transition hover:bg-muted/70"
-            >
-              <Wine className="h-4 w-4" />
-              <span className="text-muted-foreground">Consigne :</span>
-              <span className="font-bold tabular-nums">{formatFCFA(totalConsignmentBalance)}</span>
-            </button>
-          )}
 
           {/* L'addition déjà servie, tournée par tournée. C'est ce que la table doit
               pouvoir vérifier avant de payer. Chaque tournée s'encaisse indépendamment :
@@ -911,27 +863,30 @@ function PosPage() {
                           <Button
                             size="icon"
                             variant="outline"
-                            className="h-8 w-8"
+                            className="h-11 w-11"
                             onClick={() => removeOne(l)}
+                            aria-label="Retirer un exemplaire"
                           >
-                            <Minus className="h-3 w-3" />
+                            <Minus className="h-4 w-4" />
                           </Button>
                           <span className="w-6 text-center font-semibold">{l.quantity}</span>
                           <Button
                             size="icon"
                             variant="outline"
-                            className="h-8 w-8"
+                            className="h-11 w-11"
                             onClick={() => addOneByKey(l)}
+                            aria-label="Ajouter un exemplaire"
                           >
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-4 w-4" />
                           </Button>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8"
+                            className="h-11 w-11"
                             onClick={() => removeLine(l)}
+                            aria-label="Supprimer la ligne"
                           >
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                         <div className="w-20 text-right font-semibold">
@@ -1149,82 +1104,6 @@ function PosPage() {
           )}
         </CartShell>
       </div>
-
-      {/* ── Bouton flottant retour consigne (cluster bar) ───────────────────── */}
-      {features.allowDeposit && consignmentProducts.length > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={() => setConsignmentOpen(true)}
-            className="fixed right-4 bottom-24 z-30 flex items-center gap-2 rounded-full border bg-card px-4 py-3 text-sm font-semibold shadow-lg transition hover:shadow-xl hover:border-primary lg:hidden"
-          >
-            <Wine className="h-4 w-4" /> Retour consigne
-            {totalConsignmentBalance > 0 && (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary tabular-nums">
-                {formatFCFA(totalConsignmentBalance)}
-              </span>
-            )}
-          </button>
-          <Dialog open={consignmentOpen} onOpenChange={setConsignmentOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Retour de consigne</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Bouteille</Label>
-                  <select
-                    className="flex h-12 w-full items-center rounded-md border bg-transparent px-3 text-base"
-                    value={consignmentProductId}
-                    onChange={(e) => setConsignmentProductId(e.target.value)}
-                  >
-                    <option value="">Choisir…</option>
-                    {consignmentProducts.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} — consigne {formatFCFA(p.price)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {selectedConsignmentProduct && (
-                  <div>
-                    <Label htmlFor="consignment-qty">Quantité retournée</Label>
-                    <Input
-                      id="consignment-qty"
-                      inputMode="numeric"
-                      value={consignmentQty}
-                      onChange={(e) => setConsignmentQty(e.target.value.replace(/\D/g, ""))}
-                      placeholder="0"
-                      autoFocus
-                      className="h-12 text-lg font-bold"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && Number(consignmentQty) > 0)
-                          returnConsignmentMut.mutate();
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setConsignmentOpen(false)}>
-                  Annuler
-                </Button>
-                <Button
-                  onClick={() => returnConsignmentMut.mutate()}
-                  disabled={
-                    !selectedConsignmentProduct ||
-                    !consignmentQty ||
-                    Number(consignmentQty) <= 0 ||
-                    returnConsignmentMut.isPending
-                  }
-                >
-                  {returnConsignmentMut.isPending ? "Enregistrement…" : "Retourner la consigne"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </>
-      )}
 
       {/* Barre de résumé, téléphone uniquement. Le total et l'action principale restent
           sous le pouce en permanence : sans elle, sur un écran de 844 px, « Valider la

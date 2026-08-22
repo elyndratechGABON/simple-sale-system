@@ -77,16 +77,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "ELYNDRA CAISSE — Ventes, stocks et monnaie" },
+      { title: "ECAISSE — Pilotez votre business" },
       {
         name: "description",
         content:
-          "Application de caisse simple et hors-ligne : gestion des stocks, prise de commande, calcul de la monnaie à rendre et historique des ventes.",
+          "Application de caisse offline-first pensée pour les business gabonais : ventes, stocks, commandes et rapports — vos données restent sur votre appareil.",
       },
-      { property: "og:title", content: "ELYNDRA CAISSE — Ventes, stocks et monnaie" },
+      { property: "og:title", content: "ECAISSE — Pilotez votre business" },
       {
         property: "og:description",
-        content: "Prenez vos commandes, calculez la monnaie et suivez vos stocks en temps réel.",
+        content:
+          "ECAISSE centralise vos ventes, vos stocks et le suivi de votre activité — sans connexion requise.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <circle cx="200" cy="150" r="130" fill="#059669" opacity="0.06"/>
+  <!-- Table -->
+  <ellipse cx="200" cy="200" rx="120" ry="30" fill="#059669" opacity="0.08"/>
+  <rect x="140" y="180" width="120" height="8" rx="4" fill="#059669" opacity="0.15"/>
+  <!-- Plate -->
+  <circle cx="170" cy="170" r="25" stroke="#059669" stroke-width="2" fill="white"/>
+  <circle cx="170" cy="170" r="15" fill="#059669" opacity="0.08"/>
+  <!-- Drink -->
+  <rect x="215" y="148" width="16" height="30" rx="4" stroke="#059669" stroke-width="2" fill="white"/>
+  <rect x="218" y="152" width="10" height="8" rx="2" fill="#059669" opacity="0.2"/>
+  <!-- Steam lines -->
+  <path d="M165 140 Q162 130 165 120" stroke="#059669" stroke-width="1.5" fill="none" opacity="0.3" stroke-linecap="round"/>
+  <path d="M175 138 Q178 128 175 118" stroke="#059669" stroke-width="1.5" fill="none" opacity="0.3" stroke-linecap="round"/>
+  <!-- Number tag -->
+  <rect x="260" y="100" width="50" height="50" rx="10" fill="#059669"/>
+  <text x="285" y="132" text-anchor="middle" fill="white" font-size="22" font-weight="700" font-family="system-ui">5</text>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <circle cx="200" cy="150" r="130" fill="#059669" opacity="0.06"/>
+  <!-- Hand holding money -->
+  <rect x="140" y="100" width="120" height="75" rx="8" fill="#059669" opacity="0.15" stroke="#059669" stroke-width="2"/>
+  <text x="200" y="145" text-anchor="middle" fill="#059669" font-size="20" font-weight="700" font-family="system-ui">FCFA</text>
+  <!-- Coins -->
+  <circle cx="280" cy="170" r="18" fill="#059669" opacity="0.2" stroke="#059669" stroke-width="2"/>
+  <text x="280" y="176" text-anchor="middle" fill="#059669" font-size="14" font-weight="600" font-family="system-ui">C</text>
+  <circle cx="300" cy="185" r="15" fill="#059669" opacity="0.12" stroke="#059669" stroke-width="1.5"/>
+  <!-- Checkmark -->
+  <circle cx="200" cy="240" r="22" fill="#059669"/>
+  <polyline points="188,240 197,250 214,232" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Receipt -->
+  <rect x="90" y="130" width="40" height="55" rx="4" stroke="#059669" stroke-width="1.5" fill="white" opacity="0.8"/>
+  <line x1="98" y1="142" x2="122" y2="142" stroke="#059669" stroke-width="1.5" opacity="0.3"/>
+  <line x1="98" y1="150" x2="118" y2="150" stroke="#059669" stroke-width="1.5" opacity="0.3"/>
+  <line x1="98" y1="158" x2="122" y2="158" stroke="#059669" stroke-width="1.5" opacity="0.3"/>
+  <line x1="98" y1="166" x2="115" y2="166" stroke="#059669" stroke-width="1.5" opacity="0.3"/>
+</svg>

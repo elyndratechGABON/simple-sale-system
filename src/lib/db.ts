@@ -52,8 +52,6 @@ export interface Product extends SyncFields {
   barcode?: string | null;
   /** Type métier : 'product' = bien physique (défaut), 'service' = prestation. */
   type?: "product" | "service";
-  /** Suivi consigne (cluster bar) : le produit est une bouteille consignée. */
-  hasConsignment?: boolean;
   // ── V2 : champs pré-configurés (V10) ──────────────────────────────────
   /** Unité de stock : 'unit' = pièces (défaut), 'weight' = kg. */
   unitType?: "unit" | "weight";
@@ -65,6 +63,12 @@ export interface Product extends SyncFields {
   serialNumber?: string;
   /** Unité de vente (quincaillerie) : pièce, mètre, litre, etc. Absent = pièce par défaut. */
   unit?: "piece" | "meter" | "liter";
+  /**
+   * Photo du produit ou service, en dataURL (webp réduit). Champ optionnel sans index :
+   * aucun upgrade(), les fiches existantes le lisent `undefined`. Reste local — la
+   * synchronisation n'envoie que des agrégats, jamais le catalogue.
+   */
+  photo?: string;
 }
 
 /**
@@ -175,27 +179,6 @@ export interface Setting {
 }
 
 /**
- * Transaction de consigne (cluster bar) : suivi des bouteilles consignées.
- * - "deposit" : le client a déposé une bouteille (stock augmente, argent retenu).
- * - "return"  : le client récupère sa consigne (stock diminue, argent rendu).
- */
-export interface ConsignmentTransaction extends SyncFields {
-  id: string;
-  /** 'deposit' = mise en consigne, 'return' = retour de consigne. */
-  kind: "deposit" | "return";
-  /** Produit concerné (doit avoir `hasConsignment: true`). */
-  product_id: string;
-  /** Prix de la consigne (figé au moment de la transaction). */
-  deposit_price: number;
-  /** Nom du client (optionnel). */
-  client_name?: string;
-  /** Identifiant de la vente liée si la consigne est attachée à une commande. */
-  sale_id?: string;
-  /** Nombre de bouteilles. */
-  quantity: number;
-}
-
-/**
  * Coût d'acquisition saisi manuellement pour un produit donné sur une période.
  * Un seul enregistrement par (product_id, period_from) : si l'utilisateur met
  * à jour le coût, on fait un upsert.
@@ -243,6 +226,16 @@ export interface ShopProfile extends SyncFields {
   expiryDate: number;
   /** Dernier envoi réussi vers l'orchestrateur. */
   lastSyncedAt?: number;
+  /**
+   * Compte marchand (v3) : un téléphone + mot de passe partages par toutes les caisses
+   * du même commerçant. Saisis à l'onboarding, présentés à chaque handshake — le
+   * serveur rattache l'écran au compte, ou crée le compte au premier contact.
+   * Champs optionnels sans index : aucun upgrade(), les fiches existantes les lisent
+   * `undefined`, exactement comme les autres champs optionnels de ce schéma.
+   */
+  accountName?: string;
+  accountPhone?: string;
+  accountPassword?: string;
 }
 
 class PosDatabase extends Dexie {
@@ -252,7 +245,6 @@ class PosDatabase extends Dexie {
   settings!: Table<Setting, string>;
   subscriptions!: Table<Subscription, string>;
   shop_profiles!: Table<ShopProfile, string>;
-  consignment_transactions!: Table<ConsignmentTransaction, string>;
   clients!: Table<Client, string>;
   product_expenses!: Table<ProductExpense, number>;
 
@@ -417,11 +409,7 @@ class PosDatabase extends Dexie {
       shop_profiles: "id, updated_at",
     });
 
-    // Version 11 — type de produit (product/service), consigne (hasConsignment), et store
-    // `consignment_transactions` pour le cluster bar. Aucun upgrade() : les produits
-    // existants lus sans `type` ou `hasConsignment` valent `undefined` — traités comme
-    // des produits physiques sans consigne, ce qui est exact. Le store consignment
-    // est neuf, rien à migrer.
+    // Version 11 — type de produit (product/service).
     this.version(11).stores({
       products: "id, name, category, barcode, updated_at",
       sales: "id, timestamp, status, client_name, client_id, updated_at",
@@ -429,7 +417,6 @@ class PosDatabase extends Dexie {
       settings: "key",
       subscriptions: "id, updated_at",
       shop_profiles: "id, updated_at",
-      consignment_transactions: "id, product_id, kind, updated_at",
     });
 
     // Version 12 — registre clients (cluster service) + index `client_id` sur les ventes.
@@ -443,7 +430,7 @@ class PosDatabase extends Dexie {
       settings: "key",
       subscriptions: "id, updated_at",
       shop_profiles: "id, updated_at",
-      consignment_transactions: "id, product_id, kind, updated_at",
+
       clients: "id, name, phone, updated_at",
     });
 
@@ -456,7 +443,7 @@ class PosDatabase extends Dexie {
       settings: "key",
       subscriptions: "id, updated_at",
       shop_profiles: "id, updated_at",
-      consignment_transactions: "id, product_id, kind, updated_at",
+
       clients: "id, name, phone, updated_at",
       product_expenses: "++id, product_id, period_from, [product_id+period_from]",
     });
@@ -474,7 +461,7 @@ class PosDatabase extends Dexie {
       settings: "key",
       subscriptions: "id, updated_at",
       shop_profiles: "id, updated_at",
-      consignment_transactions: "id, product_id, kind, updated_at",
+
       clients: "id, name, phone, updated_at",
       product_expenses: "++id, product_id, period_from, [product_id+period_from]",
     });
@@ -1019,7 +1006,6 @@ export interface DatabaseSnapshot {
   sales: Sale[];
   sale_items: SaleItem[];
   subscriptions: Subscription[];
-  consignment_transactions?: ConsignmentTransaction[];
   clients?: Client[];
   product_expenses?: ProductExpense[];
 }
@@ -1034,29 +1020,21 @@ export interface DatabaseSnapshot {
  */
 export async function exportSnapshot(): Promise<DatabaseSnapshot> {
   const db = getDB();
-  const [
-    products,
-    sales,
-    sale_items,
-    subscriptions,
-    consignment_transactions,
-    clients,
-    product_expenses,
-  ] = await Promise.all([
-    db.products.toArray(),
-    db.sales.toArray(),
-    db.sale_items.toArray(),
-    db.subscriptions.toArray(),
-    db.consignment_transactions.toArray(),
-    db.clients.toArray(),
-    db.product_expenses.toArray(),
-  ]);
+  const [products, sales, sale_items, subscriptions, clients, product_expenses] = await Promise.all(
+    [
+      db.products.toArray(),
+      db.sales.toArray(),
+      db.sale_items.toArray(),
+      db.subscriptions.toArray(),
+      db.clients.toArray(),
+      db.product_expenses.toArray(),
+    ],
+  );
   return {
     products,
     sales,
     sale_items,
     subscriptions,
-    consignment_transactions,
     clients,
     product_expenses,
   };
@@ -1076,22 +1054,13 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
   const db = getDB();
   await db.transaction(
     "rw",
-    [
-      db.products,
-      db.sales,
-      db.sale_items,
-      db.subscriptions,
-      db.consignment_transactions,
-      db.clients,
-      db.product_expenses,
-    ],
+    [db.products, db.sales, db.sale_items, db.subscriptions, db.clients, db.product_expenses],
     async () => {
       await Promise.all([
         db.products.clear(),
         db.sales.clear(),
         db.sale_items.clear(),
         db.subscriptions.clear(),
-        db.consignment_transactions.clear(),
         db.clients.clear(),
         db.product_expenses.clear(),
       ]);
@@ -1100,7 +1069,6 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
         db.sales.bulkPut(snapshot.sales),
         db.sale_items.bulkPut(snapshot.sale_items),
         db.subscriptions.bulkPut(snapshot.subscriptions ?? []),
-        db.consignment_transactions.bulkPut(snapshot.consignment_transactions ?? []),
         db.clients.bulkPut(snapshot.clients ?? []),
         db.product_expenses.bulkPut(snapshot.product_expenses ?? []),
       ]);
@@ -1127,7 +1095,6 @@ export async function purgeAllData(): Promise<void> {
       db.settings,
       db.subscriptions,
       db.shop_profiles,
-      db.consignment_transactions,
       db.clients,
       db.product_expenses,
     ],
@@ -1139,7 +1106,6 @@ export async function purgeAllData(): Promise<void> {
         db.settings.clear(),
         db.subscriptions.clear(),
         db.shop_profiles.clear(),
-        db.consignment_transactions.clear(),
         db.clients.clear(),
         db.product_expenses.clear(),
       ]);
@@ -1255,6 +1221,29 @@ export async function setShopExpiry(expiryDate: number): Promise<void> {
   await db.shop_profiles.put({ ...profile, expiryDate, ...touch() });
 }
 
+/**
+ * Rattache l'appareil à un compte marchand (créé ou rejoint à l'onboarding). Les trois
+ * champs partent ensemble au handshake : c'est la clé que le serveur utilise pour
+ * retrouver — ou créer — le compte, puis y rattacher cette caisse.
+ */
+export async function setShopAccount(input: {
+  name: string;
+  phone: string;
+  password: string;
+  /** Nom du propriétaire, demandé à la création du compte et porté par la fiche. */
+  ownerName?: string;
+}): Promise<void> {
+  const profile = await ensureShopProfile("");
+  await getDB().shop_profiles.put({
+    ...profile,
+    accountName: input.name.trim() || profile.storeName,
+    accountPhone: input.phone.trim(),
+    accountPassword: input.password,
+    ownerName: input.ownerName?.trim() || profile.ownerName,
+    ...touch(),
+  });
+}
+
 /** Marque un envoi réussi vers l'orchestrateur. */
 export async function markShopSynced(syncedAt: number): Promise<void> {
   const db = getDB();
@@ -1278,50 +1267,6 @@ export async function getSetting<T>(key: string): Promise<T | undefined> {
 
 export async function setSetting(key: string, value: unknown): Promise<void> {
   await getDB().settings.put({ key, value });
-}
-
-// ---------- Consigne (cluster bar) ----------
-// Les bouteilles consignées suivent un cycle deposit/return. Le stock du produit
-// lui-même suit le stock physique ; la consigne suit le cycle d'engagement client.
-
-export async function listConsignmentTransactions(
-  productId?: string,
-): Promise<ConsignmentTransaction[]> {
-  const db = getDB();
-  const all = productId
-    ? await db.consignment_transactions.where("product_id").equals(productId).toArray()
-    : await db.consignment_transactions.toArray();
-  return alive(all).sort((a, b) => b.updated_at - a.updated_at);
-}
-
-export async function addConsignmentTransaction(
-  tx: Omit<ConsignmentTransaction, "id" | keyof SyncFields>,
-): Promise<ConsignmentTransaction> {
-  const record: ConsignmentTransaction = { ...tx, id: uid(), ...touch() };
-  await getDB().consignment_transactions.put(record);
-  return record;
-}
-
-/** Solde net de consigne pour un produit : dépôts - retours (en FCFA). */
-export async function getConsignmentBalance(productId: string): Promise<number> {
-  const txs = await listConsignmentTransactions(productId);
-  return txs.reduce(
-    (sum, tx) =>
-      sum +
-      (tx.kind === "deposit" ? tx.deposit_price * tx.quantity : -tx.deposit_price * tx.quantity),
-    0,
-  );
-}
-
-/** Solde consigne global (tous produits). */
-export async function getTotalConsignmentBalance(): Promise<number> {
-  const txs = await listConsignmentTransactions();
-  return txs.reduce(
-    (sum, tx) =>
-      sum +
-      (tx.kind === "deposit" ? tx.deposit_price * tx.quantity : -tx.deposit_price * tx.quantity),
-    0,
-  );
 }
 
 // ---------- Clients (cluster service) ----------

@@ -57,8 +57,8 @@ export function BottomNav() {
           <Link
             key={to}
             to={to}
-            className="flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-muted-foreground transition-colors"
-            activeProps={{ className: "text-primary" }}
+            className="flex min-h-[56px] flex-col items-center justify-center gap-0.5 border-t-2 border-transparent px-1 py-1.5 text-muted-foreground transition-colors"
+            activeProps={{ className: "border-t-2 border-primary bg-accent/60 text-primary" }}
           >
             <Icon className="h-5 w-5 shrink-0" />
             <span className="w-full truncate text-center text-[10px] leading-none">{label}</span>

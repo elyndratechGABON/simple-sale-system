@@ -1,14 +1,21 @@
-// Assistant de premier lancement — deux voies séquentielles :
+// Assistant de premier lancement — parcours guidé intelligent :
 //
-// 1. **Wizard de configuration** (7 étapes) : nom, couleur, téléphone, quartier,
-//    propriétaire, types de produits → cluster déduit, confirmation.  Sauvegarde
-//    `onboarded: true` dans localStorage.  Bloquant (ni croix, ni échappement).
+// 1. **WelcomeScreen** : "Bienvenue sur ELYNDRA CAISSE" — un seul bouton "Commencer"
+// 2. **SetupWizard** : nom, compte marchand (téléphone + mot de passe), secteur d'activité,
+//    sous-catégorie (magasin), infos optionnelles, confidentialité
+// 3. **ClusterTutorial** : tutoriel adaptatif qui ajoute des produits/prestations selon le cluster
+// 4. **FirstSaleReady** : écran de confirmation "Tout est prêt"
 //
-// 2. **Guide fonctionnel** (4 étapes, carrousel) : présentation des grands écrans.
-//    Sauvegarde `onboardingCompleted: true`.  Passable d'un simple clic.
+// Le tutoriel (3) s'adapte au cluster choisi :
+//   - retail → "Ajoutez vos produits"
+//   - restaurant → "Créez votre menu"
+//   - bar → "Ajoutez vos boissons" + choix workflow
+//   - service → "Ajoutez vos prestations"
+//   - clothing → "Ajoutez vos vêtements"
+//   - weight → "Enregistrez vos produits au poids"
+//   - magasin → "Ajoutez vos produits" (avec sous-cat)
 //
-// Les deux ne s'affichent qu'une seule fois.  Le guide vient après le wizard :
-// il n'apparaît que si le wizard est terminé mais que le guide n'a pas été vu.
+// Les produits ajoutés pendant le tutoriel sont enregistrés en base.
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,27 +23,37 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  MapPin,
+  CloudOff,
+  EyeOff,
+  HardDrive,
+  KeyRound,
   Package,
   Phone,
-  Settings,
-  ShoppingCart,
-  BarChart3,
-  User,
   Shield,
+  Store,
+  Plus,
+  ArrowRight,
+  PartyPopper,
+  Users,
+  WifiOff,
+  ScanLine,
 } from "lucide-react";
-import { ChefHat, Coffee, Scissors, ShoppingBag, Shirt, Weight, Store } from "lucide-react";
+import { ChefHat, Coffee, Scissors, ShoppingBag, Shirt, Weight, Sparkles } from "lucide-react";
 import {
-  applyTheme,
   CLUSTER_MAP,
   getPreferences,
   ACTIVE_CLUSTERS,
-  PRESET_HUES,
   savePreferences,
-  swatchColor,
+  SUB_CATEGORY_LABELS,
+  WORKFLOW_DESCRIPTIONS,
   type ClusterId,
   type SubCategory,
 } from "@/lib/settings";
+import { addProduct, setShopAccount, type Product } from "@/lib/db";
+import { parsePairingPayload } from "@/lib/pairing";
+import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import { loadDemoData } from "@/lib/demo-data";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,118 +61,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-/* ── Carrousel guide ──────────────────────────────────────────────────────── */
+/* ── Types ───────────────────────────────────────────────────────────────── */
 
-const GUIDE_STEPS = [
-  {
-    icon: Package,
-    title: "Ajoutez vos produits",
-    description: "Gérez vos stocks, prix et catégories dans la section Stocks.",
-    emoji: "📦",
-  },
-  {
-    icon: ShoppingCart,
-    title: "Encaissez rapidement",
-    description: "Vendez en quelques tapes avec la caisse intuitive.",
-    emoji: "🛒",
-  },
-  {
-    icon: BarChart3,
-    title: "Analysez vos ventes",
-    description: "Suivez votre chiffre d'affaires et vos performances dans Rapports.",
-    emoji: "📊",
-  },
-  {
-    icon: Settings,
-    title: "Personnalisez l'app",
-    description: "Thème, tables, Nom du commerce — tout se règle dans Paramètres.",
-    emoji: "⚙️",
-  },
-];
+type OnboardingPhase = "welcome" | "wizard" | "tutorial" | "ready" | "done";
 
-function FeatureGuide({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState(0);
-  const isLast = step === GUIDE_STEPS.length - 1;
-  const current = GUIDE_STEPS[step];
-
-  return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        showCloseButton={false}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-        className="sm:max-w-md"
-      >
-        <DialogTitle className="sr-only">Guide de prise en main</DialogTitle>
-
-        {/* Dots */}
-        <div className="flex justify-center gap-2">
-          {GUIDE_STEPS.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setStep(i)}
-              className={cn(
-                "h-2 rounded-full transition-all",
-                i === step ? "w-6 bg-primary" : "w-2 bg-muted",
-              )}
-            />
-          ))}
-        </div>
-
-        {/* Contenu animé */}
-        <div className="min-h-[220px] flex items-center justify-center py-4">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.2 }}
-              className="text-center space-y-4"
-            >
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-3xl">
-                {current.emoji}
-              </div>
-              <h2 className="text-lg font-semibold">{current.title}</h2>
-              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                {current.description}
-              </p>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between gap-2 border-t pt-4">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            {isLast ? "Commencer" : "Passer"}
-          </Button>
-          <div className="flex gap-2">
-            {step > 0 && (
-              <Button variant="outline" onClick={() => setStep((s) => s - 1)}>
-                <ChevronLeft className="h-4 w-4 mr-1" /> Retour
-              </Button>
-            )}
-            {!isLast && (
-              <Button onClick={() => setStep((s) => s + 1)}>
-                Suivant <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            )}
-            {isLast && (
-              <Button onClick={onClose}>
-                <Check className="h-4 w-4 mr-1" /> Commencer
-              </Button>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ── Wizard de configuration ──────────────────────────────────────────────── */
-
-const WIZARD_TOTAL = 7;
+/* ── Icon map ────────────────────────────────────────────────────────────── */
 
 const ICON_MAP: Record<string, typeof Store> = {
   ShoppingBag,
@@ -165,138 +75,198 @@ const ICON_MAP: Record<string, typeof Store> = {
   Shirt,
   Weight,
   Store,
+  Sparkles,
 };
 
 function resolveIcon(name: string): typeof Store {
   return ICON_MAP[name] ?? Store;
 }
 
+/* ── Phase 1 : WelcomeScreen ─────────────────────────────────────────────── */
+
+function WelcomeScreen({ onNext }: { onNext: () => void }) {
+  return (
+    <Dialog open>
+      <DialogContent
+        showCloseButton={false}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="sm:max-w-md"
+      >
+        <DialogTitle className="sr-only">Bienvenue</DialogTitle>
+        <div className="flex flex-col items-center text-center space-y-5 py-4">
+          {/* Visuel de bienvenue de la marque (logo/bienvenu.png, réduit en webp). */}
+          <motion.img
+            src="/welcome.webp"
+            alt="ELYNDRA CAISSE"
+            width={560}
+            height={582}
+            className="w-48 h-auto rounded-xl"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: [-8, 8, -8] }}
+            transition={{
+              opacity: { duration: 0.5 },
+              y: { duration: 3, ease: "easeInOut", repeat: Infinity },
+            }}
+          />
+
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold tracking-tight">Bienvenue sur ELYNDRA CAISSE</h1>
+            <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+              Gérez vos ventes, vos stocks et votre activité depuis un seul espace, même sans
+              connexion internet.
+            </p>
+          </div>
+
+          <ul className="space-y-2 text-sm text-left w-full max-w-xs">
+            {[
+              "Encaissez et suivez vos ventes en temps réel",
+              "Gérez votre stock automatiquement",
+              "Exportez vos rapports en PDF, Excel ou CSV",
+            ].map((b) => (
+              <li key={b} className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+
+          <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+            <WifiOff className="h-3 w-3" /> 100% hors ligne · Vos données restent sur votre appareil
+          </span>
+
+          <Button size="lg" className="h-12 px-8 gap-2" onClick={onNext}>
+            Lancer ma caisse <ArrowRight className="h-4 w-4" />
+          </Button>
+
+          <p className="text-xs text-muted-foreground">Essai gratuit de 30 jours inclus</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Phase 2 : SetupWizard ───────────────────────────────────────────────── */
+
+const MAGASIN_SUBS = Object.entries(SUB_CATEGORY_LABELS).map(([id, v]) => ({
+  id: id as SubCategory,
+  ...v,
+}));
+
 function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
 
   const [name, setName] = useState("");
-  const [hue, setHue] = useState(PRESET_HUES[0].hue);
   const [phone, setPhone] = useState("");
   const [quarter, setQuarter] = useState("");
-  const [ownerName, setOwnerName] = useState("");
   const [selectedCluster, setSelectedCluster] = useState<ClusterId | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategory | null>(null);
+  // Cluster Personnalisé : domaine d'activité libre + mode de stock choisi.
+  const [customDomain, setCustomDomain] = useState("");
+  const [customStockChoice, setCustomStockChoice] = useState<"unit" | "weight" | null>(null);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
+  // Compte marchand (v3) : un téléphone + mot de passe partagés par toutes les caisses
+  // du même commerçant. « create » pour la première boutique, « join » pour rattacher
+  // cet écran à un compte existant (même abonnement).
+  const [accountMode, setAccountMode] = useState<"create" | "join">("create");
+  const [accPhone, setAccPhone] = useState("");
+  const [accPassword, setAccPassword] = useState("");
+  // Propriétaire : demandé avec le compte, porté par la fiche boutique et les exports.
+  const [ownerName, setOwnerName] = useState("");
+  const { scanning, startScan } = useBarcodeScanner();
+
+  /** Rattache cet écran au compte encodé dans un QR affiché par une caisse abonnée. */
+  async function scanPairingQr() {
+    try {
+      const raw = await startScan();
+      const parsed = parsePairingPayload(raw ?? "");
+      if (!parsed) {
+        toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
+        return;
+      }
+      setAccPhone(parsed.phone);
+      setAccPassword(parsed.password);
+      if (parsed.name) setName(parsed.name);
+      toast.success(`Compte « ${parsed.name || parsed.phone} » récupéré — continuez.`);
+    } catch {
+      toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");
+    }
+  }
+
   const clusterConfig = selectedCluster ? CLUSTER_MAP[selectedCluster] : null;
-  const hasTables = clusterConfig?.workflow.hasTables ?? false;
   const isMagasin = selectedCluster === "magasin";
 
   useEffect(() => {
     const prefs = getPreferences();
     setName(prefs.workspaceName);
-    setHue(prefs.hue);
     setPhone(prefs.phone);
     setQuarter(prefs.quarter);
     setOwnerName(prefs.ownerName);
   }, []);
 
-  useEffect(() => {
-    applyTheme(hue);
-  }, [hue]);
-
-  function finish() {
+  async function finish() {
+    // Le compte est posé en base AVANT la fin de l'assistant : le premier handshake
+    // (au retour en ligne) présentera ces identifiants et créera/rattachera le compte.
+    await setShopAccount({
+      name: name.trim() || "Ma boutique",
+      phone: accPhone.trim(),
+      password: accPassword,
+      ownerName: ownerName.trim(),
+    });
     savePreferences({
       workspaceName: name.trim() || getPreferences().workspaceName,
-      hue,
       phone: phone.trim(),
       quarter: quarter.trim(),
       ownerName: ownerName.trim(),
       cluster: selectedCluster ?? "retail",
       subCategory: isMagasin ? (selectedSubCategory ?? undefined) : undefined,
+      customDomain: selectedCluster === "personnalise" ? customDomain.trim() : "",
+      customUnitType:
+        selectedCluster === "personnalise" ? (customStockChoice ?? "unit") : undefined,
       businessType: selectedCluster === "restaurant" ? "restaurant" : "snack",
-      tablesEnabled: hasTables,
+      tablesEnabled: clusterConfig?.workflow.hasTables ?? false,
       onboarded: true,
       privacyAccepted,
     });
-    applyTheme(hue);
     qc.invalidateQueries({ queryKey: ["preferences"] });
     onComplete();
   }
 
-  function skip() {
-    savePreferences({ onboarded: true });
-    qc.invalidateQueries({ queryKey: ["preferences"] });
-    onComplete();
-  }
-
-  // Étape 5 = choix cluster, 5b = sous-catégorie magasin (si applicable)
-  // Après cluster: privacy, puis confirmation
-  const WIZARD_TOTAL = isMagasin && selectedCluster ? 9 : 8;
-  const effectiveStep = step;
+  // Étapes visuelles : 0=confidentialité, 1=nom, 2=compte, 3=secteur, [4=sous-cat],
+  // 4/5=coordonnées. Pour non-magasin : 5 étapes (0..4). Pour magasin : 6 étapes (0..5).
+  // Le step counter est toujours continu (0..totalSteps-1).
+  const totalSteps = isMagasin ? 6 : 5;
 
   function canNext(): boolean {
-    if (step === 0) return name.trim().length > 0;
-    if (step === 5) return selectedCluster !== null;
-    if (step === 6 && isMagasin) return selectedSubCategory !== null;
-    // Privacy step
-    const privacyStep = isMagasin ? 7 : 6;
-    if (step === privacyStep) return privacyAccepted;
+    if (step === 0) return privacyAccepted;
+    if (step === 1) return name.trim().length > 0;
+    if (step === 2) return accPhone.trim().length > 0 && accPassword.trim().length >= 4;
+    if (step === 3) {
+      if (selectedCluster === null) return false;
+      if (selectedCluster === "personnalise")
+        return customDomain.trim().length > 0 && customStockChoice !== null;
+      return true;
+    }
+    if (step === 4 && isMagasin) return selectedSubCategory !== null;
     return true;
   }
 
   function goNext() {
-    // Si on est à l'étape 5 et qu'on a choisi magasin, on passe à la sous-catégorie
-    if (step === 5 && isMagasin && !selectedSubCategory) {
-      setStep(6);
-      return;
-    }
-    // Si on est à la sous-catégorie magasin, on passe à la confidentialité
-    if (step === 6 && isMagasin) {
-      setStep(7);
-      return;
-    }
-    setStep((s) => s + 1);
+    setStep((s) => Math.min(s + 1, totalSteps - 1));
   }
 
   function goPrev() {
-    // Si on est à la confidentialité et qu'on vient du magasin, on retourne à la sous-catégorie
-    const privacyStep = isMagasin ? 7 : 6;
-    if (step === privacyStep && isMagasin) {
-      setStep(6);
-      return;
-    }
-    // Si on est à la sous-catégorie magasin, on retourne au cluster
-    if (step === 6 && isMagasin) {
-      setStep(5);
-      return;
-    }
-    setStep((s) => s - 1);
+    setStep((s) => Math.max(s - 1, 0));
   }
 
-  // Sous-catégories du magasin
-  const MAGASIN_SUBS: { id: SubCategory; label: string; icon: string; description: string }[] = [
-    {
-      id: "electronics",
-      label: "Électronique",
-      icon: "📱",
-      description: "Téléphones, ordinateurs, accessoires. Numéros de série.",
-    },
-    {
-      id: "appliance",
-      label: "Électroménager",
-      icon: "🧊",
-      description: "Réfrigérateurs, cuisinières, appareils ménagers.",
-    },
-    {
-      id: "furniture",
-      label: "Meubles",
-      icon: "🛋️",
-      description: "Tables, chaises, armoires, canapés.",
-    },
-    {
-      id: "hardware_store",
-      label: "Quincaillerie",
-      icon: "🔧",
-      description: "Peinture, vis, outils. Unités : pièce, mètre, litre.",
-    },
-  ];
+  // Map step number to which section renders
+  function renderStep() {
+    // Magasin: 0=confidentialité, 1=nom, 2=compte, 3=secteur, 4=sous-cat, 5=coordonnées
+    // Non-magasin: 0=confidentialité, 1=nom, 2=compte, 3=secteur, 4=coordonnées
+    return step;
+  }
 
   return (
     <DialogContent
@@ -305,25 +275,73 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
       onInteractOutside={(e) => e.preventDefault()}
       className="sm:max-w-md"
     >
-      <DialogTitle className="sr-only">Configuration de l'application</DialogTitle>
+      <DialogTitle className="sr-only">Configuration de votre boutique</DialogTitle>
 
+      {/* Barre de progression */}
       <div className="flex gap-1">
-        {Array.from({ length: WIZARD_TOTAL }, (_, i) => (
+        {Array.from({ length: totalSteps }, (_, i) => (
           <div
             key={i}
             className={cn(
               "h-1 flex-1 rounded-full transition-colors",
-              i <= effectiveStep ? "bg-primary" : "bg-muted",
+              i <= step ? "bg-primary" : "bg-muted",
             )}
           />
         ))}
       </div>
       <p className="text-center text-xs text-muted-foreground">
-        Étape {effectiveStep + 1} sur {WIZARD_TOTAL}
+        Étape {step + 1} sur {totalSteps}
       </p>
 
       <div className="min-h-[260px] py-2">
+        {/* Étape 0 : Confidentialité */}
         {step === 0 && (
+          <StepShell
+            icon={Shield}
+            title="Confidentialité"
+            description="Vos données restent entre vos mains."
+          >
+            <div className="space-y-4">
+              {/* Visuel « Confidentialité » de la marque (logo/CONFIDENCE.png, réduit
+                  en webp), à la place de l'icône bouclier seule. */}
+              <motion.img
+                initial={{ scale: 0.92, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                src="/confidence.webp"
+                alt="Confidentialité"
+                width={560}
+                height={560}
+                className="mx-auto max-h-40 w-auto rounded-xl"
+              />
+              <ul className="space-y-2.5 text-sm">
+                {[
+                  { icon: HardDrive, text: "100% local — tout vit sur votre appareil" },
+                  { icon: CloudOff, text: "Aucun envoi vers nos serveurs sans votre accord" },
+                  { icon: EyeOff, text: "Pas de tracking, pas de collecte de données" },
+                ].map((item) => (
+                  <li key={item.text} className="flex items-start gap-2.5">
+                    <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <span className="text-muted-foreground">{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex items-center gap-2 pt-3">
+              <Checkbox
+                id="privacy-accept"
+                checked={privacyAccepted}
+                onCheckedChange={(v) => setPrivacyAccepted(Boolean(v))}
+              />
+              <Label htmlFor="privacy-accept" className="cursor-pointer text-sm">
+                J'accepte que mes données soient utilisées pour améliorer l'application.
+              </Label>
+            </div>
+          </StepShell>
+        )}
+
+        {/* Étape 1 : Nom du commerce */}
+        {step === 1 && (
           <StepShell
             icon={Store}
             title="Nom du commerce"
@@ -342,103 +360,112 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
           </StepShell>
         )}
 
-        {step === 1 && (
+        {/* Étape 2 : Compte marchand */}
+        {step === 2 && (
           <StepShell
-            icon={(props) => (
-              <span
-                className={cn("block h-5 w-5 rounded-full", props.className)}
-                style={{ backgroundColor: swatchColor(hue) }}
-              />
-            )}
-            title="Couleur principale"
-            description="Elle habille les boutons, les totaux et les graphiques."
+            icon={Users}
+            title="Compte marchand"
+            description="Un seul compte pour toutes vos caisses, un seul abonnement."
           >
-            <div className="grid grid-cols-5 gap-3">
-              {PRESET_HUES.map((p) => (
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                {
+                  id: "create" as const,
+                  title: "Créer un compte",
+                  desc: "Première boutique — essai gratuit 30 jours",
+                },
+                {
+                  id: "join" as const,
+                  title: "Rejoindre",
+                  desc: "Rattacher cette caisse à un compte existant",
+                },
+              ].map((m) => (
                 <button
-                  key={p.hue}
+                  key={m.id}
                   type="button"
-                  onClick={() => setHue(p.hue)}
-                  aria-label={p.label}
-                  aria-pressed={hue === p.hue}
+                  onClick={() => {
+                    setAccountMode(m.id);
+                    // Rejoindre un compte existant = flasher le QR affiché par une
+                    // caisse déjà abonnée. La saisie manuelle reste en secours sous
+                    // le bouton de re-scan si la caméra est indisponible.
+                    if (m.id === "join") void scanPairingQr();
+                  }}
+                  aria-pressed={accountMode === m.id}
                   className={cn(
-                    "aspect-square rounded-xl border-2 transition-transform flex items-center justify-center",
-                    hue === p.hue
-                      ? "border-foreground scale-105"
-                      : "border-transparent hover:scale-105",
+                    "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
+                    accountMode === m.id
+                      ? "border-primary bg-accent ring-1 ring-primary"
+                      : "bg-card hover:border-primary/50",
                   )}
-                  style={{ backgroundColor: swatchColor(p.hue) }}
                 >
-                  {hue === p.hue && <Check className="h-5 w-5 text-white drop-shadow" />}
+                  <span className="font-medium">{m.title}</span>
+                  <span className="text-xs text-muted-foreground">{m.desc}</span>
                 </button>
               ))}
             </div>
+            <div className="space-y-3 pt-1">
+              {accountMode === "join" && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={scanning}
+                  onClick={() => void scanPairingQr()}
+                >
+                  <ScanLine className="h-4 w-4 mr-2" />
+                  {scanning ? "Caméra active…" : "Scanner le QR d'une autre caisse"}
+                </Button>
+              )}
+              <div>
+                <Label htmlFor="ob-owner">Nom du propriétaire</Label>
+                <Input
+                  id="ob-owner"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  placeholder="Ex : Marie Kabongo"
+                  className="h-12"
+                />
+              </div>
+              <div>
+                <Label htmlFor="ob-acc-phone">Téléphone du compte</Label>
+                <Input
+                  id="ob-acc-phone"
+                  type="tel"
+                  value={accPhone}
+                  onChange={(e) => setAccPhone(e.target.value)}
+                  placeholder="Ex : +241 06 123 456"
+                  className="h-12"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label htmlFor="ob-acc-pass">Mot de passe</Label>
+                <Input
+                  id="ob-acc-pass"
+                  type="password"
+                  value={accPassword}
+                  onChange={(e) => setAccPassword(e.target.value)}
+                  placeholder={
+                    accountMode === "join" ? "Mot de passe du compte" : "4 caractères minimum"
+                  }
+                  className="h-12"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {accountMode === "create"
+                ? "Paliers : 10 000 F (2 appareils) · 25 000 F (4) · 50 000 F (8) / 30 jours. Vous démarrez avec un essai gratuit."
+                : "Scannez le QR affiché par une de vos caisses abonnées, ou saisissez son téléphone et mot de passe."}
+            </p>
           </StepShell>
         )}
 
-        {step === 2 && (
-          <StepShell
-            icon={Phone}
-            title="Téléphone"
-            description="Numéro de contact de votre commerce (optionnel)."
-          >
-            <Label htmlFor="ob-phone">Numéro de téléphone</Label>
-            <Input
-              id="ob-phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Ex : +243 81 234 5678"
-              className="h-12 text-lg"
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && setStep(3)}
-            />
-          </StepShell>
-        )}
-
+        {/* Étape 3 : Secteur d'activité */}
         {step === 3 && (
           <StepShell
-            icon={MapPin}
-            title="Quartier"
-            description="Où se situe votre commerce ? (optionnel)"
-          >
-            <Label htmlFor="ob-quarter">Quartier</Label>
-            <Input
-              id="ob-quarter"
-              value={quarter}
-              onChange={(e) => setQuarter(e.target.value)}
-              placeholder="Ex : Commune de la Gombe"
-              className="h-12 text-lg"
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && setStep(4)}
-            />
-          </StepShell>
-        )}
-
-        {step === 4 && (
-          <StepShell
-            icon={User}
-            title="Nom du propriétaire"
-            description="Qui est le propriétaire du commerce ? (optionnel)"
-          >
-            <Label htmlFor="ob-owner">Nom complet</Label>
-            <Input
-              id="ob-owner"
-              value={ownerName}
-              onChange={(e) => setOwnerName(e.target.value)}
-              placeholder="Ex : Marie Kabongo"
-              className="h-12 text-lg"
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && setStep(5)}
-            />
-          </StepShell>
-        )}
-
-        {step === 5 && (
-          <StepShell
             icon={Store}
-            title="Votre activité"
-            description="Choisissez votre type de commerce. L'application s'adaptera automatiquement."
+            title="Quel type d'activité gérez-vous ?"
+            description="Choisissez votre secteur. L'application s'adaptera automatiquement."
           >
             <div className="grid grid-cols-2 gap-2">
               {ACTIVE_CLUSTERS.map((c) => {
@@ -451,7 +478,7 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
                     onClick={() => setSelectedCluster(c.id)}
                     aria-pressed={active}
                     className={cn(
-                      "flex items-center gap-2 rounded-xl border p-3 text-left text-sm transition-all",
+                      "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-sm transition-all",
                       active
                         ? "border-primary bg-accent ring-1 ring-primary"
                         : "bg-card hover:border-primary/50",
@@ -467,117 +494,146 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
                     >
                       <Icon className="h-4 w-4" />
                     </span>
-                    <span className="font-medium">{c.label.split("/")[0].trim()}</span>
+                    <span className="font-medium text-xs leading-tight">{c.label}</span>
                   </button>
                 );
               })}
             </div>
             {selectedCluster && (
-              <p className="text-center text-xs text-muted-foreground">
-                Mode sélectionné :{" "}
-                <span className="font-medium text-foreground">{clusterConfig?.label}</span>
+              <p className="text-center text-xs text-muted-foreground mt-2">
+                <span className="font-medium text-foreground">{clusterConfig?.label}</span> —{" "}
+                {WORKFLOW_DESCRIPTIONS[clusterConfig?.workflowType ?? "direct"]?.title}
               </p>
+            )}
+
+            {/* Cluster Personnalisé : domaine libre + mode de stock */}
+            {selectedCluster === "personnalise" && (
+              <div className="space-y-3 rounded-xl border bg-accent/40 p-3 mt-2">
+                <div>
+                  <Label htmlFor="ob-custom-domain">Votre domaine d'activité</Label>
+                  <Input
+                    id="ob-custom-domain"
+                    value={customDomain}
+                    onChange={(e) => setCustomDomain(e.target.value)}
+                    placeholder="Ex : Vente de pièces détachées, Photocopie…"
+                    className="h-11"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <Label>Comment gérez-vous votre stock ?</Label>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {[
+                      {
+                        id: "unit" as const,
+                        title: "Stock normal",
+                        desc: "À l'unité / à la pièce",
+                      },
+                      {
+                        id: "weight" as const,
+                        title: "Stock au kilo",
+                        desc: "Vente et stock en kg",
+                      },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setCustomStockChoice(m.id)}
+                        aria-pressed={customStockChoice === m.id}
+                        className={cn(
+                          "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
+                          customStockChoice === m.id
+                            ? "border-primary bg-accent ring-1 ring-primary"
+                            : "bg-card hover:border-primary/50",
+                        )}
+                      >
+                        <span className="font-medium">{m.title}</span>
+                        <span className="text-xs text-muted-foreground">{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </StepShell>
         )}
 
-        {step === 6 && isMagasin && (
+        {/* Étape 4 : Sous-catégorie magasin (conditionnel) */}
+        {step === 4 && isMagasin && (
           <StepShell
             icon={Store}
             title="Type de magasin"
-            description="Précisez votre activité pour adapter les champs du formulaire."
+            description="Précisez votre activité pour adapter les champs."
           >
             <div className="grid grid-cols-2 gap-2">
-              {MAGASIN_SUBS.map((sub) => {
-                const active = selectedSubCategory === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => setSelectedSubCategory(sub.id)}
-                    aria-pressed={active}
-                    className={cn(
-                      "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
-                      active
-                        ? "border-primary bg-accent ring-1 ring-primary"
-                        : "bg-card hover:border-primary/50",
-                    )}
-                  >
-                    <span className="text-lg">{sub.icon}</span>
-                    <span className="font-medium">{sub.label}</span>
-                    <span className="text-xs text-muted-foreground">{sub.description}</span>
-                  </button>
-                );
-              })}
+              {MAGASIN_SUBS.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setSelectedSubCategory(sub.id)}
+                  aria-pressed={selectedSubCategory === sub.id}
+                  className={cn(
+                    "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
+                    selectedSubCategory === sub.id
+                      ? "border-primary bg-accent ring-1 ring-primary"
+                      : "bg-card hover:border-primary/50",
+                  )}
+                >
+                  <span className="text-lg">{sub.emoji}</span>
+                  <span className="font-medium">{sub.label}</span>
+                  <span className="text-xs text-muted-foreground">{sub.description}</span>
+                </button>
+              ))}
             </div>
           </StepShell>
         )}
 
-        {step === (isMagasin ? 7 : 6) && (
+        {/* Étape 4/5 : Coordonnées (téléphone + quartier) */}
+        {step === (isMagasin ? 5 : 4) && (
           <StepShell
-            icon={Shield}
-            title="Confidentialité"
-            description="Vos données vous appartiennent."
+            icon={Phone}
+            title="Coordonnées"
+            description="Informations de contact de votre commerce (optionnel)."
           >
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                Chez <span className="font-semibold text-foreground">ELYNDRA TECH</span>, vos
-                données vous appartiennent.
-              </p>
-              <p>
-                Elles sont stockées uniquement sur votre appareil et ne sont jamais envoyées sur nos
-                serveurs sans votre accord.
-              </p>
-              <p>
-                Nous utilisons vos données pour améliorer l'application, synchroniser (si vous
-                activez l'option) et vous proposer des rapports utiles.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 pt-2">
-              <Checkbox
-                id="privacy-accept"
-                checked={privacyAccepted}
-                onCheckedChange={(v) => setPrivacyAccepted(Boolean(v))}
-              />
-              <Label htmlFor="privacy-accept" className="cursor-pointer text-sm">
-                J'accepte que mes données soient utilisées pour améliorer l'application et les
-                fonctionnalités.
-              </Label>
-            </div>
-          </StepShell>
-        )}
-
-        {step === (isMagasin ? 8 : 7) && (
-          <StepShell
-            icon={Check}
-            title="C'est prêt"
-            description="Voici ce qui est configuré. Le reste se règle dans Paramètres."
-          >
-            <div className="space-y-2 rounded-lg border p-4 text-sm">
-              <Row label="Commerce">{name.trim() || getPreferences().workspaceName}</Row>
-              <Row label="Mode">{clusterConfig?.label ?? "Épicerie"}</Row>
-              {isMagasin && selectedSubCategory && (
-                <Row label="Type">
-                  {MAGASIN_SUBS.find((s) => s.id === selectedSubCategory)?.label}
-                </Row>
-              )}
-              {hasTables && <Row label="Tables">Activées</Row>}
-              {phone && <Row label="Téléphone">{phone}</Row>}
-              {quarter && <Row label="Quartier">{quarter}</Row>}
-              {ownerName && <Row label="Propriétaire">{ownerName}</Row>}
-              <Row label="Couleur">
-                <span
-                  className="inline-block h-4 w-4 rounded-full"
-                  style={{ backgroundColor: swatchColor(hue) }}
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="ob-phone">Numéro de téléphone</Label>
+                <Input
+                  id="ob-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Ex : +241 06 123 456"
+                  className="h-12"
+                  autoFocus
                 />
-              </Row>
+              </div>
+              <div>
+                <Label htmlFor="ob-quarter">Quartier</Label>
+                <Input
+                  id="ob-quarter"
+                  value={quarter}
+                  onChange={(e) => setQuarter(e.target.value)}
+                  placeholder="Ex : Owendo"
+                  className="h-12"
+                />
+              </div>
             </div>
           </StepShell>
         )}
       </div>
 
+      {/* Navigation */}
       <div className="flex items-center justify-between gap-2 border-t pt-4">
-        <Button variant="ghost" size="sm" onClick={skip}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            savePreferences({ onboarded: true });
+            qc.invalidateQueries({ queryKey: ["preferences"] });
+            onComplete();
+          }}
+        >
           Passer
         </Button>
         <div className="flex gap-2">
@@ -586,12 +642,12 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
               <ChevronLeft className="h-4 w-4 mr-1" /> Retour
             </Button>
           )}
-          {effectiveStep < WIZARD_TOTAL - 1 ? (
+          {step < totalSteps - 1 ? (
             <Button onClick={goNext} disabled={!canNext()}>
               Suivant <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
-            <Button onClick={finish}>
+            <Button onClick={finish} disabled={!canNext()}>
               <Check className="h-4 w-4 mr-1" /> Terminer
             </Button>
           )}
@@ -601,31 +657,386 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+/* ── Phase 3 : ClusterTutorial ───────────────────────────────────────────── */
+
+type TutorialStep = "confirm" | "add" | "done";
+
+function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
+  const prefs = getPreferences();
+  const cluster = prefs.cluster;
+  const config = CLUSTER_MAP[cluster];
+  // Personnalisé + stock au kilo = même comportement que le cluster boucherie.
+  const sellsByWeight =
+    cluster === "weight" || (cluster === "personnalise" && prefs.customUnitType === "weight");
+
+  const [subStep, setSubStep] = useState<TutorialStep>("confirm");
+  const [addedCount, setAddedCount] = useState(0);
+  const [loadingDemo, setLoadingDemo] = useState(false);
+
+  // Formulaire produit
+  const [productName, setProductName] = useState("");
+  const [productPrice, setProductPrice] = useState("");
+  const [productStock, setProductStock] = useState("");
+  const [productCategory, setProductCategory] = useState("");
+
+  // Configuration du tutoriel selon le cluster
+  const tutorialConfig = getTutorialConfig(cluster, prefs.subCategory);
+
+  async function handleLoadDemo() {
+    setLoadingDemo(true);
+    try {
+      const count = await loadDemoData(cluster, prefs.subCategory);
+      setAddedCount((c) => c + count);
+      toast.success(`${count} produits de démo chargés`);
+      setSubStep("done");
+    } catch {
+      toast.error("Erreur lors du chargement");
+    } finally {
+      setLoadingDemo(false);
+    }
+  }
+
+  async function handleAddProduct() {
+    if (!productName.trim() || !productPrice.trim()) return;
+
+    await addProduct({
+      name: productName.trim(),
+      barcode: "",
+      price: Number(productPrice) || 0,
+      cost: 0,
+      category: productCategory.trim() || tutorialConfig.defaultCategory,
+      stock: Number(productStock) || 0,
+      type: tutorialConfig.isService ? "service" : "product",
+      unit: "piece",
+      unitType: sellsByWeight ? "weight" : "unit",
+      weightUnit: sellsByWeight ? "kg" : undefined,
+      serialNumber: undefined,
+      expiryDate: undefined,
+    });
+    setAddedCount((c) => c + 1);
+    setProductName("");
+    setProductPrice("");
+    setProductStock("");
+    setProductCategory("");
+  }
+
+  // Confirmation
+  if (subStep === "confirm") {
+    return (
+      <Dialog open>
+        <DialogContent
+          showCloseButton={false}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          className="sm:max-w-md"
+        >
+          <DialogTitle className="sr-only">Votre boutique est prête</DialogTitle>
+          <div className="min-h-[300px] flex flex-col items-center justify-center text-center space-y-6 py-4">
+            {/* Visuel « Boutique prête » de la marque (logo/Boutique prete.png, réduit
+                en webp), à la place de l'icône confettis seule. */}
+            <motion.img
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 15 }}
+              src="/shop-ready.webp"
+              alt="Boutique prête"
+              width={560}
+              height={373}
+              className="w-full max-w-[280px] h-auto rounded-xl"
+            />
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold">Votre boutique est prête !</h2>
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                {tutorialConfig.welcomeMessage}
+              </p>
+            </div>
+            <Button size="lg" className="gap-2" onClick={() => setSubStep("add")}>
+              {tutorialConfig.ctaLabel} <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Ajout de produits
+  if (subStep === "add") {
+    return (
+      <Dialog open>
+        <DialogContent
+          showCloseButton={false}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          className="sm:max-w-md"
+        >
+          <DialogTitle className="sr-only">{tutorialConfig.addTitle}</DialogTitle>
+          <div className="space-y-4 py-2">
+            <StepShell
+              icon={Package}
+              title={tutorialConfig.addTitle}
+              description={tutorialConfig.addDescription}
+            >
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="tut-name">{tutorialConfig.productLabel}</Label>
+                  <Input
+                    id="tut-name"
+                    value={productName}
+                    onChange={(e) => setProductName(e.target.value)}
+                    placeholder={tutorialConfig.productPlaceholder}
+                    className="h-11"
+                    autoFocus
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="tut-price">Prix de vente (FCFA)</Label>
+                    <Input
+                      id="tut-price"
+                      inputMode="numeric"
+                      value={productPrice}
+                      onChange={(e) => setProductPrice(e.target.value.replace(/\D/g, ""))}
+                      placeholder="0"
+                      className="h-11"
+                    />
+                  </div>
+                  {!tutorialConfig.isService && (
+                    <div>
+                      <Label htmlFor="tut-stock">{sellsByWeight ? "Stock (kg)" : "Stock"}</Label>
+                      <Input
+                        id="tut-stock"
+                        inputMode="numeric"
+                        value={productStock}
+                        onChange={(e) => setProductStock(e.target.value.replace(/\D/g, ""))}
+                        placeholder="0"
+                        className="h-11"
+                      />
+                    </div>
+                  )}
+                </div>
+                {tutorialConfig.showCategory && (
+                  <div>
+                    <Label htmlFor="tut-cat">Catégorie</Label>
+                    <Input
+                      id="tut-cat"
+                      value={productCategory}
+                      onChange={(e) => setProductCategory(e.target.value)}
+                      placeholder={tutorialConfig.categoryPlaceholder}
+                      className="h-11"
+                    />
+                  </div>
+                )}
+              </div>
+            </StepShell>
+
+            {addedCount > 0 && (
+              <p className="text-center text-sm text-primary font-medium">
+                ✓ {addedCount} {addedCount === 1 ? "produit ajouté" : "produits ajoutés"}
+              </p>
+            )}
+
+            <Button
+              variant="default"
+              size="lg"
+              className="w-full gap-2"
+              onClick={handleLoadDemo}
+              disabled={loadingDemo}
+            >
+              {loadingDemo ? (
+                "Chargement…"
+              ) : (
+                <>
+                  <Package className="h-4 w-4" /> Charger les produits de démo
+                </>
+              )}
+            </Button>
+
+            <div className="flex items-center justify-between gap-2 border-t pt-4">
+              <Button variant="ghost" size="sm" onClick={() => setSubStep("done")}>
+                {addedCount > 0 ? "J'ai terminé" : "Passer"}
+              </Button>
+              <Button
+                onClick={handleAddProduct}
+                disabled={!productName.trim() || !productPrice.trim()}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Ajouter
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Done
+  return (
+    <Dialog open>
+      <DialogContent
+        showCloseButton={false}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        className="sm:max-w-md"
+      >
+        <DialogTitle className="sr-only">Tout est prêt</DialogTitle>
+        <div className="min-h-[300px] flex flex-col items-center justify-center text-center space-y-6 py-4">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+            className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10"
+          >
+            <PartyPopper className="h-8 w-8 text-primary" />
+          </motion.div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold">Tout est prêt !</h2>
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+              {addedCount > 0
+                ? `${addedCount} ${addedCount === 1 ? "produit enregistré" : "produits enregistrés"}. Votre boutique "${prefs.workspaceName}" est prête à vendre.`
+                : `Votre boutique "${prefs.workspaceName}" est configurée. Vous pourrez ajouter vos produits plus tard.`}
+            </p>
+          </div>
+          <Button size="lg" className="gap-2" onClick={onComplete}>
+            {tutorialConfig.finalCtaLabel} <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Configuration du tutoriel par cluster ───────────────────────────────── */
+
+function getTutorialConfig(cluster: ClusterId, subCategory?: SubCategory) {
+  const base = {
+    defaultCategory: "",
+    productLabel: "Nom du produit",
+    productPlaceholder: "Ex : Regab",
+    categoryPlaceholder: "Ex : Boissons",
+    showCategory: true,
+    isService: false,
+  };
+
+  switch (cluster) {
+    case "restaurant":
+      return {
+        ...base,
+        welcomeMessage: "Maintenant, configurons votre espace de vente. Commençons par votre menu.",
+        ctaLabel: "Créer mon menu",
+        addTitle: "Ajoutez un plat ou une boisson",
+        addDescription: "Nom, prix et catégorie. Vous pourrez en ajouter d'autres ensuite.",
+        productLabel: "Nom du plat ou de la boisson",
+        productPlaceholder: "Ex : Poulet braisé",
+        categoryPlaceholder: "Ex : Plats, Boissons, Desserts",
+        finalCtaLabel: "Enregistrer ma première commande",
+      };
+    case "bar":
+      return {
+        ...base,
+        welcomeMessage: "Ajoutez vos boissons pour commencer à encaisser.",
+        ctaLabel: "Ajouter mes boissons",
+        addTitle: "Ajoutez une boisson",
+        addDescription: "Nom, prix et catégorie (Bières, Vins, Spiritueux...).",
+        productLabel: "Nom de la boisson",
+        productPlaceholder: "Ex : Regab 33cl",
+        categoryPlaceholder: "Ex : Bières, Vins, Spiritueux",
+        finalCtaLabel: "Commencer à vendre",
+      };
+    case "service":
+      return {
+        ...base,
+        welcomeMessage: "Ajoutez les prestations que vous proposez à vos clients.",
+        ctaLabel: "Ajouter mes prestations",
+        addTitle: "Ajoutez une prestation",
+        addDescription: "Nom et prix de la prestation.",
+        productLabel: "Nom de la prestation",
+        productPlaceholder: "Ex : Coupe homme",
+        showCategory: false,
+        isService: true,
+        finalCtaLabel: "Enregistrer ma première prestation",
+      };
+    case "clothing":
+      return {
+        ...base,
+        welcomeMessage: "Ajoutez vos vêtements et accessoires.",
+        ctaLabel: "Ajouter mes produits",
+        addTitle: "Ajoutez un vêtement ou accessoire",
+        addDescription: "Nom, prix et catégorie.",
+        productLabel: "Nom du produit",
+        productPlaceholder: "Ex : Pagne wax",
+        categoryPlaceholder: "Ex : Vêtements, Accessoires, Chaussures",
+        finalCtaLabel: "Faire ma première vente",
+      };
+    case "weight":
+      return {
+        ...base,
+        welcomeMessage: "Enregistrez vos produits et leurs prix au kilogramme.",
+        ctaLabel: "Ajouter mes produits",
+        addTitle: "Ajoutez un produit",
+        addDescription: "Nom, prix au kg et stock initial.",
+        productLabel: "Nom du produit",
+        productPlaceholder: "Ex : Viande de bœuf",
+        categoryPlaceholder: "Ex : Viandes, Poissons",
+        finalCtaLabel: "Faire ma première vente",
+      };
+    case "magasin":
+      return {
+        ...base,
+        welcomeMessage: `Ajoutez vos produits${subCategory ? ` (${SUB_CATEGORY_LABELS[subCategory]?.label})` : ""}.`,
+        ctaLabel: "Ajouter mes produits",
+        addTitle: "Ajoutez un produit",
+        addDescription: "Nom, prix et stock.",
+        productLabel: "Nom du produit",
+        productPlaceholder: subCategory === "electronics" ? "Ex : iPhone 15" : "Ex : Canapé cuir",
+        categoryPlaceholder: "Ex : Électronique, Meubles",
+        finalCtaLabel: "Faire ma première vente",
+      };
+    case "retail":
+    default:
+      return {
+        ...base,
+        welcomeMessage: "Ajoutez les produits que vous avez actuellement en boutique.",
+        ctaLabel: "Ajouter mes produits",
+        addTitle: "Ajoutez un produit",
+        addDescription: "Nom, prix de vente et stock initial.",
+        productLabel: "Nom du produit",
+        productPlaceholder: "Ex : Regab, Sucre, Huile",
+        categoryPlaceholder: "Ex : Alimentation, Boissons",
+        finalCtaLabel: "Faire ma première vente",
+      };
+  }
+}
+
 /* ── Composant principal ──────────────────────────────────────────────────── */
 
 export function Onboarding() {
   const qc = useQueryClient();
-  const [phase, setPhase] = useState<"wizard" | "guide" | "done">("done");
+  const [phase, setPhase] = useState<OnboardingPhase>("done");
 
   useEffect(() => {
     const prefs = getPreferences();
     if (!prefs.onboarded) {
-      setPhase("wizard");
+      setPhase("welcome");
     } else if (!prefs.onboardingCompleted) {
-      setPhase("guide");
+      setPhase("tutorial");
     }
   }, []);
 
-  function handleWizardComplete() {
-    savePreferences({ onboardingCompleted: true });
-    qc.invalidateQueries({ queryKey: ["preferences"] });
-    setPhase("guide");
+  function handleWelcomeNext() {
+    setPhase("wizard");
   }
 
-  function handleGuideComplete() {
+  function handleWizardComplete() {
+    setPhase("tutorial");
+  }
+
+  function handleTutorialComplete() {
     savePreferences({ onboardingCompleted: true });
     qc.invalidateQueries({ queryKey: ["preferences"] });
     setPhase("done");
+  }
+
+  if (phase === "welcome") {
+    return <WelcomeScreen onNext={handleWelcomeNext} />;
   }
 
   if (phase === "wizard") {
@@ -636,8 +1047,8 @@ export function Onboarding() {
     );
   }
 
-  if (phase === "guide") {
-    return <FeatureGuide onClose={handleGuideComplete} />;
+  if (phase === "tutorial") {
+    return <ClusterTutorial onComplete={handleTutorialComplete} />;
   }
 
   return null;
@@ -668,15 +1079,6 @@ function StepShell({
         </div>
       </div>
       <div className="space-y-2">{children}</div>
-    </div>
-  );
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{children}</span>
     </div>
   );
 }

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none">
+  <circle cx="200" cy="150" r="130" fill="#059669" opacity="0.06"/>
+  <!-- Chart bars -->
+  <rect x="100" y="180" width="30" height="60" rx="4" fill="#059669" opacity="0.15"/>
+  <rect x="145" y="140" width="30" height="100" rx="4" fill="#059669" opacity="0.25"/>
+  <rect x="190" y="110" width="30" height="130" rx="4" fill="#059669" opacity="0.35"/>
+  <rect x="235" y="155" width="30" height="85" rx="4" fill="#059669" opacity="0.2"/>
+  <rect x="280" y="125" width="30" height="115" rx="4" fill="#059669" opacity="0.45"/>
+  <!-- Trend line -->
+  <polyline points="115,175 160,135 205,105 250,150 295,120" stroke="#059669" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Dots on trend line -->
+  <circle cx="115" cy="175" r="4" fill="#059669"/>
+  <circle cx="160" cy="135" r="4" fill="#059669"/>
+  <circle cx="205" cy="105" r="4" fill="#059669"/>
+  <circle cx="250" cy="150" r="4" fill="#059669"/>
+  <circle cx="295" cy="120" r="4" fill="#059669"/>
+  <!-- Baseline -->
+  <line x1="85" y1="250" x2="320" y2="250" stroke="#059669" stroke-width="1.5" opacity="0.2"/>
+  <!-- Percentage badge -->
+  <rect x="310" y="90" width="60" height="28" rx="14" fill="#059669"/>
+  <text x="340" y="109" text-anchor="middle" fill="white" font-size="13" font-weight="700" font-family="system-ui">+24%</text>
+</svg>

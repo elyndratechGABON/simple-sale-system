@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { usePreferences } from "@/hooks/use-preferences";
+import { getSetting } from "@/lib/db";
 import { TopNav } from "@/components/Nav";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 
@@ -16,6 +18,13 @@ export function Header() {
   const clicks = useRef(0);
   const lastClick = useRef(0);
 
+  // Logo posé par le commerçant (Paramètres › Logo), sinon l'icône de l'application.
+  const { data: shopLogo } = useQuery({
+    queryKey: ["shop_logo"],
+    queryFn: () => getSetting<string>("shop_logo"),
+    staleTime: 60_000,
+  });
+
   function onLogoClick() {
     const now = Date.now();
     if (now - lastClick.current > HIDDEN_ACCESS_WINDOW_MS) clicks.current = 0;
@@ -28,16 +37,20 @@ export function Header() {
   }
 
   return (
-    <header className="border-b bg-card sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
+    <header className="sticky top-0 z-20 border-b bg-card/85 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/75 pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         <Link
           to="/pos"
-          className="flex items-center gap-2 font-bold text-lg min-w-0"
+          className="inline-flex items-center gap-3 font-bold text-lg min-w-0"
           onClick={onLogoClick}
         >
-          <img src="/icon-192.png" alt="ECAISSE" className="h-8 w-8 shrink-0" />
-          {/* Le nom du commerce tient désormais sur téléphone : la navigation est partie
-              en bas, l'en-tête n'a plus qu'à porter la marque. */}
+          <span className="inline-flex h-20 w-20 shrink-0 items-center justify-center">
+            <img
+              src={shopLogo || "/logo-header.png"}
+              alt={workspaceName || "ECAISSE"}
+              className="h-full w-full object-contain"
+            />
+          </span>
           <span className="truncate text-foreground">{workspaceName}</span>
         </Link>
         {/* Sous `lg`, la navigation vit dans `BottomNav` — cf. src/components/Nav.tsx. */}

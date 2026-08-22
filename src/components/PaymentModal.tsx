@@ -5,7 +5,7 @@
 //
 // Le numéro WhatsApp du service client est le même que dans SuspendedScreen.tsx.
 import { useState } from "react";
-import { Smartphone, Copy, Check, MessageCircle, ExternalLink } from "lucide-react";
+import { Smartphone, Copy, Check, MessageCircle, ExternalLink, CreditCard } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import type { PlanInfo } from "@/components/SubscriptionPlanCard";
 
 const SUPPORT_WHATSAPP = "https://wa.me/241076505254";
 const SUPPORT_PHONE = "241076505254";
@@ -28,9 +30,16 @@ interface PaymentModalProps {
   onOpenChange: (open: boolean) => void;
   storeName: string;
   ownerName: string;
+  selectedPlan?: PlanInfo | null;
 }
 
-export function PaymentModal({ open, onOpenChange, storeName, ownerName }: PaymentModalProps) {
+export function PaymentModal({
+  open,
+  onOpenChange,
+  storeName,
+  ownerName,
+  selectedPlan,
+}: PaymentModalProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [reference, setReference] = useState("");
   const [copied, setCopied] = useState(false);
@@ -43,14 +52,18 @@ export function PaymentModal({ open, onOpenChange, storeName, ownerName }: Payme
   }
 
   function buildWhatsappUrl(): string {
+    const planLine = selectedPlan
+      ? `Plan : ${selectedPlan.name} — ${selectedPlan.price.toLocaleString("fr-FR")} FCFA / ${selectedPlan.period}`
+      : "";
     const msg = [
-      `Salut, je souhaite renouveler mon abonnement.`,
+      `Salut, je souhaite ${selectedPlan ? "souscrire à" : "renouveler"} mon abonnement.`,
+      planLine,
       ``,
       `Boutique : ${storeName}`,
       `Propriétaire : ${ownerName}`,
       reference ? `Référence Airtel Money : ${reference}` : ``,
       ``,
-      `Merci de confirmer la prolongation.`,
+      `Merci de confirmer.`,
     ]
       .filter(Boolean)
       .join("\n");
@@ -72,7 +85,7 @@ export function PaymentModal({ open, onOpenChange, storeName, ownerName }: Payme
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Smartphone className="h-5 w-5" />
-            Renouveler l'abonnement
+            {selectedPlan ? `Souscrire — Plan ${selectedPlan.name}` : "Renouveler l'abonnement"}
           </DialogTitle>
           <DialogDescription>
             Étape {step}/3 —{" "}
@@ -83,6 +96,21 @@ export function PaymentModal({ open, onOpenChange, storeName, ownerName }: Payme
                 : "Confirmez via WhatsApp"}
           </DialogDescription>
         </DialogHeader>
+
+        {selectedPlan && step === 1 && (
+          <div className="rounded-lg border bg-accent/50 p-3 flex items-center gap-3">
+            <CreditCard className="h-5 w-5 text-primary shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">
+                {selectedPlan.name} — {selectedPlan.price.toLocaleString("fr-FR")} FCFA /{" "}
+                {selectedPlan.period}
+              </p>
+              <Badge variant="secondary" className="mt-1 text-xs">
+                {selectedPlan.devices} appareils
+              </Badge>
+            </div>
+          </div>
+        )}
 
         {step === 1 && (
           <div className="space-y-4">
@@ -136,6 +164,15 @@ export function PaymentModal({ open, onOpenChange, storeName, ownerName }: Payme
           <div className="space-y-4">
             <div className="rounded-lg border p-4 text-sm space-y-2">
               <p className="font-medium">Récapitulatif :</p>
+              {selectedPlan && (
+                <p className="text-muted-foreground">
+                  Plan :{" "}
+                  <span className="text-foreground font-medium">
+                    {selectedPlan.name} — {selectedPlan.price.toLocaleString("fr-FR")} FCFA /{" "}
+                    {selectedPlan.period}
+                  </span>
+                </p>
+              )}
               <p className="text-muted-foreground">
                 Boutique : <span className="text-foreground font-medium">{storeName}</span>
               </p>

@@ -8,40 +8,31 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Check,
   ChefHat,
   CupSoda,
   Download,
   FolderOpen,
   Info,
   KeyRound,
-  MapPin,
-  Palette,
+  MonitorSmartphone,
   Pencil,
-  Phone,
   Plus,
+  QrCode,
   Save,
   Scissors,
   ShoppingBag,
   Shirt,
+  Sparkles,
   Store,
   Trash2,
   Upload,
-  User,
   Users,
   Utensils,
   Weight,
   Wrench,
   X,
 } from "lucide-react";
-import {
-  ACTIVE_CLUSTERS,
-  applyTheme,
-  PRESET_HUES,
-  savePreferences,
-  swatchColor,
-  type Preferences,
-} from "@/lib/settings";
+import { ACTIVE_CLUSTERS, applyTheme, savePreferences, type Preferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import {
@@ -60,8 +51,11 @@ import {
   type BackupSummary,
 } from "@/lib/exports/json";
 import { setPin, verifyPin } from "@/lib/pin";
+import { extractLogoHue } from "@/lib/logo-colors";
 import type { DatabaseSnapshot } from "@/lib/db";
 import {
+  getSetting,
+  setSetting,
   getShopProfile,
   purgeAllData,
   listClients,
@@ -70,8 +64,10 @@ import {
   deleteClient,
   type Client,
 } from "@/lib/db";
-import { deleteShopRemote, resetGatekeeper } from "@/lib/gatekeeper";
+import { deleteShopRemote, getAccountQuota, resetGatekeeper } from "@/lib/gatekeeper";
+import { DevicePairingDialog } from "@/components/DevicePairingDialog";
 import { ShopCard } from "@/components/ShopCard";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -129,11 +125,11 @@ function SettingsPage() {
 
       <InstallCard />
       <ShopCard />
-      <WorkspaceCard />
+      <LogoCard />
       <BusinessCard />
+      <DevicesCard />
       {tablesEnabled && <TablesCard />}
       <ClientsCard />
-      <ColorCard />
       <DirectoryCard />
       <BackupCard />
       <PinCard />
@@ -159,6 +155,7 @@ const ICON_MAP: Record<string, typeof Store> = {
   Shirt,
   Weight,
   Wrench,
+  Sparkles,
 };
 
 function resolveIcon(name: string): typeof Store {
@@ -167,7 +164,9 @@ function resolveIcon(name: string): typeof Store {
 
 function BusinessCard() {
   const qc = useQueryClient();
-  const { cluster, tablesEnabled } = usePreferences();
+  const { cluster, tablesEnabled, customDomain } = usePreferences();
+  const clusterConfig = ACTIVE_CLUSTERS.find((c) => c.id === cluster);
+  const ClusterIcon = clusterConfig ? resolveIcon(clusterConfig.icon) : Store;
 
   function commit(patch: Partial<Preferences>) {
     savePreferences(patch);
@@ -185,18 +184,20 @@ function BusinessCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          {ACTIVE_CLUSTERS.map((c) => (
-            <TypeOption
-              key={c.id}
-              selected={cluster === c.id}
-              onClick={() => commit({ cluster: c.id })}
-              icon={resolveIcon(c.icon)}
-              title={c.label.split("/")[0].trim()}
-              description={c.description}
-            />
-          ))}
-        </div>
+        {clusterConfig && (
+          <div className="flex items-center gap-3 rounded-xl border bg-accent/50 p-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <ClusterIcon className="h-5 w-5 text-primary" />
+            </span>
+            <div>
+              <p className="font-semibold">{clusterConfig.label.split("/")[0].trim()}</p>
+              {cluster === "personnalise" && customDomain && (
+                <p className="text-sm font-medium text-foreground">{customDomain}</p>
+              )}
+              <p className="text-sm text-muted-foreground">{clusterConfig.description}</p>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
           <div>
@@ -220,46 +221,182 @@ function BusinessCard() {
   );
 }
 
-/** Bouton de choix du type de commerce, dans Paramètres. */
-function TypeOption({
-  selected,
-  onClick,
-  icon: Icon,
-  title,
-  description,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  icon: typeof Store;
-  title: string;
-  description: string;
-}) {
+/**
+ * Appareils du compte marchand : quota renvoyé par le dernier handshake et QR
+ * d'appairage pour rattacher un nouvel écran. Le bouton n'ouvre le dialogue que
+ * lorsque l'appareil connaît un compte (créé ou rejoint à l'onboarding).
+ */
+function DevicesCard() {
+  const [pairingOpen, setPairingOpen] = useState(false);
+  const { data: profile } = useQuery({
+    queryKey: ["shop_profile"],
+    queryFn: getShopProfile,
+    staleTime: 60_000,
+  });
+  const { data: quota } = useQuery({
+    queryKey: ["account_quota"],
+    queryFn: getAccountQuota,
+    staleTime: 60_000,
+  });
+
+  const hasAccount = Boolean(profile?.accountPhone && profile.accountPassword);
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        "flex items-start gap-3 rounded-xl border p-3 text-left transition-all",
-        selected
-          ? "border-primary bg-accent ring-2 ring-primary ring-offset-1"
-          : "bg-card hover:border-primary hover:bg-accent",
-      )}
-    >
-      <span
-        className={cn(
-          "mt-0.5 rounded-lg p-2",
-          selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <MonitorSmartphone className="h-4 w-4" /> Appareils
+        </CardTitle>
+        <CardDescription>
+          {hasAccount
+            ? "Rattachez une deuxième ou troisième caisse au même compte : scannez le code QR sur le nouvel écran."
+            : "Rejoignez un compte marchand pour partager votre abonnement entre plusieurs caisses."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {quota && (
+          <div className="flex items-center justify-between rounded-lg border bg-accent/50 px-3 py-2">
+            <span className="text-sm text-muted-foreground">Places utilisées</span>
+            <Badge
+              variant={quota.deviceCount >= quota.maxDevices ? "destructive" : "secondary"}
+              className="tabular-nums"
+            >
+              {quota.deviceCount} / {quota.maxDevices}
+            </Badge>
+          </div>
         )}
-      >
-        <Icon className="h-5 w-5" />
-      </span>
-      <span>
-        <span className="block font-semibold">{title}</span>
-        <span className="block text-sm text-muted-foreground">{description}</span>
-      </span>
-      {selected && <Check className="ml-auto mt-1 h-5 w-5 shrink-0 text-primary" />}
-    </button>
+        <Button onClick={() => setPairingOpen(true)} disabled={!hasAccount}>
+          <QrCode className="h-4 w-4 mr-2" />
+          Ajouter un appareil
+        </Button>
+      </CardContent>
+
+      <DevicePairingDialog open={pairingOpen} onOpenChange={setPairingOpen} />
+    </Card>
+  );
+}
+
+/**
+ * Logo de la boutique : l'image choisie remplace l'icône de l'application à côté du nom,
+ * dans l'en-tête. Stockée en dataURL (IndexedDB) après réduction à 256 px — une image
+ * de plusieurs mégaoctets ne doit ni gonfler la base, ni ralentir l'en-tête.
+ */
+const SETTING_SHOP_LOGO = "shop_logo";
+
+async function fileToLogoDataUrl(
+  file: File,
+  max = 256,
+): Promise<{ dataUrl: string; img: HTMLImageElement }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Image illisible"));
+      img.src = url;
+    });
+    const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const width = Math.max(1, Math.round(img.naturalWidth * scale));
+    const height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d")?.drawImage(img, 0, 0, width, height);
+    return { dataUrl: canvas.toDataURL("image/webp", 0.85), img };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function LogoCard() {
+  const qc = useQueryClient();
+  const { data: shopLogo } = useQuery({
+    queryKey: ["shop_logo"],
+    queryFn: () => getSetting<string>(SETTING_SHOP_LOGO),
+  });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    try {
+      const { dataUrl, img } = await fileToLogoDataUrl(file);
+      await setSetting(SETTING_SHOP_LOGO, dataUrl);
+      qc.invalidateQueries({ queryKey: ["shop_logo"] });
+      // Le logo teinte l'interface : la couleur dominante devient le primaire, sauf si
+      // le logo est monochrome (aucune teinte exploitable — on ne change alors rien).
+      const hue = extractLogoHue(img);
+      if (hue !== null) {
+        applyTheme(hue);
+        savePreferences({ hue });
+        qc.invalidateQueries({ queryKey: ["preferences"] });
+        toast.success("Logo appliqué — couleurs de l'interface adaptées");
+      } else {
+        toast.success("Logo de la boutique mis à jour");
+      }
+    } catch {
+      toast.error("Impossible d'utiliser cette image.");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function handleRemove() {
+    await setSetting(SETTING_SHOP_LOGO, null);
+    qc.invalidateQueries({ queryKey: ["shop_logo"] });
+    toast.success("Logo retiré — icône de l'application restaurée");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Upload className="h-4 w-4" /> Logo de la boutique
+        </CardTitle>
+        <CardDescription>
+          Remplace l'icône de l'application à côté du nom de votre boutique, en haut de l'écran.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border bg-muted/30 p-1">
+            {shopLogo ? (
+              <img src={shopLogo} alt="Logo actuel" className="h-full w-full object-contain" />
+            ) : (
+              <img
+                src="/logo-header.png"
+                alt="Logo par défaut"
+                className="h-full w-full object-contain"
+              />
+            )}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => inputRef.current?.click()} disabled={busy}>
+              <Upload className="h-4 w-4 mr-2" />
+              {busy ? "Chargement…" : shopLogo ? "Changer le logo" : "Choisir un logo"}
+            </Button>
+            {shopLogo && (
+              <Button variant="outline" onClick={handleRemove}>
+                <Trash2 className="h-4 w-4 mr-2" /> Retirer
+              </Button>
+            )}
+          </div>
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void handleFile(e)}
+        />
+        <p className="text-xs text-muted-foreground">
+          Image carrée conseillée — réduite à 256 px et stockée sur cet appareil.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -322,94 +459,6 @@ function InstallCard() {
           </DialogHeader>
         </DialogContent>
       </Dialog>
-    </Card>
-  );
-}
-
-function WorkspaceCard() {
-  const qc = useQueryClient();
-  const prefs = usePreferences();
-  const [name, setName] = useState(prefs.workspaceName);
-  const [phone, setPhone] = useState(prefs.phone);
-  const [quarter, setQuarter] = useState(prefs.quarter);
-  const [ownerName, setOwnerName] = useState(prefs.ownerName);
-
-  // `prefs` arrive après montage (localStorage n'est pas lisible au rendu serveur) :
-  // sans cette resynchronisation, les champs resteraient bloqués sur les valeurs par défaut.
-  useEffect(() => setName(prefs.workspaceName), [prefs.workspaceName]);
-  useEffect(() => setPhone(prefs.phone), [prefs.phone]);
-  useEffect(() => setQuarter(prefs.quarter), [prefs.quarter]);
-  useEffect(() => setOwnerName(prefs.ownerName), [prefs.ownerName]);
-
-  function save() {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      toast.error("Le nom ne peut pas être vide");
-      return;
-    }
-    savePreferences({
-      workspaceName: trimmed,
-      phone: phone.trim(),
-      quarter: quarter.trim(),
-      ownerName: ownerName.trim(),
-    });
-    qc.invalidateQueries({ queryKey: ["preferences"] });
-    toast.success("Enregistré");
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Store className="h-4 w-4" /> Espace de travail
-        </CardTitle>
-        <CardDescription>Affiché dans l'en-tête et en tête des documents exportés.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="space-y-2">
-          <div>
-            <Label htmlFor="ws-name">Nom de l'entreprise</Label>
-            <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="ws-phone" className="flex items-center gap-1.5">
-              <Phone className="h-3.5 w-3.5" /> Téléphone
-            </Label>
-            <Input
-              id="ws-phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Ex : +243 81 234 5678"
-            />
-          </div>
-          <div>
-            <Label htmlFor="ws-quarter" className="flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5" /> Quartier
-            </Label>
-            <Input
-              id="ws-quarter"
-              value={quarter}
-              onChange={(e) => setQuarter(e.target.value)}
-              placeholder="Ex : Commune de la Gombe"
-            />
-          </div>
-          <div>
-            <Label htmlFor="ws-owner" className="flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5" /> Nom du propriétaire
-            </Label>
-            <Input
-              id="ws-owner"
-              value={ownerName}
-              onChange={(e) => setOwnerName(e.target.value)}
-              placeholder="Ex : Marie Kabongo"
-            />
-          </div>
-        </div>
-        <Button onClick={save}>
-          <Save className="h-4 w-4 mr-2" /> Enregistrer
-        </Button>
-      </CardContent>
     </Card>
   );
 }
@@ -681,52 +730,6 @@ function ClientsCard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ColorCard() {
-  const qc = useQueryClient();
-  const prefs = usePreferences();
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Palette className="h-4 w-4" /> Couleur principale
-        </CardTitle>
-        <CardDescription>
-          Boutons, totaux et graphiques. Le changement est immédiat et conservé.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-5 sm:grid-cols-9 gap-3">
-          {PRESET_HUES.map((p) => (
-            <button
-              key={p.hue}
-              type="button"
-              aria-label={p.label}
-              aria-pressed={prefs.hue === p.hue}
-              onClick={() => {
-                // Appliqué avant d'être enregistré : l'utilisateur voit le résultat
-                // sur l'écran réel, pas sur la pastille.
-                applyTheme(p.hue);
-                savePreferences({ hue: p.hue });
-                qc.invalidateQueries({ queryKey: ["preferences"] });
-              }}
-              className={cn(
-                "aspect-square rounded-xl border-2 transition-transform flex items-center justify-center",
-                prefs.hue === p.hue
-                  ? "border-foreground scale-105"
-                  : "border-transparent hover:scale-105",
-              )}
-              style={{ backgroundColor: swatchColor(p.hue) }}
-            >
-              {prefs.hue === p.hue && <Check className="h-5 w-5 text-white drop-shadow" />}
-            </button>
-          ))}
-        </div>
       </CardContent>
     </Card>
   );

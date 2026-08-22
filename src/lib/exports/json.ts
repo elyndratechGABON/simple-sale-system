@@ -44,7 +44,6 @@ const productSchema = z.object({
   category,
   barcode: z.string().nullable().optional(),
   type: z.enum(["product", "service"]).optional(),
-  hasConsignment: z.boolean().optional(),
   serialNumber: z.string().optional(),
   unit: z.enum(["piece", "meter", "liter"]).optional(),
   unitType: z.enum(["unit", "weight"]).optional(),
@@ -113,17 +112,6 @@ const clientSchema = z.object({
   ...syncFields,
 });
 
-const consignmentTransactionSchema = z.object({
-  id: z.string(),
-  kind: z.enum(["deposit", "return"]),
-  product_id: z.string(),
-  deposit_price: z.number(),
-  client_name: z.string().optional(),
-  sale_id: z.string().optional(),
-  quantity: z.number(),
-  ...syncFields,
-});
-
 const backupSchema = z.object({
   format: z.literal("caisse-pos-backup"),
   version: z.number(),
@@ -136,7 +124,6 @@ const backupSchema = z.object({
   // `subscriptions` n'existe qu'en v4 : absent d'un fichier v3, lu comme liste vide.
   subscriptions: z.array(subscriptionSchema).optional(),
   product_expenses: z.array(productExpenseSchema).optional(),
-  consignment_transactions: z.array(consignmentTransactionSchema).optional(),
   clients: z.array(clientSchema).optional(),
 });
 
@@ -223,7 +210,6 @@ export function parseBackup(text: string): { snapshot: DatabaseSnapshot; summary
       ...normalize(e),
       cost: e.cost ?? 0,
     })),
-    consignment_transactions: (data.consignment_transactions ?? []).map((t) => normalize(t)),
     clients: (data.clients ?? []).map((c) => normalize(c)),
   };
 

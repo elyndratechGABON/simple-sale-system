@@ -21,10 +21,25 @@ export const APP_VERSION = "pos-web-1";
 export const APP_ORIGIN = (import.meta.env.VITE_APP_ORIGIN as string | undefined)?.trim() || "pos";
 
 const SETTING_LOCKED = "gatekeeper_suspended";
+const SETTING_LOCK_REASON = "gatekeeper_lock_reason";
 const SETTING_APPLIED = "gatekeeper_applied_command_ids";
 const SETTING_MESSAGES = "gatekeeper_messages";
+const SETTING_QUOTA = "gatekeeper_account_quota";
+
+/** Places du compte marchand, telles que le serveur les voit au dernier handshake. */
+export interface AccountQuota {
+  maxDevices: number;
+  deviceCount: number;
+}
+
+export async function getAccountQuota(): Promise<AccountQuota | null> {
+  return (await getSetting<AccountQuota>(SETTING_QUOTA)) ?? null;
+}
 
 export type CommandType = "suspend" | "renew" | "broadcast_message";
+
+/** Pourquoi la caisse est bloquée : abonnement suspendu, ou quota d'appareils dépassé. */
+export type LockReason = "suspended" | "device_limit";
 
 export interface AdminCommand {
   id: string;
@@ -32,6 +47,7 @@ export interface AdminCommand {
   payload: {
     new_end_date?: number;
     days?: number;
+    max_devices?: number;
     message_text?: string;
   };
   expires_at: number;
@@ -42,13 +58,19 @@ export interface HandshakeResult {
   ok: boolean;
   sync_allowed: boolean;
   status: "active" | "suspended" | "expired" | "unknown";
-  reason?: "no-profile" | "network" | "error";
+  reason?: "no-profile" | "network" | "error" | "account_password" | "device_limit";
 }
 
 // ── Verrou de suspension (store minimal, synchrone pour useSyncExternalStore) ──────
+// Le motif ET sa raison voyagent ensemble : l'écran de blocage adapte son message
+// (« device_limit » = trop d'appareils sur le compte, pas un défaut de paiement).
 type Listener = () => void;
+interface LockSnapshot {
+  locked: boolean;
+  reason: LockReason | null;
+}
 const lockListeners = new Set<Listener>();
-let lockValue = false;
+let lockValue: LockSnapshot = { locked: false, reason: null };
 
 export function subscribeLock(listener: Listener): () => void {
   lockListeners.add(listener);
@@ -57,19 +79,21 @@ export function subscribeLock(listener: Listener): () => void {
   };
 }
 
-export function getLockSnapshot(): boolean {
+export function getLockSnapshot(): LockSnapshot {
   return lockValue;
 }
 
-function setLock(value: boolean): void {
-  if (lockValue === value) return;
-  lockValue = value;
+function setLock(locked: boolean, reason: LockReason | null): void {
+  if (lockValue.locked === locked && lockValue.reason === reason) return;
+  lockValue = { locked, reason };
   lockListeners.forEach((f) => f());
 }
 
 /** Restaure un éventuel verrou persistant — appelé au démarrage, avant tout handshake. */
 export async function loadLockState(): Promise<void> {
-  setLock(Boolean(await getSetting<boolean>(SETTING_LOCKED)));
+  const locked = Boolean(await getSetting<boolean>(SETTING_LOCKED));
+  const reason = (await getSetting<LockReason>(SETTING_LOCK_REASON)) ?? null;
+  setLock(locked, locked ? (reason ?? "suspended") : null);
 }
 
 // ── Mémoire des ordres appliqués (idempotence) ────────────────────────────────────
@@ -127,16 +151,49 @@ export async function handshake(): Promise<HandshakeResult> {
         app_version: APP_VERSION,
         app_origin: APP_ORIGIN,
         last_applied_command_id: lastApplied,
+        // Identifiants du compte marchand (v3) : le serveur rattache cette caisse au
+        // compte, ou le crée au premier contact avec un essai de 30 jours.
+        ...(profile.accountPhone && profile.accountPassword
+          ? {
+              account_name: profile.accountName ?? "",
+              account_phone: profile.accountPhone,
+              account_password: profile.accountPassword,
+            }
+          : {}),
       }),
     });
+    // Mot de passe erroné : refus net du serveur. On ne retente pas en boucle avec les
+    // mêmes identifiants — l'utilisateur doit les corriger dans Paramètres.
+    if (res.status === 403) {
+      const data = (await res.json().catch(() => null)) as { code?: string } | null;
+      if (data?.code === "account_password") {
+        return { ok: false, sync_allowed: false, status: "unknown", reason: "account_password" };
+      }
+      return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
+    }
     if (!res.ok) return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
 
     const data = (await res.json()) as {
       status: "active" | "suspended" | "expired";
       sync_allowed: boolean;
+      over_limit?: boolean;
       commands: AdminCommand[];
       shop?: { subscription_end_date?: number };
+      account?: { max_devices?: number; device_count?: number };
     };
+
+    // Places du compte : alimente la carte « Appareils » des paramètres. Rien de
+    // bloquant — un serveur ancien sans ce champ laisse la valeur précédente en place.
+    if (
+      typeof data.account?.max_devices === "number" &&
+      Number.isFinite(data.account.max_devices) &&
+      typeof data.account?.device_count === "number"
+    ) {
+      await setSetting(SETTING_QUOTA, {
+        maxDevices: data.account.max_devices,
+        deviceCount: data.account.device_count,
+      } satisfies AccountQuota);
+    }
 
     const nextApplied = [...applied];
     for (const command of data.commands ?? []) {
@@ -155,11 +212,21 @@ export async function handshake(): Promise<HandshakeResult> {
       await setShopExpiry(data.shop.subscription_end_date);
     }
 
+    // Un écran au-delà du quota d'appareils est bloqué comme un suspendu, mais avec sa
+    // propre raison : ce n'est pas un impayé, c'est une place manquante.
+    const overLimit = data.over_limit === true;
     const suspended = data.status === "suspended";
+    const reason: LockReason | null = overLimit ? "device_limit" : suspended ? "suspended" : null;
     await setSetting(SETTING_LOCKED, suspended);
-    setLock(suspended);
+    await setSetting(SETTING_LOCK_REASON, reason);
+    setLock(suspended, reason);
 
-    return { ok: true, sync_allowed: data.sync_allowed !== false, status: data.status };
+    return {
+      ok: true,
+      sync_allowed: data.sync_allowed !== false,
+      status: data.status,
+      reason: overLimit ? "device_limit" : undefined,
+    };
   } catch {
     return { ok: false, sync_allowed: false, status: "unknown", reason: "network" };
   }
@@ -227,5 +294,5 @@ export async function deleteShopRemote(
 
 /** Vide le verrou de suspension retenu en mémoire après une purge (`purgeAllData`). */
 export function resetGatekeeper(): void {
-  setLock(false);
+  setLock(false, null);
 }

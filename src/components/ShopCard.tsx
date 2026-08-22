@@ -1,20 +1,23 @@
-// « Mon établissement » : l'inscription de la boutique auprès de l'orchestrateur (le PC
-// du commerçant). Quatre infos saisies une fois, pré-enregistrées localement, poussées à
-// chaque synchronisation. La licence (30 jours d'essai, puis prolongations) est affichée
-// ici, dans l'attente d'un écran dédié.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+// « Mon établissement » : identité éditable de la boutique (propriétaire, nom,
+// téléphone, quartier), licence et choix d'abonnement. L'enregistrement écrit les DEUX
+// magasins : le profil (IndexedDB, poussé à l'orchestrateur) ET les préférences
+// (localStorage : en-tête, accueil, documents exportés). La synchronisation est
+// automatique ; seul le compte marchand reste non modifiable ici.
 import { useEffect, useState } from "react";
-import { Building2, MapPin, Phone, RefreshCw, UserRound, Wifi } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Building2, MapPin, Phone, Save, UserRound, Users, Wifi, CreditCard } from "lucide-react";
 import { getShopProfile, saveShopProfile, type ShopProfile } from "@/lib/db";
-import { syncNow } from "@/lib/sync";
+import { getPreferences, savePreferences } from "@/lib/settings";
 import { formatDateShort } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { PlanChooser } from "@/components/PlanChooser";
+import { PaymentModal } from "@/components/PaymentModal";
+import type { PlanInfo } from "@/components/SubscriptionPlanCard";
 
 const DAY_MS = 86_400_000;
 
@@ -29,61 +32,53 @@ export function ShopCard() {
     queryFn: getShopProfile,
   });
 
+  // Champs d'identité : préremplis depuis le profil, avec repli sur les préférences
+  // (installations existantes où « Espace de travail » était la seule source saisie).
   const [ownerName, setOwnerName] = useState("");
   const [storeName, setStoreName] = useState("");
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
 
-  // Le profil arrive après montage (IndexedDB n'est pas lisible au rendu serveur) :
-  // resynchroniser les champs à chaque chargement, comme la carte « Espace de travail ».
   useEffect(() => {
-    setOwnerName(profile?.ownerName ?? "");
-    setStoreName(profile?.storeName ?? "");
-    setPhone(profile?.phone ?? "");
-    setLocation(profile?.location ?? "");
+    if (!profile) return;
+    const prefs = getPreferences();
+    setOwnerName(profile.ownerName || prefs.ownerName);
+    setStoreName(profile.storeName || prefs.workspaceName);
+    setPhone(profile.phone || prefs.phone);
+    setLocation(profile.location || prefs.quarter);
   }, [profile]);
 
-  const saveMut = useMutation({
-    mutationFn: async () => {
-      const owner = ownerName.trim();
-      const store = storeName.trim();
-      if (!owner || !store) throw new Error("Le propriétaire et la boutique sont requis.");
-      await saveShopProfile({
-        ownerName: owner,
-        storeName: store,
-        phone: phone.trim() || undefined,
-        location: location.trim() || undefined,
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["shop_profile"] });
-      toast.success(profile ? "Boutique mise à jour" : "Boutique enregistrée · essai de 30 jours");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  async function save() {
+    const trimmedStore = storeName.trim();
+    if (!trimmedStore) {
+      toast.error("Le nom de la boutique ne peut pas être vide");
+      return;
+    }
+    const trimmedOwner = ownerName.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedLocation = location.trim();
+    await saveShopProfile({
+      ownerName: trimmedOwner,
+      storeName: trimmedStore,
+      phone: trimmedPhone,
+      location: trimmedLocation,
+    });
+    savePreferences({
+      workspaceName: trimmedStore,
+      ownerName: trimmedOwner,
+      phone: trimmedPhone,
+      quarter: trimmedLocation,
+    });
+    qc.invalidateQueries({ queryKey: ["shop_profile"] });
+    qc.invalidateQueries({ queryKey: ["preferences"] });
+    toast.success("Établissement enregistré");
+  }
 
-  const syncMut = useMutation({
-    mutationFn: syncNow,
-    onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ["shop_profile"] });
-      if (!r.ok && r.reason === "no-profile") {
-        toast.error("Enregistrez d'abord votre boutique");
-      } else if (!r.ok && r.reason === "network") {
-        toast.error("Serveur injoignable — réessai automatique au prochain contact");
-      } else if (r.ok && r.status === "suspended") {
-        toast.error(
-          "Compte suspendu — la caisse est bloquée tant que l'abonnement n'est pas renouvelé",
-        );
-      } else if (r.ok && r.status === "expired") {
-        toast.error("Abonnement expiré — prolongez pour débloquer la caisse");
-      } else if (r.ok) {
-        toast.success("Synchronisée avec l'orchestrateur");
-      } else {
-        toast.error("Serveur injoignable — réessai automatique au prochain contact");
-      }
-    },
-    onError: () => toast.error("Serveur injoignable"),
-  });
+  const [planChooserOpen, setPlanChooserOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<PlanInfo | null>(null);
+
+  if (!profile) return null;
 
   return (
     <Card>
@@ -92,73 +87,128 @@ export function ShopCard() {
           <Building2 className="h-4 w-4" /> Mon établissement
         </CardTitle>
         <CardDescription>
-          L'inscription envoyée à l'orchestrateur de ce domaine : vos données sont enregistrées sur
-          cet appareil et remontent dès que le service est joignable.
+          Informations de votre boutique, synchronisées avec l'orchestrateur.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="shop-owner">Propriétaire</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="shop-owner" className="flex items-center gap-1.5">
+              <UserRound className="h-3.5 w-3.5" /> Propriétaire
+            </Label>
             <Input
               id="shop-owner"
               value={ownerName}
               onChange={(e) => setOwnerName(e.target.value)}
-              placeholder="Ex : Jean Dupont"
+              placeholder="Ex : Marie Kabongo"
             />
           </div>
-          <div>
-            <Label htmlFor="shop-store">Nom de la boutique</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="shop-name" className="flex items-center gap-1.5">
+              <Building2 className="h-3.5 w-3.5" /> Boutique
+            </Label>
             <Input
-              id="shop-store"
+              id="shop-name"
               value={storeName}
               onChange={(e) => setStoreName(e.target.value)}
-              placeholder="Ex : Snack de la Plage"
+              placeholder="Ex : Alimentation Chez Marie"
             />
           </div>
-          <div>
-            <Label htmlFor="shop-phone">Téléphone</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="shop-phone" className="flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5" /> Téléphone
+            </Label>
             <Input
               id="shop-phone"
+              type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="Ex : 77 123 45 67"
-              inputMode="tel"
+              placeholder="Ex : +241 06 123 456"
             />
           </div>
-          <div>
-            <Label htmlFor="shop-location">Lieu</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="shop-location" className="flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5" /> Quartier
+            </Label>
             <Input
               id="shop-location"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              placeholder="Ex : Derrière l'église, Dakar"
+              placeholder="Ex : Owendo"
             />
           </div>
         </div>
 
+        {profile.accountPhone && (
+          <InfoRow
+            icon={Users}
+            label="Compte marchand"
+            value={`${profile.accountName ?? profile.storeName} · ${profile.accountPhone}`}
+          />
+        )}
+
+        <Button onClick={() => void save()}>
+          <Save className="h-4 w-4 mr-2" /> Enregistrer
+        </Button>
+
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
-            <UserRound className="h-4 w-4 mr-2" />
-            {profile ? "Mettre à jour" : "M'inscrire"}
-          </Button>
-          {profile && <ProfileStatus profile={profile} />}
+          <ProfileStatus profile={profile} />
         </div>
 
-        <div className="rounded-lg border p-3 space-y-3">
-          <Button variant="secondary" onClick={() => syncMut.mutate()} disabled={syncMut.isPending}>
-            <RefreshCw className={cn("h-4 w-4 mr-2", syncMut.isPending && "animate-spin")} />
-            Synchroniser
-          </Button>
+        <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setPlanChooserOpen(true)}>
+              <CreditCard className="h-4 w-4 mr-2" />
+              Changer de plan
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Wifi className="h-3.5 w-3.5" />
-            L'inscription est envoyée à l'orchestrateur de ce domaine, en arrière-plan, dès qu'il
-            est joignable. En dehors, la caisse fonctionne normalement : les données attendent le
-            prochain contact.
+            Synchronisation automatique avec l'orchestrateur. Hors ligne, la caisse fonctionne
+            normalement.
           </p>
         </div>
+
+        <PlanChooser
+          open={planChooserOpen}
+          onOpenChange={setPlanChooserOpen}
+          onSelect={(plan) => {
+            setSelectedPlan(plan);
+            setPaymentOpen(true);
+          }}
+        />
+
+        <PaymentModal
+          open={paymentOpen}
+          onOpenChange={setPaymentOpen}
+          storeName={profile.storeName}
+          ownerName={profile.ownerName}
+          selectedPlan={selectedPlan}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof UserRound;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+        <Icon className="h-4 w-4 text-primary" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="font-medium truncate text-sm">{value}</p>
+      </div>
+    </div>
   );
 }
 

@@ -3,16 +3,18 @@
 //
 // Le composant gère lui-même sa mutation et son invalidation : ses deux hôtes n'ont
 // qu'à le monter dans un `Dialog` et lui donner un `onClose`.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ImagePlus, Trash2 } from "lucide-react";
 import { addProduct, updateProduct, type Category, type Product } from "@/lib/db";
+import { fileToScaledDataUrl } from "@/lib/images";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
-import { toast } from "sonner";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 
 export function ProductForm({
@@ -27,7 +29,7 @@ export function ProductForm({
   defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
-  const { hasSerialNumber, unitType, hasExpiryDate, allowDeposit } = useClusterFeatures();
+  const { hasSerialNumber, unitType, hasExpiryDate } = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [barcode, setBarcode] = useState(editing?.barcode ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
@@ -41,12 +43,30 @@ export function ProductForm({
   const [productType, setProductType] = useState<"product" | "service">(
     editing?.type ?? defaultType ?? "product",
   );
-  const [hasConsignment, setHasConsignment] = useState(editing?.hasConsignment ?? false);
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
   const [unit, setUnit] = useState<"piece" | "meter" | "liter">(editing?.unit ?? "piece");
   const [expiryDate, setExpiryDate] = useState(
     editing?.expiryDate ? new Date(editing.expiryDate).toISOString().split("T")[0] : "",
   );
+  // Photo libre du produit ou service : dataURL webp réduit, purement local.
+  const [photo, setPhoto] = useState<string | undefined>(editing?.photo);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  async function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPhotoBusy(true);
+    try {
+      const { dataUrl } = await fileToScaledDataUrl(file);
+      setPhoto(dataUrl);
+    } catch {
+      toast.error("Impossible d'utiliser cette image.");
+    } finally {
+      setPhotoBusy(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -58,10 +78,10 @@ export function ProductForm({
         category,
         barcode: barcode.trim() || null,
         type: productType,
-        hasConsignment: allowDeposit ? hasConsignment : false,
         serialNumber: serialNumber.trim() || undefined,
         unit: unitType === "mixed" || unitType === "weight" ? unit : undefined,
         expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
+        photo,
       };
       if (!p.name) throw new Error("Nom requis");
       if (p.price <= 0) throw new Error("Prix invalide");
@@ -101,6 +121,44 @@ export function ProductForm({
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
             placeholder="Optionnel"
+          />
+        </div>
+        <div>
+          <Label htmlFor="photo">Photo</Label>
+          <div className="mt-1 flex items-center gap-3">
+            {photo ? (
+              <img src={photo} alt="" className="h-16 w-16 rounded-lg border object-cover" />
+            ) : (
+              <span className="flex h-16 w-16 items-center justify-center rounded-lg border bg-muted/40">
+                <ImagePlus className="h-6 w-6 text-muted-foreground" />
+              </span>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={photoBusy}
+                onClick={() => photoInputRef.current?.click()}
+              >
+                <ImagePlus className="h-4 w-4 mr-1.5" />
+                {photoBusy ? "…" : photo ? "Changer" : "Ajouter une photo"}
+              </Button>
+              {photo && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setPhoto(undefined)}>
+                  <Trash2 className="h-4 w-4 mr-1.5 text-destructive" />
+                  Retirer
+                </Button>
+              )}
+            </div>
+          </div>
+          <input
+            ref={photoInputRef}
+            id="photo"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhoto}
           />
         </div>
         {productType === "service" ? (
@@ -178,20 +236,6 @@ export function ProductForm({
               </Button>
             </div>
           </div>
-          {allowDeposit && (
-            <div className="flex items-end">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="consignment"
-                  checked={hasConsignment}
-                  onCheckedChange={(v) => setHasConsignment(Boolean(v))}
-                />
-                <Label htmlFor="consignment" className="cursor-pointer">
-                  Consigne
-                </Label>
-              </div>
-            </div>
-          )}
         </div>
         {hasSerialNumber && productType === "product" && (
           <div>

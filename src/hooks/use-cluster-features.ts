@@ -31,14 +31,23 @@ export function useClusterFeatures(): ClusterConfig & {
   hasSerialNumber: boolean;
   unitType: "unit" | "weight" | "mixed";
   // Flags dépliés au top-level
-  allowDeposit: boolean;
   allowServiceBooking: boolean;
   hasTablesOptional: boolean;
   // Sous-catégorie magasin
   subCategory?: SubCategory;
 } {
-  const { cluster, subCategory } = usePreferences();
-  const config = CLUSTER_MAP[cluster as ClusterId] ?? CLUSTER_MAP.retail;
+  const { cluster, subCategory, customUnitType } = usePreferences();
+  let config = CLUSTER_MAP[cluster as ClusterId] ?? CLUSTER_MAP.retail;
+  // Cluster Personnalisé : le choix « stock au kilo » posé à l'onboarding surcharge
+  // la config de base (qui est à l'unité) pour que caisse et formulaires vendent au poids.
+  if (config.id === "personnalise" && customUnitType === "weight") {
+    config = {
+      ...config,
+      workflowType: "weight",
+      stock: { ...config.stock, unitType: "weight" },
+      flags: { ...config.flags, hasWeightInput: true },
+    };
+  }
   return {
     ...config,
     // Rétrocompat
@@ -54,7 +63,6 @@ export function useClusterFeatures(): ClusterConfig & {
     hasSerialNumber: config.stock.hasSerialNumber,
     unitType: config.stock.unitType,
     // Flags
-    allowDeposit: config.flags.allowDeposit,
     allowServiceBooking: config.flags.allowServiceBooking,
     hasTablesOptional: config.workflow.hasTablesOptional ?? false,
     // Sous-catégorie

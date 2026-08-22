@@ -13,32 +13,31 @@
 // L'application doit rester servable hors ligne dans son intégralité, cette page comprise
 // (elle figure dans PRECACHE_PAGES de public/sw.js).
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
-  BarChart3,
   Check,
   Download,
-  FileSpreadsheet,
-  Minus,
-  Package,
-  Plus,
-  ShoppingCart,
   Share,
-  Smartphone,
-  WifiOff,
-  ShoppingBag,
-  Coffee,
+  ShoppingCart,
+  ShoppingBasket,
+  Beer,
   Utensils,
   Scissors,
   Shirt,
-  Weight,
+  Beef,
   Store,
+  ArrowRight,
+  Banknote,
+  ClipboardList,
+  TrendingUp,
+  FileSpreadsheet,
+  ArchiveRestore,
+  WifiOff,
+  Sparkles,
 } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
-import { formatFCFA } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -46,16 +45,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { CLUSTER_MAP } from "@/lib/settings";
+
+// Apparition commune : montée + fondu quand la section entre dans le viewport.
+const fadeUp = {
+  initial: { opacity: 0, y: 26 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, margin: "-64px" },
+  transition: { duration: 0.55, ease: "easeOut" },
+} as const;
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ELYNDRA CAISSE — la caisse qui marche sans réseau" },
+      { title: "ELYNDRA CAISSE — Pilotez votre business au quotidien" },
       {
         name: "description",
         content:
-          "Encaissez, rendez la monnaie, suivez vos stocks et vos bénéfices depuis votre téléphone. Sans connexion, sans compte, sans abonnement.",
+          "ELYNDRA CAISSE centralise vos ventes, vos stocks et le suivi de votre activité pour vous aider à mieux piloter votre business, au quotidien.",
       },
     ],
   }),
@@ -67,10 +74,9 @@ function LandingPage() {
     <div className="min-h-screen">
       <LandingHeader />
       <Hero />
-      <Proofs />
+      <HowItWorks />
       <ForWhom />
       <Features />
-      <Steps />
       <FinalCall />
       <Footer />
     </div>
@@ -83,14 +89,21 @@ function LandingPage() {
 
 function LandingHeader() {
   return (
-    <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
+    <header className="bg-card/80 backdrop-blur sticky top-0 z-20 pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-        <span className="flex items-center gap-2 font-bold text-lg">
-          <img src="/icon-192.png" alt="ECAISSE" className="h-8 w-8" />
-          <span>ELYNDRA CAISSE</span>
+        <span className="inline-flex items-center gap-3 font-bold text-lg">
+          <span className="inline-flex h-20 w-20 shrink-0 items-center justify-center">
+            <img src="/logo-header.png" alt="ECAISSE" className="h-full w-full object-contain" />
+          </span>
+          <span>
+            <span className="block leading-tight">ELYNDRA CAISSE</span>
+            <span className="block text-[11px] font-semibold tracking-wide text-primary/80">
+              ELYNDRA TECH GABON
+            </span>
+          </span>
         </span>
         <span className="hidden sm:block text-sm font-medium text-muted-foreground">
-          Vente · Stock · Bénéfices
+          Stock · Vente · Bénéfices
         </span>
       </div>
     </header>
@@ -98,247 +111,124 @@ function LandingHeader() {
 }
 
 // ============================================================================
-// Hero — la caisse vivante
+// Hero
 // ============================================================================
 
-// Les mêmes paliers que le vrai écran de vente (`QUICK_AMOUNTS` dans src/routes/pos.tsx) :
-// la démo doit apprendre les gestes du produit, pas les siens.
-const QUICK_AMOUNTS = [500, 1000, 2000];
-
-const DEMO_PRODUCTS = [
-  { name: "Regab", price: 500 },
-  { name: "Pain", price: 200 },
-  { name: "Sucrerie", price: 300 },
-] as const;
-
-/**
- * Démonstration jouable de l'écran de vente.
- *
- * ÉTAT REACT LOCAL PUR — n'écrit RIEN dans IndexedDB, volontairement. Un visiteur qui
- * joue ici ne doit pas découvrir des ventes fantômes dans son historique le jour où il
- * installe l'application. Ne pas « factoriser » avec `createSale` de src/lib/db.ts.
- */
 function Hero() {
-  const [cart, setCart] = useState<Record<string, number>>({});
-  const [cashGiven, setCashGiven] = useState("");
-
-  const lines = useMemo(
-    () =>
-      DEMO_PRODUCTS.map((p) => ({ ...p, quantity: cart[p.name] ?? 0 })).filter(
-        (l) => l.quantity > 0,
-      ),
-    [cart],
-  );
-
-  const total = lines.reduce((s, l) => s + l.price * l.quantity, 0);
-  const cash = Number(cashGiven) || 0;
-  const change = cash - total;
-  const insufficient = cash > 0 && change < 0;
-  const settled = total > 0 && cash >= total;
-
-  const add = (name: string) => setCart((c) => ({ ...c, [name]: (c[name] ?? 0) + 1 }));
-  const remove = (name: string) =>
-    setCart((c) => {
-      const next = (c[name] ?? 0) - 1;
-      const copy = { ...c };
-      if (next <= 0) delete copy[name];
-      else copy[name] = next;
-      return copy;
-    });
-
   return (
     <section className="relative overflow-hidden">
-      {/* Halo décoratif, purement CSS : aucune image ni police distante — la page doit
-          rester servable hors ligne, cf. l'en-tête du fichier. */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 h-80 w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
       />
-      <div className="relative mx-auto max-w-5xl px-4 pt-12 pb-16 sm:pt-20 grid gap-10 lg:grid-cols-[1fr_420px] lg:items-center">
-        <div className="space-y-6">
+      <div className="relative mx-auto max-w-5xl px-4 pt-12 pb-16 sm:pt-20 grid gap-10 lg:grid-cols-[1fr_400px] lg:items-center">
+        <motion.div
+          className="space-y-6"
+          initial={{ opacity: 0, y: 26 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
+        >
           <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-            <WifiOff className="h-3.5 w-3.5 text-primary" /> 100 % hors ligne · aucune connexion
-            requise
+            <Check className="h-3.5 w-3.5 text-primary" /> Pensé pour les business gabonais
           </span>
           <h1 className="text-4xl sm:text-5xl font-bold leading-[1.05] tracking-tight">
-            Votre caisse.
+            Pilotez votre business,
             <br />
-            <span className="text-primary">Sans réseau.</span>
+            <span className="text-primary">jour après jour.</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-md">
-            Encaissez, rendez la monnaie juste, suivez vos stocks et vos bénéfices. Depuis votre
-            téléphone, même quand la connexion tombe.
+            ELYNDRA CAISSE centralise vos ventes, vos stocks et le suivi de votre activité pour vous
+            aider à mieux piloter votre business, au quotidien.
           </p>
           <InstallCta />
           <p className="text-sm text-muted-foreground">
-            Gratuit · rien à créer · aucun compte
-            <span className="hidden sm:inline"> · fonctionne dès l'installation</span>
+            30 jours d'essai gratuit · aucune carte bancaire requise
           </p>
-        </div>
-
-        {/* La caisse jouable. C'est le produit lui-même, pas une capture. */}
-        <div className="rounded-2xl border bg-card shadow-xl p-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
-            {DEMO_PRODUCTS.map((p) => (
-              <button
-                key={p.name}
-                type="button"
-                onClick={() => add(p.name)}
-                className="rounded-full border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary hover:bg-accent active:scale-[0.97]"
-              >
-                <Plus className="inline h-3.5 w-3.5 mr-1 -mt-0.5" />
-                {p.name} {formatFCFA(p.price)}
-              </button>
-            ))}
-          </div>
-
-          <div className="min-h-[76px] space-y-2">
-            {lines.length === 0 ? (
-              <p className="py-5 text-center text-sm text-muted-foreground">
-                Touchez un article pour commencer.
-              </p>
-            ) : (
-              lines.map((l) => (
-                <div key={l.name} className="flex items-center gap-2 text-sm">
-                  <span className="flex-1 font-medium">{l.name}</span>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-7 w-7"
-                    aria-label={`Retirer un ${l.name}`}
-                    onClick={() => remove(l.name)}
-                  >
-                    <Minus className="h-3 w-3" />
-                  </Button>
-                  <span className="w-5 text-center font-semibold tabular-nums">{l.quantity}</span>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-7 w-7"
-                    aria-label={`Ajouter un ${l.name}`}
-                    onClick={() => add(l.name)}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                  <span className="w-20 text-right font-semibold tabular-nums">
-                    {formatFCFA(l.price * l.quantity)}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="border-t pt-3 flex items-center justify-between">
-            <span className="font-semibold">Total</span>
-            <span className="text-2xl font-bold text-primary tabular-nums">
-              {formatFCFA(total)}
+          <div className="flex items-center gap-4 pt-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <WifiOff className="h-3.5 w-3.5 text-primary" />
+              Fonctionne hors ligne
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="h-3.5 w-3.5 text-primary" />
+              Sans connexion requise
             </span>
           </div>
+        </motion.div>
 
-          <div className="space-y-2">
-            <label htmlFor="demo-cash" className="text-sm font-medium">
-              Argent donné
-            </label>
-            <Input
-              id="demo-cash"
-              inputMode="numeric"
-              value={cashGiven}
-              onChange={(e) => setCashGiven(e.target.value.replace(/\D/g, ""))}
-              placeholder="0"
-              className="h-12 text-xl text-right font-bold tabular-nums"
-            />
-            <div className="flex flex-wrap gap-1">
-              {QUICK_AMOUNTS.map((amt) => (
-                <Button
-                  key={amt}
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setCashGiven(String((Number(cashGiven) || 0) + amt))}
-                >
-                  +{formatFCFA(amt)}
-                </Button>
-              ))}
-              <Button variant="ghost" size="sm" onClick={() => setCashGiven("")}>
-                Vider
-              </Button>
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "rounded-xl p-4 flex items-center justify-between",
-              insufficient ? "bg-destructive/10" : "bg-accent",
-            )}
-          >
-            <span className="font-semibold">{insufficient ? "Manque" : "À rendre"}</span>
-            {/* La clé fait rejouer l'animation à chaque nouveau montant : c'est le chiffre
-              que le commerçant cherche des yeux cinquante fois par jour. */}
-            <motion.span
-              key={change}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className={cn(
-                "text-4xl font-bold tabular-nums",
-                insufficient ? "text-destructive" : "text-primary",
-              )}
-            >
-              {formatFCFA(Math.abs(change))}
-            </motion.span>
-          </div>
-
-          {/* La région live reste MONTÉE en permanence et c'est son contenu qui apparaît :
-            c'est la condition pour qu'un lecteur d'écran annonce le message au bon moment.
-            Masquer la phrase par `opacity-0` la laisserait dans l'arbre d'accessibilité,
-            donc lue avant même qu'un calcul ait eu lieu. */}
-          <p className="min-h-[1rem] text-center text-xs text-muted-foreground" aria-live="polite">
-            {settled &&
-              "Ce calcul vient de tourner sur votre téléphone. Rien n'est parti sur Internet."}
-          </p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="flex justify-center lg:justify-end"
+        >
+          <img
+            src="/logo-body.webp"
+            alt="Ely, la mascotte d'ELYNDRA CAISSE"
+            className="w-full max-w-[380px] h-auto"
+            width={768}
+            height={1152}
+          />
+        </motion.div>
       </div>
     </section>
   );
 }
 
 // ============================================================================
-// Preuves
+// Comment ça marche
 // ============================================================================
 
-const PROOFS = [
+const HOW_STEPS = [
   {
-    icon: WifiOff,
-    title: "Le réseau coupe, la vente passe",
-    body: "L'application s'installe entièrement sur l'appareil. Elle n'appelle aucun serveur pour encaisser, calculer la monnaie ou sortir un rapport.",
+    number: "01",
+    title: "Créez votre boutique en 2 minutes",
+    body: "Nom, secteur d'activité — l'application se configure automatiquement pour votre métier.",
+    illustration: "/illustrations/setup.svg",
   },
   {
-    icon: Smartphone,
-    title: "Vos chiffres restent chez vous",
-    body: "Ventes et stocks sont enregistrés dans la mémoire du téléphone. Vous les exportez quand vous le décidez, vers Excel, PDF ou une sauvegarde.",
+    number: "02",
+    title: "Chargez votre catalogue",
+    body: "Ajoutez vos produits ou prestations en quelques secondes, ou utilisez les fiches de démo.",
+    illustration: "/illustrations/order.svg",
   },
   {
-    icon: Check,
-    title: "Aucun compte, aucun abonnement",
-    body: "Pas d'inscription, pas de numéro à donner, pas de paiement mensuel. Vous installez et vous encaissez.",
+    number: "03",
+    title: "Encaissez et suivez",
+    body: "Ventes, stocks, bénéfices — tout est là, automatiquement.",
+    illustration: "/illustrations/payment.svg",
   },
 ] as const;
 
-function Proofs() {
+function HowItWorks() {
   return (
     <section className="border-y bg-muted/40">
-      <div className="mx-auto max-w-5xl px-4 py-12 grid gap-8 sm:grid-cols-3">
-        {PROOFS.map((p) => {
-          const Icon = p.icon;
-          return (
-            <div key={p.title} className="space-y-2">
-              <span className="inline-flex rounded-lg bg-primary/10 p-2 text-primary">
-                <Icon className="h-5 w-5" />
+      <div className="mx-auto max-w-5xl px-4 py-16 space-y-10">
+        <motion.div className="text-center space-y-2" {...fadeUp}>
+          <h2 className="text-2xl font-bold tracking-tight">Comment ça marche</h2>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Trois étapes simples pour démarrer et piloter votre activité.
+          </p>
+        </motion.div>
+        <ol className="grid gap-8 sm:grid-cols-3">
+          {HOW_STEPS.map((s, i) => (
+            <motion.li
+              key={s.number}
+              className="space-y-4 text-center"
+              {...fadeUp}
+              transition={{ ...fadeUp.transition, delay: i * 0.12 }}
+            >
+              <div className="mx-auto w-full max-w-[200px]">
+                <img src={s.illustration} alt="" className="w-full h-auto" aria-hidden />
+              </div>
+              <span className="block text-3xl font-bold tabular-nums text-primary/40">
+                {s.number}
               </span>
-              <h2 className="font-semibold">{p.title}</h2>
-              <p className="text-sm text-muted-foreground">{p.body}</p>
-            </div>
-          );
-        })}
+              <h3 className="font-semibold text-lg">{s.title}</h3>
+              <p className="text-sm text-muted-foreground">{s.body}</p>
+            </motion.li>
+          ))}
+        </ol>
       </div>
     </section>
   );
@@ -350,71 +240,71 @@ function Proofs() {
 
 const CLUSTER_CARDS = [
   {
-    icon: ShoppingBag,
+    icon: ShoppingBasket,
     title: "Épicerie",
-    description: "Gérez vos produits, stocks et ventes au quotidien.",
-    emoji: "🛒",
+    description: "Produits du quotidien, stocks, ventes directes.",
   },
   {
-    icon: Coffee,
-    title: "Snack Bar",
-    description: "Consignes, tournées et suivi des boissons. Tables optionnelles.",
-    emoji: "🍺",
+    icon: Beer,
+    title: "Bar / Snack",
+    description: "Boissons, commandes ouvertes.",
   },
   {
     icon: Scissors,
     title: "Coiffeur",
-    description: "Prestations, clients et suivi des visites.",
-    emoji: "✂️",
+    description: "Prestations, clients, suivi des visites.",
   },
   {
     icon: Shirt,
     title: "Boutique",
-    description: "Vêtements, accessoires. Variantes taille et couleur.",
-    emoji: "👗",
+    description: "Vêtements, accessoires, variantes taille/couleur.",
   },
   {
     icon: Store,
     title: "Magasin",
-    description: "Électronique, meubles, quincaillerie. Sous-catégorie au choix.",
-    emoji: "🏪",
+    description: "Électronique, meubles, quincaillerie.",
   },
   {
     icon: Utensils,
     title: "Restaurant",
-    description: "Tables, commandes, service et paiement en 3 étapes.",
-    emoji: "🍽️",
+    description: "Menus, commandes, service et paiement.",
   },
   {
-    icon: Weight,
+    icon: Beef,
     title: "Boucherie",
-    description: "Vente au poids, stock en kg, dates de péremption.",
-    emoji: "🥩",
+    description: "Vente au poids, stock en kg.",
+  },
+  {
+    icon: Sparkles,
+    title: "Personnalisé",
+    description: "Votre domaine d'activité, au kilo ou à l'unité.",
   },
 ] as const;
 
 function ForWhom() {
   return (
     <section className="mx-auto max-w-5xl px-4 py-16 space-y-8">
-      <div className="text-center space-y-2">
+      <motion.div className="text-center space-y-2" {...fadeUp}>
         <h2 className="text-2xl font-bold tracking-tight">Pour qui ?</h2>
         <p className="text-muted-foreground max-w-md mx-auto">
           ELYNDRA CAISSE s'adapte à votre métier. Choisissez votre activité, l'application se
           configure automatiquement.
         </p>
-      </div>
+      </motion.div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {CLUSTER_CARDS.map((c) => (
-          <div
+        {CLUSTER_CARDS.map((c, i) => (
+          <motion.div
             key={c.title}
             className="rounded-xl border bg-card p-5 text-center space-y-3 transition-all hover:border-primary/40 hover:shadow-sm"
+            {...fadeUp}
+            transition={{ ...fadeUp.transition, delay: i * 0.06 }}
           >
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-2xl">
-              {c.emoji}
-            </div>
+            <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-primary ring-1 ring-primary/10">
+              <c.icon className="h-6 w-6" />
+            </span>
             <h3 className="font-semibold">{c.title}</h3>
             <p className="text-sm text-muted-foreground">{c.description}</p>
-          </div>
+          </motion.div>
         ))}
       </div>
     </section>
@@ -425,96 +315,71 @@ function ForWhom() {
 // Fonctionnalités
 // ============================================================================
 
-// Nommées par ce que le commerçant fait, pas par ce que le système contient.
 const FEATURES = [
   {
-    icon: ShoppingCart,
-    title: "Encaisser et rendre la monnaie",
-    body: "Touchez vos articles, saisissez ce que le client donne, lisez la monnaie à rendre. Un article absent du catalogue se saisit à la main sans rien préparer.",
+    icon: Banknote,
+    title: "Encaissez en un instant",
+    body: "Sélectionnez les articles, saisissez le montant reçu, validez. La monnaie se calcule automatiquement.",
+    illustration: "/illustrations/payment.svg",
   },
   {
-    icon: Package,
-    title: "Suivre le stock",
-    body: "Chaque vente décrémente le stock. Prix d'achat et prix de vente sont enregistrés à part, pour que le bénéfice soit réel.",
+    icon: ClipboardList,
+    title: "Gérez votre stock",
+    body: "Suivi automatique à chaque vente. Alertes quand le stock est bas ou vide. Prix d'achat et de vente séparés.",
+    illustration: "/illustrations/stock.svg",
   },
   {
-    icon: BarChart3,
-    title: "Voir ce que vous avez gagné",
-    body: "Revenus, bénéfice, marge, panier moyen, meilleur jour. Sur aujourd'hui, sur 7 jours, sur 30 jours ou sur les dates de votre choix.",
+    icon: TrendingUp,
+    title: "Suivez vos performances",
+    body: "Chiffre d'affaires, bénéfices, marges, panier moyen. Par jour, semaine, mois ou période personnalisée.",
+    illustration: "/illustrations/analytics.svg",
   },
   {
     icon: FileSpreadsheet,
-    title: "Sortir un document",
-    body: "Un rapport en PDF, un tableau en Excel ou en CSV. Généré sur l'appareil, hors ligne comme le reste.",
+    title: "Exportez vos rapports",
+    body: "PDF, Excel ou CSV. Généré directement sur votre téléphone, même sans connexion.",
   },
   {
-    icon: Download,
-    title: "Sauvegarder et restaurer",
-    body: "Un fichier de sauvegarde contient tout. Vous le rangez où vous voulez et vous le rechargez sur un autre téléphone.",
+    icon: ArchiveRestore,
+    title: "Sauvegardez tout",
+    body: "Un fichier complet contenant toutes vos données. Restaurez-le sur un autre appareil en un clic.",
+  },
+  {
+    icon: WifiOff,
+    title: "100% hors ligne",
+    body: "Aucune connexion internet nécessaire. Vos données restent sur votre appareil, sécurisées et accessibles à tout moment.",
   },
 ] as const;
 
 function Features() {
   return (
-    <section className="mx-auto max-w-5xl px-4 py-16 space-y-8">
-      <h2 className="text-2xl font-bold tracking-tight">Ce que fait l'application</h2>
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map((f) => {
-          const Icon = f.icon;
-          return (
-            <div
-              key={f.title}
-              className="rounded-xl border bg-card p-5 space-y-3 transition-all hover:border-primary/40 hover:shadow-sm"
-            >
-              <span className="inline-flex rounded-lg bg-accent p-2 text-primary ring-1 ring-primary/10">
-                <Icon className="h-5 w-5" />
-              </span>
-              <h3 className="font-semibold">{f.title}</h3>
-              <p className="text-sm text-muted-foreground">{f.body}</p>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-// ============================================================================
-// Étapes
-// ============================================================================
-
-// Numérotées parce que c'en est vraiment une séquence : l'ordre porte de l'information.
-const STEPS = [
-  {
-    title: "Installez l'application",
-    body: "Elle se pose sur l'écran d'accueil comme n'importe quelle autre. Quelques secondes, une seule fois.",
-  },
-  {
-    title: "Ajoutez vos produits",
-    body: "Nom, prix d'achat, prix de vente, stock. Ou sautez cette étape : on peut encaisser en saisissant les articles à la main.",
-  },
-  {
-    title: "Encaissez",
-    body: "Chaque vente alimente les stocks, l'historique et les rapports. Sans rien faire de plus.",
-  },
-] as const;
-
-function Steps() {
-  return (
     <section className="border-y bg-muted/40">
       <div className="mx-auto max-w-5xl px-4 py-16 space-y-8">
-        <h2 className="text-2xl font-bold tracking-tight">Comment démarrer</h2>
-        <ol className="grid gap-6 sm:grid-cols-3">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="space-y-2">
-              <span className="block text-3xl font-bold tabular-nums text-primary/40">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <h3 className="font-semibold">{s.title}</h3>
-              <p className="text-sm text-muted-foreground">{s.body}</p>
-            </li>
-          ))}
-        </ol>
+        <motion.div className="text-center space-y-2" {...fadeUp}>
+          <h2 className="text-2xl font-bold tracking-tight">Les outils qui font la différence</h2>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Tout ce dont vous avez besoin pour gérer votre activité, rien de plus.
+          </p>
+        </motion.div>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f, i) => {
+            const Icon = f.icon;
+            return (
+              <motion.div
+                key={f.title}
+                className="rounded-xl border bg-card p-5 space-y-3 transition-all hover:border-primary/40 hover:shadow-sm"
+                {...fadeUp}
+                transition={{ ...fadeUp.transition, delay: i * 0.06 }}
+              >
+                <span className="inline-flex rounded-lg bg-accent p-2 text-primary ring-1 ring-primary/10">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <h3 className="font-semibold">{f.title}</h3>
+                <p className="text-sm text-muted-foreground">{f.body}</p>
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -526,24 +391,36 @@ function Steps() {
 
 function FinalCall() {
   return (
-    <section className="mx-auto max-w-2xl px-4 py-20 text-center space-y-6">
-      <h2 className="text-3xl font-bold tracking-tight">Installez-la maintenant</h2>
+    <motion.section className="mx-auto max-w-2xl px-4 py-20 text-center space-y-6" {...fadeUp}>
+      <h2 className="text-3xl font-bold tracking-tight">Prêt à piloter votre business ?</h2>
       <p className="text-muted-foreground">
-        Sur Android et sur ordinateur, l'installation se fait en un bouton. Sur iPhone, ouvrez le
-        menu Partager de Safari puis « Ajouter à l'écran d'accueil ».
+        30 jours gratuits, sans engagement. Aucune carte bancaire requise.
+        <br />
+        Créez votre boutique en quelques minutes et commencez à encaisser.
       </p>
       <div className="flex flex-wrap justify-center gap-3">
         <InstallCta />
       </div>
-    </section>
+      <p className="text-xs text-muted-foreground">
+        Fonctionne hors ligne · Données 100% locales · Sans abonnement
+      </p>
+    </motion.section>
   );
 }
 
 function Footer() {
   return (
     <footer className="border-t">
-      <div className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">
-        ELYNDRA CAISSE — application hors ligne. Vos données ne quittent pas votre appareil.
+      <div className="mx-auto max-w-5xl px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+        <span>
+          ELYNDRA CAISSE — Développé par{" "}
+          <span className="font-semibold text-foreground">ELYNDRA TECH</span>
+        </span>
+        <span className="flex items-center gap-4">
+          <span>Vos données restent sur votre appareil.</span>
+          <span className="hidden sm:inline">·</span>
+          <span className="hidden sm:inline">Fonctionne hors ligne</span>
+        </span>
       </div>
     </footer>
   );
@@ -556,9 +433,6 @@ function Footer() {
 function InstallCta() {
   const navigate = useNavigate();
   const { canInstall, installed, install } = usePwaInstall();
-  // "ios" : marche à suivre Safari. "generic" : le navigateur n'expose aucune invite
-  // (Firefox, Safari de bureau, ou Chrome qui a déjà consommé la sienne). Dans les deux
-  // cas le bouton mène quelque part — un CTA qui ne fait rien serait pire que pas de CTA.
   const [help, setHelp] = useState<"ios" | "generic" | null>(null);
 
   if (installed) {
@@ -569,7 +443,7 @@ function InstallCta() {
         onClick={() => navigate({ to: "/pos" })}
       >
         <ShoppingCart className="h-5 w-5" />
-        Ouvrir la caisse
+        Ouvrir ELYNDRA CAISSE
       </Button>
     );
   }
@@ -597,10 +471,13 @@ function InstallCta() {
           }}
         >
           <Download className="h-5 w-5" />
-          Installer l'application
+          {canInstall ? "Installer l'application" : "Essai gratuit 1 mois"}
         </Button>
-        <Button asChild size="lg" variant="outline" className="h-14 px-6 text-base">
-          <Link to="/pos">{canInstall ? "Essayer d'abord" : "Ouvrir la caisse"}</Link>
+        <Button asChild size="lg" variant="outline" className="h-14 px-6 text-base gap-2">
+          <Link to="/pos">
+            Ouvrir la caisse
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </Button>
       </div>
 
