@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -14,6 +14,8 @@ import {
   Lock,
   Scissors,
   Package,
+  Camera,
+  Pencil,
 } from "lucide-react";
 import {
   addRound,
@@ -22,6 +24,7 @@ import {
   closeTable,
   createSale,
   getSaleItems,
+  getSaleItemsForSales,
   listOpenTables,
   listProducts,
   listSalesToday,
@@ -31,6 +34,7 @@ import {
   serveTable,
   type CartLine,
   type Category,
+  type PaymentMethod,
   type Product,
   type Sale,
   type SaleItem,
@@ -40,6 +44,8 @@ import { usePreferences } from "@/hooks/use-preferences";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { savePreferences } from "@/lib/settings";
 import { verifyPin } from "@/lib/pin";
+import { playSuccessChime } from "@/lib/success-sound";
+import { LOW_STOCK_THRESHOLD } from "@/lib/alerts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,8 +62,11 @@ import {
 } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
 import { ProductForm } from "@/components/ProductForm";
+import { ProductPhotoDialog, ProductQuickEditDialog } from "@/components/ProductQuickEdit";
 import { ClientSelect } from "@/components/ClientSelect";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
+import { VoiceDictation } from "@/components/VoiceDictation";
+import type { ParseResult } from "@/lib/voice/parser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -75,7 +84,131 @@ export const Route = createFileRoute("/_app/pos")({
   component: PosPage,
 });
 
+type PosLineProps = {
+  line: UiLine;
+  isService: boolean;
+  onRemoveOne: (line: UiLine) => void;
+  onAddOne: (line: UiLine) => void;
+  onRemove: (line: UiLine) => void;
+};
+
+/**
+ * Ligne du panier. MAINTENIR la ligne ≈600 ms la retire d'un coup : teinte rouge et
+ * barre de remplissage pendant l'appui, vibration légère à l'expiration. Relâcher,
+ * sortir du doigt ou faire défiler la liste (pointercancel) annule le geste — il ne
+ * part jamais par accident pendant que le panier glisse. Les boutons −/+/poubelle
+ * restent en place pour les corrections fines.
+ */
+function PosLine({ line, isService, onRemoveOne, onAddOne, onRemove }: PosLineProps) {
+  const [holding, setHolding] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const cancel = () => {
+    setHolding(false);
+    window.clearTimeout(timer.current);
+  };
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: -12 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 12 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
+      className={cn(
+        "relative flex items-center gap-2 -mx-1 px-1 rounded-lg select-none transition-colors",
+        holding ? "bg-destructive/10" : "bg-transparent",
+      )}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        setHolding(true);
+        timer.current = window.setTimeout(() => {
+          navigator.vibrate?.(35);
+          onRemove(line);
+          setHolding(false);
+        }, 600);
+      }}
+      onPointerUp={cancel}
+      onPointerLeave={cancel}
+      onPointerCancel={cancel}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Barre de progression du maintien : elle ne court que pendant l'appui. */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute bottom-0 left-0 h-0.5 rounded-full bg-destructive transition-[width]",
+          holding ? "w-full duration-[600ms] ease-linear" : "w-0 duration-150",
+        )}
+      />
+      <div className="flex-1 min-w-0 pointer-events-none">
+        <div className="font-medium truncate flex items-center gap-1.5">
+          {line.name}
+          {isService && line.productType && (
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                line.productType === "service"
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+              )}
+            >
+              {line.productType === "service" ? "P" : "Pr"}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {formatFCFA(line.price)} × {line.quantity}
+        </div>
+      </div>
+      <div className="flex items-center gap-1">
+        <Button
+          size="icon"
+          variant="outline"
+          className="h-11 w-11"
+          onClick={() => onRemoveOne(line)}
+          aria-label="Retirer un exemplaire"
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+        <span className="w-6 text-center font-semibold">{line.quantity}</span>
+        <Button
+          size="icon"
+          variant="outline"
+          className="h-11 w-11"
+          onClick={() => onAddOne(line)}
+          aria-label="Ajouter un exemplaire"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-11 w-11"
+          onClick={() => onRemove(line)}
+          aria-label="Supprimer la ligne"
+        >
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </div>
+      <div className="w-20 text-right font-semibold">{formatFCFA(line.price * line.quantity)}</div>
+    </motion.div>
+  );
+}
+
 const QUICK_AMOUNTS = [500, 1000, 2000, 5000, 10000];
+
+// Moyens de paiement proposés au comptoir. Les tables restent en espèces : c'est le
+// serveur qui encaisse et rend la monnaie, pas un terminal.
+const PAYMENT_METHODS: { id: PaymentMethod; label: string }[] = [
+  { id: "cash", label: "Espèces" },
+  { id: "card", label: "Carte" },
+  { id: "mobile_money", label: "Mobile Money" },
+];
+
+function paymentLabel(m: PaymentMethod): string {
+  return PAYMENT_METHODS.find((x) => x.id === m)?.label ?? "Espèces";
+}
 
 // Ligne saisie à la main, pour encaisser sans catalogue (stocks pas encore initiés).
 // Elle n'a pas de product_id : aucun stock n'est décrémenté à la vente.
@@ -160,6 +293,20 @@ function PosPage() {
   const [ordersOpen, setOrdersOpen] = useState(false);
   // Onglet Prestations/Produits (cluster service uniquement)
   const [serviceTab, setServiceTab] = useState<"prestations" | "produits">("prestations");
+  const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  // Étape d'encaissement ouverte (comptoir uniquement) : le total est figé, on saisit
+  // l'argent donné avant de confirmer.
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  // Voile « Vente validée » : son + animation, auto-effacé. `null` = caché.
+  const [saleFlash, setSaleFlash] = useState<{
+    total: number;
+    change: number;
+    method: PaymentMethod;
+  } | null>(null);
+  // Produit visé depuis la caisse : photo (bouton appareil) ou modification rapide
+  // (bouton crayon) — deux fenêtres séparées, chacune ne montre que l'essentiel.
+  const [photoTarget, setPhotoTarget] = useState<Product | null>(null);
+  const [quickEditTarget, setQuickEditTarget] = useState<Product | null>(null);
 
   // Table DÉRIVÉE de la liste des additions ouvertes, jamais copiée dans l'état local :
   // une table encaissée ou annulée disparaît de la liste, `activeTable` retombe à null et
@@ -248,11 +395,17 @@ function PosPage() {
       : activeTable.total
     : total;
   const cash = Number(cashGiven) || 0;
-  const change = cash - dueNow;
-  const insufficient = cash > 0 && change < 0;
+  // Ce qu'on doit encaisser : le panier au comptoir, la tournée ou l'addition sur une table.
+  const dueTotal = activeTable ? dueNow : total;
+  const isCash = activeTable !== null || payMethod === "cash";
+  const change = isCash ? cash - dueTotal : 0;
+  const insufficient = isCash && cash > 0 && change < 0;
+  // Comptoir : l'argent se saisit DANS le dialogue d'encaissement — le bouton du panier
+  // n'exige que d'avoir quelque chose à vendre.
   const canValidate = activeTable
     ? dueNow > 0 && cash >= dueNow
-    : lines.length > 0 && cash >= total && total > 0;
+    : lines.length > 0 && (!isCash || cash >= total);
+  const canOpenCheckout = lines.length > 0 && total > 0;
 
   const filtered = useMemo(() => {
     let list = products;
@@ -273,18 +426,23 @@ function PosPage() {
     mutationFn: () =>
       createSale({
         lines: lines.map(({ key: _key, ...line }): CartLine => line),
-        cash_given: cash,
+        cash_given: payMethod === "cash" ? cash : dueTotal,
         customers_count: customers,
+        payment_method: payMethod,
         ...(clientName.trim() ? { client_name: clientName.trim() } : {}),
         ...(clientId ? { client_id: clientId } : {}),
       }),
     onSuccess: (sale) => {
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Vente enregistrée", {
-        description: `Total ${formatFCFA(sale.total)} · Rendu ${formatFCFA(sale.change_due)}`,
-      });
+      setCheckoutOpen(false);
       resetCart();
+      playSuccessChime();
+      setSaleFlash({
+        total: sale.total,
+        change: sale.change_due,
+        method: sale.payment_method ?? "cash",
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -417,6 +575,14 @@ function PosPage() {
     resetCart();
   }
 
+  // Le voile de validation s'efface tout seul : le serveur n'a rien à cliquer, la vente
+  // suivante peut commencer dès que l'animation a joué.
+  useEffect(() => {
+    if (!saleFlash) return;
+    const timer = setTimeout(() => setSaleFlash(null), 2000);
+    return () => clearTimeout(timer);
+  }, [saleFlash]);
+
   function resetCart() {
     setCart({});
     setFreeLines([]);
@@ -424,6 +590,7 @@ function PosPage() {
     setCustomers(1);
     setClientName("");
     setClientId(undefined);
+    setPayMethod("cash");
     setSheetOpen(false);
   }
 
@@ -478,6 +645,49 @@ function PosPage() {
     setFreeLines((f) => f.filter((l) => l.key !== line.key));
   }
 
+  /** Ajout par la dictée : quantités fractionnaires admises (« un kilo et demi »). */
+  function addQty(p: Product, qty: number) {
+    setCart((c) => {
+      const next = (c[p.id] ?? 0) + qty;
+      if (Number.isFinite(p.stock) && next > p.stock + 1e-9) {
+        toast.warning(`Stock insuffisant pour ${p.name}`);
+        return c;
+      }
+      return { ...c, [p.id]: next };
+    });
+  }
+
+  function applyVoice(result: ParseResult) {
+    if (result.command === "clear-all") {
+      resetCart();
+      toast.success("Panier vidé");
+      return;
+    }
+    if (result.command === "clear-last") {
+      const last = lines[lines.length - 1];
+      if (last) {
+        removeLine(last);
+        toast.success(`${last.name} retiré`);
+      } else {
+        toast.info("Le panier est déjà vide");
+      }
+      return;
+    }
+    const added: string[] = [];
+    for (const m of result.matches) {
+      addQty(m.product, m.qty);
+      added.push(
+        `${Number.isInteger(m.qty) ? m.qty : m.qty.toLocaleString("fr-FR")} × ${m.product.name}`,
+      );
+    }
+    if (added.length > 0) toast.success(`Ajouté : ${added.join(", ")}`);
+    if (result.unknown.length > 0) {
+      toast.warning(`Non reconnu : ${result.unknown.join(", ")}`, { duration: 7000 });
+    } else if (added.length === 0 && !result.command) {
+      toast.info("Rien à ajouter — reformulez la commande");
+    }
+  }
+
   // La page ouvre directement sur la grille et le panier. Un écran d'attente précédait
   // chaque vente (« Nouvelle commande ») : un geste de plus sur l'action la plus répétée
   // de la journée, pour un écran qui n'apprenait rien. L'état vide de la grille suffit.
@@ -486,7 +696,7 @@ function PosPage() {
     // et ne pousse rien, elle recouvrirait sinon le dernier produit de la grille.
     <div
       className={cn(
-        "mx-auto max-w-7xl space-y-4 px-4 py-4",
+        "mx-auto max-w-[1500px] space-y-4 px-4 py-4 lg:px-8",
         compact && (activeTable !== null || lines.length > 0) && "pb-20",
       )}
     >
@@ -639,36 +849,83 @@ function PosPage() {
               const inCart = cart[p.id] ?? 0;
               const out = Number.isFinite(p.stock) && p.stock - inCart <= 0;
               return (
-                <button
-                  key={p.id}
-                  onClick={() => addOne(p)}
-                  disabled={out}
-                  className={cn(
-                    "relative rounded-xl border bg-card p-4 text-left min-h-[100px] transition-all",
-                    "hover:border-primary hover:shadow-md active:scale-[0.98]",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    out && "opacity-50 cursor-not-allowed",
-                  )}
-                >
-                  {p.photo ? (
-                    <img
-                      src={p.photo}
-                      alt=""
-                      className="mb-2 h-20 w-full rounded-lg object-cover"
-                      loading="lazy"
-                    />
-                  ) : null}
-                  <div className="font-semibold leading-tight">{p.name}</div>
-                  <div className="mt-1 text-lg font-bold text-primary">{formatFCFA(p.price)}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Stock : {Number.isFinite(p.stock) ? p.stock - inCart : "∞"}
-                  </div>
-                  {inCart > 0 && (
-                    <span className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shadow">
-                      {inCart}
-                    </span>
-                  )}
-                </button>
+                // Le bouton photo est un FRÈRE de la carte, pas un enfant : deux
+                // <button> imbriqués sont du HTML invalide, et la fiche produit doit
+                // rester ouvrable même quand la carte est désactivée (rupture).
+                <div key={p.id} className="relative">
+                  <button
+                    onClick={() => addOne(p)}
+                    disabled={out}
+                    className={cn(
+                      "relative w-full h-full rounded-xl border bg-card p-4 text-left min-h-[100px] transition-all",
+                      "hover:border-primary hover:shadow-md active:scale-[0.98]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      out && "opacity-50 cursor-not-allowed",
+                    )}
+                  >
+                    {p.photo ? (
+                      <img
+                        src={p.photo}
+                        alt=""
+                        className="mb-2 h-20 w-full rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <div className="font-semibold leading-tight">{p.name}</div>
+                    <div className="mt-1 text-lg font-bold text-primary">{formatFCFA(p.price)}</div>
+                    <div
+                      className={cn(
+                        "mt-1 text-xs",
+                        out
+                          ? "font-medium text-destructive"
+                          : Number.isFinite(p.stock) &&
+                              p.stock - inCart <= (p.min_stock ?? LOW_STOCK_THRESHOLD)
+                            ? "font-medium text-amber-600 dark:text-amber-400"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {out
+                        ? "Rupture"
+                        : Number.isFinite(p.stock)
+                          ? `Stock : ${p.stock - inCart}`
+                          : "Illimité"}
+                    </div>
+                    {inCart > 0 && (
+                      <span className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shadow">
+                        {inCart}
+                      </span>
+                    )}
+                  </button>
+                  {/* Deux gestes distincts, FRÈRES de la carte (du HTML invalide sinon) :
+                      l'appareil ouvre la fenêtre PHOTO seule, le crayon la modification
+                      rapide nom/prix/stock. Rupture ou non, les deux restent cliquables. */}
+                  <button
+                    type="button"
+                    aria-label={`Photo de ${p.name}`}
+                    title="Changer la photo"
+                    onClick={() => setPhotoTarget(p)}
+                    className={cn(
+                      "absolute -top-2 -left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
+                      "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    )}
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Modifier ${p.name}`}
+                    title="Modifier nom, prix, stock"
+                    onClick={() => setQuickEditTarget(p)}
+                    className={cn(
+                      "absolute -top-2 left-6 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
+                      "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    )}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -706,6 +963,7 @@ function PosPage() {
               </CardContent>
             </Card>
           )}
+          {salesToday.length > 0 && <RecentSalesMini sales={salesToday} />}
         </div>
 
         {/* Panier / encaissement. Panneau latéral collant sur grand écran, feuille
@@ -808,14 +1066,12 @@ function PosPage() {
               commande plus, on compte l'argent. */}
           {!cashing && (
             <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => setFreeOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Article manuel
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" onClick={() => setFreeOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Article manuel
+                </Button>
+                <VoiceDictation products={products} onResult={applyVoice} />
+              </div>
 
               {lines.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">
@@ -830,69 +1086,14 @@ function PosPage() {
                   ligne en cours de sortie décale les autres pendant son animation. */}
                   <AnimatePresence initial={false} mode="popLayout">
                     {lines.map((l) => (
-                      <motion.div
+                      <PosLine
                         key={l.key}
-                        layout
-                        initial={{ opacity: 0, x: -12 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 12 }}
-                        transition={{ duration: 0.15, ease: "easeOut" }}
-                        className="flex items-center gap-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate flex items-center gap-1.5">
-                            {l.name}
-                            {features.isService && l.productType && (
-                              <span
-                                className={cn(
-                                  "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                                  l.productType === "service"
-                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-                                )}
-                              >
-                                {l.productType === "service" ? "P" : "Pr"}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatFCFA(l.price)} × {l.quantity}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-11 w-11"
-                            onClick={() => removeOne(l)}
-                            aria-label="Retirer un exemplaire"
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <span className="w-6 text-center font-semibold">{l.quantity}</span>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-11 w-11"
-                            onClick={() => addOneByKey(l)}
-                            aria-label="Ajouter un exemplaire"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-11 w-11"
-                            onClick={() => removeLine(l)}
-                            aria-label="Supprimer la ligne"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                        <div className="w-20 text-right font-semibold">
-                          {formatFCFA(l.price * l.quantity)}
-                        </div>
-                      </motion.div>
+                        line={l}
+                        isService={features.isService}
+                        onRemoveOne={removeOne}
+                        onAddOne={addOneByKey}
+                        onRemove={removeLine}
+                      />
                     ))}
                   </AnimatePresence>
                 </div>
@@ -901,7 +1102,7 @@ function PosPage() {
               <div className="border-t pt-3 flex items-center justify-between">
                 <span className="text-lg font-semibold">{activeTable ? "Tournée" : "Total"}</span>
                 <span className="text-3xl font-bold text-primary tabular-nums">
-                  {formatFCFA(total)}
+                  {formatFCFA(dueTotal)}
                 </span>
               </div>
 
@@ -938,13 +1139,13 @@ function PosPage() {
             </>
           )}
 
-          {/* Encaissement. Au comptoir il est toujours là — c'est le geste unique. Sur une
-              table il n'apparaît qu'après avoir choisi sa cible — « Encaisser » pour toute
-              l'addition, « Encaisser cette tournée » pour une seule — pour que « ajouter
-              une tournée » et « faire payer » ne se ressemblent jamais pendant un service. */}
-          {(!activeTable || cashing) && (
+          {/* Encaissement SUR TABLE uniquement : il n'apparaît qu'après avoir choisi sa
+              cible — « Encaisser » pour toute l'addition, « Encaisser cette tournée » pour
+              une seule. Au comptoir, l'argent se saisit dans le dialogue d'encaissement,
+              ouvert par « Valider » — le panier reste un récapitulatif pendant la prise. */}
+          {activeTable && cashing && (
             <>
-              {cashing?.kind === "round" && cashingRound && (
+              {cashing.kind === "round" && cashingRound && (
                 <p className="text-sm font-medium text-muted-foreground">
                   Tournée de {formatTime(cashingRound[0])} — {formatFCFA(dueNow)} à encaisser
                 </p>
@@ -998,7 +1199,7 @@ function PosPage() {
               </div>
               {insufficient && (
                 <p className="text-sm text-destructive">
-                  Montant insuffisant. Demander au moins {formatFCFA(dueNow)}.
+                  Montant insuffisant. Demander au moins {formatFCFA(dueTotal)}.
                 </p>
               )}
             </>
@@ -1025,8 +1226,8 @@ function PosPage() {
               <Button
                 size="lg"
                 className="w-full h-16 text-lg gap-2"
-                disabled={!canValidate || saleMut.isPending}
-                onClick={() => saleMut.mutate()}
+                disabled={!canOpenCheckout}
+                onClick={() => setCheckoutOpen(true)}
               >
                 <CheckCircle2 className="h-5 w-5" />
                 Valider la vente
@@ -1268,7 +1469,190 @@ function PosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Étape d'encaissement du comptoir : le total est figé en haut, on saisit l'argent
+          reçu, la monnaie se calcule en direct. C'est ICI et pas avant que l'argent
+          entre en jeu — pendant la prise de commande, le panier reste un récapitulatif. */}
+      <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Encaissement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg bg-accent p-4 text-center">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Total à payer</p>
+              <p className="text-4xl font-bold text-primary tabular-nums">{formatFCFA(total)}</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1">
+              {PAYMENT_METHODS.map((m) => (
+                <Button
+                  key={m.id}
+                  size="sm"
+                  variant={payMethod === m.id ? "default" : "outline"}
+                  onClick={() => setPayMethod(m.id)}
+                >
+                  {m.label}
+                </Button>
+              ))}
+            </div>
+
+            {payMethod === "cash" ? (
+              <>
+                <label className="text-sm font-medium" htmlFor="checkout-cash">
+                  Argent donné
+                </label>
+                <Input
+                  id="checkout-cash"
+                  autoFocus
+                  inputMode="numeric"
+                  value={cashGiven}
+                  onChange={(e) => setCashGiven(e.target.value.replace(/\D/g, ""))}
+                  placeholder="0"
+                  className="h-16 text-center text-3xl font-bold tabular-nums"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {QUICK_AMOUNTS.map((amt) => (
+                    <Button
+                      key={amt}
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setCashGiven(String((Number(cashGiven) || 0) + amt))}
+                    >
+                      +{formatFCFA(amt)}
+                    </Button>
+                  ))}
+                  <Button variant="ghost" size="sm" onClick={() => setCashGiven("")}>
+                    Vider
+                  </Button>
+                </div>
+
+                <div
+                  className={cn(
+                    "rounded-lg p-4 flex items-center justify-between",
+                    insufficient ? "bg-destructive/10" : "bg-accent",
+                  )}
+                >
+                  <span className="font-semibold">
+                    {insufficient ? "Manque" : "Monnaie à rendre"}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-3xl font-bold tabular-nums",
+                      insufficient ? "text-destructive" : "text-primary",
+                    )}
+                  >
+                    {formatFCFA(Math.abs(change))}
+                  </span>
+                </div>
+                {insufficient && (
+                  <p className="text-sm text-destructive">
+                    Montant insuffisant. Demander au moins {formatFCFA(dueTotal)}.
+                  </p>
+                )}
+              </>
+            ) : (
+              // Hors espèces, le débit est exact — pas d'argent physique, pas de monnaie.
+              <div className="rounded-lg p-4 flex items-center justify-between bg-accent">
+                <span className="font-semibold">Débité exactement</span>
+                <span className="text-3xl font-bold text-primary tabular-nums">
+                  {formatFCFA(total)}
+                </span>
+              </div>
+            )}
+
+            <Button
+              size="lg"
+              className="w-full h-14 text-lg gap-2"
+              disabled={!canValidate || saleMut.isPending}
+              onClick={() => saleMut.mutate()}
+            >
+              <CheckCircle2 className="h-5 w-5" />
+              Valider l'encaissement
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Voile « Vente validée » : son + animation, aucun bouton à cliquer — il s'efface
+          tout seul et le serveur enchaîne directement la vente suivante. */}
+      <AnimatePresence>
+        {saleFlash && (
+          <motion.div
+            key="sale-flash"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="flex flex-col items-center gap-4 text-center"
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 260, damping: 18 }}
+            >
+              <motion.span
+                className="flex h-24 w-24 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.08, type: "spring", stiffness: 320, damping: 14 }}
+              >
+                <CheckCircle2 className="h-12 w-12" />
+              </motion.span>
+              <p className="text-2xl font-bold">Vente validée</p>
+              <p className="text-muted-foreground tabular-nums">
+                {formatFCFA(saleFlash.total)}
+                {saleFlash.method === "cash"
+                  ? ` · Monnaie rendue ${formatFCFA(saleFlash.change)}`
+                  : ` · ${paymentLabel(saleFlash.method)}`}
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fenêtres éclair de la caisse : la photo seule, ou la modification rapide
+          pré-remplie — jamais le formulaire complet pour un geste de service. */}
+      <ProductPhotoDialog product={photoTarget} onClose={() => setPhotoTarget(null)} />
+      <ProductQuickEditDialog product={quickEditTarget} onClose={() => setQuickEditTarget(null)} />
     </div>
+  );
+}
+
+/** Trois dernières ventes du jour, sous la grille du catalogue. */
+function RecentSalesMini({ sales }: { sales: Sale[] }) {
+  const latest = useMemo(
+    () => [...sales].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3),
+    [sales],
+  );
+  const { data: items = [] } = useQuery({
+    queryKey: ["sale_items", "recent-mini", latest.map((s) => s.id).join(",")],
+    queryFn: () => getSaleItemsForSales(latest.map((s) => s.id)),
+    enabled: latest.length > 0,
+  });
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const it of items) m.set(it.sale_id, (m.get(it.sale_id) ?? 0) + it.quantity);
+    return m;
+  }, [items]);
+  return (
+    <Card>
+      <CardContent className="space-y-2 p-4">
+        <p className="text-sm font-semibold">Ventes récentes</p>
+        {latest.map((s) => (
+          <div key={s.id} className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground tabular-nums">{formatTime(s.timestamp)}</span>
+            <span className="flex items-center gap-3">
+              <span className="text-muted-foreground">{counts.get(s.id) ?? 0} art.</span>
+              <span className="font-semibold tabular-nums">{formatFCFA(s.total)}</span>
+            </span>
+          </div>
+        ))}
+        <Link to="/history" className="block pt-1 text-sm text-primary underline">
+          Voir toutes les ventes
+        </Link>
+      </CardContent>
+    </Card>
   );
 }
 

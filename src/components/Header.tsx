@@ -5,6 +5,19 @@ import { usePreferences } from "@/hooks/use-preferences";
 import { getSetting } from "@/lib/db";
 import { TopNav } from "@/components/Nav";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
+import { NotificationBell } from "@/components/NotificationBell";
+
+/** Initiales pour l'avatar sans photo : deux lettres maximum, du nom fourni. */
+function initials(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("") || "?"
+  );
+}
 
 // Accès caché à la gestion des abonnements : 5 appuis sur le logo « ECAISSE ».
 // Le compteur se remet à zéro si deux appuis sont espacés de plus de deux secondes, pour
@@ -13,7 +26,7 @@ const HIDDEN_ACCESS_CLICKS = 5;
 const HIDDEN_ACCESS_WINDOW_MS = 2000;
 
 export function Header() {
-  const { workspaceName } = usePreferences();
+  const { workspaceName, ownerName, ownerPhoto } = usePreferences();
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
   const clicks = useRef(0);
   const lastClick = useRef(0);
@@ -54,7 +67,21 @@ export function Header() {
           <span className="truncate text-foreground">{workspaceName}</span>
         </Link>
         {/* Sous `lg`, la navigation vit dans `BottomNav` — cf. src/components/Nav.tsx. */}
-        <TopNav />
+        <div className="flex items-center gap-1">
+          <TopNav />
+          <NotificationBell />
+          <Link
+            to="/settings"
+            aria-label="Profil et réglages"
+            className="ml-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+          >
+            {ownerPhoto ? (
+              <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials(ownerName || workspaceName)
+            )}
+          </Link>
+        </div>
       </div>
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />
     </header>

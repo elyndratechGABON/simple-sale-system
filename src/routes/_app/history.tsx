@@ -5,11 +5,11 @@ import { startOfDay, startOfMonth, startOfWeek, startOfYear } from "date-fns";
 import { History, ChevronDown, ChevronUp, User, X } from "lucide-react";
 import {
   cancelSale,
-  getSaleItems,
   getSaleItemsForSales,
   isClosed,
   listSales,
   type Sale,
+  type SaleItem,
 } from "@/lib/db";
 import { lineProfit } from "@/lib/analytics";
 import { formatDay, formatFCFA, formatTime } from "@/lib/format";
@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { verifyPin } from "@/lib/pin";
+import { SaleItemChips } from "@/components/SaleItemChips";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -119,6 +120,16 @@ function HistoryPage() {
     const map = new Map<string, number>();
     for (const item of periodItems ?? []) {
       map.set(item.sale_id, (map.get(item.sale_id) ?? 0) + lineProfit(item));
+    }
+    return map;
+  }, [periodItems]);
+
+  const itemsBySale = useMemo(() => {
+    const map = new Map<string, SaleItem[]>();
+    for (const item of periodItems ?? []) {
+      const list = map.get(item.sale_id);
+      if (list) list.push(item);
+      else map.set(item.sale_id, [item]);
     }
     return map;
   }, [periodItems]);
@@ -271,7 +282,12 @@ function HistoryPage() {
               </span>
             </div>
             {daySales.map((s) => (
-              <SaleRow key={s.id} sale={s} profit={profitBySale.get(s.id) ?? 0} />
+              <SaleRow
+                key={s.id}
+                sale={s}
+                profit={profitBySale.get(s.id) ?? 0}
+                items={itemsBySale.get(s.id) ?? []}
+              />
             ))}
           </section>
         ))
@@ -280,22 +296,11 @@ function HistoryPage() {
   );
 }
 
-function SaleRow({ sale, profit }: { sale: Sale; profit: number }) {
+function SaleRow({ sale, profit, items }: { sale: Sale; profit: number; items: SaleItem[] }) {
   const [open, setOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPin] = useState("");
   const qc = useQueryClient();
-
-  const items = useQuery({
-    queryKey: ["sale_items", sale.id],
-    queryFn: () => getSaleItems(sale.id),
-    enabled: open,
-  });
-
-  const itemCount = useMemo(() => {
-    if (items.data) return items.data.reduce((s, i) => s + i.quantity, 0);
-    return 0;
-  }, [items.data]);
 
   const cancelMut = useMutation({
     mutationFn: () => cancelSale(sale.id),
@@ -329,13 +334,13 @@ function SaleRow({ sale, profit }: { sale: Sale; profit: number }) {
                 </Badge>
               )}
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              {itemCount > 0
-                ? `${itemCount} article${itemCount > 1 ? "s" : ""}`
-                : items.isLoading
-                  ? "…"
-                  : ""}
-              {isClosed(sale) && <span className="ml-2">· clôturée</span>}
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <SaleItemChips items={items} />
+              {isClosed(sale) && (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  clôturée
+                </Badge>
+              )}
             </div>
           </div>
           <div className="text-lg font-bold text-primary tabular-nums">
@@ -363,12 +368,19 @@ function SaleRow({ sale, profit }: { sale: Sale; profit: number }) {
         {/* Détail déplié : articles, cash, rendu, bénéfice */}
         {open && (
           <div className="mt-3 border-t pt-3 space-y-2 text-sm">
-            {items.data?.map((it) => (
-              <div key={it.id} className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {it.quantity} × {it.name}
+            {items.map((it) => (
+              <div key={it.id} className="flex justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">{it.name}</span>
+                  {it.quantity > 1 && (
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums">
+                      ×{it.quantity}
+                    </span>
+                  )}
                 </span>
-                <span className="font-medium">{formatFCFA(it.price_at_sale * it.quantity)}</span>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {formatFCFA(it.price_at_sale * it.quantity)}
+                </span>
               </div>
             ))}
             <div className="border-t pt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">

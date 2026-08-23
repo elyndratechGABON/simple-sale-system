@@ -13,7 +13,6 @@ import {
   Download,
   FolderOpen,
   Info,
-  KeyRound,
   MonitorSmartphone,
   Pencil,
   Plus,
@@ -50,7 +49,6 @@ import {
   restoreBackup,
   type BackupSummary,
 } from "@/lib/exports/json";
-import { setPin, verifyPin } from "@/lib/pin";
 import { extractLogoHue } from "@/lib/logo-colors";
 import type { DatabaseSnapshot } from "@/lib/db";
 import {
@@ -132,7 +130,6 @@ function SettingsPage() {
       <ClientsCard />
       <DirectoryCard />
       <BackupCard />
-      <PinCard />
       <DeleteShopCard />
       <AboutCard />
     </div>
@@ -919,66 +916,6 @@ function BackupCard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
-  );
-}
-
-function PinCard() {
-  const [oldPin, setOldPin] = useState("");
-  const [newPin, setNewPin] = useState("");
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <KeyRound className="h-4 w-4" /> Code PIN
-        </CardTitle>
-        <CardDescription>
-          Protège l'annulation d'une vente. PIN par défaut : <code>1234</code>.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="old">PIN actuel</Label>
-            <Input
-              id="old"
-              type="password"
-              inputMode="numeric"
-              value={oldPin}
-              onChange={(e) => setOldPin(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="new">Nouveau PIN</Label>
-            <Input
-              id="new"
-              type="password"
-              inputMode="numeric"
-              value={newPin}
-              onChange={(e) => setNewPin(e.target.value)}
-            />
-          </div>
-        </div>
-        <Button
-          onClick={() => {
-            if (!verifyPin(oldPin)) {
-              toast.error("PIN actuel incorrect");
-              return;
-            }
-            if (newPin.length < 4) {
-              toast.error("Nouveau PIN : au moins 4 caractères");
-              return;
-            }
-            setPin(newPin);
-            toast.success("PIN mis à jour");
-            setOldPin("");
-            setNewPin("");
-          }}
-        >
-          Modifier le PIN
-        </Button>
-      </CardContent>
     </Card>
   );
 }

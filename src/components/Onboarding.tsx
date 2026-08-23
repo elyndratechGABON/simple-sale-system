@@ -28,7 +28,6 @@ import {
   HardDrive,
   KeyRound,
   Package,
-  Phone,
   Shield,
   Store,
   Plus,
@@ -234,10 +233,10 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
     onComplete();
   }
 
-  // Étapes visuelles : 0=confidentialité, 1=nom, 2=compte, 3=secteur, [4=sous-cat],
-  // 4/5=coordonnées. Pour non-magasin : 5 étapes (0..4). Pour magasin : 6 étapes (0..5).
+  // Étapes visuelles : 0=confidentialité, 1=nom, 2=compte+coordonnées, 3=secteur,
+  // [4=sous-cat magasin]. Pour non-magasin : 4 étapes (0..3). Pour magasin : 5 (0..4).
   // Le step counter est toujours continu (0..totalSteps-1).
-  const totalSteps = isMagasin ? 6 : 5;
+  const totalSteps = isMagasin ? 5 : 4;
 
   function canNext(): boolean {
     if (step === 0) return privacyAccepted;
@@ -263,8 +262,8 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
 
   // Map step number to which section renders
   function renderStep() {
-    // Magasin: 0=confidentialité, 1=nom, 2=compte, 3=secteur, 4=sous-cat, 5=coordonnées
-    // Non-magasin: 0=confidentialité, 1=nom, 2=compte, 3=secteur, 4=coordonnées
+    // Magasin: 0=confidentialité, 1=nom, 2=compte+coordonnées, 3=secteur, 4=sous-cat
+    // Non-magasin: 0=confidentialité, 1=nom, 2=compte+coordonnées, 3=secteur
     return step;
   }
 
@@ -451,6 +450,32 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
                   className="h-12"
                 />
               </div>
+              <div className="border-t pt-3 space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Coordonnées du commerce (optionnel)
+                </p>
+                <div>
+                  <Label htmlFor="ob-phone">Numéro de téléphone</Label>
+                  <Input
+                    id="ob-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Ex : +241 06 123 456"
+                    className="h-12"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="ob-quarter">Quartier</Label>
+                  <Input
+                    id="ob-quarter"
+                    value={quarter}
+                    onChange={(e) => setQuarter(e.target.value)}
+                    placeholder="Ex : Owendo"
+                    className="h-12"
+                  />
+                </div>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
               {accountMode === "create"
@@ -584,40 +609,6 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
                   <span className="text-xs text-muted-foreground">{sub.description}</span>
                 </button>
               ))}
-            </div>
-          </StepShell>
-        )}
-
-        {/* Étape 4/5 : Coordonnées (téléphone + quartier) */}
-        {step === (isMagasin ? 5 : 4) && (
-          <StepShell
-            icon={Phone}
-            title="Coordonnées"
-            description="Informations de contact de votre commerce (optionnel)."
-          >
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="ob-phone">Numéro de téléphone</Label>
-                <Input
-                  id="ob-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Ex : +241 06 123 456"
-                  className="h-12"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <Label htmlFor="ob-quarter">Quartier</Label>
-                <Input
-                  id="ob-quarter"
-                  value={quarter}
-                  onChange={(e) => setQuarter(e.target.value)}
-                  placeholder="Ex : Owendo"
-                  className="h-12"
-                />
-              </div>
             </div>
           </StepShell>
         )}

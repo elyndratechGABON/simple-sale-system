@@ -69,6 +69,12 @@ export interface Product extends SyncFields {
    * synchronisation n'envoie que des agrégats, jamais le catalogue.
    */
   photo?: string;
+  /**
+   * Seuil « stock faible » propre au produit. Absent = seuil global de 5 (cf.
+   * src/lib/alerts.ts). Sans index : aucun upgrade nécessaire, les fiches existantes
+   * le lisent `undefined`.
+   */
+  min_stock?: number;
 }
 
 /**
@@ -112,7 +118,17 @@ export interface Sale extends SyncFields {
   client_name?: string;
   /** Référence vers le registre clients. Absent si le client n'est pas enregistré. */
   client_id?: string;
+  /**
+   * Moyen de paiement. Absent sur les ventes antérieures à ce suivi → lu comme
+   * « espèces », qui était alors le seul mode possible.
+   */
+  payment_method?: PaymentMethod;
+  /** Réduction accordée en FCFA, déjà déduite de `total`. Absente = aucune remise. */
+  discount?: number;
 }
+
+/** Moyens de paiement acceptés au comptoir. */
+export type PaymentMethod = "cash" | "card" | "mobile_money";
 
 export interface SaleItem extends SyncFields {
   id: string;
@@ -238,6 +254,40 @@ export interface ShopProfile extends SyncFields {
   accountPassword?: string;
 }
 
+/**
+ * Journal des mouvements de stock : chaque variation de quantité laisse une trace
+ * datée et motivée, pour répondre à « pourquoi il ne me reste que 3 Coca ? ».
+ * `delta` est signé : +5 réapprovisionnement, −2 vente ou correction. Journal LOCAL —
+ * le catalogue n'est pas synchronisé, un mouvement n'a pas plus à l'être.
+ */
+export interface StockMovement {
+  id: string;
+  product_id: string;
+  /** Nom du produit au moment du mouvement (le catalogue peut renommer ensuite). */
+  product_name: string;
+  delta: number;
+  reason: "replenishment" | "sale" | "round" | "cancellation" | "correction" | "creation";
+  /** Prix d'achat unitaire saisi au réapprovisionnement. */
+  unit_cost?: number;
+  supplier?: string;
+  note?: string;
+  created_at: number;
+}
+
+/**
+ * Trace d'une clôture de journée : le rapport figé au moment où on a tourné la clé.
+ * `id` est la clé du jour (minuit local) — reclôturer le même jour REMPLACE la trace
+ * au lieu d'en empiler une deuxième. Journal LOCAL : comme les mouvements de stock,
+ * rien à synchroniser.
+ */
+export interface DayClosure {
+  id: string;
+  day: number;
+  revenue: number;
+  sales_count: number;
+  closed_at: number;
+}
+
 class PosDatabase extends Dexie {
   products!: Table<Product, string>;
   sales!: Table<Sale, string>;
@@ -247,6 +297,8 @@ class PosDatabase extends Dexie {
   shop_profiles!: Table<ShopProfile, string>;
   clients!: Table<Client, string>;
   product_expenses!: Table<ProductExpense, number>;
+  stock_movements!: Table<StockMovement, string>;
+  day_closures!: Table<DayClosure, string>;
 
   constructor() {
     super("pos-db");
@@ -465,6 +517,41 @@ class PosDatabase extends Dexie {
       clients: "id, name, phone, updated_at",
       product_expenses: "++id, product_id, period_from, [product_id+period_from]",
     });
+
+    // Version 15 — journal des mouvements de stock : pourquoi la quantité a changé
+    // (réapprovisionnement, vente, tournée, annulation, correction). Journal LOCAL :
+    // la synchronisation n'envoie que des agrégats et le catalogue reste local, un
+    // mouvement n'a donc rien à faire sur un autre appareil. `min_stock` sur Product
+    // est optionnel sans index — il ne nécessite ni store ni upgrade.
+    this.version(15).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+    });
+
+    // Version 16 — historique des clôtures : une trace par jour clôturé (CA + nombre
+    // de ventes au moment de la clôture). `payment_method` et `discount` sur Sale sont
+    // optionnels sans index — aucun upgrade nécessaire pour eux.
+    this.version(16).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+      day_closures: "id, closed_at",
+    });
   }
 }
 
@@ -517,12 +604,45 @@ export async function listProducts(): Promise<Product[]> {
 
 export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Promise<Product> {
   const product: Product = { ...p, id: uid(), ...touch() };
-  await getDB().products.put(product);
+  const db = getDB();
+  await db.products.put(product);
+  // Stock initial > 0 : une trace de création, sinon le premier réapprovisionnement
+  // paraîtrait avoir disparu du journal.
+  if (Number.isFinite(product.stock) && product.stock > 0) {
+    await db.stock_movements.put({
+      id: uid(),
+      product_id: product.id,
+      product_name: product.name,
+      delta: product.stock,
+      reason: "creation",
+      created_at: Date.now(),
+    });
+  }
   return product;
 }
 
 export async function updateProduct(p: Product): Promise<void> {
-  await getDB().products.put({ ...p, ...touch() });
+  const db = getDB();
+  const previous = await db.products.get(p.id);
+  await db.products.put({ ...p, ...touch() });
+  // Le formulaire écrit un stock ABSOLU : s'il change, c'est une correction de
+  // comptage et elle doit figurer au journal comme les autres variations.
+  if (
+    previous &&
+    Number.isFinite(previous.stock) &&
+    Number.isFinite(p.stock) &&
+    p.stock !== previous.stock
+  ) {
+    await db.transaction("rw", db.stock_movements, async () => {
+      await recordMovement(db, {
+        product_id: p.id,
+        product_name: p.name,
+        delta: p.stock - previous.stock,
+        reason: "correction",
+        note: "Modification du produit",
+      });
+    });
+  }
 }
 
 /**
@@ -540,15 +660,107 @@ export async function deleteProduct(id: string): Promise<void> {
 /**
  * Ajoute une quantité au stock d'un produit. Stock illimité : opération sans effet
  * (rien à incrémenter). Retourne le produit mis à jour pour affichage immédiat.
+ *
+ * Les champs optionnels documentent le mouvement dans le journal : prix d'achat saisi
+ * (met aussi à jour le coût du produit — c'est le dernier coût d'acquisition connu),
+ * fournisseur, note libre.
  */
-export async function addStock(productId: string, quantity: number): Promise<Product> {
+export async function addStock(
+  productId: string,
+  quantity: number,
+  info?: { unit_cost?: number; supplier?: string; note?: string },
+): Promise<Product> {
   const db = getDB();
   const p = await db.products.get(productId);
   if (!p || p.deleted_at) throw new Error("Produit introuvable.");
   if (!Number.isFinite(p.stock)) throw new Error("Stock illimité, pas d'initiation possible.");
-  const updated: Product = { ...p, stock: p.stock + Math.max(0, quantity), ...touch() };
-  await db.products.put(updated);
+  const qty = Math.max(0, quantity);
+  const updated: Product = {
+    ...p,
+    stock: p.stock + qty,
+    ...(info?.unit_cost && info.unit_cost > 0 ? { cost: info.unit_cost } : {}),
+    ...touch(),
+  };
+  await db.transaction("rw", db.products, db.stock_movements, async () => {
+    await db.products.put(updated);
+    if (qty > 0) {
+      await recordMovement(db, {
+        product_id: p.id,
+        product_name: p.name,
+        delta: qty,
+        reason: "replenishment",
+        unit_cost: info?.unit_cost,
+        supplier: info?.supplier,
+        note: info?.note,
+      });
+    }
+  });
   return updated;
+}
+
+/**
+ * Retire une quantité du stock sans passer par une vente (casse, perte, inventaire).
+ * La quantité est bornée au stock présent : un retrait ne crée jamais un négatif.
+ */
+export async function removeStock(
+  productId: string,
+  quantity: number,
+  note?: string,
+): Promise<Product> {
+  const db = getDB();
+  const p = await db.products.get(productId);
+  if (!p || p.deleted_at) throw new Error("Produit introuvable.");
+  if (!Number.isFinite(p.stock)) throw new Error("Stock illimité, rien à retirer.");
+  const qty = Math.min(Math.max(0, quantity), p.stock);
+  const updated: Product = { ...p, stock: p.stock - qty, ...touch() };
+  await db.transaction("rw", db.products, db.stock_movements, async () => {
+    await db.products.put(updated);
+    if (qty > 0) {
+      await recordMovement(db, {
+        product_id: p.id,
+        product_name: p.name,
+        delta: -qty,
+        reason: "correction",
+        note,
+      });
+    }
+  });
+  return updated;
+}
+
+/**
+ * Écrit une ligne du journal des mouvements. À appeler DANS la transaction qui modifie
+ * le stock : un mouvement sans variation correspondante serait un mensonge, et
+ * l'inverse aussi. Journal plafonné aux 2 000 dernières lignes — c'est un outil de
+ * compréhension, pas une archive comptable (les ventes, elles, restent complètes).
+ */
+async function recordMovement(
+  db: PosDatabase,
+  input: Omit<StockMovement, "id" | "created_at">,
+): Promise<void> {
+  await db.stock_movements.put({ ...input, id: uid(), created_at: Date.now() });
+  const count = await db.stock_movements.count();
+  if (count > 2000) {
+    const excess = count - 2000;
+    const oldest = await db.stock_movements.orderBy("created_at").limit(excess).toArray();
+    await db.stock_movements.bulkDelete(oldest.map((m) => m.id));
+  }
+}
+
+/** Journal des mouvements, du plus récent au plus ancien ; par produit si demandé. */
+export async function listStockMovements(opts?: {
+  productId?: string;
+  limit?: number;
+}): Promise<StockMovement[]> {
+  const db = getDB();
+  const limit = opts?.limit ?? 50;
+  const table = opts?.productId
+    ? db.stock_movements
+        .where("[product_id+created_at]")
+        .between([opts.productId, Dexie.minKey], [opts.productId, Dexie.maxKey])
+    : db.stock_movements.orderBy("created_at");
+  const rows = await table.reverse().limit(limit).toArray();
+  return rows;
 }
 
 // ---------- Sales ----------
@@ -567,24 +779,35 @@ export async function createSale(input: {
   customers_count?: number;
   client_name?: string;
   client_id?: string;
+  payment_method?: PaymentMethod;
+  /** Réduction en FCFA, bornée au sous-total. */
+  discount?: number;
 }): Promise<Sale> {
   const db = getDB();
-  const total = input.lines.reduce((s, l) => s + l.price * l.quantity, 0);
+  const subtotal = input.lines.reduce((s, l) => s + l.price * l.quantity, 0);
+  const discount = Math.min(Math.max(0, Math.round(input.discount ?? 0)), subtotal);
+  const total = subtotal - discount;
+  const method: PaymentMethod = input.payment_method ?? "cash";
+  // Hors espèces, le montant débité est exact : rien ne rentre physiquement dans le
+  // tiroir-caisse, il n'y a donc rien à rendre.
+  const cashGiven = method === "cash" ? input.cash_given : total;
   const sale: Sale = {
     id: uid(),
     timestamp: Date.now(),
     total,
-    cash_given: input.cash_given,
-    change_due: input.cash_given - total,
+    cash_given: cashGiven,
+    change_due: cashGiven - total,
     day_closed: false,
     customers_count: Math.max(1, input.customers_count ?? 1),
     // Explicite bien qu'omis : une vente directe est encaissée au moment où on la crée.
     status: "paid",
+    ...(discount > 0 ? { discount } : {}),
+    payment_method: method,
     ...(input.client_name ? { client_name: input.client_name } : {}),
     ...(input.client_id ? { client_id: input.client_id } : {}),
     ...touch(),
   };
-  await db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
+  await db.transaction("rw", db.sales, db.sale_items, db.products, db.stock_movements, async () => {
     await db.sales.put(sale);
     for (const line of input.lines) {
       await db.sale_items.put({
@@ -606,6 +829,14 @@ export async function createSale(input: {
           stock: Math.max(0, p.stock - line.quantity),
           ...touch(),
         });
+        if (line.quantity > 0) {
+          await recordMovement(db, {
+            product_id: p.id,
+            product_name: p.name,
+            delta: -line.quantity,
+            reason: "sale",
+          });
+        }
       }
     }
   });
@@ -664,7 +895,7 @@ export async function getProfitToday(): Promise<number> {
  */
 export async function cancelSale(saleId: string): Promise<void> {
   const db = getDB();
-  await db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
+  await db.transaction("rw", db.sales, db.sale_items, db.products, db.stock_movements, async () => {
     const sale = await db.sales.get(saleId);
     if (!sale || sale.deleted_at) return;
     if (isClosed(sale)) {
@@ -678,6 +909,15 @@ export async function cancelSale(saleId: string): Promise<void> {
         const p = await db.products.get(item.product_id);
         if (p && Number.isFinite(p.stock)) {
           await db.products.put({ ...p, stock: p.stock + item.quantity, ...touch() });
+          if (item.quantity > 0) {
+            await recordMovement(db, {
+              product_id: p.id,
+              product_name: p.name,
+              delta: item.quantity,
+              reason: "cancellation",
+              note: `Vente annulée`,
+            });
+          }
         }
       }
       await db.sale_items.put({ ...item, ...touch(), deleted_at });
@@ -689,12 +929,29 @@ export async function cancelSale(saleId: string): Promise<void> {
 export async function closeDay(): Promise<number> {
   const db = getDB();
   const sales = await listSalesToday();
-  await db.transaction("rw", db.sales, async () => {
+  await db.transaction("rw", db.sales, db.day_closures, async () => {
     for (const s of sales) {
       if (!s.day_closed) await db.sales.put({ ...s, day_closed: true, ...touch() });
     }
+    if (sales.length > 0) {
+      // Une trace par jour, clé = minuit local : reclôturer le même jour remplace la
+      // trace précédente au lieu d'en empiler une deuxième.
+      const day = startOfToday();
+      await db.day_closures.put({
+        id: String(day),
+        day,
+        revenue: sales.reduce((sum, s) => sum + s.total, 0),
+        sales_count: sales.length,
+        closed_at: Date.now(),
+      });
+    }
   });
   return sales.length;
+}
+
+/** Dernières clôtures enregistrées, la plus récente d'abord. */
+export async function listDayClosures(limit = 5): Promise<DayClosure[]> {
+  return getDB().day_closures.orderBy("closed_at").reverse().limit(limit).toArray();
 }
 
 // ---------- Clôture automatique ----------
@@ -828,40 +1085,55 @@ export async function serveTable(saleId: string): Promise<void> {
 export async function addRound(saleId: string, lines: CartLine[]): Promise<Sale> {
   const db = getDB();
   const ordered_at = Date.now();
-  return db.transaction("rw", db.sales, db.sale_items, db.products, async () => {
-    const sale = await db.sales.get(saleId);
-    if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
-    if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
+  return db.transaction(
+    "rw",
+    db.sales,
+    db.sale_items,
+    db.products,
+    db.stock_movements,
+    async () => {
+      const sale = await db.sales.get(saleId);
+      if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
+      if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
 
-    for (const line of lines) {
-      await db.sale_items.put({
-        id: uid(),
-        sale_id: sale.id,
-        product_id: line.product_id,
-        name: line.name,
-        quantity: line.quantity,
-        price_at_sale: line.price,
-        cost_at_sale: line.cost,
-        category_at_sale: line.category,
-        ordered_at,
-        ...touch(),
-      });
-      if (!line.product_id) continue; // ligne libre : rien à décrémenter
-      const p = await db.products.get(line.product_id);
-      if (p && Number.isFinite(p.stock)) {
-        await db.products.put({ ...p, stock: Math.max(0, p.stock - line.quantity), ...touch() });
+      for (const line of lines) {
+        await db.sale_items.put({
+          id: uid(),
+          sale_id: sale.id,
+          product_id: line.product_id,
+          name: line.name,
+          quantity: line.quantity,
+          price_at_sale: line.price,
+          cost_at_sale: line.cost,
+          category_at_sale: line.category,
+          ordered_at,
+          ...touch(),
+        });
+        if (!line.product_id) continue; // ligne libre : rien à décrémenter
+        const p = await db.products.get(line.product_id);
+        if (p && Number.isFinite(p.stock)) {
+          await db.products.put({ ...p, stock: Math.max(0, p.stock - line.quantity), ...touch() });
+          if (line.quantity > 0) {
+            await recordMovement(db, {
+              product_id: p.id,
+              product_name: p.name,
+              delta: -line.quantity,
+              reason: "round",
+            });
+          }
+        }
       }
-    }
 
-    // Le total se RECALCULE depuis les lignes vivantes plutôt que de s'incrémenter : une
-    // addition dont le total dérive de ses lignes ne peut pas mentir, même si une tournée
-    // a été écrite deux fois.
-    const items = alive(await db.sale_items.where("sale_id").equals(sale.id).toArray());
-    const total = items.reduce((s, i) => s + i.price_at_sale * i.quantity, 0);
-    const updated: Sale = { ...sale, total, ...touch() };
-    await db.sales.put(updated);
-    return updated;
-  });
+      // Le total se RECALCULE depuis les lignes vivantes plutôt que de s'incrémenter : une
+      // addition dont le total dérive de ses lignes ne peut pas mentir, même si une tournée
+      // a été écrite deux fois.
+      const items = alive(await db.sale_items.where("sale_id").equals(sale.id).toArray());
+      const total = items.reduce((s, i) => s + i.price_at_sale * i.quantity, 0);
+      const updated: Sale = { ...sale, total, ...touch() };
+      await db.sales.put(updated);
+      return updated;
+    },
+  );
 }
 
 /** Encaisse une addition : elle devient une vente ordinaire, datée de cet instant. */

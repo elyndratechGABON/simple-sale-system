@@ -115,6 +115,8 @@ export interface Preferences {
   quarter: string;
   /** Nom du propriétaire du commerce. */
   ownerName: string;
+  /** Photo de profil du propriétaire, dataURL webp réduit à 128 px (en-tête, avatar). */
+  ownerPhoto?: string;
   /** Passe à true une fois le guide fonctionnel terminé ou passé. */
   onboardingCompleted: boolean;
   /** L'utilisateur a accepté la politique de confidentialité. */
@@ -137,6 +139,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   phone: "",
   quarter: "",
   ownerName: "",
+  ownerPhoto: "",
   onboardingCompleted: false,
   privacyAccepted: false,
 };
@@ -417,6 +420,7 @@ export function getPreferences(): Preferences {
       phone: parsed.phone?.trim() || "",
       quarter: parsed.quarter?.trim() || "",
       ownerName: parsed.ownerName?.trim() || "",
+      ownerPhoto: typeof parsed.ownerPhoto === "string" ? parsed.ownerPhoto : "",
       onboardingCompleted: parsed.onboardingCompleted === true,
       privacyAccepted: parsed.privacyAccepted === true,
     };

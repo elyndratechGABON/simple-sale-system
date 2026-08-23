@@ -37,6 +37,9 @@ export function ProductForm({
   const [stock, setStock] = useState<string>(
     editing && Number.isFinite(editing.stock) ? String(editing.stock) : "",
   );
+  const [minStock, setMinStock] = useState<string>(
+    editing?.min_stock !== undefined ? String(editing.min_stock) : "",
+  );
   const [category, setCategory] = useState<Category>(
     editing?.category ?? defaultCategory ?? "Boisson",
   );
@@ -75,6 +78,7 @@ export function ProductForm({
         cost: 0,
         price: Number(price) || 0,
         stock: unlimited ? Number.POSITIVE_INFINITY : Number(stock) || 0,
+        min_stock: !unlimited && minStock ? Number(minStock) : undefined,
         category,
         barcode: barcode.trim() || null,
         type: productType,
@@ -207,6 +211,22 @@ export function ProductForm({
                 Stock illimité
               </Label>
             </div>
+            {!unlimited && (
+              <div>
+                <Label htmlFor="min-stock">Stock minimum (alerte)</Label>
+                <Input
+                  id="min-stock"
+                  inputMode="numeric"
+                  value={minStock}
+                  onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Par défaut : 5"
+                  className="mt-1.5"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Sous ce seuil, le produit apparaît comme « stock faible ».
+                </p>
+              </div>
+            )}
           </>
         )}
         <div className="grid grid-cols-2 gap-3">

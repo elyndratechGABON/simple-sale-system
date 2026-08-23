@@ -37,16 +37,29 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const [loading, setLoading] = useState(true);
+  // Progression RÉELLE du démarrage, passée à l'écran de chargement : chaque jalon
+  // franchi pousse le compteur (jamais en arrière — `Math.max`, l'ordre d'arrivée
+  // des promesses n'est pas garanti quand la synchro réseau bat le délai minimum).
+  const [progress, setProgress] = useState(8);
 
   useEffect(() => {
-    const minDelay = new Promise((r) => setTimeout(r, 1800));
-    const profileReady = ensureShopProfile(getPreferences().workspaceName).then(() =>
-      backgroundSync(),
-    );
-    void Promise.all([minDelay, profileReady]).then(() => setLoading(false));
+    const bump = (v: number) => setProgress((p) => Math.max(p, v));
+    const minDelay = new Promise((r) => setTimeout(r, 1800)).then(() => bump(90));
+    const profileReady = ensureShopProfile(getPreferences().workspaceName)
+      .then(() => {
+        bump(45);
+        return backgroundSync();
+      })
+      .then(() => bump(80));
+    void Promise.all([minDelay, profileReady]).then(async () => {
+      bump(100);
+      // Laisse le compteur afficher 100 % un instant avant la bascule vers l'app.
+      await new Promise((r) => setTimeout(r, 350));
+      setLoading(false);
+    });
   }, []);
 
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen progress={progress} />;
 
   return (
     <>

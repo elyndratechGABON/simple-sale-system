@@ -9,12 +9,20 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  Lightbulb,
   Lock,
   TrendingUp,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { DateRange } from "react-day-picker";
-import { closeDay, getProductExpenses, listSalesToday, saveProductExpense } from "@/lib/db";
+import {
+  closeDay,
+  getProductExpenses,
+  listDayClosures,
+  listSalesToday,
+  saveProductExpense,
+  type PaymentMethod,
+} from "@/lib/db";
 import { computePeriodStats, lastDaysRange, type ProductBucket } from "@/lib/analytics";
 import { usePeriodData } from "@/hooks/use-period-data";
 import { usePreferences } from "@/hooks/use-preferences";
@@ -66,6 +74,31 @@ export const Route = createFileRoute("/_app/reports")({
 // l'ancienne route /dashboard apportait en propre. Cette page l'a absorbée, le reste
 // (courbe, faits saillants, exports) était déjà ici en plus complet.
 type PresetKey = "today" | "7" | "30" | "custom";
+
+// Granularité de la courbe : par jour, regroupée par semaine (lundi) ou par mois.
+type Granularity = "day" | "week" | "month";
+
+const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  cash: "Espèces",
+  card: "Carte",
+  mobile_money: "Mobile Money",
+};
+
+/** Clé et libellé du bucket temporel d'un jour, selon la granularité choisie. */
+function bucketOf(ts: number, g: Granularity): { key: string; label: string } {
+  if (g === "day") return { key: String(ts), label: formatDayShort(ts) };
+  const d = new Date(ts);
+  if (g === "week") {
+    // Semaine commençant le lundi : on ramène au lundi de la semaine du jour.
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return { key: `w${monday.getTime()}`, label: formatDayShort(monday.getTime()) };
+  }
+  return {
+    key: `m${d.getFullYear()}-${d.getMonth()}`,
+    label: d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }),
+  };
+}
 
 const chartConfig = {
   revenue: { label: "Revenus", color: "var(--chart-1)" },
@@ -211,6 +244,7 @@ function ReportsPage() {
   const [preset, setPreset] = useState<PresetKey>("today");
   const [showDetail, setShowDetail] = useState(false);
   const [range, setRange] = useState<DateRange | undefined>();
+  const [granularity, setGranularity] = useState<Granularity>("day");
   const chartRef = useRef<HTMLDivElement>(null);
 
   // La plage personnalisée n'est prise en compte qu'une fois les deux bornes choisies ;
@@ -273,6 +307,94 @@ function ReportsPage() {
   const topProducts = stats.topProducts.slice(0, 10);
   const topRest = stats.topProducts.length - topProducts.length;
 
+  // Courbe agrégée selon la granularité choisie. Par jour : la série complète telle
+  // quelle. Semaine/mois : sommes des jours, dans l'ordre chronologique de la série.
+  const chartBuckets = useMemo(() => {
+    if (granularity === "day") {
+      return stats.days.map((d) => ({
+        day: formatDayShort(d.day),
+        revenue: d.revenue,
+        profit: d.profit,
+      }));
+    }
+    const map = new Map<string, { day: string; revenue: number; profit: number }>();
+    for (const d of stats.days) {
+      const b = bucketOf(d.day, granularity);
+      const cur = map.get(b.key) ?? { day: b.label, revenue: 0, profit: 0 };
+      cur.revenue += d.revenue;
+      cur.profit += d.profit;
+      map.set(b.key, cur);
+    }
+    return Array.from(map.values());
+  }, [stats.days, granularity]);
+
+  // Résumé financier : ce qui est entré, ce qui a coûté, ce qu'on a laissé en remise.
+  // « Coûts d'acquisition » = revenus − bénéfice (les coûts figés dans les lignes).
+  // Les dépenses produit saisies à la main viennent s'ajouter — elles ne sont PAS déjà
+  // déduites du bénéfice, cf. computePeriodStats.
+  const acquisitionCosts = stats.revenue - stats.profit;
+  const productExpensesTotal = useMemo(
+    () => productExpenses.reduce((sum, e) => sum + e.cost, 0),
+    [productExpenses],
+  );
+  const totalDiscounts = useMemo(
+    () => sales.reduce((sum, s) => sum + (s.discount ?? 0), 0),
+    [sales],
+  );
+
+  // Répartition par moyen de paiement. Absent sur les ventes antérieures au suivi =
+  // espèces, seul mode alors possible.
+  const byPayment = useMemo(() => {
+    const m = new Map<PaymentMethod, { total: number; count: number }>();
+    for (const s of sales) {
+      const key: PaymentMethod = s.payment_method ?? "cash";
+      const cur = m.get(key) ?? { total: 0, count: 0 };
+      cur.total += s.total;
+      cur.count += 1;
+      m.set(key, cur);
+    }
+    return Array.from(m.entries())
+      .map(([method, v]) => ({
+        method,
+        ...v,
+        share: stats.revenue > 0 ? v.total / stats.revenue : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [sales, stats.revenue]);
+
+  // Recommandations contextuelles : uniquement des faits calculés, jamais de conseil
+  // générique. Le stock bas vit dans la cloche du tableau de bord, on ne le duplique pas.
+  const tips = useMemo(() => {
+    const out: { tone: "good" | "warn" | "info"; text: string }[] = [];
+    if (prevStats.salesCount > 0 && prevStats.revenue > 0) {
+      if (stats.revenue >= prevStats.revenue * 1.1) {
+        out.push({
+          tone: "good",
+          text: `Le chiffre d'affaires progresse de ${formatPercent(stats.revenue / prevStats.revenue - 1, true)} par rapport à la période précédente.`,
+        });
+      } else if (stats.revenue <= prevStats.revenue * 0.9) {
+        out.push({
+          tone: "warn",
+          text: `Le chiffre d'affaires recule de ${formatPercent(1 - stats.revenue / prevStats.revenue, true)} par rapport à la période précédente.`,
+        });
+      }
+    }
+    const top = stats.topProducts[0];
+    if (top && top.quantity > 0) {
+      out.push({
+        tone: "info",
+        text: `Meilleure vente : ${top.name} — ${top.quantity} vendu(s), ${formatFCFA(top.revenue)}.`,
+      });
+    }
+    if (stats.bestDay) {
+      out.push({
+        tone: "info",
+        text: `Meilleure journée : ${formatDay(stats.bestDay.day)} avec ${formatFCFA(stats.bestDay.revenue)}.`,
+      });
+    }
+    return out;
+  }, [stats, prevStats]);
+
   const payload: ReportPayload = {
     label,
     from,
@@ -283,18 +405,21 @@ function ReportsPage() {
     workspaceName,
   };
 
-  const chartData = stats.days.map((d) => ({
-    day: formatDayShort(d.day),
-    revenue: d.revenue,
-    profit: d.profit,
-  }));
-
   const closeMut = useMutation({
     mutationFn: closeDay,
     onSuccess: (n) => {
       qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["day_closures"] });
       toast.success(`${n} vente(s) clôturée(s)`);
     },
+  });
+
+  // Historique des clôtures enregistrées — la plus récente d'abord. Vide tant qu'aucune
+  // clôture n'a été posée depuis l'ajout de la fonctionnalité : on ne reconstruit pas
+  // le passé à partir des ventes, la trace figée au moment de la clôture est la source.
+  const { data: closures = [] } = useQuery({
+    queryKey: ["day_closures"],
+    queryFn: () => listDayClosures(5),
   });
 
   // Les ventes du jour en propre, indépendamment de la période affichée : la clôture
@@ -307,7 +432,7 @@ function ReportsPage() {
   const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+    <div className="mx-auto max-w-[1500px] px-4 py-6 lg:px-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <BarChart3 className="h-6 w-6" /> Rapports & clôture
@@ -349,6 +474,99 @@ function ReportsPage() {
         <StatCard label="Articles vendus" value={String(stats.itemsCount)} />
         <StatCard label="Clients" value={String(stats.customersCount)} />
       </div>
+
+      {/* Résumé financier — toujours visible : c'est la photo que le gérant vient chercher. */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Résumé financier</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Revenus</span>
+              <span className="font-medium tabular-nums">{formatFCFA(stats.revenue)}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Coûts d'acquisition</span>
+              <span className="font-medium tabular-nums">{formatFCFA(acquisitionCosts)}</span>
+            </div>
+            {productExpensesTotal > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Dépenses produit saisies</span>
+                <span className="font-medium tabular-nums">{formatFCFA(productExpensesTotal)}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Bénéfice</span>
+              <span className="font-semibold tabular-nums text-primary">
+                {formatFCFA(stats.profit)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Marge</span>
+              <span className="font-medium tabular-nums">{formatPercent(stats.marginRate)}</span>
+            </div>
+            {totalDiscounts > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-muted-foreground">Réductions accordées</span>
+                <span className="font-medium tabular-nums">−{formatFCFA(totalDiscounts)}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {byPayment.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Modes de paiement</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {byPayment.map((p) => (
+              <div key={p.method} className="space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span>{PAYMENT_LABELS[p.method]}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {formatFCFA(p.total)} · {formatPercent(p.share)}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-muted">
+                  <div
+                    className="h-2 rounded-full bg-primary"
+                    style={{ width: `${Math.round(p.share * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {tips.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lightbulb className="h-4 w-4" /> À retenir
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {tips.map((t, i) => (
+              <p
+                key={i}
+                className={
+                  t.tone === "good"
+                    ? "text-emerald-600"
+                    : t.tone === "warn"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-muted-foreground"
+                }
+              >
+                {t.text}
+              </p>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <TopArticlesCard
         products={topProducts.slice(0, 5)}
@@ -414,6 +632,11 @@ function ReportsPage() {
                   value={stats.itemsCount}
                   previous={prevStats.itemsCount}
                 />
+                <ComparisonCell
+                  label="Clients"
+                  value={stats.customersCount}
+                  previous={prevStats.customersCount}
+                />
               </div>
               <div className="border-t pt-3 grid gap-2 text-sm">
                 <div className="flex justify-between gap-3">
@@ -438,12 +661,19 @@ function ReportsPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Revenus et bénéfices par jour</CardTitle>
+              <CardTitle className="text-base">Revenus et bénéfices</CardTitle>
+              <Tabs value={granularity} onValueChange={(v) => setGranularity(v as Granularity)}>
+                <TabsList>
+                  <TabsTrigger value="day">Par jour</TabsTrigger>
+                  <TabsTrigger value="week">Par semaine</TabsTrigger>
+                  <TabsTrigger value="month">Par mois</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
             <CardContent>
               <div ref={chartRef}>
                 <ChartContainer config={chartConfig} className="aspect-[2/1] w-full">
-                  <LineChart data={chartData} margin={{ left: 4, right: 8, top: 8 }}>
+                  <LineChart data={chartBuckets} margin={{ left: 4, right: 8, top: 8 }}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} />
                     <YAxis width={56} tickLine={false} axisLine={false} />
@@ -571,6 +801,30 @@ function ReportsPage() {
         busy={closeMut.isPending}
         onClose={() => closeMut.mutate()}
       />
+
+      {closures.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Historique des clôtures</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Les 5 dernières journées clôturées — le rapport figé au moment où on a tourné la clé.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {closures.map((c) => (
+              <div key={c.id} className="flex justify-between gap-3">
+                <span>{formatDay(c.day)}</span>
+                <span className="tabular-nums">
+                  <span className="font-medium">{formatFCFA(c.revenue)}</span>{" "}
+                  <span className="text-muted-foreground">
+                    · {c.sales_count} vente{c.sales_count > 1 ? "s" : ""}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -3,12 +3,24 @@
 // magasins : le profil (IndexedDB, poussé à l'orchestrateur) ET les préférences
 // (localStorage : en-tête, accueil, documents exportés). La synchronisation est
 // automatique ; seul le compte marchand reste non modifiable ici.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Building2, MapPin, Phone, Save, UserRound, Users, Wifi, CreditCard } from "lucide-react";
+import {
+  Building2,
+  Camera,
+  MapPin,
+  Phone,
+  Save,
+  Trash2,
+  UserRound,
+  Users,
+  Wifi,
+  CreditCard,
+} from "lucide-react";
 import { getShopProfile, saveShopProfile, type ShopProfile } from "@/lib/db";
 import { getPreferences, savePreferences } from "@/lib/settings";
+import { fileToScaledDataUrl } from "@/lib/images";
 import { formatDateShort } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +50,9 @@ export function ShopCard() {
   const [storeName, setStoreName] = useState("");
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
+  const [ownerPhoto, setOwnerPhoto] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -46,6 +61,7 @@ export function ShopCard() {
     setStoreName(profile.storeName || prefs.workspaceName);
     setPhone(profile.phone || prefs.phone);
     setLocation(profile.location || prefs.quarter);
+    setOwnerPhoto(prefs.ownerPhoto || "");
   }, [profile]);
 
   async function save() {
@@ -72,6 +88,31 @@ export function ShopCard() {
     qc.invalidateQueries({ queryKey: ["shop_profile"] });
     qc.invalidateQueries({ queryKey: ["preferences"] });
     toast.success("Établissement enregistré");
+  }
+
+  async function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPhotoBusy(true);
+    try {
+      // 128 px suffit pour un avatar de 40 px dans l'en-tête, même en écran retina ×3.
+      const { dataUrl } = await fileToScaledDataUrl(file, 128);
+      setOwnerPhoto(dataUrl);
+      savePreferences({ ownerPhoto: dataUrl });
+      qc.invalidateQueries({ queryKey: ["preferences"] });
+      toast.success("Photo de profil mise à jour");
+    } catch {
+      toast.error("Impossible d'utiliser cette image.");
+    } finally {
+      setPhotoBusy(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
+
+  function removePhoto() {
+    setOwnerPhoto("");
+    savePreferences({ ownerPhoto: "" });
+    qc.invalidateQueries({ queryKey: ["preferences"] });
   }
 
   const [planChooserOpen, setPlanChooserOpen] = useState(false);
@@ -146,6 +187,48 @@ export function ShopCard() {
             value={`${profile.accountName ?? profile.storeName} · ${profile.accountPhone}`}
           />
         )}
+
+        <div className="flex items-center gap-4 rounded-xl border bg-muted/30 px-4 py-3">
+          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary">
+            {ownerPhoto ? (
+              <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <UserRound className="h-5 w-5" />
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Photo de profil</p>
+            <p className="text-xs text-muted-foreground truncate">
+              Affichée dans l'en-tête, à côté des réglages.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={photoBusy}
+            onClick={() => photoInputRef.current?.click()}
+          >
+            <Camera className="h-4 w-4 mr-1.5" />
+            Changer
+          </Button>
+          {ownerPhoto && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Retirer la photo de profil"
+              onClick={removePhoto}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void handlePhoto(e)}
+        />
 
         <Button onClick={() => void save()}>
           <Save className="h-4 w-4 mr-2" /> Enregistrer
