@@ -31,7 +31,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { ACTIVE_CLUSTERS, applyTheme, savePreferences, type Preferences } from "@/lib/settings";
+import { ACTIVE_CLUSTERS, savePreferences, type Preferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import {
@@ -49,7 +49,6 @@ import {
   restoreBackup,
   type BackupSummary,
 } from "@/lib/exports/json";
-import { extractLogoHue } from "@/lib/logo-colors";
 import type { DatabaseSnapshot } from "@/lib/db";
 import {
   getSetting,
@@ -319,20 +318,12 @@ function LogoCard() {
     if (!file) return;
     setBusy(true);
     try {
-      const { dataUrl, img } = await fileToLogoDataUrl(file);
+      const { dataUrl } = await fileToLogoDataUrl(file);
       await setSetting(SETTING_SHOP_LOGO, dataUrl);
       qc.invalidateQueries({ queryKey: ["shop_logo"] });
-      // Le logo teinte l'interface : la couleur dominante devient le primaire, sauf si
-      // le logo est monochrome (aucune teinte exploitable — on ne change alors rien).
-      const hue = extractLogoHue(img);
-      if (hue !== null) {
-        applyTheme(hue);
-        savePreferences({ hue });
-        qc.invalidateQueries({ queryKey: ["preferences"] });
-        toast.success("Logo appliqué — couleurs de l'interface adaptées");
-      } else {
-        toast.success("Logo de la boutique mis à jour");
-      }
+      // Le logo illustre la boutique, il ne teinte PAS l'interface : l'identité couleur
+      // reste celle de la marque (émeraude/or), quel que soit le fichier envoyé.
+      toast.success("Logo de la boutique mis à jour");
     } catch {
       toast.error("Impossible d'utiliser cette image.");
     } finally {

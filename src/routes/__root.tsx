@@ -8,11 +8,10 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { MotionConfig } from "framer-motion";
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { PwaBootstrap } from "../components/PwaBootstrap";
-import { applyTheme, getPreferences } from "../lib/settings";
 import { Toaster } from "sonner";
 
 function NotFoundComponent() {
@@ -130,15 +129,6 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-
-  // La couleur choisie est réappliquée à chaque démarrage. Elle vit dans localStorage,
-  // que le rendu serveur ne peut pas lire : le HTML part donc toujours avec le vert par
-  // défaut de styles.css, et bascule ici. Un très bref éclat de vert est possible au
-  // premier rendu chez un utilisateur ayant choisi une autre couleur — le prix à payer
-  // pour ne pas injecter de script bloquant dans le <head>.
-  useEffect(() => {
-    applyTheme(getPreferences().hue);
-  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
