@@ -20,6 +20,24 @@
 // « toutes les fonctionnalités continuent de fonctionner sans Internet », et l'export PDF
 // en est une. Précacher partiellement produirait une application qui marche hors ligne
 // jusqu'au moment où l'utilisateur clique sur « PDF ».
+//
+// EXCEPTIONS documentées (~42 Mo d'écart à l'installation) — l'assetHandler du service
+// worker est cache-first : tout ce qui n'est pas préchargé se met en cache au PREMIER
+// usage réel, donc rien ne casse, seul le premier usage exige le réseau.
+//   - ort-wasm-simd-threaded.jsep-*.wasm  : doublon hashé émis par Vite. ORT charge
+//     exclusivement les copies NON hashées (wasmPaths = "/assets/", cf.
+//     scripts/copy-onnx-wasm.mjs et src/lib/voice/engine.ts) — ce fichier n'est JAMAIS
+//     demandé, ni en ligne ni hors ligne. Pur poids mort de 21 Mo dans le précache.
+//   - ort-wasm-simd-threaded.jsep.wasm/.mjs + transformers.web-*.js : la pile de dictée
+//     vocale (Whisper). Télécharger 22 Mo à l'installation pour une fonctionnalité
+//     optionnelle pénalise chaque premier lancement ; la dictée reste utilisable hors
+//     ligne dès la deuxième fois, après le premier passage connecté.
+const PRECACHE_EXCLUDE = [
+  /^ort-wasm-simd-threaded\.jsep-\w+\.wasm$/,
+  /^ort-wasm-simd-threaded\.jsep\.wasm$/,
+  /^ort-wasm-simd-threaded\.jsep\.mjs$/,
+  /^transformers\.web-\w+\.js$/,
+];
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -60,7 +78,10 @@ for (const dir of OUTPUT_DIRS) {
     continue;
   }
 
-  const urls = files.map((f) => `/assets/${f}`).sort();
+  const urls = files
+    .filter((f) => !PRECACHE_EXCLUDE.some((re) => re.test(f)))
+    .map((f) => `/assets/${f}`)
+    .sort();
   // La version de cache dérive du contenu de la liste : deux builds identiques gardent
   // le même cache, un build qui change un asset invalide l'ancien. Sans ça les caches des
   // versions précédentes s'accumuleraient sur l'appareil, puisque le `activate` du

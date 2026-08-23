@@ -39,24 +39,24 @@ function AppLayout() {
   const [loading, setLoading] = useState(true);
   // Progression RÉELLE du démarrage, passée à l'écran de chargement : chaque jalon
   // franchi pousse le compteur (jamais en arrière — `Math.max`, l'ordre d'arrivée
-  // des promesses n'est pas garanti quand la synchro réseau bat le délai minimum).
+  // des promesses n'est pas garanti).
   const [progress, setProgress] = useState(8);
 
   useEffect(() => {
     const bump = (v: number) => setProgress((p) => Math.max(p, v));
-    const minDelay = new Promise((r) => setTimeout(r, 1800)).then(() => bump(90));
-    const profileReady = ensureShopProfile(getPreferences().workspaceName)
-      .then(() => {
-        bump(45);
-        return backgroundSync();
-      })
-      .then(() => bump(80));
+    // Plancher court (400 ms) : juste le temps que l'écran ne clignote pas quand
+    // tout est déjà prêt. Le compteur étant sincère, plus besoin de délai-théâtre.
+    const minDelay = new Promise((r) => setTimeout(r, 400)).then(() => bump(90));
+    // La synchronisation réseau NE BLOQUE PLUS l'affichage : l'app est offline-first,
+    // rien dans /pos n'en dépend. Elle part en tâche de fond dès que le profil existe.
+    const profileReady = ensureShopProfile(getPreferences().workspaceName).then(() => bump(75));
     void Promise.all([minDelay, profileReady]).then(async () => {
       bump(100);
       // Laisse le compteur afficher 100 % un instant avant la bascule vers l'app.
-      await new Promise((r) => setTimeout(r, 350));
+      await new Promise((r) => setTimeout(r, 250));
       setLoading(false);
     });
+    void profileReady.then(() => backgroundSync());
   }, []);
 
   if (loading) return <LoadingScreen progress={progress} />;
