@@ -187,7 +187,7 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
       }
       setAccPhone(parsed.phone);
       setAccPassword(parsed.password);
-      if (parsed.name) setName(parsed.name);
+      // Le nom du QR n'est qu'indicatif : cet écran garde SA propre enseigne.
       toast.success(`Compte « ${parsed.name || parsed.phone} » récupéré — continuez.`);
     } catch {
       toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");

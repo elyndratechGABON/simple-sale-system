@@ -13,6 +13,7 @@ import {
   Download,
   FolderOpen,
   Info,
+  Link2,
   MonitorSmartphone,
   Pencil,
   Plus,
@@ -59,9 +60,16 @@ import {
   addClient,
   updateClient,
   deleteClient,
+  setShopAccount,
   type Client,
 } from "@/lib/db";
-import { deleteShopRemote, getAccountQuota, resetGatekeeper } from "@/lib/gatekeeper";
+import {
+  deleteShopRemote,
+  getAccountQuota,
+  getSubscriptionRequest,
+  handshake,
+  resetGatekeeper,
+} from "@/lib/gatekeeper";
 import { DevicePairingDialog } from "@/components/DevicePairingDialog";
 import { ShopCard } from "@/components/ShopCard";
 import { Badge } from "@/components/ui/badge";
@@ -223,6 +231,7 @@ function BusinessCard() {
  * lorsque l'appareil connaît un compte (créé ou rejoint à l'onboarding).
  */
 function DevicesCard() {
+  const qc = useQueryClient();
   const [pairingOpen, setPairingOpen] = useState(false);
   const { data: profile } = useQuery({
     queryKey: ["shop_profile"],
@@ -234,8 +243,48 @@ function DevicesCard() {
     queryFn: getAccountQuota,
     staleTime: 60_000,
   });
+  const { data: request } = useQuery({
+    queryKey: ["subscription_request"],
+    queryFn: getSubscriptionRequest,
+    staleTime: 60_000,
+  });
 
   const hasAccount = Boolean(profile?.accountPhone && profile.accountPassword);
+
+  // Rattachement manuel : le serveur connaît déjà cet écran (le quota s'affiche) mais
+  // la fiche locale n'a pas d'identifiants de compte — cas des écrans rattachés par
+  // migration ou fusion, dont le mot de passe généré ne connaît qu'eux. Le serveur
+  // accepte la réclamation car ce device_id est déjà membre du compte visé.
+  const [claimPhone, setClaimPhone] = useState("");
+  const [claimPassword, setClaimPassword] = useState("");
+  const [claiming, setClaiming] = useState(false);
+
+  async function claimAccount() {
+    const phone = claimPhone.trim();
+    const password = claimPassword.trim();
+    if (!phone || !password) {
+      toast.error("Renseignez le téléphone et le mot de passe du compte marchand.");
+      return;
+    }
+    setClaiming(true);
+    try {
+      await setShopAccount({ name: profile?.storeName ?? "", phone, password });
+      const result = await handshake();
+      if (result.ok) {
+        toast.success("Écran rattaché au compte marchand.");
+        setClaimPassword("");
+        await qc.invalidateQueries({ queryKey: ["shop_profile"] });
+        await qc.invalidateQueries({ queryKey: ["account_quota"] });
+        await qc.invalidateQueries({ queryKey: ["subscription_request"] });
+      } else if (result.reason === "account_password") {
+        toast.error("Téléphone ou mot de passe incorrect.");
+      } else {
+        toast.error("Serveur injoignable — réessayez une fois le réseau revenu.");
+      }
+    } finally {
+      setClaiming(false);
+    }
+  }
 
   return (
     <Card>
@@ -261,6 +310,75 @@ function DevicesCard() {
             </Badge>
           </div>
         )}
+
+        {request && (
+          <div className="flex items-center justify-between rounded-lg border border-dashed px-3 py-2">
+            <span className="text-sm text-muted-foreground">
+              Demande d'abonnement
+              {typeof request.plan_price === "number" && request.plan_price > 0
+                ? ` (${request.plan_price.toLocaleString("fr-FR")} F)`
+                : ""}
+            </span>
+            <Badge
+              variant={
+                request.status === "pending"
+                  ? "secondary"
+                  : request.status === "approved"
+                    ? "default"
+                    : "destructive"
+              }
+            >
+              {request.status === "pending"
+                ? "En attente de validation"
+                : request.status === "approved"
+                  ? "Validée"
+                  : "Refusée"}
+            </Badge>
+          </div>
+        )}
+
+        {!hasAccount && (
+          <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Users className="h-4 w-4" /> Rejoindre le compte marchand
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Saisissez le téléphone et le mot de passe du compte marchand pour rattacher cette
+                caisse — puis « Ajouter un appareil » deviendra disponible.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-phone">Téléphone du compte</Label>
+                <Input
+                  id="claim-phone"
+                  type="tel"
+                  value={claimPhone}
+                  onChange={(e) => setClaimPhone(e.target.value)}
+                  placeholder="Ex : +241 06 123 456"
+                  autoComplete="tel"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="claim-password">Mot de passe du compte</Label>
+                <Input
+                  id="claim-password"
+                  type="password"
+                  value={claimPassword}
+                  onChange={(e) => setClaimPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
+            <Button variant="outline" disabled={claiming} onClick={() => void claimAccount()}>
+              <Link2 className="h-4 w-4 mr-2" />
+              {claiming ? "Rattachement…" : "Rattacher cet écran au compte"}
+            </Button>
+          </div>
+        )}
+
         <Button onClick={() => setPairingOpen(true)} disabled={!hasAccount}>
           <QrCode className="h-4 w-4 mr-2" />
           Ajouter un appareil

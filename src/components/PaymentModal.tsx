@@ -1,11 +1,23 @@
 // Modal de renouvellement manuel via Airtel Money. Trois étapes guidées :
 // 1. Instructions USSD (*110#) avec bouton qui compose le numéro
 // 2. Saisie de la référence de transaction
-// 3. Confirmation via WhatsApp (lien wa.me pré-rempli)
+// 3. Envoi de la demande à l'administrateur (un clic) + confirmation WhatsApp en secours
 //
-// Le numéro WhatsApp du service client est le même que dans SuspendedScreen.tsx.
+// La demande part à l'orchestrateur (POST /api/v1/requests) : le tableau de bord de
+// l'administrateur la reçoit en temps réel et valide EN UN CLIC — plus besoin de
+// ressaisir le montant à la main. Le lien WhatsApp reste en secours si le serveur est
+// injoignable.
 import { useState } from "react";
-import { Smartphone, Copy, Check, MessageCircle, ExternalLink, CreditCard } from "lucide-react";
+import {
+  BadgeCheck,
+  Copy,
+  Check,
+  MessageCircle,
+  ExternalLink,
+  CreditCard,
+  Send,
+  Smartphone,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { submitSubscriptionRequest } from "@/lib/requests";
 import type { PlanInfo } from "@/components/SubscriptionPlanCard";
 
 const SUPPORT_WHATSAPP = "https://wa.me/241076505254";
@@ -43,11 +56,36 @@ export function PaymentModal({
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [reference, setReference] = useState("");
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function handleSendRequest() {
+    if (!reference.trim() || sending) return;
+    setSending(true);
+    try {
+      const result = await submitSubscriptionRequest({
+        planName: selectedPlan?.name ?? "",
+        planPrice: selectedPlan?.price ?? 0,
+        planDevices: selectedPlan?.devices ?? 0,
+        reference,
+      });
+      if (result.ok) {
+        setSent(true);
+        toast.success("Demande envoyée — l'administrateur la valide depuis son tableau de bord.");
+      } else {
+        toast.error(result.error ?? "Impossible d'envoyer la demande.");
+      }
+    } finally {
+      setSending(false);
+    }
+  }
 
   function handleClose() {
     setStep(1);
     setReference("");
     setCopied(false);
+    setSending(false);
+    setSent(false);
     onOpenChange(false);
   }
 
@@ -188,18 +226,47 @@ export function PaymentModal({
               </Button>
             </div>
 
-            <Button className="w-full gap-2" asChild>
-              <a href={buildWhatsappUrl()} target="_blank" rel="noreferrer">
-                <MessageCircle className="h-4 w-4" />
-                Confirmer via WhatsApp
-                <ExternalLink className="h-3.5 w-3.5 ml-1 opacity-60" />
-              </a>
-            </Button>
+            {sent ? (
+              <div className="flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/10 p-3">
+                <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p className="text-sm text-foreground">
+                  Demande envoyée. L'administrateur la voit sur son tableau de bord et la valide en
+                  un clic — la caisse se débloquera au prochain démarrage.
+                </p>
+              </div>
+            ) : (
+              <Button
+                className="w-full gap-2"
+                disabled={!reference.trim() || sending}
+                onClick={() => void handleSendRequest()}
+              >
+                <Send className="h-4 w-4" />
+                {sending ? "Envoi…" : "Envoyer la demande à l'administrateur"}
+              </Button>
+            )}
 
-            <p className="text-xs text-muted-foreground text-center">
-              Envoyez le message WhatsApp avec la référence. L'administrateur prolongera votre
-              licence et la caisse sera débloquée automatiquement au prochain contact.
-            </p>
+            {!sent && (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground">ou, en secours</span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+
+                <Button variant="outline" className="w-full gap-2" asChild>
+                  <a href={buildWhatsappUrl()} target="_blank" rel="noreferrer">
+                    <MessageCircle className="h-4 w-4" />
+                    Confirmer via WhatsApp
+                    <ExternalLink className="h-3.5 w-3.5 ml-1 opacity-60" />
+                  </a>
+                </Button>
+
+                <p className="text-xs text-muted-foreground text-center">
+                  Envoyez le message WhatsApp avec la référence. L'administrateur prolongera votre
+                  licence et la caisse sera débloquée automatiquement au prochain contact.
+                </p>
+              </>
+            )}
 
             <Button variant="ghost" className="w-full" onClick={handleClose}>
               Fermer

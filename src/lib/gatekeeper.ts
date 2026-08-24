@@ -25,6 +25,7 @@ const SETTING_LOCK_REASON = "gatekeeper_lock_reason";
 const SETTING_APPLIED = "gatekeeper_applied_command_ids";
 const SETTING_MESSAGES = "gatekeeper_messages";
 const SETTING_QUOTA = "gatekeeper_account_quota";
+const SETTING_REQUEST = "gatekeeper_subscription_request";
 
 /** Places du compte marchand, telles que le serveur les voit au dernier handshake. */
 export interface AccountQuota {
@@ -34,6 +35,24 @@ export interface AccountQuota {
 
 export async function getAccountQuota(): Promise<AccountQuota | null> {
   return (await getSetting<AccountQuota>(SETTING_QUOTA)) ?? null;
+}
+
+/**
+ * Dernière demande d'abonnement du compte, telle que le serveur la voit au dernier
+ * handshake : « pending » tant que l'admin n'a pas tranché, puis decided_at est posé.
+ * Alimente l'indicateur « Demande en attente de validation » des Paramètres.
+ */
+export interface SubscriptionRequestStatus {
+  status: "pending" | "approved" | "rejected";
+  plan_price?: number;
+  plan_devices?: number;
+  reference?: string;
+  created_at: number;
+  decided_at?: number | null;
+}
+
+export async function getSubscriptionRequest(): Promise<SubscriptionRequestStatus | null> {
+  return (await getSetting<SubscriptionRequestStatus>(SETTING_REQUEST)) ?? null;
 }
 
 export type CommandType = "suspend" | "renew" | "broadcast_message";
@@ -180,6 +199,7 @@ export async function handshake(): Promise<HandshakeResult> {
       commands: AdminCommand[];
       shop?: { subscription_end_date?: number };
       account?: { max_devices?: number; device_count?: number };
+      subscription_request?: SubscriptionRequestStatus;
     };
 
     // Places du compte : alimente la carte « Appareils » des paramètres. Rien de
@@ -193,6 +213,11 @@ export async function handshake(): Promise<HandshakeResult> {
         maxDevices: data.account.max_devices,
         deviceCount: data.account.device_count,
       } satisfies AccountQuota);
+    }
+
+    // Statut de la demande d'abonnement : même tolérance qu'au-dessus (serveur ancien).
+    if (data.subscription_request) {
+      await setSetting(SETTING_REQUEST, data.subscription_request);
     }
 
     const nextApplied = [...applied];
