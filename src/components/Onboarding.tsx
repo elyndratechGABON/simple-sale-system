@@ -385,11 +385,14 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
                   key={m.id}
                   type="button"
                   onClick={() => {
+                    // Sélection SILENCIEUSE : la caméra n'est JAMAIS armée depuis le
+                    // choix de la tuile. Les navigateurs mobiles (Safari iOS en
+                    // tête) n'accordent getUserMedia que dans la fenêtre d'activation
+                    // qui suit un geste — et un prompt d'autorisation qui surgit sur
+                    // un simple choix de mode surprend et se fait refuser. L'activation
+                    // passe par le bouton « Scanner » dédié ci-dessous : UN geste
+                    // clair = UN prompt, au moment où l'utilisateur l'attend.
                     setAccountMode(m.id);
-                    // Rejoindre un compte existant = flasher le QR affiché par une
-                    // caisse déjà abonnée. La saisie manuelle reste en secours sous
-                    // le bouton de re-scan si la caméra est indisponible.
-                    if (m.id === "join") void scanPairingQr();
                   }}
                   aria-pressed={accountMode === m.id}
                   className={cn(

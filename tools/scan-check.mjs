@@ -56,7 +56,8 @@ await context.route("**/*", async (route) => {
   let rel = decodeURIComponent(url.pathname);
   if (rel === "/" || !extname(rel)) rel = "/index.html"; // coquille SPA
   const file = normalize(join(DIST, rel));
-  if (!file.startsWith(DIST + sep) && file !== DIST) return route.fulfill({ status: 403, body: "" });
+  if (!file.startsWith(DIST + sep) && file !== DIST)
+    return route.fulfill({ status: 403, body: "" });
   if (!existsSync(file)) return route.fulfill({ status: 404, body: "" });
   return route.fulfill({
     status: 200,
@@ -91,9 +92,19 @@ await page.fill("#ob-name", "Boutique Test Scan");
 await page.getByRole("button", { name: /suivant/i }).click();
 ok("étape 1 passée");
 
-// Tuile « Rejoindre » : son onClick lance immédiatement scanPairingQr().
+// Tuile « Rejoindre » : sélection silencieuse (SANS caméra), puis le scan part
+// uniquement du geste sur le bouton dédié — c'est l'événement qui autorise
+// getUserMedia à présenter le prompt d'autorisation.
 await page.getByRole("button", { name: /^Rejoindre/ }).click();
-ok("tuile « Rejoindre » cliquée — démarrage du scan");
+ok("tuile « Rejoindre » cliquée (sans activation caméra)");
+const noEarlyCamera = await page.evaluate(
+  () => !document.querySelector('div[id^="barcode-reader"]'),
+);
+noEarlyCamera
+  ? ok("aucun prompt caméra avant le geste dédié")
+  : ko("la caméra s'est armée dès la tuile — geste dédié non respecté");
+await page.getByRole("button", { name: /scanner le qr d'une autre caisse/i }).click();
+ok("bouton « Scanner » cliqué — démarrage du scan");
 
 // La superposition doit devenir « Caméra active » avec une vidéo VIVANTE.
 let cameraLive = false;
@@ -117,15 +128,13 @@ const hadCancel = await page.evaluate(() =>
 );
 if (hadCancel) {
   await page.evaluate(() => {
-    [...document.querySelectorAll("button")]
-      .find((b) => b.textContent === "Annuler")
-      ?.click();
+    [...document.querySelectorAll("button")].find((b) => b.textContent === "Annuler")?.click();
   });
   await page.waitForTimeout(600);
-  const gone = await page.evaluate(
-    () => !document.querySelector('div[id^="barcode-reader"]'),
-  );
-  gone ? ok("« Annuler » referme proprement la superposition") : ko("overlay toujours présent après Annuler");
+  const gone = await page.evaluate(() => !document.querySelector('div[id^="barcode-reader"]'));
+  gone
+    ? ok("« Annuler » referme proprement la superposition")
+    : ko("overlay toujours présent après Annuler");
 }
 
 await context.close();
