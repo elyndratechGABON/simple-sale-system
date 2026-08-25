@@ -85,7 +85,9 @@ export function CategorySelect({
         </SelectContent>
       </Select>
       {newOpen && (
-        <div className="mt-2 flex items-center gap-2">
+        // `flex-wrap` : à 320px, champ + deux boutons ne tiennent pas sur une
+        // ligne — les boutons passent dessous au lieu de compresser le champ.
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -94,6 +96,7 @@ export function CategorySelect({
             }}
             placeholder="Ex : Chips"
             autoFocus
+            className="min-w-0 flex-1"
           />
           <Button size="sm" onClick={create} disabled={createMut.isPending}>
             Créer

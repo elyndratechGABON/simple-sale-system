@@ -210,7 +210,7 @@ function ExpenseInputCard({
                       onChange={(e) => handleChange(p.name, e.target.value.replace(/\D/g, ""))}
                       onBlur={() => handleBlur(p.name)}
                       placeholder="0"
-                      className="h-8 w-28 text-right tabular-nums ml-auto"
+                      className="ml-auto h-10 w-24 text-right tabular-nums xs:w-28"
                     />
                   </TableCell>
                   <TableCell
@@ -226,7 +226,9 @@ function ExpenseInputCard({
             })}
           </TableBody>
         </Table>
-        <div className="mt-3 flex justify-end gap-6 text-sm font-medium border-t pt-3">
+        {/* `flex-wrap` : trois totaux côte à côte font ~500px — sans retour à la
+            ligne ils poussent la page en scroll horizontal sous 480px. */}
+        <div className="mt-3 flex flex-wrap justify-end gap-x-6 gap-y-1 text-sm font-medium border-t pt-3">
           <span>Revenus : {formatFCFA(totalRevenue)}</span>
           <span>Coûts : {formatFCFA(totalCost)}</span>
           <span className={totalRevenue - totalCost >= 0 ? "text-emerald-600" : "text-red-600"}>
@@ -432,41 +434,51 @@ function ReportsPage() {
   const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 
   return (
-    <div className="mx-auto max-w-[1500px] px-4 py-6 lg:px-8 space-y-6">
+    <div className="app-container space-y-6 py-6">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <BarChart3 className="h-6 w-6" /> Rapports & clôture
+        <h1 className="text-page-title flex items-center gap-2 font-bold">
+          <BarChart3 className="h-6 w-6 shrink-0" /> Rapports & clôture
         </h1>
         <p className="text-sm text-muted-foreground">Analyse des ventes sur la période choisie.</p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Tabs value={preset} onValueChange={(v) => setPreset(v as PresetKey)}>
-          <TabsList>
-            <TabsTrigger value="today">Aujourd'hui</TabsTrigger>
-            <TabsTrigger value="7">7 jours</TabsTrigger>
-            <TabsTrigger value="30">30 jours</TabsTrigger>
-            <TabsTrigger value="custom">Personnalisé</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {preset === "custom" && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline">
-                <CalendarDays className="h-4 w-4 mr-2" />
-                {range?.from && range?.to ? label : "Choisir les dates"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="range" selected={range} onSelect={setRange} numberOfMonths={1} />
-            </PopoverContent>
-          </Popover>
-        )}
-        <span className="text-sm text-muted-foreground">{label}</span>
+      {/* Périodes : les onglets glissent horizontalement sous 480px au lieu
+          d'écraser leurs libellés ; l'étiquette de plage reste LUE sous les
+          onglets — dans le scrolleur, elle partait hors écran en 320px. */}
+      <div>
+        <div className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 no-scrollbar">
+          <Tabs
+            value={preset}
+            onValueChange={(v) => setPreset(v as PresetKey)}
+            className="shrink-0"
+          >
+            <TabsList>
+              <TabsTrigger value="today">Aujourd'hui</TabsTrigger>
+              <TabsTrigger value="7">7 jours</TabsTrigger>
+              <TabsTrigger value="30">30 jours</TabsTrigger>
+              <TabsTrigger value="custom">Personnalisé</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {preset === "custom" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="shrink-0">
+                  <CalendarDays className="h-4 w-4 mr-2" />
+                  {range?.from && range?.to ? label : "Choisir les dates"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="range" selected={range} onSelect={setRange} numberOfMonths={1} />
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">{label}</p>
       </div>
 
-      {/* Vue simplifiée : KPI + top articles + clôture */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* KPI : une colonne sur téléphone (les montants respirent), deux dès
+          480px, trois sur desktop — jamais la grille desktop forcée en petit. */}
+      <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Revenus" value={formatFCFA(stats.revenue)} highlight large />
         <StatCard label="Bénéfices" value={formatFCFA(stats.profit)} highlight large />
         <StatCard label="Ventes" value={String(stats.salesCount)} large />
@@ -672,7 +684,13 @@ function ReportsPage() {
             </CardHeader>
             <CardContent>
               <div ref={chartRef}>
-                <ChartContainer config={chartConfig} className="aspect-[2/1] w-full">
+                {/* Plus haut relativement à l'écran sur téléphone : 30 jours en
+                    `aspect-[2/1]` donnaient un ruban de 150px illisible ; la
+                    proportion s'élargit quand la largeur le permet. */}
+                <ChartContainer
+                  config={chartConfig}
+                  className="aspect-[4/3] w-full xs:aspect-[2/1] lg:aspect-[5/2]"
+                >
                   <LineChart data={chartBuckets} margin={{ left: 4, right: 8, top: 8 }}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} />
@@ -717,7 +735,7 @@ function ReportsPage() {
                   <>
                     <ChartContainer
                       config={{ revenue: { label: "Revenus", color: "var(--chart-1)" } }}
-                      className="aspect-[2/1] w-full"
+                      className="aspect-[4/3] w-full xs:aspect-[2/1]"
                     >
                       <BarChart data={stats.byCategory} layout="vertical" margin={{ left: 8 }}>
                         <XAxis type="number" hide />
@@ -1034,9 +1052,13 @@ function ExportCard({
           </Button>
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs break-words text-muted-foreground">
           {directory ? (
-            <>Destination : « {directory} ». </>
+            // `break-all` : un chemin Windows est un jeton sans espace — sans
+            // coupure possible il pousse le paragraphe hors de la carte.
+            <>
+              Destination : <span className="break-all">« {directory} »</span>.{" "}
+            </>
           ) : (
             <>Sans dossier choisi, les fichiers vont dans Téléchargements. </>
           )}

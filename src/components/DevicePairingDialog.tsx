@@ -101,18 +101,20 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             )}
 
             <div className="flex flex-col items-center gap-3 rounded-xl border bg-card p-4">
+              {/* Le QR suit la largeur disponible : figé à 224px, il était rogné
+                  dans une modale de 300px et moins. */}
               {qrDataUrl ? (
                 <img
                   src={qrDataUrl}
                   alt="QR d'appairage du compte marchand"
-                  className="h-56 w-56 rounded-lg"
+                  className="aspect-square h-56 max-w-full rounded-lg object-contain"
                 />
               ) : qrError ? (
                 <p className="text-sm text-muted-foreground py-16">
                   Impossible de générer le code QR.
                 </p>
               ) : (
-                <div className="flex h-56 w-56 items-center justify-center rounded-lg border border-dashed">
+                <div className="flex aspect-square h-56 w-full max-w-[224px] items-center justify-center rounded-lg border border-dashed">
                   <QrCode className="h-8 w-8 animate-pulse text-muted-foreground" />
                 </div>
               )}

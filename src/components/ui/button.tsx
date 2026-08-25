@@ -18,10 +18,13 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        // Mobile d'abord : 44px = cible tactile minimum du doigt. Dès `sm`
+        // (pointeur précis), la densité desktop d'origine reprend. Les appelants
+        // qui fixent déjà leur propre `h-*` restent prioritaires sur ces défauts.
+        default: "h-11 px-4 py-2 sm:h-9",
+        sm: "h-10 rounded-md px-3 text-xs sm:h-8",
+        lg: "h-12 rounded-md px-8 sm:h-10",
+        icon: "h-11 w-11 sm:h-9 sm:w-9",
       },
     },
     defaultVariants: {

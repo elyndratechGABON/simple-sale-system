@@ -156,8 +156,10 @@ export function PaymentModal({
               <p className="text-sm text-muted-foreground mb-2">
                 Composez ce numéro sur votre téléphone :
               </p>
+              {/* `#` non encodé = fragment d'URL : Android tronquait le code USSD
+                  au dièse et composait `*110` seul. */}
               <a
-                href={`tel:${USSD_CODE}`}
+                href={`tel:${encodeURIComponent(USSD_CODE)}`}
                 className="text-2xl font-bold tracking-widest text-primary hover:underline"
               >
                 {USSD_CODE}

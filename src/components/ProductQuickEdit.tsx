@@ -173,7 +173,8 @@ export function ProductQuickEditDialog({
     <Dialog open={product !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Modifier — {product?.name}</DialogTitle>
+          {/* `truncate` + marge droite : un nom long ne passe plus sous la croix. */}
+          <DialogTitle className="truncate pr-8">Modifier — {product?.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>

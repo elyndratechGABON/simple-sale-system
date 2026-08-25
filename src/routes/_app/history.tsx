@@ -177,8 +177,8 @@ function HistoryPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-4">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <History className="h-6 w-6" /> Historique des ventes
+        <h1 className="text-page-title flex items-center gap-2 font-bold">
+          <History className="h-6 w-6 shrink-0" /> Historique des ventes
         </h1>
         <p className="text-sm text-muted-foreground">
           {scope === ALL ? "" : `${scopeLabel(scope)} · `}
@@ -196,7 +196,7 @@ function HistoryPage() {
               onClick={() => setScope(s)}
               aria-pressed={scope === s}
               className={cn(
-                "rounded-full border px-3 py-1 text-sm transition-colors",
+                "min-h-11 rounded-full border px-4 text-sm transition-colors",
                 scope === s
                   ? "border-primary bg-primary text-primary-foreground"
                   : "bg-card hover:bg-accent",
@@ -221,7 +221,7 @@ function HistoryPage() {
                 }}
                 aria-pressed={period === p.key}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-sm transition-colors",
+                  "min-h-11 rounded-full border px-4 text-sm transition-colors",
                   period === p.key
                     ? "border-primary bg-primary text-primary-foreground"
                     : "bg-card hover:bg-accent",
@@ -246,7 +246,9 @@ function HistoryPage() {
                 <div className="truncate text-sm font-semibold first-letter:uppercase">
                   {bucketLabel(period, b.start)}
                 </div>
-                <div className="text-lg font-bold tabular-nums text-primary">
+                {/* Montants insécables (U+00A0) : sans truncate, un bucket
+                    semaine/mois au CA long déborde de sa demi-colonne. */}
+                <div className="truncate text-lg font-bold tabular-nums text-primary">
                   {formatFCFA(b.total)}
                 </div>
                 <div className="text-xs font-medium tabular-nums text-emerald-600">
@@ -343,13 +345,14 @@ function SaleRow({ sale, profit, items }: { sale: Sale; profit: number; items: S
               )}
             </div>
           </div>
-          <div className="text-lg font-bold text-primary tabular-nums">
+          <div className="shrink-0 text-right text-base font-bold text-primary tabular-nums sm:text-lg">
             {formatFCFA(sale.total)}
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0"
+            className="h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+            aria-label={open ? "Replier la vente" : "Déplier la vente"}
             onClick={() => setOpen((o) => !o)}
           >
             {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -357,7 +360,8 @@ function SaleRow({ sale, profit, items }: { sale: Sale; profit: number; items: S
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0"
+            className="h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+            aria-label="Annuler la vente"
             onClick={() => setPinOpen(true)}
             disabled={isClosed(sale)}
           >

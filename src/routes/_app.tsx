@@ -63,13 +63,15 @@ function AppLayout() {
 
   return (
     <>
-      <div className="min-h-screen flex flex-col">
+      <div className="flex min-h-screen flex-col">
         <Header />
         <RenewalBanner />
-        {/* `pb-24` réserve la hauteur de la barre d'onglets basse, qui est en `fixed` et
-            ne pousse donc rien : sans cette réserve elle recouvre la fin de chaque page —
-            le bouton « Valider la vente », le dernier produit, le dernier réglage. */}
-        <main className="flex-1 pb-24 lg:pb-0">
+        {/* `.app-main` (styles.css) réserve exactement `--bottomnav-h` + marge système :
+            la barre d'onglets est en `fixed` sous `lg` et ne pousse rien — sans cette
+            réserve elle recouvrirait la fin de chaque page (le bouton « Valider la
+            vente », le dernier produit, le dernier réglage). À partir de `lg`, la barre
+            disparaît et la réserve avec elle. */}
+        <main className="app-main flex-1">
           <RouteTransition />
         </main>
       </div>

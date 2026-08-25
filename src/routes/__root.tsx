@@ -118,6 +118,22 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="fr">
       <head>
         <HeadContent />
+        {/*
+         * Capture TRÈS PRÉCOCE de `beforeinstallprompt`.
+         *
+         * Chrome/Edge déclenchent cet événement très tôt — souvent AVANT que le bundle
+         * React ne soit chargé et monté, sur une coquille statique aussi petite que la
+         * nôtre. Le hook `use-pwa-install`, qui n'écoutait qu'une fois monté, ratait
+         * alors l'événement : le bouton « Installer » retombait sur « Ce navigateur ne
+         * propose pas de bouton d'installation ». Ce script tourne dans <head>, avant
+         * tout bundle : il met l'événement de côté et le hook le récupère à son montage.
+         * Vrai pour toutes les pages — donc à sa place ici, et nulle part ailleurs.
+         */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__pwaInstallEvent=e;window.dispatchEvent(new Event("pwa-install-captured"));});window.__pwaInstallCaptureArmed=true;})();`,
+          }}
+        />
       </head>
       <body>
         {children}

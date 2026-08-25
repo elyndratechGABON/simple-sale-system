@@ -114,7 +114,10 @@ function KpiCard({
           </div>
           <div className="min-w-0">
             <p className="text-xs text-muted-foreground truncate">{label}</p>
-            <p className="text-lg font-bold leading-tight">
+            {/* `truncate` obligatoire : formatFCFA produit des montants à espaces
+                insécables — sans plafond, un gros CA pousse la carte KPI hors
+                de sa demi-colonne (320–375px, grille `grid-cols-2`). */}
+            <p className="truncate text-base font-bold leading-tight sm:text-lg">
               <AnimatedCounter value={value} format={format} />
             </p>
           </div>
@@ -307,13 +310,15 @@ function DashboardPage() {
     })) ?? [];
 
   return (
-    <div className="mx-auto max-w-[1500px] px-4 py-6 lg:px-8 space-y-6">
+    <div className="app-container space-y-6 py-6">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-2xl font-bold">Bonjour{workspaceName ? `, ${workspaceName}` : ""}</h1>
+        <h1 className="text-page-title font-bold">
+          Bonjour{workspaceName ? `, ${workspaceName}` : ""}
+        </h1>
         <p className="text-sm text-muted-foreground">Vue d'ensemble de votre activité</p>
       </motion.div>
 

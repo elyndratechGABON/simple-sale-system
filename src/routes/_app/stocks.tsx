@@ -75,6 +75,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ProductForm } from "@/components/ProductForm";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { cn } from "@/lib/utils";
@@ -398,20 +400,24 @@ function StocksPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1500px] px-4 py-6 lg:px-8 space-y-5">
+    <div className="app-container space-y-5 py-6">
       {/* ── En-tête ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Package className="h-6 w-6" /> Stocks & Produits
+      <div className="flex flex-col gap-3 xs:flex-row xs:items-end xs:justify-between">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-page-title font-bold">
+            <Package className="h-6 w-6 shrink-0" /> Stocks & Produits
           </h1>
           <p className="text-sm text-muted-foreground">
             Gérez vos produits, vos quantités et vos réapprovisionnements.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setMovementsOpen(true)}>
-            <History className="h-4 w-4 mr-1.5" /> Mouvements
+        {/* `flex-wrap` : les trois actions se répartissent sur deux lignes au
+            besoin — « Nouveau produit » ne dépassera jamais l'écran (320px). */}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="xs:h-9" onClick={() => setMovementsOpen(true)}>
+            <History className="h-4 w-4 mr-1.5" />
+            <span className="hidden xs:inline">Mouvements</span>
+            <span className="xs:hidden">Journal</span>
           </Button>
           <Dialog open={stockOpen} onOpenChange={setStockOpen}>
             <DialogTrigger asChild>
@@ -610,8 +616,12 @@ function StocksPage() {
           </Dialog>
           <Dialog open={editOpen} onOpenChange={setEditOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => setEditing(null)}>
-                <Plus className="h-4 w-4 mr-1.5" /> Nouveau produit
+              {/* Libellé court sous 480px : le bouton reste entier et lisible
+                  même en 320px (« + Nouveau »), complet au-delà. */}
+              <Button className="xs:h-9" onClick={() => setEditing(null)}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                <span className="hidden xs:inline">Nouveau produit</span>
+                <span className="xs:hidden">Nouveau</span>
               </Button>
             </DialogTrigger>
             <ProductForm
@@ -683,15 +693,18 @@ function StocksPage() {
       </div>
 
       {/* ── Filtres statut + catégories ────────────────────────────────────── */}
+      {/* Rangées à défilement horizontal CONTRÔLÉ (chip-row) : les filtres ne
+          réorganisent plus la page en pile de lignes, ils glissent sous le
+          pouce — et débordent DANS la gouttière (bleed-x) pour partir du bord. */}
       <div className="space-y-2">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="chip-row bleed-x">
           {statusChips.map(({ key, label, count }) => (
             <button
               key={key}
               type="button"
               onClick={() => setStatusFilter(key)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "min-h-11 rounded-full border px-3.5 text-xs font-medium transition-colors sm:min-h-9",
                 statusFilter === key
                   ? "border-primary bg-primary text-primary-foreground"
                   : "hover:bg-accent",
@@ -702,12 +715,12 @@ function StocksPage() {
           ))}
         </div>
         {categories.length > 1 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="chip-row bleed-x">
             <button
               type="button"
               onClick={() => setCategoryFilter(null)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "min-h-11 rounded-full border px-3.5 text-xs font-medium transition-colors sm:min-h-9",
                 categoryFilter === null
                   ? "border-primary bg-primary/10 text-primary"
                   : "hover:bg-accent",
@@ -721,7 +734,7 @@ function StocksPage() {
                 type="button"
                 onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  "min-h-11 rounded-full border px-3.5 text-xs font-medium transition-colors sm:min-h-9",
                   categoryFilter === cat
                     ? "border-primary bg-primary/10 text-primary"
                     : "hover:bg-accent",
@@ -794,7 +807,10 @@ function StocksPage() {
           Aucun produit ne correspond à la recherche ou aux filtres.
         </p>
       ) : (
-        <div className="grid gap-2.5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4">
+          {/* Une colonne sur téléphone, deux dès qu'elles tiennent, trois puis
+              quatre sur les grands écrans : les cartes ne s'étirent jamais en
+              bandes de 700px sur un 1920. */}
           {visible.map((p) => {
             const state = stateOf(p);
             const isServiceItem = state === "service";
@@ -1158,7 +1174,13 @@ function MovementList({
   );
 }
 
-/** Journal global : derniers mouvements tous produits confondus. */
+/** Journal global : derniers mouvements tous produits confondus.
+ *
+ * Bottom sheet SUR TÉLÉPHONE (<md) — c'est une liste de consultation, le geste
+ * naturel du pouce est de la tirer depuis le bas et de la refermer d'un
+ * glissement ; modale centrée au-delà, où le pointeur n'a pas de préférence.
+ * Même contenu dans les deux conteneurs : un seul jeu d'enfants, zéro doublon.
+ */
 function MovementsDialog({
   open,
   onOpenChange,
@@ -1166,31 +1188,52 @@ function MovementsDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const isMobile = useIsMobile(768);
   const { data: movements = [] } = useQuery({
     queryKey: ["movements", "all"],
     queryFn: () => listStockMovements({ limit: 50 }),
     enabled: open,
   });
+
+  const content = (
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <History className="h-4 w-4" /> Historique des mouvements
+        </DialogTitle>
+      </DialogHeader>
+      {movements.length === 0 ? (
+        <p className="rounded-lg border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+          Aucun mouvement enregistré. Réapprovisionnez un produit ou effectuez une vente.
+        </p>
+      ) : (
+        <div className="max-h-[60vh] space-y-1.5 overflow-y-auto pr-1">
+          {movements.map((m) => (
+            <MovementRow key={m.id} movement={m} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent>
+          <DrawerTitle className="px-4 pt-1 text-base font-semibold">
+            <span className="flex items-center justify-center gap-2">
+              <History className="h-4 w-4" /> Historique des mouvements
+            </span>
+          </DrawerTitle>
+          <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4">{content}</div>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <History className="h-4 w-4" /> Historique des mouvements
-          </DialogTitle>
-        </DialogHeader>
-        {movements.length === 0 ? (
-          <p className="rounded-lg border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
-            Aucun mouvement enregistré. Réapprovisionnez un produit ou effectuez une vente.
-          </p>
-        ) : (
-          <div className="max-h-[60vh] space-y-1.5 overflow-y-auto pr-1">
-            {movements.map((m) => (
-              <MovementRow key={m.id} movement={m} />
-            ))}
-          </div>
-        )}
-      </DialogContent>
+      <DialogContent className="sm:max-w-md">{content}</DialogContent>
     </Dialog>
   );
 }

@@ -38,7 +38,10 @@ const DrawerContent = React.forwardRef<
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
+        // Arrondi cohérent avec les modales (`rounded-2xl`, 20px) et marge
+        // système en bas : le contenu d'une feuille ne colle jamais sous
+        // l'indicateur de geste iOS/Android même si l'appelant oublie.
+        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto max-h-[calc(100vh-2rem)] flex-col rounded-t-2xl border bg-background pb-[env(safe-area-inset-bottom)] supports-[height:100dvh]:max-h-[calc(100dvh-2rem)]",
         className,
       )}
       {...props}

@@ -122,7 +122,9 @@ function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Paramètres</h1>
+        {/* Formulaire : conteneur étroit VOLONTAIRE — des lignes de réglages qui
+            s'étirent sur 1600px se lisent mal ; seul le titre suit l'échelle fluide. */}
+        <h1 className="text-page-title font-bold">Paramètres</h1>
         <p className="text-sm text-muted-foreground">
           Tout ce qui a été demandé au premier lancement se modifie ici.
         </p>
@@ -604,10 +606,12 @@ function TablesCard() {
               className="inline-flex items-center gap-1 rounded-full border bg-card py-1 pl-3 pr-1 text-sm"
             >
               {t}
+              {/* Cible 44px débordant visuellement de la pastille (-m) : le
+                  geste destructeur le plus petit de l'app était un 24×24. */}
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6"
+                className="-mr-2 -my-2.5 h-11 w-11 rounded-full text-muted-foreground hover:text-destructive sm:-mr-1.5 sm:-my-1 sm:h-8 sm:w-8"
                 aria-label={`Retirer la table ${t}`}
                 onClick={() => commit(tables.filter((x) => x !== t))}
               >
@@ -739,22 +743,33 @@ function ClientsCard() {
               >
                 <div className="min-w-0">
                   <div className="font-medium truncate">{c.name}</div>
-                  <div className="text-xs text-muted-foreground">
+                  {/* `truncate` sur le BLOC (un span inline n'ellipsis pas) : une
+                      note longue reste sur une ligne coupée au lieu de pousser
+                      la carte en largeur. */}
+                  <div className="truncate text-xs text-muted-foreground">
                     {c.phone && <span>{c.phone}</span>}
                     {c.phone && c.notes && <span> · </span>}
-                    {c.notes && <span className="truncate">{c.notes}</span>}
+                    {c.notes && <span>{c.notes}</span>}
                     {!c.phone && !c.notes && (
                       <span className="text-muted-foreground/60">Pas de détails</span>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(c)}>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-11 w-11 sm:h-9 sm:w-9"
+                    aria-label={`Modifier ${c.name}`}
+                    onClick={() => openEdit(c)}
+                  >
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
+                    className="h-11 w-11 sm:h-9 sm:w-9"
+                    aria-label={`Supprimer ${c.name}`}
                     onClick={() => {
                       if (confirm(`Supprimer "${c.name}" ?`)) removeMut.mutate(c.id);
                     }}

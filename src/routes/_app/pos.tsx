@@ -161,7 +161,9 @@ function PosLine({ line, isService, onRemoveOne, onAddOne, onRemove }: PosLinePr
           {formatFCFA(line.price)} × {line.quantity}
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      {/* `shrink-0` : à 320px, c'est le NOM qui tronque — jamais les cibles 44px
+          des steppers, que le flex comprimerait sinon sous le minimum tactile. */}
+      <div className="flex shrink-0 items-center gap-1">
         <Button
           size="icon"
           variant="outline"
@@ -191,7 +193,11 @@ function PosLine({ line, isService, onRemoveOne, onAddOne, onRemove }: PosLinePr
           <Trash2 className="h-4 w-4 text-destructive" />
         </Button>
       </div>
-      <div className="w-20 text-right font-semibold">{formatFCFA(line.price * line.quantity)}</div>
+      {/* `min-w-20 shrink-0` au lieu de `w-20` figé : un montant long
+          (« 1 250 000 F », espaces insécables) garde sa colonne sans déborder. */}
+      <div className="min-w-20 shrink-0 text-right font-semibold">
+        {formatFCFA(line.price * line.quantity)}
+      </div>
     </motion.div>
   );
 }
@@ -696,7 +702,7 @@ function PosPage() {
     // et ne pousse rien, elle recouvrirait sinon le dernier produit de la grille.
     <div
       className={cn(
-        "mx-auto max-w-[1500px] space-y-4 px-4 py-4 lg:px-8",
+        "app-container space-y-4 py-4",
         compact && (activeTable !== null || lines.length > 0) && "pb-20",
       )}
     >
@@ -800,16 +806,19 @@ function PosPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
         {/* Products */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <h2 className="text-xl font-bold">
+        <div className="space-y-3 min-w-0">
+          {/* Titre seul sur sa ligne en mobile ; les catégories passent dans
+              leur propre rangée scrollable (chip-row) au lieu de pousser le
+              titre ou de s'empiler en salade de puces. */}
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold sm:text-xl">
               {features.isService
                 ? serviceTab === "prestations"
                   ? "Prestations"
                   : "Produits"
                 : "Articles"}
             </h2>
-            {features.isService ? (
+            {features.isService && (
               <div className="flex gap-1">
                 <FilterChip
                   active={serviceTab === "prestations"}
@@ -824,25 +833,26 @@ function PosPage() {
                   <Package className="h-3.5 w-3.5 mr-1" /> Produits
                 </FilterChip>
               </div>
-            ) : (
-              <div className="flex gap-1 flex-wrap">
-                <FilterChip active={filter === "Tous"} onClick={() => setFilter("Tous")}>
-                  Tous
-                </FilterChip>
-                {categories.map((c) => (
-                  <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>
-                    {c}
-                  </FilterChip>
-                ))}
-              </div>
             )}
           </div>
+          {!features.isService && categories.length > 0 && (
+            <div className="chip-row bleed-x -my-1 py-1">
+              <FilterChip active={filter === "Tous"} onClick={() => setFilter("Tous")}>
+                Tous
+              </FilterChip>
+              {categories.map((c) => (
+                <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>
+                  {c}
+                </FilterChip>
+              ))}
+            </div>
+          )}
           <div
             className={cn(
-              "grid gap-3",
+              "grid gap-2.5 xs:gap-3",
               features.hasTables
-                ? "grid-cols-2 sm:grid-cols-3"
-                : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
+                ? "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
+                : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
             )}
           >
             {filtered.map((p) => {
@@ -857,7 +867,7 @@ function PosPage() {
                     onClick={() => addOne(p)}
                     disabled={out}
                     className={cn(
-                      "relative w-full h-full rounded-xl border bg-card p-4 text-left min-h-[100px] transition-all",
+                      "relative w-full h-full rounded-xl border bg-card p-3 text-left min-h-[100px] transition-all sm:p-4",
                       "hover:border-primary hover:shadow-md active:scale-[0.98]",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       out && "opacity-50 cursor-not-allowed",
@@ -898,19 +908,21 @@ function PosPage() {
                   </button>
                   {/* Deux gestes distincts, FRÈRES de la carte (du HTML invalide sinon) :
                       l'appareil ouvre la fenêtre PHOTO seule, le crayon la modification
-                      rapide nom/prix/stock. Rupture ou non, les deux restent cliquables. */}
+                      rapide nom/prix/stock. Rupture ou non, les deux restent cliquables.
+                      36px de diamètre : compromis assumé entre la cible tactile et la
+                      surface de carte qu'elles recouvrent sur une grille 2 colonnes. */}
                   <button
                     type="button"
                     aria-label={`Photo de ${p.name}`}
                     title="Changer la photo"
                     onClick={() => setPhotoTarget(p)}
                     className={cn(
-                      "absolute -top-2 -left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
+                      "absolute -top-2.5 -left-2.5 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-card shadow-sm",
                       "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     )}
                   >
-                    <Camera className="h-3.5 w-3.5" />
+                    <Camera className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
@@ -918,12 +930,12 @@ function PosPage() {
                     title="Modifier nom, prix, stock"
                     onClick={() => setQuickEditTarget(p)}
                     className={cn(
-                      "absolute -top-2 left-6 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
+                      "absolute -top-2.5 left-7 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-card shadow-sm",
                       "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     )}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <Pencil className="h-4 w-4" />
                   </button>
                 </div>
               );
@@ -1116,7 +1128,7 @@ function PosPage() {
                     <Button
                       size="icon"
                       variant="outline"
-                      className="h-8 w-8"
+                      className="h-11 w-11 sm:h-9 sm:w-9"
                       aria-label="Un client de moins"
                       disabled={customers <= 1}
                       onClick={() => setCustomers((c) => Math.max(1, c - 1))}
@@ -1127,7 +1139,7 @@ function PosPage() {
                     <Button
                       size="icon"
                       variant="outline"
-                      className="h-8 w-8"
+                      className="h-11 w-11 sm:h-9 sm:w-9"
                       aria-label="Un client de plus"
                       onClick={() => setCustomers((c) => c + 1)}
                     >
@@ -1484,7 +1496,10 @@ function PosPage() {
               <p className="text-4xl font-bold text-primary tabular-nums">{formatFCFA(total)}</p>
             </div>
 
-            <div className="grid grid-cols-3 gap-1">
+            {/* Empilés sur petit écran : « Mobile Money » en 3 colonnes de
+                ~74px débordait de sa cellule ; côte à côte dès que la modale
+                a la place. */}
+            <div className="grid grid-cols-1 gap-1 min-[400px]:grid-cols-3">
               {PAYMENT_METHODS.map((m) => (
                 <Button
                   key={m.id}
@@ -1689,10 +1704,10 @@ function CartShell({
       <DrawerContent>
         <DrawerTitle className="sr-only">Panier et encaissement</DrawerTitle>
         {/* `max-h` et non `h` : une addition d'une seule tournée ne doit pas ouvrir une
-            feuille pleine hauteur. Le défilement est interne, la poignée reste visible. */}
-        <div className="max-h-[80vh] space-y-4 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-          {children}
-        </div>
+            feuille pleine hauteur. Le défilement est interne, la poignée reste visible.
+            La marge système basse est déjà posée par DrawerContent (pb safe-area) —
+            on n'ajoute ici que le confort d'un `1rem`. */}
+        <div className="max-h-[80vh] space-y-4 overflow-y-auto p-4 pb-6">{children}</div>
       </DrawerContent>
     </Drawer>
   );
@@ -1858,7 +1873,9 @@ function TableCard({
         </>
       ) : (
         <>
-          <span className="font-bold leading-tight text-primary tabular-nums">
+          {/* `truncate` comme pour le label : une grosse addition partielle ne
+              doit pas pousser la carte du plan de salle plus large que sa case. */}
+          <span className="max-w-full truncate font-bold leading-tight text-primary tabular-nums">
             {formatFCFA(table.total)}
           </span>
           <span className="mt-auto text-[11px] leading-tight text-muted-foreground">

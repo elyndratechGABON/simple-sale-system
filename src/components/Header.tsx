@@ -50,14 +50,18 @@ export function Header() {
   }
 
   return (
+    // Header compact et sûr à la fois : hauteur minimale 64px sur téléphone
+    // (`--header-h`), logo borné (jamais plus grand que la barre qui le porte)
+    // et nom du commerce TRONQUÉ au lieu de pousser la cloche et l'avatar hors
+    // écran — c'était le débordement horizontal d'origine (logo 80px).
     <header className="sticky top-0 z-20 border-b bg-card/85 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/75 pt-[env(safe-area-inset-top)]">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+      <div className="app-container flex min-h-[var(--header-h)] items-center justify-between gap-2 sm:gap-4 sm:py-2.5">
         <Link
           to="/pos"
-          className="inline-flex items-center gap-3 font-bold text-lg min-w-0"
+          className="inline-flex min-w-0 items-center gap-2.5 text-base font-bold sm:gap-3 sm:text-lg"
           onClick={onLogoClick}
         >
-          <span className="inline-flex h-20 w-20 shrink-0 items-center justify-center">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center xs:h-10 xs:w-10 sm:h-11 sm:w-11 lg:h-12 lg:w-12">
             <img
               src={shopLogo || "/logo-header.png"}
               alt={workspaceName || "ECAISSE"}
@@ -67,13 +71,13 @@ export function Header() {
           <span className="truncate text-foreground">{workspaceName}</span>
         </Link>
         {/* Sous `lg`, la navigation vit dans `BottomNav` — cf. src/components/Nav.tsx. */}
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <TopNav />
           <NotificationBell />
           <Link
             to="/settings"
             aria-label="Profil et réglages"
-            className="ml-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20"
+            className="ml-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 sm:h-9 sm:w-9"
           >
             {ownerPhoto ? (
               <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />

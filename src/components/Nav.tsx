@@ -44,24 +44,35 @@ export function TopNav() {
  * Barre d'onglets basse, jusqu'à `lg`.
  *
  * Cinq onglets sur 390 px font 78 px chacun : au-dessus des 44 px minimum, et le libellé
- * tient sous l'icône.
+ * tient sous l'icône. La grille occupe TOUTE la largeur — rétrécir la barre à `max-w-lg`
+ * laissait un angle mort inatteignable aux coins de l'écran sur les grands smartphones.
+ *
+ * La hauteur est portée par `--bottomnav-h` (styles.css) : la réserve de padding du
+ * contenu principal (`app-main`) et le décalage de la barre de résumé de la caisse
+ * dérivent du même jeton, donc les trois restent toujours alignés.
  *
  * `pb-[env(safe-area-inset-bottom)]` remonte la barre au-dessus de l'indicateur d'accueil
  * des iPhone sans encoche matérielle — sans lui, le dernier onglet est à moitié couvert.
  */
 export function BottomNav() {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
-      <div className="mx-auto grid max-w-lg grid-cols-5">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 shadow-[0_-4px_24px_-12px_rgb(0_0_0/0.15)] backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden"
+      aria-label="Navigation principale"
+    >
+      <div className="mx-auto grid grid-cols-5">
         {NAV_LINKS.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
             to={to}
-            className="flex min-h-[56px] flex-col items-center justify-center gap-0.5 border-t-2 border-transparent px-1 py-1.5 text-muted-foreground transition-colors"
+            aria-label={label}
+            className="flex min-h-[var(--bottomnav-h)] flex-col items-center justify-center gap-1 border-t-2 border-transparent px-1 py-1.5 text-muted-foreground transition-colors active:bg-accent/60"
             activeProps={{ className: "border-t-2 border-primary bg-accent/60 text-primary" }}
           >
-            <Icon className="h-5 w-5 shrink-0" />
-            <span className="w-full truncate text-center text-[10px] leading-none">{label}</span>
+            <Icon className="h-5 w-5 shrink-0" strokeWidth={2.25} />
+            <span className="w-full truncate text-center text-[11px] font-medium leading-none">
+              {label}
+            </span>
           </Link>
         ))}
       </div>

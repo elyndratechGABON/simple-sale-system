@@ -42,20 +42,23 @@ export function RenewalBanner() {
             : "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-400",
         )}
       >
+        {/* La phrase est UN SEUL enfant flex : en fragments séparés, chaque mot
+            devenait un item et la ligne se cassait en escalier sous 380px. */}
         {isExpired ? (
           <>
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            Abonnement expiré — choisissez un plan pour continuer
+            <span>Abonnement expiré — choisissez un plan pour continuer</span>
           </>
         ) : (
           <>
             <Clock className="h-4 w-4 shrink-0" />
-            Votre abonnement expire dans{" "}
-            <span className="font-bold">
-              {daysRemaining} jour{daysRemaining > 1 ? "s" : ""}
+            <span>
+              Votre abonnement expire dans{" "}
+              <span className="font-bold">
+                {daysRemaining} jour{daysRemaining > 1 ? "s" : ""}
+              </span>{" "}
+              — choisir un plan
             </span>
-            {" — "}
-            Choisir un plan
           </>
         )}
       </button>

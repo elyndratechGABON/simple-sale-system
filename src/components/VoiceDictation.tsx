@@ -108,7 +108,8 @@ export function VoiceDictation({ products, onResult }: VoiceDictationProps) {
           <button
             onClick={close}
             aria-label="Fermer la dictée"
-            className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+            // Seule sortie du mode dictée : cible tactile pleine (44px).
+            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <X className="h-5 w-5" />
           </button>

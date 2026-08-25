@@ -205,7 +205,7 @@ function SubscriptionRow({
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8"
+            className="h-11 w-11 sm:h-9 sm:w-9"
             aria-label="Modifier"
             onClick={onEdit}
           >
@@ -215,7 +215,7 @@ function SubscriptionRow({
             <Button
               size="sm"
               variant="destructive"
-              className="h-8"
+              className="h-11 sm:h-8"
               onClick={onDelete}
               onMouseLeave={onCancelDelete}
             >
@@ -225,7 +225,7 @@ function SubscriptionRow({
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-destructive"
+              className="h-11 w-11 text-destructive sm:h-9 sm:w-9"
               aria-label="Supprimer"
               onClick={onDelete}
             >

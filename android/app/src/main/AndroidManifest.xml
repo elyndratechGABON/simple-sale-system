@@ -38,4 +38,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Scanner de QR d'appairage : getUserMedia dans le WebView Capacitor exige la
+         permission native CAMERA. Sans elle, le bridge ne peut ni la demander au
+         runtime ni accorder la requête du WebView — le flux caméra n'arrive jamais
+         et le cadre du scanner reste noir. -->
+    <uses-permission android:name="android.permission.CAMERA" />
 </manifest>

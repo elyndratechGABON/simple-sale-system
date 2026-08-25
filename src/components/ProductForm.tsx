@@ -229,32 +229,31 @@ export function ProductForm({
             )}
           </>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label>Type</Label>
-            <div className="flex gap-2 mt-1">
-              <Button
-                type="button"
-                variant={productType === "product" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setProductType("product")}
-                className="flex-1"
-              >
-                Produit
-              </Button>
-              <Button
-                type="button"
-                variant={productType === "service" ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setProductType("service");
-                  setUnlimited(true);
-                }}
-                className="flex-1"
-              >
-                Prestation
-              </Button>
-            </div>
+        {/* Un seul enfant : une grille 2 colonnes laissait une moitié vide. */}
+        <div>
+          <Label>Type</Label>
+          <div className="flex gap-2 mt-1">
+            <Button
+              type="button"
+              variant={productType === "product" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setProductType("product")}
+              className="flex-1"
+            >
+              Produit
+            </Button>
+            <Button
+              type="button"
+              variant={productType === "service" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setProductType("service");
+                setUnlimited(true);
+              }}
+              className="flex-1"
+            >
+              Prestation
+            </Button>
           </div>
         </div>
         {hasSerialNumber && productType === "product" && (

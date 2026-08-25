@@ -81,7 +81,9 @@ export function ClientSelect({
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Effacer le nom du client"
+            // Zone tactile honnête (44px) autour d'un glyphe visuellement petit.
+            className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             ×
           </button>
@@ -90,7 +92,7 @@ export function ClientSelect({
 
       {/* Stats du client sélectionné */}
       {selectedClient && stats && (
-        <div className="mt-1.5 flex items-center gap-3 rounded-md bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
           <span>
             {stats.visits} visite{stats.visits > 1 ? "s" : ""}
           </span>

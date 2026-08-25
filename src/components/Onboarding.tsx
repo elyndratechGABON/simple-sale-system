@@ -292,7 +292,9 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
         Étape {step + 1} sur {totalSteps}
       </p>
 
-      <div className="min-h-[260px] py-2">
+      {/* Hauteur minimale bornée : les étapes du wizard restent stables d'un
+          écran à l'autre sans exiger 260px de haut sur un téléphone couché. */}
+      <div className="min-h-[min(260px,40dvh)] py-2">
         {/* Étape 0 : Confidentialité */}
         {step === 0 && (
           <StepShell
@@ -722,7 +724,9 @@ function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
           className="sm:max-w-md"
         >
           <DialogTitle className="sr-only">Votre boutique est prête</DialogTitle>
-          <div className="min-h-[300px] flex flex-col items-center justify-center text-center space-y-6 py-4">
+          {/* `min()` en dvh : en paysage sur petit téléphone (≤568px de haut),
+              l'écran ne réclame plus une hauteur impossible. */}
+          <div className="flex min-h-[min(300px,45dvh)] flex-col items-center justify-center text-center space-y-6 py-4">
             {/* Visuel « Boutique prête » de la marque (logo/Boutique prete.png, réduit
                 en webp), à la place de l'icône confettis seule. */}
             <motion.img
@@ -869,7 +873,8 @@ function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
         className="sm:max-w-md"
       >
         <DialogTitle className="sr-only">Tout est prêt</DialogTitle>
-        <div className="min-h-[300px] flex flex-col items-center justify-center text-center space-y-6 py-4">
+        {/* Même garde-fou paysage que l'écran « Boutique prête » ci-dessus. */}
+        <div className="flex min-h-[min(300px,45dvh)] flex-col items-center justify-center text-center space-y-6 py-4">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}

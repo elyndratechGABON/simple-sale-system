@@ -27,3 +27,10 @@ bun.lock
 # Journaux (dev-server.log, etc.) : jamais versionnés.
 *.log
 
+# Cache npm local (installs hors sandbox) et profils Chrome des outils de test.
+.npm-cache/
+.chrome-test*/
+
+# Captures des tests responsive (tools/responsive-test.mjs).
+.responsive-shots/
+

@@ -23,7 +23,7 @@ export function SaleItemChips({
       {shown.map((it, i) => (
         <span
           key={`${it.name}-${i}`}
-          className="whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-xs font-medium"
+          className="max-w-full truncate whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-xs font-medium"
         >
           {it.name}
           {it.quantity > 1 && (

@@ -25,7 +25,9 @@ export function PlanChooser({ open, onOpenChange, onSelect }: PlanChooserProps) 
           </p>
         </DialogHeader>
 
-        <div className="grid gap-4 sm:grid-cols-3 pt-2">
+        {/* Le badge « Populaire » dépasse de 12px au-dessus de chaque carte :
+          `pt-3` lui laisse la place au lieu d'être rogné par le défilement. */}
+        <div className="grid gap-4 pt-3 sm:grid-cols-3">
           {PLANS.map((plan) => (
             <PlanCard
               key={plan.id}
