@@ -32,6 +32,7 @@ import {
   getSaleItemsForSales,
   listSales,
   listOpenTables,
+  listActiveRentals,
 } from "@/lib/db";
 import { computePeriodStats, lastDaysRange } from "@/lib/analytics";
 import { buildAlerts, type AppAlert } from "@/lib/alerts";
@@ -232,6 +233,11 @@ function DashboardPage() {
     queryFn: listOpenTables,
     staleTime: 30_000,
   });
+  const { data: activeRentals } = useQuery({
+    queryKey: ["rentals", "active"],
+    queryFn: listActiveRentals,
+    staleTime: 30_000,
+  });
 
   const todayStats = useMemo(() => {
     if (!todayData) return null;
@@ -257,8 +263,8 @@ function DashboardPage() {
   }, [fortnightData, weekRange, fortnightRange]);
 
   const alerts = useMemo(
-    () => buildAlerts(products ?? [], openTables ?? []),
-    [products, openTables],
+    () => buildAlerts(products ?? [], openTables ?? [], activeRentals),
+    [products, openTables, activeRentals],
   );
 
   // Pas de base de comparaison (semaine précédente vide) → NaN → « — » affiché,

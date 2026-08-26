@@ -18,7 +18,15 @@ export type BusinessType = "snack" | "restaurant";
 
 /** Identifiant unique d'un cluster métier. */
 export type ClusterId =
-  "retail" | "restaurant" | "bar" | "service" | "clothing" | "weight" | "magasin" | "personnalise";
+  | "retail"
+  | "restaurant"
+  | "bar"
+  | "service"
+  | "clothing"
+  | "weight"
+  | "magasin"
+  | "personnalise"
+  | "location";
 
 /** Sous-catégorie du cluster "Magasin" — détermine les champs spécifiques dans le formulaire produit. */
 export type SubCategory = "electronics" | "appliance" | "furniture" | "hardware_store";
@@ -27,7 +35,7 @@ export type SubCategory = "electronics" | "appliance" | "furniture" | "hardware_
 export type Cluster = ClusterId;
 
 /**
- * Les 5 grands workflows métier qui pilotent l'expérience utilisateur.
+ * Les 6 grands workflows métier qui pilotent l'expérience utilisateur.
  * Le cluster choisi au onboarding active un workflow spécifique.
  */
 export type WorkflowType =
@@ -35,7 +43,8 @@ export type WorkflowType =
   | "order-prep" // Restaurant, fast-food → Commande → Préparation → Servie → Encaissé
   | "open-tab" // Bar avec addition → Ouvrir → Ajouter → Encaisser → Clôturer
   | "service" // Coiffeur, salon → Prestation → Réalisation → Paiement → Terminé
-  | "weight"; // Boucherie → Produit → Poids/Quantité → Calcul → Paiement → Terminé
+  | "weight" // Boucherie → Produit → Poids/Quantité → Calcul → Paiement → Terminé
+  | "rental"; // Location d'actifs → Actif → Période → Caution → Retour
 
 /* ─── Configuration d'un cluster ──────────────────────────────────────────── */
 
@@ -60,6 +69,12 @@ export interface ClusterStock {
 export interface ClusterFlags {
   allowServiceBooking: boolean;
   hasWeightInput: boolean;
+  /** Location : actifs avec disponibilité, caution, pénalités de retard. */
+  hasRentalBooking: boolean;
+  /** Location : caution obligatoire au moment de la réservation. */
+  hasDeposit: boolean;
+  /** Location : vue calendrier de disponibilité en temps réel. */
+  hasAvailability: boolean;
 }
 
 export interface ClusterConfig {
@@ -162,7 +177,13 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: true,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: false, hasWeightInput: false },
+    flags: {
+      allowServiceBooking: false,
+      hasWeightInput: false,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
     active: true,
   },
   restaurant: {
@@ -180,7 +201,13 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: false,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: false, hasWeightInput: false },
+    flags: {
+      allowServiceBooking: false,
+      hasWeightInput: false,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
     active: true,
   },
   bar: {
@@ -197,7 +224,13 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: false,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: false, hasWeightInput: false },
+    flags: {
+      allowServiceBooking: false,
+      hasWeightInput: false,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
     active: true,
   },
   service: {
@@ -215,7 +248,13 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: false,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: true, hasWeightInput: false },
+    flags: {
+      allowServiceBooking: true,
+      hasWeightInput: false,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
     active: true,
   },
   clothing: {
@@ -232,7 +271,13 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: false,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: false, hasWeightInput: false },
+    flags: {
+      allowServiceBooking: false,
+      hasWeightInput: false,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
     active: true,
   },
   magasin: {
@@ -249,7 +294,13 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: false,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: false, hasWeightInput: false },
+    flags: {
+      allowServiceBooking: false,
+      hasWeightInput: false,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
     active: true,
   },
   weight: {
@@ -267,7 +318,13 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: true,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: false, hasWeightInput: true },
+    flags: {
+      allowServiceBooking: false,
+      hasWeightInput: true,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
     active: true,
   },
   personnalise: {
@@ -286,7 +343,37 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       hasExpiryDate: true,
       hasSerialNumber: false,
     },
-    flags: { allowServiceBooking: false, hasWeightInput: false },
+    flags: {
+      allowServiceBooking: false,
+      hasWeightInput: false,
+      hasRentalBooking: false,
+      hasDeposit: false,
+      hasAvailability: false,
+    },
+    active: true,
+  },
+  location: {
+    id: "location",
+    label: "Location d'actifs",
+    icon: "KeyRound",
+    description:
+      "Location de chaises, tentes, voitures, maisons. Gérez les actifs, les périodes et les cautions.",
+    workflowType: "rental",
+    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
+    stock: {
+      unitType: "unit",
+      hasVariants: false,
+      showCostPrice: true,
+      hasExpiryDate: false,
+      hasSerialNumber: false,
+    },
+    flags: {
+      allowServiceBooking: true,
+      hasWeightInput: false,
+      hasRentalBooking: true,
+      hasDeposit: true,
+      hasAvailability: true,
+    },
     active: true,
   },
 };
@@ -356,6 +443,7 @@ export function inferCluster(selectedTypeIds: string[]): ClusterId {
 
   // Ordre de priorité
   const priority: ClusterId[] = [
+    "location",
     "service",
     "restaurant",
     "weight",
@@ -518,5 +606,13 @@ export const WORKFLOW_DESCRIPTIONS: Record<WorkflowType, { title: string; steps:
   weight: {
     title: "Vente au poids",
     steps: ["Choisissez le produit", "Saisissez le poids", "Le prix se calcule, encaissez"],
+  },
+  rental: {
+    title: "Location d'actifs",
+    steps: [
+      "Sélectionnez l'actif",
+      "Définissez la période et la caution",
+      "Remettez et encaissez, puis gérez le retour",
+    ],
   },
 };

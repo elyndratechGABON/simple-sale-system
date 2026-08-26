@@ -182,3 +182,40 @@ async function assetHandler(request) {
     return new Response("", { status: 504 });
   }
 }
+
+// ── Push notifications ────────────────────────────────────────────────────────
+// Reçoit les push du serveur (overdue rentals, reminders) et affiche une notification.
+// Le corps du push est un JSON { title, body, icon?, url? }.
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: "Notification", body: event.data.text() };
+  }
+  const title = payload.title || "ELYNDRA";
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || "/icon-192.png",
+    badge: "/icon-192.png",
+    data: { url: payload.url || "/pos" },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/pos";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Si une fenêtre est déjà ouverte, la focus ; sinon ouvrir une nouvelle.
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

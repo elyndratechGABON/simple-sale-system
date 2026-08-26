@@ -29,7 +29,7 @@ export function ProductForm({
   defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
-  const { hasSerialNumber, unitType, hasExpiryDate } = useClusterFeatures();
+  const { hasSerialNumber, unitType, hasExpiryDate, isLocation } = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [barcode, setBarcode] = useState(editing?.barcode ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
@@ -56,6 +56,27 @@ export function ProductForm({
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
 
+  // Champs location (cluster 'location')
+  const [isAsset, setIsAsset] = useState(editing?.is_asset ?? isLocation);
+  const [rentalHour, setRentalHour] = useState<string>(
+    editing?.rental_pricing?.hour != null ? String(editing.rental_pricing.hour) : "",
+  );
+  const [rentalDay, setRentalDay] = useState<string>(
+    editing?.rental_pricing?.day != null ? String(editing.rental_pricing.day) : "",
+  );
+  const [rentalWeek, setRentalWeek] = useState<string>(
+    editing?.rental_pricing?.week != null ? String(editing.rental_pricing.week) : "",
+  );
+  const [rentalMonth, setRentalMonth] = useState<string>(
+    editing?.rental_pricing?.month != null ? String(editing.rental_pricing.month) : "",
+  );
+  const [depositAmount, setDepositAmount] = useState<string>(
+    editing?.deposit_amount != null ? String(editing.deposit_amount) : "",
+  );
+  const [totalUnits, setTotalUnits] = useState<string>(
+    editing?.total_units != null ? String(editing.total_units) : "",
+  );
+
   async function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -76,9 +97,13 @@ export function ProductForm({
       const p = {
         name: name.trim(),
         cost: 0,
-        price: Number(price) || 0,
-        stock: unlimited ? Number.POSITIVE_INFINITY : Number(stock) || 0,
-        min_stock: !unlimited && minStock ? Number(minStock) : undefined,
+        price: isAsset ? Number(rentalDay) || 0 : Number(price) || 0,
+        stock: isAsset
+          ? Number(totalUnits) || 0
+          : unlimited
+            ? Number.POSITIVE_INFINITY
+            : Number(stock) || 0,
+        min_stock: !unlimited && !isAsset && minStock ? Number(minStock) : undefined,
         category,
         barcode: barcode.trim() || null,
         type: productType,
@@ -86,9 +111,22 @@ export function ProductForm({
         unit: unitType === "mixed" || unitType === "weight" ? unit : undefined,
         expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
         photo,
+        // Champs location
+        is_asset: isAsset || undefined,
+        rental_pricing: isAsset
+          ? {
+              hour: rentalHour ? Number(rentalHour) : undefined,
+              day: rentalDay ? Number(rentalDay) : undefined,
+              week: rentalWeek ? Number(rentalWeek) : undefined,
+              month: rentalMonth ? Number(rentalMonth) : undefined,
+            }
+          : undefined,
+        deposit_amount: isAsset && depositAmount ? Number(depositAmount) : undefined,
+        total_units: isAsset && totalUnits ? Number(totalUnits) : undefined,
       };
       if (!p.name) throw new Error("Nom requis");
-      if (p.price <= 0) throw new Error("Prix invalide");
+      if (!isAsset && p.price <= 0) throw new Error("Prix invalide");
+      if (isAsset && !totalUnits) throw new Error("Nombre d'unités requis");
       if (editing) {
         await updateProduct({ ...editing, ...p });
       } else {
@@ -267,37 +305,131 @@ export function ProductForm({
             />
           </div>
         )}
-        {(unitType === "mixed" || unitType === "weight") && productType === "product" && (
-          <div>
-            <Label>Unité de vente</Label>
-            <div className="flex gap-2 mt-1">
-              <Button
-                type="button"
-                variant={unit === "piece" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setUnit("piece")}
-              >
-                Pièce
-              </Button>
-              <Button
-                type="button"
-                variant={unit === "meter" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setUnit("meter")}
-              >
-                Mètre
-              </Button>
-              <Button
-                type="button"
-                variant={unit === "liter" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setUnit("liter")}
-              >
-                Litre
-              </Button>
+        {/* Champs location : actif de location avec tarification par période */}
+        {isLocation && productType === "product" && (
+          <>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="is_asset"
+                checked={isAsset}
+                onCheckedChange={(v) => setIsAsset(Boolean(v))}
+              />
+              <Label htmlFor="is_asset" className="cursor-pointer">
+                Actif de location (chaises, tentes, voitures…)
+              </Label>
             </div>
-          </div>
+            {isAsset && (
+              <>
+                <div>
+                  <Label htmlFor="total_units">Nombre d'unités physiques</Label>
+                  <Input
+                    id="total_units"
+                    inputMode="numeric"
+                    value={totalUnits}
+                    onChange={(e) => setTotalUnits(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Ex : 50 chaises, 3 voitures"
+                  />
+                </div>
+                <div>
+                  <Label>Tarifs de location (FCFA)</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div>
+                      <Label htmlFor="rental_hour" className="text-xs text-muted-foreground">
+                        Par heure
+                      </Label>
+                      <Input
+                        id="rental_hour"
+                        inputMode="numeric"
+                        value={rentalHour}
+                        onChange={(e) => setRentalHour(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Optionnel"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="rental_day" className="text-xs text-muted-foreground">
+                        Par jour
+                      </Label>
+                      <Input
+                        id="rental_day"
+                        inputMode="numeric"
+                        value={rentalDay}
+                        onChange={(e) => setRentalDay(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Ex : 5000"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="rental_week" className="text-xs text-muted-foreground">
+                        Par semaine
+                      </Label>
+                      <Input
+                        id="rental_week"
+                        inputMode="numeric"
+                        value={rentalWeek}
+                        onChange={(e) => setRentalWeek(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Optionnel"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="rental_month" className="text-xs text-muted-foreground">
+                        Par mois
+                      </Label>
+                      <Input
+                        id="rental_month"
+                        inputMode="numeric"
+                        value={rentalMonth}
+                        onChange={(e) => setRentalMonth(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Optionnel"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="deposit">Caution par défaut (FCFA)</Label>
+                  <Input
+                    id="deposit"
+                    inputMode="numeric"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Optionnel — montant retenu au client"
+                  />
+                </div>
+              </>
+            )}
+          </>
         )}
+        {!isAsset &&
+          (unitType === "mixed" || unitType === "weight") &&
+          productType === "product" && (
+            <div>
+              <Label>Unité de vente</Label>
+              <div className="flex gap-2 mt-1">
+                <Button
+                  type="button"
+                  variant={unit === "piece" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setUnit("piece")}
+                >
+                  Pièce
+                </Button>
+                <Button
+                  type="button"
+                  variant={unit === "meter" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setUnit("meter")}
+                >
+                  Mètre
+                </Button>
+                <Button
+                  type="button"
+                  variant={unit === "liter" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setUnit("liter")}
+                >
+                  Litre
+                </Button>
+              </div>
+            </div>
+          )}
         {hasExpiryDate && productType === "product" && (
           <div>
             <Label htmlFor="expiryDate">Date de péremption</Label>

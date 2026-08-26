@@ -176,6 +176,14 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       type: "service",
     },
   ],
+  location: [
+    { name: "Chaise en plastique", price: 0, stock: 50, category: "Événementiel" },
+    { name: "Tente 6×12m", price: 0, stock: 5, category: "Événementiel" },
+    { name: "Table ronde", price: 0, stock: 20, category: "Événementiel" },
+    { name: "Sonorisation portable", price: 0, stock: 3, category: "Équipement" },
+    { name: "Groupe électrogène 5kVA", price: 0, stock: 2, category: "Équipement" },
+    { name: "Voiture berline", price: 0, stock: 2, category: "Véhicules" },
+  ],
 };
 
 const MAGASIN_DEMO: Record<SubCategory, DemoProduct[]> = {

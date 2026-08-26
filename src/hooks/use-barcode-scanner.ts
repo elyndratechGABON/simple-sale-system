@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+import { Camera } from "@capacitor/camera";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
@@ -47,6 +49,21 @@ export function useBarcodeScanner() {
           ? `La caméra ne peut pas se lancer depuis « ${location.host} » (adresse http). Ouvrez l'application via son adresse https://, ou installez-la, puis réessayez.`
           : "La caméra exige une connexion sécurisée : ouvrez l'application en HTTPS (ou via l'application installée), puis réessayez.",
       );
+    }
+
+    // Android Capacitor : la permission CAMERA doit être demandée au runtime
+    // (Android 6+). Sans cette étape, getUserMedia ne répond jamais et le
+    // cadre reste noir sans explication.
+    if (Capacitor.isNativePlatform()) {
+      const status = await Camera.checkPermissions();
+      if (status.camera !== "granted") {
+        const result = await Camera.requestPermissions();
+        if (result.camera !== "granted") {
+          throw new Error(
+            "Autorisation caméra refusée. Allez dans Réglages → Applications → Caisse → Autorisations, activez la caméra, puis réessayez.",
+          );
+        }
+      }
     }
 
     scanningRef.current = true;

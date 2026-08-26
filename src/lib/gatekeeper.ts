@@ -12,6 +12,7 @@
 // qu'une caisse suspendue le reste même sans réseau.
 import { getShopProfile, getSetting, setSetting, setShopExpiry } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
+import { getDeviceFingerprint } from "@/lib/device-fingerprint";
 
 /** Version de l'application remontée au serveur (colonne `app_version_used`). */
 export const APP_VERSION = "pos-web-1";
@@ -156,6 +157,7 @@ export async function handshake(): Promise<HandshakeResult> {
 
   const applied = await getAppliedIds();
   const lastApplied = applied.length > 0 ? applied[applied.length - 1] : null;
+  const deviceFingerprint = await getDeviceFingerprint();
 
   try {
     const res = await fetch(`${url}/api/v1/handshake`, {
@@ -170,6 +172,7 @@ export async function handshake(): Promise<HandshakeResult> {
         app_version: APP_VERSION,
         app_origin: APP_ORIGIN,
         last_applied_command_id: lastApplied,
+        device_fingerprint: deviceFingerprint,
         // Identifiants du compte marchand (v3) : le serveur rattache cette caisse au
         // compte, ou le crée au premier contact avec un essai de 30 jours.
         ...(profile.accountPhone && profile.accountPassword
@@ -187,6 +190,22 @@ export async function handshake(): Promise<HandshakeResult> {
       const data = (await res.json().catch(() => null)) as { code?: string } | null;
       if (data?.code === "account_password") {
         return { ok: false, sync_allowed: false, status: "unknown", reason: "account_password" };
+      }
+      return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
+    }
+    // Conflit d'empreinte : cet appareil est déjà enregistré sous un autre device_id.
+    if (res.status === 409) {
+      const data = (await res.json().catch(() => null)) as {
+        code?: string;
+        existing_device_id?: string;
+      } | null;
+      if (data?.code === "fingerprint_conflict") {
+        return {
+          ok: false,
+          sync_allowed: false,
+          status: "unknown",
+          reason: "error",
+        };
       }
       return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
     }

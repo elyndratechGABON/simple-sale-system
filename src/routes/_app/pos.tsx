@@ -66,6 +66,7 @@ import { ProductPhotoDialog, ProductQuickEditDialog } from "@/components/Product
 import { ClientSelect } from "@/components/ClientSelect";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { VoiceDictation } from "@/components/VoiceDictation";
+import { RentalView } from "@/components/RentalView";
 import type { ParseResult } from "@/lib/voice/parser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1384,6 +1385,43 @@ function PosPage() {
                   })
                   .map((t) => {
                     const stage = tableStage(t);
+                    // Cluster location : vue dédiée locations d'actifs (pas de panier)
+                    if (features.isLocation) {
+                      return (
+                        <div className="app-container space-y-4 py-4">
+                          {salesToday.length > 0 && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-2.5">
+                              <span className="flex items-center gap-2 text-sm">
+                                <span className="text-muted-foreground">Aujourd'hui</span>
+                                <span className="font-bold tabular-nums">
+                                  {formatFCFA(todayTotal)}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  · {salesToday.length} location{salesToday.length > 1 ? "s" : ""}
+                                </span>
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCloseOpen(true)}
+                              >
+                                <Lock className="h-4 w-4 mr-1" /> Clôturer la journée
+                              </Button>
+                            </div>
+                          )}
+                          <RentalView />
+                          <CloseDayDialog
+                            open={closeOpen}
+                            onOpenChange={setCloseOpen}
+                            salesCount={salesToday.length}
+                            total={todayTotal}
+                            busy={closeDayMut.isPending}
+                            onConfirm={() => closeDayMut.mutate()}
+                          />
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={t.id}

@@ -75,6 +75,20 @@ export interface Product extends SyncFields {
    * le lisent `undefined`.
    */
   min_stock?: number;
+  // ── Location d'actifs (cluster 'location') ─────────────────────────────
+  /** true = actif de location, pas produit consommable. */
+  is_asset?: boolean;
+  /** Tarifs de location par unité de temps. Absent = pas de location. */
+  rental_pricing?: {
+    hour?: number;
+    day?: number;
+    week?: number;
+    month?: number;
+  };
+  /** Montant de caution par défaut pour cet actif. */
+  deposit_amount?: number;
+  /** Nombre total d'unités physiques de cet actif. */
+  total_units?: number;
 }
 
 /**
@@ -216,6 +230,50 @@ export interface ProductExpense {
 }
 
 /**
+ * Location d'actifs (cluster 'location'). Chaque enregistrement représente une location
+ * en cours ou terminée. Le lien avec le produit (actif) est `asset_id` → `Product.id`.
+ */
+export interface Rental {
+  id: string;
+  /** Référence vers le produit/actif (Product.id). */
+  asset_id: string;
+  /** Nom de l'actif au moment de la location (snapshot, résiste aux renommages). */
+  asset_name: string;
+  /** Nom du client. */
+  client_name: string;
+  /** Téléphone du client (optionnel). */
+  client_phone?: string;
+  /** Unité de tarification choisie par le vendeur. */
+  pricing_unit: "hour" | "day" | "week" | "month";
+  /** Tarif unitaire choisi (FCFA). */
+  price_per_unit: number;
+  /** Nombre d'unités louées (ex: 5 chaises). */
+  quantity: number;
+  /** Montant de la caution perçue (FCFA). */
+  deposit: number;
+  /** Timestamp début de la location. */
+  start_date: number;
+  /** Timestamp fin prévue de la location. */
+  expected_end_date: number;
+  /** Timestamp fin réelle (retour). Absent tant que pas retourné. */
+  actual_end_date?: number;
+  /** État de la location. */
+  status: "active" | "returned" | "overdue" | "cancelled";
+  /** État de l'actif au retour. */
+  condition_at_return?: "good" | "damaged" | "lost";
+  /** Pénalité de retard calculée (FCFA). */
+  late_fee?: number;
+  /** Montant de caution rendu au client (FCFA). */
+  deposit_refund?: number;
+  /** Notes libres. */
+  notes?: string;
+  /** Timestamp de création. */
+  created_at: number;
+  /** Timestamp de dernière mise à jour. */
+  updated_at: number;
+}
+
+/**
  * Identité de l'établissement qui utilise la caisse : c'est l'inscription de la boutique
  * dans l'orchestrateur (le PC du commerçant). Quatre infos saisies une fois dans
  * Paramètres, pré-enregistrées localement, puis poussées à chaque synchronisation.
@@ -252,6 +310,8 @@ export interface ShopProfile extends SyncFields {
   accountName?: string;
   accountPhone?: string;
   accountPassword?: string;
+  /** Empreinte numérique de l'appareil (SHA-256) — garantit 1 téléphone = 1 boutique. */
+  deviceFingerprint?: string;
 }
 
 /**
@@ -299,6 +359,7 @@ class PosDatabase extends Dexie {
   product_expenses!: Table<ProductExpense, number>;
   stock_movements!: Table<StockMovement, string>;
   day_closures!: Table<DayClosure, string>;
+  rentals!: Table<Rental, string>;
 
   constructor() {
     super("pos-db");
@@ -551,6 +612,24 @@ class PosDatabase extends Dexie {
       product_expenses: "++id, product_id, period_from, [product_id+period_from]",
       stock_movements: "id, product_id, created_at, [product_id+created_at]",
       day_closures: "id, closed_at",
+    });
+
+    // Version 17 — location d'actifs (cluster 'location'). Le store `rentals` est neuf,
+    // rien à migrer. Indexé sur `asset_id` (查询某 actif 的 locations), `status` (查询
+    // 活跃/逾期 locations), et `start_date` / `expected_end_date` (calendrier).
+    this.version(17).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+      day_closures: "id, closed_at",
+      rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
     });
   }
 }
@@ -1415,11 +1494,89 @@ export async function deleteSubscription(id: string): Promise<void> {
   await db.subscriptions.put({ ...sub, ...touch(), deleted_at: Date.now() });
 }
 
-// ---------- Profil boutique (licence) ----------
+// ---------- Locations d'actifs (cluster 'location') ----------
+// CRUD pour les locations : création, mise à jour (retour), suppression logique.
+
+export async function addRental(
+  r: Omit<Rental, "id" | "created_at" | "updated_at">,
+): Promise<Rental> {
+  const now = Date.now();
+  const rental: Rental = { ...r, id: uid(), created_at: now, updated_at: now };
+  await getDB().rentals.put(rental);
+  return rental;
+}
+
+export async function updateRental(r: Rental): Promise<void> {
+  await getDB().rentals.put({ ...r, updated_at: Date.now() });
+}
+
+export async function getRental(id: string): Promise<Rental | undefined> {
+  return getDB().rentals.get(id);
+}
+
+export async function listActiveRentals(): Promise<Rental[]> {
+  return getDB().rentals.where("status").equals("active").sortBy("expected_end_date");
+}
+
+export async function listOverdueRentals(): Promise<Rental[]> {
+  return getDB().rentals.where("status").equals("overdue").sortBy("expected_end_date");
+}
+
+export async function listAllRentals(): Promise<Rental[]> {
+  return getDB().rentals.orderBy("created_at").reverse().toArray();
+}
+
+/**
+ * Vérifie la disponibilité d'un actif sur une période donnée.
+ * Renvoie le nombre d'unités encore disponibles.
+ */
+export async function getAssetAvailability(
+  assetId: string,
+  startDate: number,
+  endDate: number,
+): Promise<{ available: number; total: number; conflicting: number }> {
+  const db = getDB();
+  const product = await db.products.get(assetId);
+  const total = product?.total_units ?? product?.stock ?? 0;
+  if (!Number.isFinite(total)) return { available: Infinity, total: Infinity, conflicting: 0 };
+
+  // Locations qui se chevauchent avec la période demandée
+  const overlapping = await db.rentals
+    .where("asset_id")
+    .equals(assetId)
+    .filter(
+      (r) => r.status === "active" && r.start_date < endDate && r.expected_end_date > startDate,
+    )
+    .toArray();
+
+  const conflicting = overlapping.reduce((sum, r) => sum + r.quantity, 0);
+  return { available: Math.max(0, total - conflicting), total, conflicting };
+}
+
+/**
+ * Marque comme overdue les locations dont la date de fin prévue est dépassée
+ * et qui ne sont pas encore retournées. Appelée au démarrage de l'app.
+ */
+export async function markOverdueRentals(): Promise<number> {
+  const db = getDB();
+  const now = Date.now();
+  const active = await db.rentals.where("status").equals("active").toArray();
+  const overdue = active.filter((r) => r.expected_end_date < now);
+  if (overdue.length === 0) return 0;
+  await db.transaction("rw", db.rentals, async () => {
+    for (const r of overdue) {
+      await db.rentals.put({ ...r, status: "overdue", updated_at: now });
+    }
+  });
+  return overdue.length;
+}
+
+/** Profil boutique (licence) -------------------------
 // L'identité de l'établissement, pré-enregistrée localement et poussée à l'orchestrateur.
 // La durée de l'essai est le miroir de `orchestrator/src/config.ts` : le SERVEUR calcule
 // et renvoie l'échéance, ceci n'est que la valeur affichée tant qu'aucune synchronisation
 // n'a eu lieu.
+*/
 
 const TRIAL_DAYS = 30;
 const TRIAL_DAYS_MS = TRIAL_DAYS * 86_400_000;

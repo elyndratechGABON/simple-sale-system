@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, CircleAlert, TriangleAlert, Info as InfoIcon, type LucideIcon } from "lucide-react";
-import { listProducts, listOpenTables } from "@/lib/db";
+import { listProducts, listOpenTables, listActiveRentals } from "@/lib/db";
 import { buildAlerts, type AlertSeverity } from "@/lib/alerts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,9 +66,14 @@ export function NotificationBell() {
     queryFn: listOpenTables,
     staleTime: 30_000,
   });
+  const { data: activeRentals } = useQuery({
+    queryKey: ["rentals", "active"],
+    queryFn: listActiveRentals,
+    staleTime: 30_000,
+  });
   const alerts = useMemo(
-    () => buildAlerts(products ?? [], openTables ?? []),
-    [products, openTables],
+    () => buildAlerts(products ?? [], openTables ?? [], activeRentals),
+    [products, openTables, activeRentals],
   );
   const unseenCount = useMemo(() => {
     void seenVersion;
