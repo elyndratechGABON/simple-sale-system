@@ -20,6 +20,7 @@ import {
   QrCode,
   Save,
   Scissors,
+  ScanLine,
   ShoppingBag,
   Shirt,
   Sparkles,
@@ -35,6 +36,8 @@ import {
 import { ACTIVE_CLUSTERS, savePreferences, type Preferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import { parsePairingPayload } from "@/lib/pairing";
 import {
   canPickDirectory,
   describeSaveResult,
@@ -261,6 +264,30 @@ function DevicesCard() {
   const [claimPassword, setClaimPassword] = useState("");
   const [claiming, setClaiming] = useState(false);
 
+  // Scan du QR d'appairage : même parcours que l'onboarding « Rejoindre », proposé
+  // ici aux écrans ajoutés APRÈS la création du compte. La caméra ne s'arme que sur
+  // le clic du bouton dédié (geste frais = prompt d'autorisation au bon moment).
+  const { scanning, startScan } = useBarcodeScanner();
+
+  async function scanPairingQr() {
+    try {
+      const raw = await startScan();
+      const parsed = parsePairingPayload(raw ?? "");
+      if (!parsed) {
+        toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
+        return;
+      }
+      setClaimPhone(parsed.phone);
+      setClaimPassword(parsed.password);
+      // Le nom du QR n'est qu'indicatif : cet écran garde SA propre enseigne.
+      toast.success(
+        `Compte « ${parsed.name || parsed.phone} » récupéré — vérifiez puis rattachez.`,
+      );
+    } catch {
+      toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");
+    }
+  }
+
   async function claimAccount() {
     const phone = claimPhone.trim();
     const password = claimPassword.trim();
@@ -346,10 +373,22 @@ function DevicesCard() {
                 <Users className="h-4 w-4" /> Rejoindre le compte marchand
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Saisissez le téléphone et le mot de passe du compte marchand pour rattacher cette
-                caisse — puis « Ajouter un appareil » deviendra disponible.
+                Scannez le QR affiché par une caisse déjà abonnée, ou saisissez son téléphone et son
+                mot de passe — puis « Ajouter un appareil » deviendra disponible.
               </p>
             </div>
+            {/* Chemin primaire : scanner le QR d'une caisse abonnée (même parcours
+                que l'onboarding « Rejoindre ») — la saisie manuelle reste en repli. */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={scanning}
+              onClick={() => void scanPairingQr()}
+            >
+              <ScanLine className="h-4 w-4 mr-2" />
+              {scanning ? "Caméra active…" : "Scanner le QR d'une caisse abonnée"}
+            </Button>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="claim-phone">Téléphone du compte</Label>

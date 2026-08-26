@@ -409,16 +409,42 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
             </div>
             <div className="space-y-3 pt-1">
               {accountMode === "join" && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                  disabled={scanning}
-                  onClick={() => void scanPairingQr()}
-                >
-                  <ScanLine className="h-4 w-4 mr-2" />
-                  {scanning ? "Caméra active…" : "Scanner le QR d'une autre caisse"}
-                </Button>
+                <>
+                  {/* Chemin PRIMAIRE du rattachement : ce mobile est nouveau, le QR
+                      affiché par une caisse déjà abonnée est ce qu'on lui DEMANDE.
+                      La caméra ne s'arme que sur ce bouton (geste dédié = prompt
+                      d'autorisation au bon moment) ; la saisie manuelle reste en
+                      dessous comme repli explicite. */}
+                  <div className="space-y-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4 text-center">
+                    <ScanLine className="mx-auto h-8 w-8 text-primary" />
+                    <p className="text-sm font-medium">
+                      Scannez le QR affiché par votre caisse déjà abonnée
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Sur l'autre téléphone : Réglages → Appareils → « Ajouter un appareil », puis
+                      présentez le code ici.
+                    </p>
+                    <Button
+                      type="button"
+                      className="h-12 w-full"
+                      disabled={scanning}
+                      onClick={() => void scanPairingQr()}
+                    >
+                      <ScanLine className="h-4 w-4 mr-2" />
+                      {scanning ? "Caméra active…" : "Scanner le QR maintenant"}
+                    </Button>
+                  </div>
+                  <div className="relative py-1">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span className="bg-background px-2 text-xs uppercase tracking-wide text-muted-foreground">
+                        ou saisir manuellement
+                      </span>
+                    </div>
+                  </div>
+                </>
               )}
               <div>
                 <Label htmlFor="ob-owner">Nom du propriétaire</Label>

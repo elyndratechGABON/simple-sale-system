@@ -103,8 +103,8 @@ const noEarlyCamera = await page.evaluate(
 noEarlyCamera
   ? ok("aucun prompt caméra avant le geste dédié")
   : ko("la caméra s'est armée dès la tuile — geste dédié non respecté");
-await page.getByRole("button", { name: /scanner le qr d'une autre caisse/i }).click();
-ok("bouton « Scanner » cliqué — démarrage du scan");
+await page.getByRole("button", { name: /scanner le qr/i }).click();
+ok("bouton « Scanner le QR maintenant » cliqué — démarrage du scan");
 
 // La superposition doit devenir « Caméra active » avec une vidéo VIVANTE.
 let cameraLive = false;
