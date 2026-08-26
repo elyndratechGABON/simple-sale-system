@@ -40,8 +40,12 @@ export function useBarcodeScanner() {
       !window.isSecureContext ||
       !navigator.mediaDevices?.getUserMedia
     ) {
+      const onHttp =
+        typeof location !== "undefined" && location.protocol === "http:" && !!location.host;
       throw new Error(
-        "La caméra exige une connexion sécurisée : ouvrez l'application en HTTPS (ou via l'application installée), puis réessayez.",
+        onHttp
+          ? `La caméra ne peut pas se lancer depuis « ${location.host} » (adresse http). Ouvrez l'application via son adresse https://, ou installez-la, puis réessayez.`
+          : "La caméra exige une connexion sécurisée : ouvrez l'application en HTTPS (ou via l'application installée), puis réessayez.",
       );
     }
 
@@ -103,33 +107,67 @@ export function useBarcodeScanner() {
       scanner = new Html5Qrcode(frame.id);
 
       // ATTENTE RÉELLE de start() : sa résolution garantit un flux caméra vivant.
-      // Avant, la promesse était lancée sans être attendue — toute erreur passait
-      // inaperçue derrière le cadre noir.
-      const timeout = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(
-            new Error(
-              "Impossible d'accéder à la caméra (délai dépassé). Fermez les autres applications qui l'utilisent, puis réessayez.",
+      // Deux tentatives : caméra ARRIÈRE d'abord (facingMode environment), puis
+      // n'importe laquelle — certaines tablettes n'ont pas de module arrière et
+      // rejetaient la contrainte, laissant un cadre noir sans explication.
+      const attempts: Array<{ facingMode: string }> = [
+        { facingMode: "environment" },
+        { facingMode: "user" },
+      ];
+      let started = false;
+      let lastErr: unknown = null;
+      for (const camera of attempts) {
+        const timeout = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(
+              new Error(
+                "Impossible d'accéder à la caméra (délai dépassé). Fermez les autres applications qui l'utilisent, puis réessayez.",
+              ),
+            );
+          }, 10_000);
+        });
+        try {
+          await Promise.race([
+            scanner.start(
+              camera,
+              { fps: 10, qrbox: { width: qrBoxSize, height: qrBoxSize } },
+              (decodedText) => resolveDecoded(decodedText),
+              () => {},
             ),
-          );
-        }, 10_000);
-      });
-      await Promise.race([
-        scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: qrBoxSize, height: qrBoxSize } },
-          (decodedText) => resolveDecoded(decodedText),
-          () => {},
-        ),
-        timeout,
-      ]);
+            timeout,
+          ]);
+          started = true;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const msg = String((e as Error)?.message ?? e ?? "");
+          // Contrainte injoignable uniquement → tenter la caméra suivante.
+          if (/overconstrained|notfound|no ?camera|facingmode|device not found/i.test(msg)) {
+            continue;
+          }
+          throw e;
+        } finally {
+          if (timeoutId !== undefined) clearTimeout(timeoutId);
+        }
+      }
+      if (!started) throw lastErr ?? new Error("Caméra indisponible.");
 
       hint.textContent = "Cadrez le code QR dans le cadre";
       status.textContent = "Caméra active";
 
       return await Promise.race([decoded, cancelled]);
     } catch (err) {
-      throw toCameraError(err);
+      // L'erreur doit être LISIBLE SUR PLACE : on l'écrit dans l'overlay et on
+      // laisse 4 s avant de le retirer. Un simple toast, sur mobile, passe
+      // inaperçu — l'utilisateur ne comprenait jamais pourquoi « rien ne se
+      // lance ».
+      const e = toCameraError(err);
+      hint.style.display = "none";
+      status.textContent = e.message;
+      status.style.color = "#fca5a5";
+      status.style.fontSize = "13px";
+      await new Promise((r) => setTimeout(r, 4000));
+      throw e;
     } finally {
       if (timeoutId !== undefined) clearTimeout(timeoutId);
       // Quelle que soit l'issue (lecture, annulation, erreur), la caméra est rendue.
@@ -149,11 +187,22 @@ function toCameraError(err: unknown): Error {
   const raw = String((err as Error)?.message ?? err ?? "");
   if (/permission|notallowed|denied|refus/i.test(raw)) {
     return new Error(
-      "Accès à la caméra refusé. Autorisez-la pour ce site (ou pour l'application), puis réessayez.",
+      "Accès à la caméra refusé. Touchez l'icône 🔒/ⓘ dans la barre d'adresse (ou Réglages → Applications), autorisez la caméra pour ce site, puis réessayez.",
     );
   }
-  if (/notfound|no ?camera|device not found|overconstrained/i.test(raw)) {
+  if (/notfound|no ?camera|device not found/i.test(raw)) {
     return new Error("Aucune caméra utilisable n'a été détectée sur cet appareil.");
+  }
+  if (/notreadable|track ?start|could not start|busy|déjà utilis/i.test(raw)) {
+    return new Error(
+      "La caméra est déjà utilisée par une autre application. Fermez-la, puis réessayez.",
+    );
+  }
+  if (/overconstrained|facingmode/i.test(raw)) {
+    // Certaines tablettes n'ont pas de caméra arrière : retenter sans préférence.
+    return new Error(
+      "Caméra arrière introuvable sur cet appareil — la frontale sera utilisée au prochain essai.",
+    );
   }
   if (/secure|https/i.test(raw)) {
     return new Error("La caméra exige une connexion sécurisée (HTTPS).");
