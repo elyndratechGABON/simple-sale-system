@@ -18,6 +18,31 @@ export function isIOS(): boolean {
   return /Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
 }
 
+export type InstallPlatform = "ios" | "android" | "desktop";
+
+/**
+ * Plateforme d'installation : oriente le repli quand aucun événement natif
+ * n'est disponible (Safari → Partager ; Android → menu ⋮ du navigateur ;
+ * desktop → icône dans la barre d'adresse).
+ */
+export function detectInstallPlatform(): InstallPlatform {
+  if (typeof window === "undefined") return "desktop";
+  if (isIOS()) return "ios";
+  if (/android/i.test(navigator.userAgent)) return "android";
+  return "desktop";
+}
+
+/**
+ * Contexte non sécurisé (http hors localhost) : `beforeinstallprompt` n'y est
+ * JAMAIS exposé — c'est la cause n°1 du « pas de bouton d'installation » lors
+ * des tests en IP locale. Le repli doit le dire explicitement au lieu d'un
+ * message générique.
+ */
+export function isInsecureContext(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.isSecureContext === false;
+}
+
 export function registerServiceWorker(): void {
   if (typeof window === "undefined") return;
   if (import.meta.env.DEV) return;

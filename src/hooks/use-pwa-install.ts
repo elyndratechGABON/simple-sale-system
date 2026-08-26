@@ -13,7 +13,14 @@
 // Rien n'est évalué pendant le rendu serveur : le bootstrap touche window
 // uniquement côté navigateur, et le snapshot serveur est une constante.
 import { useCallback, useSyncExternalStore } from "react";
-import { type BeforeInstallPromptEvent, isIOS, isStandalone } from "@/lib/pwa";
+import {
+  type BeforeInstallPromptEvent,
+  detectInstallPlatform,
+  isIOS,
+  isInsecureContext,
+  isStandalone,
+  type InstallPlatform,
+} from "@/lib/pwa";
 
 declare global {
   interface Window {
@@ -34,6 +41,10 @@ export interface PwaInstallState {
   installed: boolean;
   /** Safari n'expose aucun prompt : l'installation passe par une manipulation manuelle. */
   isIos: boolean;
+  /** Plateforme détectée : oriente le repli (menu Android, barre d'adresse desktop…). */
+  platform: InstallPlatform;
+  /** Contexte non sécurisé (http hors localhost) : cause n°1 d'absence du prompt natif. */
+  insecure: boolean;
   install: () => Promise<InstallOutcome>;
 }
 
@@ -41,15 +52,25 @@ interface Snapshot {
   prompt: BeforeInstallPromptEvent | null;
   installed: boolean;
   isIos: boolean;
+  platform: InstallPlatform;
+  insecure: boolean;
 }
 
 /* ── Store de module ─────────────────────────────────────────────────────── */
 
-const SERVER_SNAPSHOT: Snapshot = { prompt: null, installed: false, isIos: false };
+const SERVER_SNAPSHOT: Snapshot = {
+  prompt: null,
+  installed: false,
+  isIos: false,
+  platform: "desktop",
+  insecure: false,
+};
 
 let captured: BeforeInstallPromptEvent | null = null;
 let installedFlag = false;
 let iosFlag = false;
+let platformFlag: InstallPlatform = "desktop";
+let insecureFlag = false;
 let autoShown = false;
 let autoArmed = false;
 let pending: Promise<InstallOutcome> | null = null;
@@ -58,7 +79,13 @@ let snap: Snapshot = SERVER_SNAPSHOT;
 const subscribers = new Set<() => void>();
 
 function refresh() {
-  snap = { prompt: captured, installed: installedFlag, isIos: iosFlag };
+  snap = {
+    prompt: captured,
+    installed: installedFlag,
+    isIos: iosFlag,
+    platform: platformFlag,
+    insecure: insecureFlag,
+  };
   subscribers.forEach((notify) => notify());
 }
 
@@ -112,6 +139,8 @@ function armAutoGesture() {
 
 function bootstrap() {
   iosFlag = isIOS();
+  platformFlag = detectInstallPlatform();
+  insecureFlag = isInsecureContext();
 
   if (isStandalone()) {
     installedFlag = true;
@@ -185,6 +214,8 @@ export function usePwaInstall(): PwaInstallState {
     canInstall: state.prompt !== null || state.isIos,
     installed: state.installed,
     isIos: state.isIos,
+    platform: state.platform,
+    insecure: state.insecure,
     install: installStable,
   };
 }

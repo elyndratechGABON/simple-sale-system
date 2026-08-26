@@ -25,32 +25,39 @@ const ko = (m) => {
   failed++;
 };
 
-const INIT = () => {
-  window.__stubPromptCount = 0;
-  window.__stubOutcome = "accepted";
-  (function fire() {
-    // Attend que le script inline de __root.tsx ait posé son écouteur…
-    if (!window.__pwaInstallCaptureArmed) return setTimeout(fire, 1);
-    // …puis tire l'événement SYNTHÉTIQUE, comme le ferait Chrome après sa
-    // vérification manifest+SW — potentiellement avant le montage React.
-    const e = new Event("beforeinstallprompt");
-    e.prompt = () => {
-      window.__stubPromptCount += 1;
-      return Promise.resolve();
-    };
-    e.userChoice = Promise.resolve({ outcome: window.__stubOutcome });
-    Object.defineProperty(e, "userChoice", { value: e.userChoice });
-    window.dispatchEvent(e);
-  })();
-};
+const makeInit =
+  (dispatchEvent) =>
+  () => {
+    window.__stubPromptCount = 0;
+    window.__stubOutcome = "accepted";
+    if (!dispatchEvent) return; // scénario « aucun prompt natif » (ex. contexte non sécurisé)
+    (function fire() {
+      // Attend que le script inline de __root.tsx ait posé son écouteur…
+      if (!window.__pwaInstallCaptureArmed) return setTimeout(fire, 1);
+      // …puis tire l'événement SYNTHÉTIQUE, comme le ferait Chrome après sa
+      // vérification manifest+SW — potentiellement avant le montage React.
+      const e = new Event("beforeinstallprompt");
+      e.prompt = () => {
+        window.__stubPromptCount += 1;
+        return Promise.resolve();
+      };
+      e.userChoice = Promise.resolve({ outcome: window.__stubOutcome });
+      Object.defineProperty(e, "userChoice", { value: e.userChoice });
+      window.dispatchEvent(e);
+    })();
+  };
+const INIT = makeInit(true);
 
-async function runScenario(name, { delayBundles, buttonIndex, label, desktop = false }) {
+async function runScenario(
+  name,
+  { delayBundles, buttonIndex, label, desktop = false, insecure = false },
+) {
   const context = await browser.newContext(
     desktop
       ? { viewport: { width: 1366, height: 900 } }
       : { viewport: { width: 390, height: 844 }, isMobile: true },
   );
-  await context.addInitScript(INIT);
+  await context.addInitScript(makeInit(!insecure));
   if (delayBundles) {
     // Retarder les bundles : React montera APRÈS le tir de l'événement.
     await context.route("**/assets/*.js", async (route) => {
@@ -59,7 +66,10 @@ async function runScenario(name, { delayBundles, buttonIndex, label, desktop = f
     });
   }
   const page = await context.newPage();
-  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  // http://scan.test n'est PAS un contexte sûr : Chrome n'y expose jamais
+  // beforeinstallprompt — exactement la situation d'un test en IP locale.
+  const origin = insecure ? "http://scan.test" : BASE;
+  await page.goto(`${origin}/`, { waitUntil: "domcontentloaded" });
 
   // La landing monte TROIS « Installer » (header compact, hero, section finale).
   // Le bug historique : seul le premier monté (header) déclenchait l'installation,
@@ -81,18 +91,31 @@ async function runScenario(name, { delayBundles, buttonIndex, label, desktop = f
   const res = await page.evaluate(() => ({
     stubPromptCount: window.__stubPromptCount ?? 0,
     fallbackVisible: document.body.innerText.includes("Ce navigateur ne propose pas de bouton"),
+    insecureHelpVisible: document.body.innerText.includes("Connexion non sécurisée"),
     installedCta: document.body.innerText.includes("Ouvrir ELYNDRA CAISSE"),
   }));
 
-  res.stubPromptCount >= 1
-    ? ok(`${name} [${label}]: prompt() appelé (${res.stubPromptCount}× au total)`)
-    : ko(`${name} [${label}]: prompt() jamais appelé`);
-  res.stubPromptCount === 1
-    ? ok(`${name} [${label}]: consommation unique de l'événement`)
-    : ko(`${name} [${label}]: ${res.stubPromptCount} appels prompt() (attendu : 1)`);
-  if (res.fallbackVisible) ko(`${name} [${label}]: message de repli affiché à tort`);
-  else ok(`${name} [${label}]: pas de message de repli`);
-  if (!res.installedCta) ko(`${name} [${label}]: les CTA n'ont pas basculé sur « Ouvrir »`);
+  if (insecure) {
+    // Aucun prompt natif possible : l'orchestrateur doit EXPLIQUER la cause.
+    res.insecureHelpVisible
+      ? ok(`${name} [${label}]: cause « Connexion non sécurisée » expliquée`)
+      : ko(`${name} [${label}]: la cause http n'est pas expliquée`);
+    res.stubPromptCount === 0
+      ? ok(`${name} [${label}]: aucun prompt() tenté hors contexte sûr`)
+      : ko(`${name} [${label}]: prompt() appelé en contexte non sécurisé ?!`);
+    if (res.fallbackVisible) ko(`${name} [${label}]: message générique historique affiché`);
+    else ok(`${name} [${label}]: message générique absent`);
+  } else {
+    res.stubPromptCount >= 1
+      ? ok(`${name} [${label}]: prompt() appelé (${res.stubPromptCount}× au total)`)
+      : ko(`${name} [${label}]: prompt() jamais appelé`);
+    res.stubPromptCount === 1
+      ? ok(`${name} [${label}]: consommation unique de l'événement`)
+      : ko(`${name} [${label}]: ${res.stubPromptCount} appels prompt() (attendu : 1)`);
+    if (res.fallbackVisible) ko(`${name} [${label}]: message de repli affiché à tort`);
+    else ok(`${name} [${label}]: pas de message de repli`);
+    if (!res.installedCta) ko(`${name} [${label}]: les CTA n'ont pas basculé sur « Ouvrir »`);
+  }
 
   await context.close();
 }
@@ -110,6 +133,7 @@ await runScenario("D desktop-header", {
   label: "header compact (lg+)",
   desktop: true,
 });
+await runScenario("E insecure", { delayBundles: false, buttonIndex: 0, label: "http local" });
 
 console.log(failed === 0 ? "\nINSTALL OK" : `\n${failed} échec(s) d'installation`);
 process.exit(failed === 0 ? 0 : 1);
