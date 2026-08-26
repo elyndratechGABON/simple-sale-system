@@ -1,6 +1,7 @@
-// Mise en page de l'APPLICATION : en-tête de navigation, zone de contenu animée et
-// assistant de premier lancement. Route sans segment d'URL (`_app`), donc `/pos` reste
-// `/pos`.
+// Mise en page de l'APPLICATION (post-onboarding) : en-tête de navigation et zone
+// de contenu animée. Route sans segment d'URL (`_app`), donc `/pos` reste `/pos`.
+// L'onboarding vit DANS SA PROPRE ROUTE /welcome : le beforeLoad ci-dessous y
+// renvoie quiconque n'a pas terminé son installation, avant tout rendu.
 //
 // POURQUOI CE CHROME N'EST PAS DANS `__root.tsx` — et ne doit pas y retourner.
 //
@@ -16,14 +17,13 @@
 // différer sans rien casser. Placer ici le chrome propre à l'application, et laisser
 // `__root.tsx` ne contenir que ce qui est vrai pour TOUTES les pages, résout le problème
 // par construction — plus aucune condition sur le chemin nulle part.
-import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
 import { Header } from "../components/Header";
 import { BottomNav } from "../components/Nav";
 import { LoadingScreen } from "../components/LoadingScreen";
-import { Onboarding } from "../components/Onboarding";
 import { RenewalBanner } from "../components/RenewalBanner";
 import { SuspendedScreen } from "../components/SuspendedScreen";
 import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
@@ -32,6 +32,17 @@ import { getPreferences } from "../lib/settings";
 import { backgroundSync } from "../lib/sync";
 
 export const Route = createFileRoute("/_app")({
+  // GARDE ANTI-FLASH : couru AVANT le montage du moindre composant applicatif.
+  // Tant que l'onboarding n'est pas terminé, ni ce layout ni ses enfants
+  // (caisse, stocks, rapports…) ne sont instanciés : le navigateur part direct
+  // vers /welcome. Aucune donnée métier, aucun chrome, aucun flash possible —
+  // c'est la garantie structurelle, pas un overlay posé sur l'app.
+  beforeLoad: () => {
+    const prefs = getPreferences();
+    if (!prefs.onboarded || !prefs.onboardingCompleted) {
+      throw redirect({ to: "/welcome" });
+    }
+  },
   component: AppLayout,
 });
 
@@ -76,7 +87,6 @@ function AppLayout() {
         </main>
       </div>
       <BottomNav />
-      <Onboarding />
       <GatekeeperAlerts />
       <SuspendedScreen />
     </>

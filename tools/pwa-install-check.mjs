@@ -25,27 +25,25 @@ const ko = (m) => {
   failed++;
 };
 
-const makeInit =
-  (dispatchEvent) =>
-  () => {
-    window.__stubPromptCount = 0;
-    window.__stubOutcome = "accepted";
-    if (!dispatchEvent) return; // scénario « aucun prompt natif » (ex. contexte non sécurisé)
-    (function fire() {
-      // Attend que le script inline de __root.tsx ait posé son écouteur…
-      if (!window.__pwaInstallCaptureArmed) return setTimeout(fire, 1);
-      // …puis tire l'événement SYNTHÉTIQUE, comme le ferait Chrome après sa
-      // vérification manifest+SW — potentiellement avant le montage React.
-      const e = new Event("beforeinstallprompt");
-      e.prompt = () => {
-        window.__stubPromptCount += 1;
-        return Promise.resolve();
-      };
-      e.userChoice = Promise.resolve({ outcome: window.__stubOutcome });
-      Object.defineProperty(e, "userChoice", { value: e.userChoice });
-      window.dispatchEvent(e);
-    })();
-  };
+const makeInit = (dispatchEvent) => () => {
+  window.__stubPromptCount = 0;
+  window.__stubOutcome = "accepted";
+  if (!dispatchEvent) return; // scénario « aucun prompt natif » (ex. contexte non sécurisé)
+  (function fire() {
+    // Attend que le script inline de __root.tsx ait posé son écouteur…
+    if (!window.__pwaInstallCaptureArmed) return setTimeout(fire, 1);
+    // …puis tire l'événement SYNTHÉTIQUE, comme le ferait Chrome après sa
+    // vérification manifest+SW — potentiellement avant le montage React.
+    const e = new Event("beforeinstallprompt");
+    e.prompt = () => {
+      window.__stubPromptCount += 1;
+      return Promise.resolve();
+    };
+    e.userChoice = Promise.resolve({ outcome: window.__stubOutcome });
+    Object.defineProperty(e, "userChoice", { value: e.userChoice });
+    window.dispatchEvent(e);
+  })();
+};
 const INIT = makeInit(true);
 
 async function runScenario(

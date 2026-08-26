@@ -1,22 +1,18 @@
-// Assistant de premier lancement — parcours guidé intelligent :
+// Assistant de premier lancement — parcours guidé intelligent, rendu dans la
+// ROUTE DÉDIÉE /welcome (page indépendante : aucun chrome applicatif derrière).
 //
-// 1. **WelcomeScreen** : "Bienvenue sur ELYNDRA CAISSE" — un seul bouton "Commencer"
-// 2. **SetupWizard** : nom, compte marchand (téléphone + mot de passe), secteur d'activité,
-//    sous-catégorie (magasin), infos optionnelles, confidentialité
-// 3. **ClusterTutorial** : tutoriel adaptatif qui ajoute des produits/prestations selon le cluster
-// 4. **FirstSaleReady** : écran de confirmation "Tout est prêt"
+// 1. **SetupWizard** : confidentialité, nom, compte marchand (téléphone + mot de
+//    passe, ou scan du QR d'une caisse abonnée), secteur d'activité, sous-catégorie
+// 2. **ClusterTutorial** : tutoriel adaptatif qui ajoute des produits/prestations selon le cluster
 //
-// Le tutoriel (3) s'adapte au cluster choisi :
-//   - retail → "Ajoutez vos produits"
-//   - restaurant → "Créez votre menu"
-//   - bar → "Ajoutez vos boissons" + choix workflow
-//   - service → "Ajoutez vos prestations"
-//   - clothing → "Ajoutez vos vêtements"
-//   - weight → "Enregistrez vos produits au poids"
+// Le tutoriel s'adapte au cluster choisi :
+//   - retail → "Ajoutez vos produits"   - restaurant → "Créez votre menu"
+//   - bar → "Ajoutez vos boissons"      - service → "Ajoutez vos prestations"
+//   - clothing → "Ajoutez vos vêtements" - weight → "Produits au poids"
 //   - magasin → "Ajoutez vos produits" (avec sous-cat)
 //
 // Les produits ajoutés pendant le tutoriel sont enregistrés en base.
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -26,7 +22,6 @@ import {
   CloudOff,
   EyeOff,
   HardDrive,
-  KeyRound,
   Package,
   Shield,
   Store,
@@ -34,7 +29,6 @@ import {
   ArrowRight,
   PartyPopper,
   Users,
-  WifiOff,
   ScanLine,
 } from "lucide-react";
 import { ChefHat, Coffee, Scissors, ShoppingBag, Shirt, Weight, Sparkles } from "lucide-react";
@@ -57,12 +51,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
-
-type OnboardingPhase = "welcome" | "wizard" | "tutorial" | "ready" | "done";
 
 /* ── Icon map ────────────────────────────────────────────────────────────── */
 
@@ -81,80 +72,25 @@ function resolveIcon(name: string): typeof Store {
   return ICON_MAP[name] ?? Store;
 }
 
-/* ── Phase 1 : WelcomeScreen ─────────────────────────────────────────────── */
-
-function WelcomeScreen({ onNext }: { onNext: () => void }) {
-  return (
-    <Dialog open>
-      <DialogContent
-        showCloseButton={false}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-        className="sm:max-w-md"
-      >
-        <DialogTitle className="sr-only">Bienvenue</DialogTitle>
-        <div className="flex flex-col items-center text-center space-y-5 py-4">
-          {/* Visuel de bienvenue de la marque (logo/bienvenu.png, réduit en webp). */}
-          <motion.img
-            src="/welcome.webp"
-            alt="ELYNDRA CAISSE"
-            width={560}
-            height={582}
-            className="w-48 h-auto rounded-xl"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: [-8, 8, -8] }}
-            transition={{
-              opacity: { duration: 0.5 },
-              y: { duration: 3, ease: "easeInOut", repeat: Infinity },
-            }}
-          />
-
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold tracking-tight">Bienvenue sur ELYNDRA CAISSE</h1>
-            <p className="text-muted-foreground text-sm max-w-xs mx-auto">
-              Gérez vos ventes, vos stocks et votre activité depuis un seul espace, même sans
-              connexion internet.
-            </p>
-          </div>
-
-          <ul className="space-y-2 text-sm text-left w-full max-w-xs">
-            {[
-              "Encaissez et suivez vos ventes en temps réel",
-              "Gérez votre stock automatiquement",
-              "Exportez vos rapports en PDF, Excel ou CSV",
-            ].map((b) => (
-              <li key={b} className="flex items-start gap-2">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span>{b}</span>
-              </li>
-            ))}
-          </ul>
-
-          <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-            <WifiOff className="h-3 w-3" /> 100% hors ligne · Vos données restent sur votre appareil
-          </span>
-
-          <Button size="lg" className="h-12 px-8 gap-2" onClick={onNext}>
-            Lancer ma caisse <ArrowRight className="h-4 w-4" />
-          </Button>
-
-          <p className="text-xs text-muted-foreground">Essai gratuit de 30 jours inclus</p>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ── Phase 2 : SetupWizard ───────────────────────────────────────────────── */
+/* ── Phase 1 : SetupWizard ───────────────────────────────────────────────── */
 
 const MAGASIN_SUBS = Object.entries(SUB_CATEGORY_LABELS).map(([id, v]) => ({
   id: id as SubCategory,
   ...v,
 }));
 
-function SetupWizard({ onComplete }: { onComplete: () => void }) {
+export function SetupWizard({
+  onComplete,
+  initialAccountMode = "create",
+}: {
+  onComplete: () => void;
+  /** « join » = arrivée via « Se connecter » : le wizard démarre directement sur
+   *  l'étape du nom d'enseigne avec le compte en mode rattachement (scan QR ou
+   *  saisie). La case confidentialité reste atteignable via « Retour ». */
+  initialAccountMode?: "create" | "join";
+}) {
   const qc = useQueryClient();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initialAccountMode === "join" ? 1 : 0);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -169,7 +105,7 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
   // Compte marchand (v3) : un téléphone + mot de passe partagés par toutes les caisses
   // du même commerçant. « create » pour la première boutique, « join » pour rattacher
   // cet écran à un compte existant (même abonnement).
-  const [accountMode, setAccountMode] = useState<"create" | "join">("create");
+  const [accountMode, setAccountMode] = useState<"create" | "join">(initialAccountMode);
   const [accPhone, setAccPhone] = useState("");
   const [accPassword, setAccPassword] = useState("");
   // Propriétaire : demandé avec le compte, porté par la fiche boutique et les exports.
@@ -268,13 +204,10 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
   }
 
   return (
-    <DialogContent
-      showCloseButton={false}
-      onEscapeKeyDown={(e) => e.preventDefault()}
-      onInteractOutside={(e) => e.preventDefault()}
-      className="sm:max-w-md"
-    >
-      <DialogTitle className="sr-only">Configuration de votre boutique</DialogTitle>
+    // CARTE DE PAGE (plus aucun Dialog) : ce composant vit dans la route /welcome,
+    // pleine page indépendante — rien de l'application ne peut apparaître derrière.
+    <div className="w-full max-w-lg rounded-2xl border bg-card p-5 text-left shadow-sm sm:p-6">
+      <h1 className="sr-only">Configuration de votre boutique</h1>
 
       {/* Barre de progression */}
       <div className="flex gap-1">
@@ -288,7 +221,7 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
           />
         ))}
       </div>
-      <p className="text-center text-xs text-muted-foreground">
+      <p className="mt-2 text-center text-xs text-muted-foreground">
         Étape {step + 1} sur {totalSteps}
       </p>
 
@@ -675,15 +608,15 @@ function SetupWizard({ onComplete }: { onComplete: () => void }) {
           )}
         </div>
       </div>
-    </DialogContent>
+    </div>
   );
 }
 
-/* ── Phase 3 : ClusterTutorial ───────────────────────────────────────────── */
+/* ── Phase 2 : ClusterTutorial ───────────────────────────────────────────── */
 
 type TutorialStep = "confirm" | "add" | "done";
 
-function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
+export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const prefs = getPreferences();
   const cluster = prefs.cluster;
   const config = CLUSTER_MAP[cluster];
@@ -745,187 +678,166 @@ function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   // Confirmation
   if (subStep === "confirm") {
     return (
-      <Dialog open>
-        <DialogContent
-          showCloseButton={false}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-          className="sm:max-w-md"
-        >
-          <DialogTitle className="sr-only">Votre boutique est prête</DialogTitle>
-          {/* `min()` en dvh : en paysage sur petit téléphone (≤568px de haut),
-              l'écran ne réclame plus une hauteur impossible. */}
-          <div className="flex min-h-[min(300px,45dvh)] flex-col items-center justify-center text-center space-y-6 py-4">
-            {/* Visuel « Boutique prête » de la marque (logo/Boutique prete.png, réduit
-                en webp), à la place de l'icône confettis seule. */}
-            <motion.img
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              src="/shop-ready.webp"
-              alt="Boutique prête"
-              width={560}
-              height={373}
-              className="w-full max-w-[280px] h-auto rounded-xl"
-            />
-            <div className="space-y-2">
-              <h2 className="text-xl font-bold">Votre boutique est prête !</h2>
-              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                {tutorialConfig.welcomeMessage}
-              </p>
-            </div>
-            <Button size="lg" className="gap-2" onClick={() => setSubStep("add")}>
-              {tutorialConfig.ctaLabel} <ArrowRight className="h-4 w-4" />
-            </Button>
+      <div className="w-full max-w-lg rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+        <h1 className="sr-only">Votre boutique est prête</h1>
+        {/* `min()` en dvh : en paysage sur petit téléphone (≤568px de haut),
+            l'écran ne réclame plus une hauteur impossible. */}
+        <div className="flex min-h-[min(300px,45dvh)] flex-col items-center justify-center text-center space-y-6 py-4">
+          {/* Visuel « Boutique prête » de la marque (logo/Boutique prete.png, réduit
+              en webp), à la place de l'icône confettis seule. */}
+          <motion.img
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+            src="/shop-ready.webp"
+            alt="Boutique prête"
+            width={560}
+            height={373}
+            className="w-full max-w-[280px] h-auto rounded-xl"
+          />
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold">Votre boutique est prête !</h2>
+            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+              {tutorialConfig.welcomeMessage}
+            </p>
           </div>
-        </DialogContent>
-      </Dialog>
+          <Button size="lg" className="gap-2" onClick={() => setSubStep("add")}>
+            {tutorialConfig.ctaLabel} <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     );
   }
 
   // Ajout de produits
   if (subStep === "add") {
     return (
-      <Dialog open>
-        <DialogContent
-          showCloseButton={false}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-          className="sm:max-w-md"
-        >
-          <DialogTitle className="sr-only">{tutorialConfig.addTitle}</DialogTitle>
-          <div className="space-y-4 py-2">
-            <StepShell
-              icon={Package}
-              title={tutorialConfig.addTitle}
-              description={tutorialConfig.addDescription}
-            >
-              <div className="space-y-3">
+      <div className="w-full max-w-lg rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+        <h1 className="sr-only">{tutorialConfig.addTitle}</h1>
+        <div className="space-y-4 py-2">
+          <StepShell
+            icon={Package}
+            title={tutorialConfig.addTitle}
+            description={tutorialConfig.addDescription}
+          >
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="tut-name">{tutorialConfig.productLabel}</Label>
+                <Input
+                  id="tut-name"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder={tutorialConfig.productPlaceholder}
+                  className="h-11"
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="tut-name">{tutorialConfig.productLabel}</Label>
+                  <Label htmlFor="tut-price">Prix de vente (FCFA)</Label>
                   <Input
-                    id="tut-name"
-                    value={productName}
-                    onChange={(e) => setProductName(e.target.value)}
-                    placeholder={tutorialConfig.productPlaceholder}
+                    id="tut-price"
+                    inputMode="numeric"
+                    value={productPrice}
+                    onChange={(e) => setProductPrice(e.target.value.replace(/\D/g, ""))}
+                    placeholder="0"
                     className="h-11"
-                    autoFocus
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                {!tutorialConfig.isService && (
                   <div>
-                    <Label htmlFor="tut-price">Prix de vente (FCFA)</Label>
+                    <Label htmlFor="tut-stock">{sellsByWeight ? "Stock (kg)" : "Stock"}</Label>
                     <Input
-                      id="tut-price"
+                      id="tut-stock"
                       inputMode="numeric"
-                      value={productPrice}
-                      onChange={(e) => setProductPrice(e.target.value.replace(/\D/g, ""))}
+                      value={productStock}
+                      onChange={(e) => setProductStock(e.target.value.replace(/\D/g, ""))}
                       placeholder="0"
-                      className="h-11"
-                    />
-                  </div>
-                  {!tutorialConfig.isService && (
-                    <div>
-                      <Label htmlFor="tut-stock">{sellsByWeight ? "Stock (kg)" : "Stock"}</Label>
-                      <Input
-                        id="tut-stock"
-                        inputMode="numeric"
-                        value={productStock}
-                        onChange={(e) => setProductStock(e.target.value.replace(/\D/g, ""))}
-                        placeholder="0"
-                        className="h-11"
-                      />
-                    </div>
-                  )}
-                </div>
-                {tutorialConfig.showCategory && (
-                  <div>
-                    <Label htmlFor="tut-cat">Catégorie</Label>
-                    <Input
-                      id="tut-cat"
-                      value={productCategory}
-                      onChange={(e) => setProductCategory(e.target.value)}
-                      placeholder={tutorialConfig.categoryPlaceholder}
                       className="h-11"
                     />
                   </div>
                 )}
               </div>
-            </StepShell>
-
-            {addedCount > 0 && (
-              <p className="text-center text-sm text-primary font-medium">
-                ✓ {addedCount} {addedCount === 1 ? "produit ajouté" : "produits ajoutés"}
-              </p>
-            )}
-
-            <Button
-              variant="default"
-              size="lg"
-              className="w-full gap-2"
-              onClick={handleLoadDemo}
-              disabled={loadingDemo}
-            >
-              {loadingDemo ? (
-                "Chargement…"
-              ) : (
-                <>
-                  <Package className="h-4 w-4" /> Charger les produits de démo
-                </>
+              {tutorialConfig.showCategory && (
+                <div>
+                  <Label htmlFor="tut-cat">Catégorie</Label>
+                  <Input
+                    id="tut-cat"
+                    value={productCategory}
+                    onChange={(e) => setProductCategory(e.target.value)}
+                    placeholder={tutorialConfig.categoryPlaceholder}
+                    className="h-11"
+                  />
+                </div>
               )}
-            </Button>
-
-            <div className="flex items-center justify-between gap-2 border-t pt-4">
-              <Button variant="ghost" size="sm" onClick={() => setSubStep("done")}>
-                {addedCount > 0 ? "J'ai terminé" : "Passer"}
-              </Button>
-              <Button
-                onClick={handleAddProduct}
-                disabled={!productName.trim() || !productPrice.trim()}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Ajouter
-              </Button>
             </div>
+          </StepShell>
+
+          {addedCount > 0 && (
+            <p className="text-center text-sm text-primary font-medium">
+              ✓ {addedCount} {addedCount === 1 ? "produit ajouté" : "produits ajoutés"}
+            </p>
+          )}
+
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full gap-2"
+            onClick={handleLoadDemo}
+            disabled={loadingDemo}
+          >
+            {loadingDemo ? (
+              "Chargement…"
+            ) : (
+              <>
+                <Package className="h-4 w-4" /> Charger les produits de démo
+              </>
+            )}
+          </Button>
+
+          <div className="flex items-center justify-between gap-2 border-t pt-4">
+            <Button variant="ghost" size="sm" onClick={() => setSubStep("done")}>
+              {addedCount > 0 ? "J'ai terminé" : "Passer"}
+            </Button>
+            <Button
+              onClick={handleAddProduct}
+              disabled={!productName.trim() || !productPrice.trim()}
+            >
+              <Plus className="h-4 w-4 mr-1" /> Ajouter
+            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
     );
   }
 
   // Done
   return (
-    <Dialog open>
-      <DialogContent
-        showCloseButton={false}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
-        className="sm:max-w-md"
-      >
-        <DialogTitle className="sr-only">Tout est prêt</DialogTitle>
-        {/* Même garde-fou paysage que l'écran « Boutique prête » ci-dessus. */}
-        <div className="flex min-h-[min(300px,45dvh)] flex-col items-center justify-center text-center space-y-6 py-4">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15 }}
-            className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10"
-          >
-            <PartyPopper className="h-8 w-8 text-primary" />
-          </motion.div>
-          <div className="space-y-2">
-            <h2 className="text-xl font-bold">Tout est prêt !</h2>
-            <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              {addedCount > 0
-                ? `${addedCount} ${addedCount === 1 ? "produit enregistré" : "produits enregistrés"}. Votre boutique "${prefs.workspaceName}" est prête à vendre.`
-                : `Votre boutique "${prefs.workspaceName}" est configurée. Vous pourrez ajouter vos produits plus tard.`}
-            </p>
-          </div>
-          <Button size="lg" className="gap-2" onClick={onComplete}>
-            {tutorialConfig.finalCtaLabel} <ArrowRight className="h-4 w-4" />
-          </Button>
+    <div className="w-full max-w-lg rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+      <h1 className="sr-only">Tout est prêt</h1>
+      {/* Même garde-fou paysage que l'écran « Boutique prête » ci-dessus. */}
+      <div className="flex min-h-[min(300px,45dvh)] flex-col items-center justify-center text-center space-y-6 py-4">
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 15 }}
+          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10"
+        >
+          <PartyPopper className="h-8 w-8 text-primary" />
+        </motion.div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold">Tout est prêt !</h2>
+          <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+            {addedCount > 0
+              ? `${addedCount} ${addedCount === 1 ? "produit enregistré" : "produits enregistrés"}. Votre boutique "${prefs.workspaceName}" est prête à vendre.`
+              : `Votre boutique "${prefs.workspaceName}" est configurée. Vous pourrez ajouter vos produits plus tard.`}
+          </p>
         </div>
-      </DialogContent>
-    </Dialog>
+        <Button size="lg" className="gap-2" onClick={onComplete}>
+          {tutorialConfig.finalCtaLabel} <ArrowRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -1031,53 +943,9 @@ function getTutorialConfig(cluster: ClusterId, subCategory?: SubCategory) {
   }
 }
 
-/* ── Composant principal ──────────────────────────────────────────────────── */
-
-export function Onboarding() {
-  const qc = useQueryClient();
-  const [phase, setPhase] = useState<OnboardingPhase>("done");
-
-  useEffect(() => {
-    const prefs = getPreferences();
-    if (!prefs.onboarded) {
-      setPhase("welcome");
-    } else if (!prefs.onboardingCompleted) {
-      setPhase("tutorial");
-    }
-  }, []);
-
-  function handleWelcomeNext() {
-    setPhase("wizard");
-  }
-
-  function handleWizardComplete() {
-    setPhase("tutorial");
-  }
-
-  function handleTutorialComplete() {
-    savePreferences({ onboardingCompleted: true });
-    qc.invalidateQueries({ queryKey: ["preferences"] });
-    setPhase("done");
-  }
-
-  if (phase === "welcome") {
-    return <WelcomeScreen onNext={handleWelcomeNext} />;
-  }
-
-  if (phase === "wizard") {
-    return (
-      <Dialog open>
-        <SetupWizard onComplete={handleWizardComplete} />
-      </Dialog>
-    );
-  }
-
-  if (phase === "tutorial") {
-    return <ClusterTutorial onComplete={handleTutorialComplete} />;
-  }
-
-  return null;
-}
+/* L'ancien composant-modale `Onboarding()` a disparu : le parcours vit désormais
+   dans la ROUTE /welcome (src/routes/welcome.tsx), qui conditionne le rendu de
+   l'application entière — plus jamais une modale posée sur la caisse. */
 
 /* ── Sous-composants ──────────────────────────────────────────────────────── */
 

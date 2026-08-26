@@ -74,12 +74,28 @@ await context.addInitScript(() => {
 const page = await context.newPage();
 await page.goto(`${ORIGIN}/pos`, { waitUntil: "domcontentloaded" });
 
-// Étape du nom du commerce : l'écran de bienvenue (« Lancer ma caisse ») précède
-// le wizard ; ne cliquer QUE ce CTA — le « Suivant » du wizard reste désactivé
-// jusqu'à la saisie du nom.
+// CRITÈRE ABSOLU : non installé ⇒ redirection vers /welcome et AUCUNE trace de
+// l'application (ni chrome ni contenu métier) derrière l'onboarding.
+try {
+  await page.waitForURL("**/welcome", { timeout: 15000 });
+} catch {
+  ko(`redirection vers /welcome absente (URL actuelle : ${page.url()})`);
+}
+const leak = await page.evaluate(() => ({
+  url: location.pathname,
+  nav: !!document.querySelector('nav[aria-label="Navigation principale"]'),
+  header: !!document.querySelector("header"),
+  posText:
+    document.body.innerText.includes("Valider") || document.body.innerText.includes("Articles"),
+}));
+leak.url === "/welcome" ? ok("URL = /welcome") : ko(`URL inattendue : ${leak.url}`);
+!leak.nav && !leak.header && !leak.posText
+  ? ok("CRITÈRE ABSOLU : aucun élément de la caisse derrière l'onboarding")
+  : ko(`fuite de l'application : ${JSON.stringify(leak)}`);
+
+// Étape du nom du commerce : l'héro (« Créer mon compte ») précède le wizard.
 if (!(await page.$("#ob-name"))) {
-  const lancer = page.getByRole("button", { name: /lancer ma caisse/i });
-  await lancer.click({ timeout: 10000 });
+  await page.getByRole("button", { name: /créer mon compte/i }).click({ timeout: 15000 });
 }
 // Étape 0 du wizard : confidentialité — case obligatoire avant « Suivant ».
 const privacy = page.getByRole("checkbox");
