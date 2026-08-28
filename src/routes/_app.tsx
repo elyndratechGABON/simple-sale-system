@@ -1,7 +1,9 @@
 // Mise en page de l'APPLICATION (post-onboarding) : en-tête de navigation et zone
 // de contenu animée. Route sans segment d'URL (`_app`), donc `/pos` reste `/pos`.
-// L'onboarding vit DANS SA PROPRE ROUTE /welcome : le beforeLoad ci-dessous y
-// renvoie quiconque n'a pas terminé son installation, avant tout rendu.
+// L'onboarding vit DANS SA PROPRE ROUTE /welcome : quiconque n'a pas terminé son
+// installation est renvoyé vers /welcome APRÈS hydratation (voir AppLayout). Un
+// `redirect()` dans beforeLoad, lui, casserait l'hydratation du document statique
+// (voir le commentaire du composant) — d'où le déplacement hors de beforeLoad.
 //
 // POURQUOI CE CHROME N'EST PAS DANS `__root.tsx` — et ne doit pas y retourner.
 //
@@ -17,7 +19,7 @@
 // différer sans rien casser. Placer ici le chrome propre à l'application, et laisser
 // `__root.tsx` ne contenir que ce qui est vrai pour TOUTES les pages, résout le problème
 // par construction — plus aucune condition sur le chemin nulle part.
-import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
@@ -32,28 +34,32 @@ import { getPreferences } from "../lib/settings";
 import { backgroundSync } from "../lib/sync";
 
 export const Route = createFileRoute("/_app")({
-  // GARDE ANTI-FLASH : couru AVANT le montage du moindre composant applicatif.
-  // Tant que l'onboarding n'est pas terminé, ni ce layout ni ses enfants
-  // (caisse, stocks, rapports…) ne sont instanciés : le navigateur part direct
-  // vers /welcome. Aucune donnée métier, aucun chrome, aucun flash possible —
-  // c'est la garantie structurelle, pas un overlay posé sur l'app.
-  beforeLoad: () => {
-    const prefs = getPreferences();
-    if (!prefs.onboarded || !prefs.onboardingCompleted) {
-      throw redirect({ to: "/welcome" });
-    }
-  },
   component: AppLayout,
 });
 
 function AppLayout() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   // Progression RÉELLE du démarrage, passée à l'écran de chargement : chaque jalon
   // franchi pousse le compteur (jamais en arrière — `Math.max`, l'ordre d'arrivée
   // des promesses n'est pas garanti).
   const [progress, setProgress] = useState(8);
 
+  // GARDE ANTI-FLASH, COURUE APRÈS hydratation. À l'ouverture d'un lien direct ou de
+  // l'app installée (`start_url` = /pos), le document statique est hydraté par React :
+  // un `throw redirect()` dans beforeLoad partait PENDANT cette hydratation et cassait
+  // toute l'arborescence (« Minified React error #418 », coquille servie telle quelle).
+  // Tant que l'onboarding n'est pas terminé, ce layout ne monte donc que son écran de
+  // chargement — jamais ses enfants, aucune donnée métier ni chrome — puis renvoie
+  // vers /welcome à hydratation terminée. La garantie « anti-flash » est inchangée.
+  const onboarded =
+    getPreferences().onboarded === true && getPreferences().onboardingCompleted === true;
+
   useEffect(() => {
+    if (!onboarded) {
+      void router.navigate({ to: "/welcome" });
+      return;
+    }
     const bump = (v: number) => setProgress((p) => Math.max(p, v));
     // Plancher court (400 ms) : juste le temps que l'écran ne clignote pas quand
     // tout est déjà prêt. Le compteur étant sincère, plus besoin de délai-théâtre.
@@ -68,7 +74,7 @@ function AppLayout() {
       setLoading(false);
     });
     void profileReady.then(() => backgroundSync());
-  }, []);
+  }, [onboarded, router]);
 
   if (loading) return <LoadingScreen progress={progress} />;
 
