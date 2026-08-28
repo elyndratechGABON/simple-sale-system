@@ -16,7 +16,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * re-sonde navigator.permissions. Un refus persistant ne peut être levé que par l'UI
  * du navigateur (icône en barre d'adresse) ou les réglages système : l'erreur affichée
  * l'explique exactement, puis on peut réessayer sans quitter l'écran.
+ *
+ * Deux garanties supplémentaires :
+ *  - la PREMIÈRE activation part dans le geste de clic lui-même, avant tout await
+ *    (l'import dynamique et le démarrage du flux attendent derrière) — le prompt natif
+ *    n'est plus décalé d'un tick ;
+ *  - si le composant qui héberge le scan est démonté en pleine passe (navigation),
+ *    `activeStop` arrête le flux, retire la superposition et fait résoudre `null` :
+ *    jamais d'overlay orphelin ni de `scanning` bloqué.
  */
+
+/** Callback d'arrêt du scan en cours (posé par `startScannerWithOverlay`, appelé par
+ * le cleanup du hook si le composant se démonte en pleine passe). */
+let activeStop: (() => void) | null = null;
 
 export interface CameraAccess {
   available: boolean;
@@ -24,6 +36,52 @@ export interface CameraAccess {
   platform: "native" | "web";
   /** Instruction précise à afficher quand l'accès est impossible. */
   fix: string | null;
+}
+
+/** Largeur de fenêtre accordée à getUserMedia avant de déclarer la caméra bloquée. */
+const CAMERA_TIMEOUT_MS = 10_000;
+
+/** Rend la promesse mais échoue au bout de `ms` si elle n'a pas résolu. */
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      },
+    );
+  });
+}
+
+/** Ouvre la caméra dans le geste utilisateur puis la relâche aussitôt. Le but n'est pas
+ *  le flux, c'est l'ACQUISITION de la permission : une fois accordée, le démarrage
+ *  html5-qrcode qui suit résout en quelques millisecondes, sans re-prompt. */
+async function acquireWebStream() {
+  const tryStart = (constraints: MediaStreamConstraints) =>
+    withTimeout(
+      navigator.mediaDevices.getUserMedia(constraints),
+      CAMERA_TIMEOUT_MS,
+      "Impossible d'accéder à la caméra (délai dépassé). Fermez les autres applications qui l'utilisent, puis réessayez.",
+    );
+  let stream: MediaStream;
+  try {
+    // Caméra ARRIÈRE d'abord (le QR est tenu par l'autre caisse).
+    stream = await tryStart({ video: { facingMode: "environment" } });
+  } catch (err) {
+    // Contrainte injoignable (surface, tablette…) → n'importe quelle caméra.
+    if (/overconstrained|notfound|facingmode/i.test(String((err as Error)?.message ?? ""))) {
+      stream = await tryStart({ video: true });
+    } else {
+      throw err;
+    }
+  }
+  // Permission obtenue : on relâche le flux, html5-qrcode le rouvrira sans prompt.
+  stream.getTracks().forEach((track) => track.stop());
 }
 
 /**
@@ -69,23 +127,22 @@ export async function requestCameraActivation(): Promise<CameraAccess> {
     };
   }
 
-  // Web : on ne peut PAS forcer un nouveau prompt une fois la permission bloquée.
-  // On lit l'état ; 'denied' → instruction exacte (seul l'UI navigateur débloque).
+  // Web (iOS surtout) : le prompt `getUserMedia` ne naît que s'il est retenu DANS la
+  // fenêtre d'activation du geste. Tout `await` avant lui (import encore en cours de
+  // cache, autre micro-tâche) suffit à l'écraser : au 1er essai à froid, iOS ne montre
+  // aucun prompt et échoue en silence. On ouvre donc réellement la caméra ICI, dans le
+  // geste, puis on relâche le flux — la permission est acquise et le `scanner.start()`
+  // suivant (html5-qrcode fait son propre getUserMedia) obtient le flux sans prompt.
   try {
-    const perm = await navigator.permissions.query({ name: "camera" as PermissionName });
-    if (perm.state === "denied") {
-      return {
-        available: false,
-        denied: true,
-        platform: "web",
-        fix: "Caméra bloquée pour ce site. Touchez l'icône 🔒/ⓘ dans la barre d'adresse → Autorisations du site → Appareil photo → Autoriser (ou « Réinitialiser les autorisations »), rechargez, puis touchez Réessayer.",
-      };
-    }
-    // 'prompt' ou 'granted' : le getUserMedia déclenché par le clic ouvrira le prompt.
+    await acquireWebStream();
     return { available: true, denied: false, platform: "web", fix: null };
-  } catch {
-    // API indisponible (Safari iOS…) : on laisse getUserMedia décider au démarrage.
-    return { available: true, denied: false, platform: "web", fix: null };
+  } catch (err) {
+    const classified = toCameraError(err);
+    const name = String((err as { name?: string })?.name ?? "");
+    const denied =
+      /notallowed|permission|denied|security/i.test(name) ||
+      /permission|denied|refus/i.test(classified.message);
+    return { available: false, denied, platform: "web", fix: classified.message };
   }
 }
 
@@ -138,12 +195,34 @@ async function startScannerWithOverlay(): Promise<string | null> {
   const decoded = new Promise<string>((resolve) => {
     resolveDecoded = resolve;
   });
+
+  let scanner: import("html5-qrcode").Html5Qrcode | null = null;
+
+  // Résolvants exposés à `stop` : quelque soit l'état (flux vivant, attente du choix
+  // retry/annuler, démarrage en cours), l'arrêt programmatique doit pouvoir tout
+  // dénouer proprement et faire renvoyer `null`.
+  let resolveCancelled: (v: null) => void = () => {};
   const cancelled = new Promise<null>((resolve) => {
-    cancelBtn.addEventListener("click", () => resolve(null), { once: true });
+    resolveCancelled = resolve;
   });
+  let resolveChoice: (v: "retry" | "cancel") => void = () => {};
+  cancelBtn.addEventListener("click", () => resolveCancelled(null), { once: true });
+
+  /** Arrêt demandé par le hook (démontage) : on dénoue la passe en cours et on nettoie.
+   *  `scanner` et `overlay` sont fuités volontairement — la promesse rendue finit par
+   *  `finally`, qui re-localise puis détruit proprement. */
+  const stop = () => {
+    resolveChoice("cancel");
+    resolveCancelled(null);
+    void scanner?.stop().catch(() => {});
+    scanner?.clear();
+    teardown();
+  };
+  activeStop = stop;
 
   const waitForChoice = () =>
     new Promise<"retry" | "cancel">((resolve) => {
+      resolveChoice = resolve;
       const onRetry = () => {
         cleanup();
         resolve("retry");
@@ -177,16 +256,22 @@ async function startScannerWithOverlay(): Promise<string | null> {
     retryBtn.style.display = "none";
   };
 
-  let scanner: import("html5-qrcode").Html5Qrcode | null = null;
   try {
+    // 1. Activation caméra — COURUE DANS LE GESTE DE CLIC, avant tout import dynamique.
+    //    Native, le prompt OS s'ouvre donc dans la fenêtre d'activation du clic ; web,
+    //    `requestCameraActivation` OUVRE réellement la caméra ici pour acquérir la
+    //    permission (puis la relâche), ce qui rend impossible l'échec silencieux iOS.
+    const firstAccess = await requestCameraActivation();
+
     const { Html5Qrcode } = await import("html5-qrcode");
     scanner = new Html5Qrcode(frame.id);
 
-    for (;;) {
+    for (let pass = 0; ; pass++) {
       resetStatus();
 
-      // 1. Activation caméra (native ou web) — relancée à chaque passe.
-      const access = await requestCameraActivation();
+      // 1 bis. Aux passes suivantes (`pass > 0`, « Réessayer »), on redemande une
+      // activation — chaque retry est un geste frais qui rouvre le prompt.
+      const access = pass === 0 ? firstAccess : await requestCameraActivation();
       if (access.denied || !access.available) {
         showError(access.fix ?? "Accès caméra refusé.");
         const choice = await waitForChoice();
@@ -253,6 +338,7 @@ async function startScannerWithOverlay(): Promise<string | null> {
       return await Promise.race([decoded, cancelled]);
     }
   } finally {
+    activeStop = null;
     if (scanner) {
       await scanner.stop().catch(() => {});
       scanner.clear();
@@ -270,6 +356,16 @@ export function useBarcodeScanner() {
     void import("html5-qrcode");
   }, []);
 
+  // Sécurité démontage : si le composant qui héberge le scan est retiré en pleine
+  // passe (navigation), on arrête le flux, on retire la superposition et le scan
+  // résout `null` — jamais d'overlay orphelin ni de `scanning` bloqué.
+  useEffect(() => {
+    return () => {
+      activeStop?.();
+      activeStop = null;
+    };
+  }, []);
+
   const startScan = useCallback(async (): Promise<string | null> => {
     if (scanningRef.current) return null;
     scanningRef.current = true;
@@ -277,6 +373,7 @@ export function useBarcodeScanner() {
     try {
       return await startScannerWithOverlay();
     } finally {
+      activeStop = null;
       scanningRef.current = false;
       setScanning(false);
     }

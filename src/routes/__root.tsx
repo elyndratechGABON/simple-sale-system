@@ -8,7 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { MotionConfig } from "framer-motion";
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import { PwaBootstrap } from "../components/PwaBootstrap";
@@ -145,6 +145,15 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Chaud pour le scan QR : on charge le chunk html5-qrcode au boot, pas au premier clic
+  // sur une caméra. Ça retire tout fetch de la chaîne d'activation du getUserMedia (qui
+  // doit naître dans le geste pour montrer le prompt sur iOS/Android) et ça rend le flux
+  // visible quasi instantanément, quelle que soit la route d'où on ouvre le scanneur.
+  // Effet sans rendu → aucun risque pour le document statique prérendu.
+  useEffect(() => {
+    void import("html5-qrcode");
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

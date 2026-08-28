@@ -257,6 +257,10 @@ function DevicesCard() {
   });
 
   const hasAccount = Boolean(profile?.accountPhone && profile.accountPassword);
+  // Écran « mots clé uniquement » (téléphone perdu) : rattaché au compte sans détenir
+  // téléphone+mot de passe → il ne peut pas fabriquer de QR d'appairage, mais le
+  // dialogue « Ajouter un appareil » doit s'ouvrir pour l'expliquer (chemin mot clé).
+  const hasKeywordOnly = Boolean(profile?.accountKeyword) && !hasAccount;
 
   // Rattachement manuel : le serveur connaît déjà cet écran (le quota s'affiche) mais
   // la fiche locale n'a pas d'identifiants de compte — cas des écrans rattachés par
@@ -509,7 +513,7 @@ function DevicesCard() {
           </div>
         )}
 
-        <Button onClick={() => setPairingOpen(true)} disabled={!hasAccount}>
+        <Button onClick={() => setPairingOpen(true)} disabled={!hasAccount && !hasKeywordOnly}>
           <QrCode className="h-4 w-4 mr-2" />
           Ajouter un appareil
         </Button>

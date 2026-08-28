@@ -130,6 +130,14 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
               mot de passe — mêmes champs, même effet.
             </p>
           </div>
+        ) : profile?.accountKeyword ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Cet écran a rejoint le compte{" "}
+            <span className="font-medium text-foreground">par mot clé de récupération</span> : il
+            n'a pas le téléphone ni le mot de passe du compte, que le QR transporte. Pour ajouter
+            une autre caisse, communiquez-le lui le mot clé reçu à la création (Paramètres →
+            Appareils → « Téléphone perdu, ou plus de mot de passe ? »).
+          </p>
         ) : (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             Aucun compte marchand sur cet appareil : créez-en un ou rejoignez-le depuis l'assistant

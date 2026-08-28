@@ -7,6 +7,12 @@
 //
 // Le payload contient le mot de passe du compte : il ne doit JAMAIS quitter l'écran
 // du commerçant (pas d'envoi réseau, pas de partage) et n'être montré qu'au scan.
+//
+// Un écran qui a rejoint le compte PAR MOT CLÉ (téléphone perdu) n'a ni téléphone ni
+// mot de passe : `buildPairingPayload` renvoie `null` et le bouton « Ajouter un
+// appareil » reste inactif — le QR transporte ces deux identifiants, que cet écran ne
+// détient pas. Ses caisses supplémentaires rejoignent par le mot clé (saisie manuelle),
+// jamais par QR : c'est voulu et géré côté UI (DevicePairingDialog).
 import { getShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 
