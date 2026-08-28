@@ -27,6 +27,7 @@ const SETTING_APPLIED = "gatekeeper_applied_command_ids";
 const SETTING_MESSAGES = "gatekeeper_messages";
 const SETTING_QUOTA = "gatekeeper_account_quota";
 const SETTING_REQUEST = "gatekeeper_subscription_request";
+const SETTING_GRACE_ENDS_AT = "gatekeeper_grace_ends_at";
 
 /** Places du compte marchand, telles que le serveur les voit au dernier handshake. */
 export interface AccountQuota {
@@ -54,6 +55,14 @@ export interface SubscriptionRequestStatus {
 
 export async function getSubscriptionRequest(): Promise<SubscriptionRequestStatus | null> {
   return (await getSetting<SubscriptionRequestStatus>(SETTING_REQUEST)) ?? null;
+}
+
+/**
+ * Date de fin de la grace period (timestamp ms). Renseigné par le handshake quand le
+ * serveur renvoie `grace_ends_at`. `null` = pas en grace.
+ */
+export async function getGraceEndsAt(): Promise<number | null> {
+  return (await getSetting<number>(SETTING_GRACE_ENDS_AT)) ?? null;
 }
 
 export type CommandType = "suspend" | "renew" | "broadcast_message";
@@ -215,6 +224,8 @@ export async function handshake(): Promise<HandshakeResult> {
       status: "active" | "suspended" | "expired";
       sync_allowed: boolean;
       over_limit?: boolean;
+      grace_period?: boolean;
+      grace_ends_at?: number;
       commands: AdminCommand[];
       shop?: { subscription_end_date?: number };
       account?: { max_devices?: number; device_count?: number };
@@ -237,6 +248,14 @@ export async function handshake(): Promise<HandshakeResult> {
     // Statut de la demande d'abonnement : même tolérance qu'au-dessus (serveur ancien).
     if (data.subscription_request) {
       await setSetting(SETTING_REQUEST, data.subscription_request);
+    }
+
+    // Grace period : le serveur envoie grace_ends_at quand le compte a expiré mais
+    // bénéficie encore de la période de grâce. Si absent → on nettoie (plus en grace).
+    if (data.grace_ends_at && data.grace_period) {
+      await setSetting(SETTING_GRACE_ENDS_AT, data.grace_ends_at);
+    } else {
+      await setSetting(SETTING_GRACE_ENDS_AT, null);
     }
 
     const nextApplied = [...applied];

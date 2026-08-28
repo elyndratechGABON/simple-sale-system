@@ -1,20 +1,21 @@
-// Bandeau de countdown affiché quand la licence approche de l'échéance (≤ 7 jours).
+// Bandeau de countdown affiché quand la licence approche de l'échéance (≤ 7 jours)
+// ou est en grace period (2 jours post-expiration).
 // Cliquable : ouvre le sélecteur de plan. Disparaît une fois la licence prolongée.
 //
 // Intégré dans _app.tsx, juste sous l'en-tête, pour être visible quel que soit l'écran.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, ShieldAlert } from "lucide-react";
 import { getShopProfile } from "@/lib/db";
 import { useSubscription } from "@/hooks/use-subscription";
 import { PlanChooser } from "@/components/PlanChooser";
 import { PaymentModal } from "@/components/PaymentModal";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PlanInfo } from "@/components/SubscriptionPlanCard";
 
 export function RenewalBanner() {
-  const { isExpiringSoon, isExpired, daysRemaining } = useSubscription();
+  const { isExpiringSoon, isExpired, isInGrace, daysRemaining, graceHoursRemaining } =
+    useSubscription();
   const { data: profile } = useQuery({
     queryKey: ["shop_profile"],
     queryFn: getShopProfile,
@@ -30,6 +31,10 @@ export function RenewalBanner() {
     setPaymentOpen(true);
   }
 
+  // Détermination du style et du message selon la gravité.
+  const isCritical = isInGrace || isExpired;
+  const isUrgent = !isCritical && daysRemaining <= 3;
+
   return (
     <>
       <button
@@ -37,14 +42,26 @@ export function RenewalBanner() {
         onClick={() => setPlanChooserOpen(true)}
         className={cn(
           "w-full px-4 py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-colors",
-          isExpired
-            ? "bg-destructive/10 text-destructive hover:bg-destructive/15"
-            : "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-400",
+          isCritical
+            ? "bg-destructive/10 text-destructive hover:bg-destructive/15 animate-pulse"
+            : isUrgent
+              ? "bg-orange-500/10 text-orange-700 hover:bg-orange-500/15 dark:text-orange-400"
+              : "bg-amber-500/10 text-amber-700 hover:bg-amber-500/15 dark:text-amber-400",
         )}
       >
-        {/* La phrase est UN SEUL enfant flex : en fragments séparés, chaque mot
-            devenait un item et la ligne se cassait en escalier sous 380px. */}
-        {isExpired ? (
+        {isInGrace ? (
+          <>
+            <ShieldAlert className="h-4 w-4 shrink-0" />
+            <span>
+              Grace period —{" "}
+              <span className="font-bold">
+                {graceHoursRemaining}h{graceHoursRemaining > 1 ? "" : ""} restante
+                {graceHoursRemaining > 1 ? "s" : ""}
+              </span>{" "}
+              avant coupure — choisir un plan
+            </span>
+          </>
+        ) : isExpired ? (
           <>
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>Abonnement expiré — choisissez un plan pour continuer</span>
@@ -53,11 +70,7 @@ export function RenewalBanner() {
           <>
             <Clock className="h-4 w-4 shrink-0" />
             <span>
-              Votre abonnement expire dans{" "}
-              <span className="font-bold">
-                {daysRemaining} jour{daysRemaining > 1 ? "s" : ""}
-              </span>{" "}
-              — choisir un plan
+              Expire dans <span className="font-bold">J-{daysRemaining}</span> — choisir un plan
             </span>
           </>
         )}

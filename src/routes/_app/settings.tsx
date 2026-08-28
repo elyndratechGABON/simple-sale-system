@@ -272,7 +272,8 @@ function DevicesCard() {
   async function scanPairingQr() {
     try {
       const raw = await startScan();
-      const parsed = parsePairingPayload(raw ?? "");
+      if (raw === null) return;
+      const parsed = parsePairingPayload(raw);
       if (!parsed) {
         toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
         return;
