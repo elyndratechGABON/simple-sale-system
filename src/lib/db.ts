@@ -310,6 +310,13 @@ export interface ShopProfile extends SyncFields {
   accountName?: string;
   accountPhone?: string;
   accountPassword?: string;
+  /**
+   * Mot clé de récupération du compte (v3) : combinaison aléatoire des infos fournies
+   * à la création, remise par le serveur UNE seule fois à l'écran créateur. Présenté
+   * au handshake d'un nouvel écran pour rattacher ce compte (téléphone perdu) — ou
+   * vides sur une caisse qui se connecte par téléphone+mot de passe.
+   */
+  accountKeyword?: string;
   /** Empreinte numérique de l'appareil (SHA-256) — garantit 1 téléphone = 1 boutique. */
   deviceFingerprint?: string;
 }
@@ -1669,6 +1676,22 @@ export async function setShopAccount(input: {
     accountPhone: input.phone.trim(),
     accountPassword: input.password,
     ownerName: input.ownerName?.trim() || profile.ownerName,
+    ...touch(),
+  });
+}
+
+/**
+ * Pose (ou retire, `null`) le mot clé de récupération du compte. Utilisé au moment de
+ * la connexion par mot clé (périphérie : téléphone perdu) et par l'écran créateur à la
+ * réception du mot clé généré par le serveur.
+ */
+export async function setShopKeyword(keyword: string | null): Promise<void> {
+  const db = getDB();
+  const profile = await db.shop_profiles.get("me");
+  if (!profile) return;
+  await db.shop_profiles.put({
+    ...profile,
+    accountKeyword: keyword ? keyword.trim().toUpperCase() : undefined,
     ...touch(),
   });
 }

@@ -13,6 +13,7 @@ import {
   Download,
   FolderOpen,
   Info,
+  KeyRound,
   Link2,
   MonitorSmartphone,
   Pencil,
@@ -71,6 +72,7 @@ import {
   getAccountQuota,
   getSubscriptionRequest,
   handshake,
+  joinByKeyword,
   resetGatekeeper,
 } from "@/lib/gatekeeper";
 import { DevicePairingDialog } from "@/components/DevicePairingDialog";
@@ -316,6 +318,42 @@ function DevicesCard() {
     }
   }
 
+  // Voie « mot clé de récupération » : téléphone perdu, ou compte visible au tableau de
+  // bord sans identifiants. La validation est portée par le serveur (mot clé) ; hors ligne,
+  // la réclamation reste posée et GatekeeperAlerts l'annonce (bandeau « 48 h »).
+  const [claimKeyword, setClaimKeyword] = useState("");
+  const [claimKeywordOwner, setClaimKeywordOwner] = useState("");
+  const [joiningKeyword, setJoiningKeyword] = useState(false);
+
+  async function joinWithKeyword() {
+    const keyword = claimKeyword.trim().toUpperCase();
+    const storeName = profile?.storeName?.trim() ?? "";
+    const ownerName = claimKeywordOwner.trim() || (profile?.ownerName?.trim() ?? "");
+    if (!keyword) {
+      toast.error("Saisissez le mot clé reçu à la création du compte (format XXXX-XXXX).");
+      return;
+    }
+    setJoiningKeyword(true);
+    try {
+      const result = await joinByKeyword({ storeName, ownerName, keyword });
+      if (result.status === "verified") {
+        toast.success("Compte vérifié — écran rattaché au compte marchand.");
+        setClaimKeyword("");
+        await qc.invalidateQueries({ queryKey: ["shop_profile"] });
+        await qc.invalidateQueries({ queryKey: ["account_quota"] });
+        await qc.invalidateQueries({ queryKey: ["subscription_request"] });
+      } else if (result.status === "blocked") {
+        toast.error("Mot clé invalide : aucun compte ne correspond. Vérifiez vos informations.");
+      } else {
+        toast.info(
+          "Serveur injoignable — la vérification reprendra automatiquement au retour du réseau (48 h max).",
+        );
+      }
+    } finally {
+      setJoiningKeyword(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -418,6 +456,56 @@ function DevicesCard() {
               <Link2 className="h-4 w-4 mr-2" />
               {claiming ? "Rattachement…" : "Rattacher cet écran au compte"}
             </Button>
+
+            <div className="border-t border-border/60 pt-3">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <KeyRound className="h-4 w-4" /> Téléphone perdu, ou plus de mot de passe ?
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Rejoignez le compte avec le mot clé reçu à la création (affiché une seule fois).
+                Saisissez le nom de la boutique, le propriétaire et le mot clé.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="claim-kw-store">Nom de la boutique</Label>
+                  <Input
+                    id="claim-kw-store"
+                    value={profile?.storeName ?? ""}
+                    readOnly
+                    className="bg-muted/40 text-muted-foreground"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="claim-kw-owner">Nom du propriétaire</Label>
+                  <Input
+                    id="claim-kw-owner"
+                    value={claimKeywordOwner}
+                    onChange={(e) => setClaimKeywordOwner(e.target.value)}
+                    placeholder={profile?.ownerName?.trim() || "Ex : Jean-Marc"}
+                  />
+                </div>
+              </div>
+              <div className="mt-3 space-y-1.5">
+                <Label htmlFor="claim-kw">Mot clé de récupération</Label>
+                <Input
+                  id="claim-kw"
+                  value={claimKeyword}
+                  onChange={(e) => setClaimKeyword(e.target.value.toUpperCase())}
+                  placeholder="XXXX-XXXX"
+                  className="font-mono tracking-widest"
+                  autoComplete="off"
+                />
+              </div>
+              <Button
+                variant="outline"
+                className="mt-3"
+                disabled={joiningKeyword}
+                onClick={() => void joinWithKeyword()}
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                {joiningKeyword ? "Vérification…" : "Rejoindre avec ce mot clé"}
+              </Button>
+            </div>
           </div>
         )}
 

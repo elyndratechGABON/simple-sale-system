@@ -18,11 +18,14 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, LogIn, WifiOff } from "lucide-react";
+import { ArrowRight, Check, LogIn, QrCode, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ClusterTutorial, SetupWizard } from "@/components/Onboarding";
 import { getPreferences, savePreferences } from "@/lib/settings";
+import { parsePairingPayload } from "@/lib/pairing";
+import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/welcome")({
   // Utilisateur déjà installé → straight to the till : rafraîchissement,
@@ -49,6 +52,42 @@ function WelcomePage() {
     return prefs.onboarded && !prefs.onboardingCompleted ? "tutorial" : "welcome";
   });
   const [mode, setMode] = useState<EntryMode>("create");
+  const [joinCreds, setJoinCreds] = useState<{ phone: string; password: string } | null>(null);
+  const { startScan } = useBarcodeScanner();
+
+  /** « Rejoindre via code QR » : scan DIRECT depuis l'écran de bienvenue, puis entrée
+   *  dans l'assistant en mode rattachement avec les identifiants déjà pré-remplis. */
+  async function joinViaQr() {
+    try {
+      const raw = await startScan();
+      if (raw === null) return;
+      const parsed = parsePairingPayload(raw);
+      if (!parsed) {
+        toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
+        return;
+      }
+      setJoinCreds({ phone: parsed.phone, password: parsed.password });
+      setMode("join");
+      setPhase("wizard");
+      toast.success(`Compte « ${parsed.name || parsed.phone} » lu — vérifiez puis continuez.`);
+    } catch {
+      toast.error(
+        "Caméra indisponible — utilisez « Se connecter » et saisissez le téléphone à la main.",
+      );
+    }
+  }
+
+  function startCreate() {
+    setJoinCreds(null);
+    setMode("create");
+    setPhase("wizard");
+  }
+
+  function startJoinManual() {
+    setJoinCreds(null);
+    setMode("join");
+    setPhase("wizard");
+  }
 
   function finishTutorial() {
     savePreferences({ onboardingCompleted: true });
@@ -115,26 +154,23 @@ function WelcomePage() {
             </ul>
 
             <div className="mt-8 flex w-full max-w-xs flex-col items-center gap-3">
-              <Button
-                size="lg"
-                className="h-13 w-full px-8 text-base"
-                onClick={() => {
-                  setMode("create");
-                  setPhase("wizard");
-                }}
-              >
+              <Button size="lg" className="h-13 w-full px-8 text-base" onClick={startCreate}>
                 Créer mon compte <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
               <p className="text-sm text-muted-foreground">Déjà inscrit ?</p>
               <Button
                 variant="ghost"
                 className="-mt-2 h-11 gap-2 text-base"
-                onClick={() => {
-                  setMode("join");
-                  setPhase("wizard");
-                }}
+                onClick={startJoinManual}
               >
                 <LogIn className="h-4 w-4" /> Se connecter
+              </Button>
+              <Button
+                variant="outline"
+                className="-mt-2 h-11 gap-2 text-base"
+                onClick={() => void joinViaQr()}
+              >
+                <QrCode className="h-4 w-4" /> Rejoindre via code QR
               </Button>
             </div>
 
@@ -151,7 +187,11 @@ function WelcomePage() {
             transition={{ duration: 0.3 }}
             className="flex w-full justify-center"
           >
-            <SetupWizard initialAccountMode={mode} onComplete={() => setPhase("tutorial")} />
+            <SetupWizard
+              initialAccountMode={mode}
+              initialCredentials={joinCreds}
+              onComplete={() => setPhase("tutorial")}
+            />
           </motion.div>
         )}
 

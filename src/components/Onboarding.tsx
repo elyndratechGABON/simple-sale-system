@@ -43,6 +43,7 @@ import {
   type SubCategory,
 } from "@/lib/settings";
 import { addProduct, setShopAccount, type Product } from "@/lib/db";
+import { joinByKeyword } from "@/lib/gatekeeper";
 import { parsePairingPayload } from "@/lib/pairing";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { loadDemoData } from "@/lib/demo-data";
@@ -82,12 +83,16 @@ const MAGASIN_SUBS = Object.entries(SUB_CATEGORY_LABELS).map(([id, v]) => ({
 export function SetupWizard({
   onComplete,
   initialAccountMode = "create",
+  initialCredentials,
 }: {
   onComplete: () => void;
   /** « join » = arrivée via « Se connecter » : le wizard démarre directement sur
    *  l'étape du nom d'enseigne avec le compte en mode rattachement (scan QR ou
    *  saisie). La case confidentialité reste atteignable via « Retour ». */
   initialAccountMode?: "create" | "join";
+  /** Identifiants recueillis par un scan QR AVANT l'ouverture du wizard (bouton
+   *  « Rejoindre via code QR » de l'écran de bienvenue) : pré-remplis. */
+  initialCredentials?: { phone: string; password: string } | null;
 }) {
   const qc = useQueryClient();
   const [step, setStep] = useState(initialAccountMode === "join" ? 1 : 0);
@@ -106,8 +111,11 @@ export function SetupWizard({
   // du même commerçant. « create » pour la première boutique, « join » pour rattacher
   // cet écran à un compte existant (même abonnement).
   const [accountMode, setAccountMode] = useState<"create" | "join">(initialAccountMode);
-  const [accPhone, setAccPhone] = useState("");
-  const [accPassword, setAccPassword] = useState("");
+  const [accPhone, setAccPhone] = useState(initialCredentials?.phone ?? "");
+  const [accPassword, setAccPassword] = useState(initialCredentials?.password ?? "");
+  // Mot clé de récupération (v3) : alternative au téléphone+mot de passe pour rattacher
+  // un écran au compte — utilisé quand les identifiants du compte sont perdus.
+  const [accKeyword, setAccKeyword] = useState("");
   // Propriétaire : demandé avec le compte, porté par la fiche boutique et les exports.
   const [ownerName, setOwnerName] = useState("");
   const { scanning, startScan } = useBarcodeScanner();
@@ -145,14 +153,42 @@ export function SetupWizard({
   async function finish() {
     // Le compte est posé en base AVANT la fin de l'assistant : le premier handshake
     // (au retour en ligne) présentera ces identifiants et créera/rattachera le compte.
-    await setShopAccount({
-      name: name.trim() || "Ma boutique",
-      phone: accPhone.trim(),
-      password: accPassword,
-      ownerName: ownerName.trim(),
-    });
+    const store = name.trim() || "Ma boutique";
+    const owner = ownerName.trim();
+
+    // Voie « mot clé » (jonction sans téléphone/mot de passe) : la vérification est
+    // portée par le serveur. Hors ligne → mode provisoire 48 h (claim + bannière) ;
+    // mot clé rejeté → blocage dur, on NE termine PAS l'assistant.
+    if (accountMode === "join" && accKeyword.trim() && !(accPhone.trim() && accPassword)) {
+      await setShopAccount({ name: store, phone: "", password: "", ownerName: owner });
+      const result = await joinByKeyword({
+        storeName: store,
+        ownerName: owner,
+        keyword: accKeyword.trim(),
+      });
+      if (result.status === "blocked") {
+        toast.error(
+          "Mot clé invalide : aucun compte ne correspond à ce nom, ce propriétaire et ce mot clé.",
+        );
+        setAccKeyword("");
+        return;
+      }
+      if (result.status === "pending") {
+        toast.info(
+          "Serveur injoignable — la vérification reprendra automatiquement au retour du réseau (48 h max).",
+        );
+      }
+    } else {
+      await setShopAccount({
+        name: store,
+        phone: accPhone.trim(),
+        password: accPassword,
+        ownerName: owner,
+      });
+    }
+
     savePreferences({
-      workspaceName: name.trim() || getPreferences().workspaceName,
+      workspaceName: store,
       phone: phone.trim(),
       quarter: quarter.trim(),
       ownerName: ownerName.trim(),
@@ -178,7 +214,13 @@ export function SetupWizard({
   function canNext(): boolean {
     if (step === 0) return privacyAccepted;
     if (step === 1) return name.trim().length > 0;
-    if (step === 2) return accPhone.trim().length > 0 && accPassword.trim().length >= 4;
+    if (step === 2) {
+      // Jonction par mot clé : les identifiants téléphone/mdp ne sont plus exigés.
+      if (accountMode === "join" && accKeyword.trim() && !(accPhone.trim() && accPassword)) {
+        return accKeyword.trim().replace(/\s/g, "").length >= 8;
+      }
+      return accPhone.trim().length > 0 && accPassword.trim().length >= 4;
+    }
     if (step === 3) {
       if (selectedCluster === null) return false;
       if (selectedCluster === "personnalise")
@@ -415,6 +457,29 @@ export function SetupWizard({
                   className="h-12"
                 />
               </div>
+              {accountMode === "join" && (
+                <div className="space-y-2 rounded-xl border border-dashed border-border bg-muted/20 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Téléphone perdu, ou plus de mot de passe ? Rejoignez avec le mot clé reçu à la
+                    création du compte.
+                  </p>
+                  <div>
+                    <Label htmlFor="ob-acc-keyword">Mot clé de récupération</Label>
+                    <Input
+                      id="ob-acc-keyword"
+                      value={accKeyword}
+                      onChange={(e) => setAccKeyword(e.target.value.toUpperCase())}
+                      placeholder="XXXX-XXXX"
+                      className="h-12 font-mono tracking-widest"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Le mot clé n'est affiché qu'à la création du compte — conservez-le
+                    précieusement.
+                  </p>
+                </div>
+              )}
               <div className="border-t pt-3 space-y-3">
                 <p className="text-xs font-medium text-muted-foreground">
                   Coordonnées du commerce (optionnel)

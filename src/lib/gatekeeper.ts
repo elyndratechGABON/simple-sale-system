@@ -10,9 +10,10 @@
 // verrou, échéance et messages ne bougent que sur SUCCÈS d'un handshake. Seule
 // exception : le verrou déjà en place est rechargé au démarrage depuis IndexedDB, pour
 // qu'une caisse suspendue le reste même sans réseau.
-import { getShopProfile, getSetting, setSetting, setShopExpiry } from "@/lib/db";
+import { getShopProfile, getSetting, setSetting, setShopExpiry, setShopKeyword } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
+import { toast } from "sonner";
 
 /** Version de l'application remontée au serveur (colonne `app_version_used`). */
 export const APP_VERSION = "pos-web-1";
@@ -67,8 +68,9 @@ export async function getGraceEndsAt(): Promise<number | null> {
 
 export type CommandType = "suspend" | "renew" | "broadcast_message";
 
-/** Pourquoi la caisse est bloquée : abonnement suspendu, ou quota d'appareils dépassé. */
-export type LockReason = "suspended" | "device_limit";
+/** Pourquoi la caisse est bloquée : abonnement suspendu, quota d'appareils dépassé,
+ * ou mot clé de récupération rejeté par le serveur. */
+export type LockReason = "suspended" | "device_limit" | "keyword_invalid";
 
 export interface AdminCommand {
   id: string;
@@ -87,7 +89,8 @@ export interface HandshakeResult {
   ok: boolean;
   sync_allowed: boolean;
   status: "active" | "suspended" | "expired" | "unknown";
-  reason?: "no-profile" | "network" | "error" | "account_password" | "device_limit";
+  reason?:
+    "no-profile" | "network" | "error" | "account_password" | "device_limit" | "keyword_invalid";
 }
 
 // ── Verrou de suspension (store minimal, synchrone pour useSyncExternalStore) ──────
@@ -143,6 +146,54 @@ export async function consumeMessages(): Promise<{ text: string; at: number }[]>
   return messages;
 }
 
+// ── Vérification par mot clé de récupération (v3) ─────────────────────────────────
+// Un écran qui a perdu ses identifiants (téléphone perdu) se rattache au compte via le
+// mot clé reçu à la création. La réclamation (claim) est posée dès la soumission : elle
+// nourrit la bannière « vérification en attente » pendant que le serveur est muet, et sa
+// levée au handshake suivant matérialise la confirmation différée.
+export interface KeywordClaim {
+  storeName: string;
+  ownerName: string;
+  keyword: string;
+  submittedAt: number;
+}
+
+const SETTING_KEYWORD_CLAIM = "gatekeeper_keyword_claim";
+const SETTING_KEYWORD_REVEALED = "gatekeeper_keyword_revealed";
+
+export async function getKeywordClaim(): Promise<KeywordClaim | null> {
+  return (await getSetting<KeywordClaim>(SETTING_KEYWORD_CLAIM)) ?? null;
+}
+
+export async function setKeywordClaim(claim: KeywordClaim): Promise<void> {
+  await setSetting(SETTING_KEYWORD_CLAIM, claim);
+}
+
+export async function clearKeywordClaim(): Promise<void> {
+  await setSetting(SETTING_KEYWORD_CLAIM, null);
+}
+
+/**
+ * Mot clé à encore révéler à l'écran fondateur (reçu au handshake de création, jamais
+ * réaffiché ensuite) — ou `null` si déjà noté ou si la fiche n'en porte pas.
+ */
+export async function getKeywordToReveal(): Promise<string | null> {
+  const profile = await getShopProfile();
+  const revealed = Boolean(await getSetting<boolean>(SETTING_KEYWORD_REVEALED));
+  if (!profile?.accountKeyword || revealed) return null;
+  return profile.accountKeyword;
+}
+
+/** L'utilisateur a noté son mot clé : il ne sera plus proposé sur cet écran. */
+export async function ackKeywordReveal(): Promise<void> {
+  await setSetting(SETTING_KEYWORD_REVEALED, true);
+}
+
+/** Récupère (avant soumission) la valeur normalisée du mot clé saisi. */
+export function normKeyword(input: string): string {
+  return input.toUpperCase().replace(/[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g, "");
+}
+
 // ── Application d'un ordre ────────────────────────────────────────────────────────
 async function applyCommand(command: AdminCommand): Promise<void> {
   if (command.action_type === "renew" && typeof command.payload.new_end_date === "number") {
@@ -191,6 +242,16 @@ export async function handshake(): Promise<HandshakeResult> {
               account_password: profile.accountPassword,
             }
           : {}),
+        // Mot clé de récupération (v3) : un écran qui a perdu téléphone/mot de passe se
+        // rattache au compte par son mot clé seul (nom boutique + propriétaire + mot clé).
+        // Porteur des identifiants téléphone/mdp, il les présente (bloc ci-dessus) et
+        // n'a pas besoin du mot clé — les deux clés ne voyagent jamais ensemble.
+        ...(profile.accountKeyword && !(profile.accountPhone && profile.accountPassword)
+          ? {
+              account_name: profile.accountName ?? profile.storeName,
+              account_keyword: profile.accountKeyword,
+            }
+          : {}),
       }),
     });
     // Mot de passe erroné : refus net du serveur. On ne retente pas en boucle avec les
@@ -199,6 +260,14 @@ export async function handshake(): Promise<HandshakeResult> {
       const data = (await res.json().catch(() => null)) as { code?: string } | null;
       if (data?.code === "account_password") {
         return { ok: false, sync_allowed: false, status: "unknown", reason: "account_password" };
+      }
+      if (data?.code === "keyword_invalid") {
+        // Mot clé inconnu : blocage dur immédiat (cf. SuspendedScreen) tant que les
+        // informations ne sont pas corrigées — c'est le pendant du 403 mot de passe.
+        await setSetting(SETTING_LOCKED, true);
+        await setSetting(SETTING_LOCK_REASON, "keyword_invalid" as LockReason);
+        setLock(true, "keyword_invalid");
+        return { ok: false, sync_allowed: false, status: "unknown", reason: "keyword_invalid" };
       }
       return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
     }
@@ -230,6 +299,8 @@ export async function handshake(): Promise<HandshakeResult> {
       shop?: { subscription_end_date?: number };
       account?: { max_devices?: number; device_count?: number };
       subscription_request?: SubscriptionRequestStatus;
+      /** Mot clé de récupération — présent UNIQUEMENT à la création du compte. */
+      keyword?: string;
     };
 
     // Places du compte : alimente la carte « Appareils » des paramètres. Rien de
@@ -284,6 +355,24 @@ export async function handshake(): Promise<HandshakeResult> {
     await setSetting(SETTING_LOCK_REASON, reason);
     setLock(suspended, reason);
 
+    // Mot clé généré à la création : l'écran fondateur est le SEUL à le recevoir — il
+    // doit le conserver (il resservira sur un autre téléphone). Posé une seule fois,
+    // puis révélé par GatekeeperAlerts, jamais réaffiché.
+    if (typeof data.keyword === "string" && data.keyword && !profile.accountKeyword) {
+      await setShopKeyword(data.keyword);
+      await setSetting(SETTING_KEYWORD_REVEALED, false);
+      await setSetting(SETTING_KEYWORD_CLAIM, null);
+    }
+
+    // Une vérification par mot clé était en attente (serveur éteint à la soumission) :
+    // le serveur vient de confirmer → on lève la réclamation et on notifie, une fois.
+    if (await getKeywordClaim()) {
+      await clearKeywordClaim();
+      toast.success("Compte vérifié", {
+        description: "Votre caisse est rattachée au compte. Vous pouvez continuer.",
+      });
+    }
+
     return {
       ok: true,
       sync_allowed: data.sync_allowed !== false,
@@ -293,6 +382,60 @@ export async function handshake(): Promise<HandshakeResult> {
   } catch {
     return { ok: false, sync_allowed: false, status: "unknown", reason: "network" };
   }
+}
+
+// ── Connexion par mot clé de récupération (v3) ────────────────────────────────────
+export interface KeywordJoinInput {
+  storeName: string;
+  ownerName: string;
+  keyword: string;
+}
+
+export interface KeywordJoinResult {
+  status: "verified" | "blocked" | "pending";
+}
+
+/**
+ * Rattache cet écran au compte marchand via le mot clé de récupération.
+ *
+ * Le serveur est JOINT au minimum : si la vérification aboutit, on est `verified` ;
+ * si le mot clé est inconnu, `blocked` (le verrou `keyword_invalid` est déjà posé par
+ * `handshake` → écran de blocage dur) ; si le serveur est muet, la réclamation reste
+ * posée → bannière « vérification sous 48 h » et confirmation différée au prochain
+ * handshake réussi.
+ */
+export async function joinByKeyword(input: KeywordJoinInput): Promise<KeywordJoinResult> {
+  const keyword = normKeyword(input.keyword);
+  if (!keyword) return { status: "blocked" };
+  await setShopKeyword(keyword);
+  await setKeywordClaim({
+    storeName: input.storeName.trim(),
+    ownerName: input.ownerName.trim(),
+    keyword,
+    submittedAt: Date.now(),
+  });
+  const result = await handshake();
+  if (result.ok) {
+    await clearKeywordClaim();
+    return { status: "verified" };
+  }
+  if (result.reason === "keyword_invalid") {
+    await clearKeywordClaim();
+    return { status: "blocked" };
+  }
+  return { status: "pending" };
+}
+
+/**
+ * Réinitialise le blocage « mot clé invalide » : retire le verrou, la réclamation et le
+ * mot clé de la fiche pour permettre une nouvelle tentative (bouton Réessayer).
+ */
+export async function resetKeywordBlock(): Promise<void> {
+  await setShopKeyword(null);
+  await clearKeywordClaim();
+  await setSetting(SETTING_LOCKED, false);
+  await setSetting(SETTING_LOCK_REASON, null);
+  setLock(false, null);
 }
 
 // ── Sync des agrégats (stockage brut côté serveur) ────────────────────────────────
