@@ -31,7 +31,6 @@ export function ProductForm({
   const qc = useQueryClient();
   const { hasSerialNumber, unitType, hasExpiryDate, isLocation } = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
-  const [barcode, setBarcode] = useState(editing?.barcode ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
   const [stock, setStock] = useState<string>(
@@ -105,7 +104,6 @@ export function ProductForm({
             : Number(stock) || 0,
         min_stock: !unlimited && !isAsset && minStock ? Number(minStock) : undefined,
         category,
-        barcode: barcode.trim() || null,
         type: productType,
         serialNumber: serialNumber.trim() || undefined,
         unit: unitType === "mixed" || unitType === "weight" ? unit : undefined,
@@ -157,15 +155,6 @@ export function ProductForm({
           />
         </div>
         <div>
-          <Label htmlFor="barcode">Code-barres</Label>
-          <Input
-            id="barcode"
-            value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
-            placeholder="Optionnel"
-          />
-        </div>
-        <div>
           <Label htmlFor="photo">Photo</Label>
           <div className="mt-1 flex items-center gap-3">
             {photo ? (
@@ -199,6 +188,7 @@ export function ProductForm({
             id="photo"
             type="file"
             accept="image/*"
+            capture="environment"
             className="hidden"
             onChange={handlePhoto}
           />

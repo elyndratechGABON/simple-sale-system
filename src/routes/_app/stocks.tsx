@@ -359,12 +359,7 @@ function StocksPage() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = products.filter((p) => {
-      if (
-        q &&
-        !p.name.toLowerCase().includes(q) &&
-        !p.category.toLowerCase().includes(q) &&
-        !(p.barcode ?? "").toLowerCase().includes(q)
-      )
+      if (q && !p.name.toLowerCase().includes(q) && !p.category.toLowerCase().includes(q))
         return false;
       if (statusFilter !== "all") {
         const s = stateOf(p);

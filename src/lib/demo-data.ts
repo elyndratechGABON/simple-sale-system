@@ -228,7 +228,6 @@ export async function loadDemoData(cluster: ClusterId, subCategory?: SubCategory
   for (const p of products) {
     await addProduct({
       name: p.name,
-      barcode: "",
       price: p.price,
       cost: 0,
       stock: p.stock,

@@ -42,7 +42,6 @@ const productSchema = z.object({
   // services. La reconversion se fait dans `normalize`.
   stock: z.number().nullable(),
   category,
-  barcode: z.string().nullable().optional(),
   type: z.enum(["product", "service"]).optional(),
   serialNumber: z.string().optional(),
   unit: z.enum(["piece", "meter", "liter"]).optional(),

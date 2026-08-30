@@ -751,7 +751,6 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
 
     await addProduct({
       name: productName.trim(),
-      barcode: "",
       price: Number(productPrice) || 0,
       cost: 0,
       category:

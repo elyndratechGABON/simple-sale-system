@@ -52,7 +52,6 @@ export interface Product extends SyncFields {
   price: number; // prix de revente FCFA
   stock: number; // Number.POSITIVE_INFINITY when unlimited
   category: Category;
-  barcode?: string | null;
   /** Type métier : 'product' = bien physique (défaut), 'service' = prestation. */
   type?: "product" | "service";
   // ── V2 : champs pré-configurés (V10) ──────────────────────────────────
@@ -699,7 +698,7 @@ export class PosDatabase extends Dexie {
     // stock restant éventuellement ajustée, complément de coût. Données LOCALES,
     // comme `product_expenses` : elles ne font pas partie du moteur de synchronisation.
     this.version(19).stores({
-      products: "id, name, category, barcode, updated_at",
+      products: "id, name, category, updated_at",
       sales: "id, timestamp, status, client_name, client_id, updated_at",
       sale_items: "id, sale_id, updated_at",
       settings: "key",
