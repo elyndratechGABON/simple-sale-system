@@ -8,7 +8,7 @@
 // Le bénéfice est calculé depuis les coûts d'acquisition saisis dans les rapports
 // (table `product_expenses`), pas depuis `cost_at_sale` figé dans les lignes de vente.
 import { eachDayOfInterval, startOfDay, subDays } from "date-fns";
-import type { Category, ProductExpense, Sale, SaleItem } from "./db";
+import type { Category, PaymentMethod, ProductExpense, Sale, SaleItem } from "./db";
 
 export interface DayBucket {
   day: number; // minuit local, en ms — même clé de regroupement que src/routes/history.tsx
@@ -97,6 +97,87 @@ export const lineProfit = (i: SaleItem) => (i.price_at_sale - (i.cost_at_sale ??
 // category_at_sale est absente pour la même raison, et pour les lignes libres d'avant
 // l'ajout du champ Catégorie.
 export const lineCategory = (i: SaleItem): Category => i.category_at_sale ?? "Autre";
+
+/** Produit vendu un jour donné — agrégé par clé catalogue (nom pour les lignes libres). */
+export interface DayProductBucket {
+  product_id: string;
+  name: string;
+  category: Category;
+  quantity: number;
+  revenue: number;
+}
+
+/** Répartition d'un jour par moyen de paiement. */
+export interface PaymentBreakdown {
+  method: PaymentMethod;
+  count: number;
+  total: number;
+}
+
+/**
+ * Photo complète d'une journée : le contenu du dialogue « détail d'un jour » du
+ * calendrier des rapports. Pure et recalculable à la main, comme le reste du module.
+ */
+export interface DayDetail {
+  revenue: number;
+  profit: number;
+  salesCount: number;
+  itemsCount: number;
+  /** Personnes servies — une vente sans `customers_count` compte pour 1. */
+  customers: number;
+  byPayment: PaymentBreakdown[];
+  /** Produits triés par chiffre d'affaires décroissant. */
+  products: DayProductBucket[];
+  /** Noms des clients nommés (services), distincts, dans l'ordre de passage. */
+  clients: string[];
+  /** Libellés des tables servies, distincts. */
+  tables: string[];
+}
+
+export function computeDayDetail(sales: Sale[], items: SaleItem[]): DayDetail {
+  const byPaymentMap = new Map<PaymentMethod, PaymentBreakdown>();
+  for (const s of sales) {
+    const method = s.payment_method ?? "cash";
+    const cur = byPaymentMap.get(method) ?? { method, count: 0, total: 0 };
+    cur.count += 1;
+    cur.total += s.total;
+    byPaymentMap.set(method, cur);
+  }
+
+  const productMap = new Map<string, DayProductBucket>();
+  for (const i of items) {
+    const key = i.product_id ?? i.name;
+    const cur = productMap.get(key) ?? {
+      product_id: key,
+      name: i.name,
+      category: lineCategory(i),
+      quantity: 0,
+      revenue: 0,
+    };
+    cur.quantity += i.quantity;
+    cur.revenue += lineRevenue(i);
+    productMap.set(key, cur);
+  }
+
+  const clients = Array.from(
+    new Set(sales.map((s) => s.client_name).filter((c): c is string => Boolean(c))),
+  );
+  const tables = Array.from(
+    new Set(sales.map((s) => s.table).filter((t): t is string => Boolean(t))),
+  );
+
+  return {
+    revenue: sales.reduce((s, x) => s + x.total, 0),
+    profit: items.reduce((s, i) => s + lineProfit(i), 0),
+    salesCount: sales.length,
+    itemsCount: items.reduce((s, i) => s + i.quantity, 0),
+    customers: sales.reduce((s, x) => s + (x.customers_count ?? 1), 0),
+    byPayment: Array.from(byPaymentMap.values()),
+    products: Array.from(productMap.values()).sort((a, b) => b.revenue - a.revenue),
+    clients,
+    tables,
+  };
+}
 
 export const dayKey = (ts: number) => startOfDay(ts).getTime();
 

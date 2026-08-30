@@ -41,6 +41,7 @@ import {
   listSales,
   getSaleItemsForSales,
   type Product,
+  type SaleItem,
   type StockMovement,
 } from "@/lib/db";
 import { lastDaysRange } from "@/lib/analytics";
@@ -293,6 +294,29 @@ function StocksPage() {
     return map;
   }, [monthData]);
 
+  // « Sollicité il y a 1 j / 3 j » : date de la dernière vente de chaque produit sur
+  // les 30 derniers jours, ventes triées du plus ancien au plus récent pour laisser la
+  // dernière gagner. Réponse visuelle au « pourquoi ce stock bouge-t-il ? ».
+  const itemsBySale = useMemo(() => {
+    const map = new Map<string, SaleItem[]>();
+    for (const it of monthData?.items ?? []) {
+      const arr = map.get(it.sale_id) ?? [];
+      arr.push(it);
+      map.set(it.sale_id, arr);
+    }
+    return map;
+  }, [monthData]);
+  const lastSoldAtByProduct = useMemo(() => {
+    const map = new Map<string, number>();
+    const sales = [...(monthData?.sales ?? [])].sort((a, b) => a.timestamp - b.timestamp);
+    for (const s of sales) {
+      for (const it of itemsBySale.get(s.id) ?? []) {
+        if (it.product_id && it.quantity > 0) map.set(it.product_id, s.timestamp);
+      }
+    }
+    return map;
+  }, [monthData, itemsBySale]);
+
   // ── Recherche / filtres / tri ───────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -398,6 +422,7 @@ function StocksPage() {
   const [movementsOpen, setMovementsOpen] = useState(false);
 
   const detailProduct = products.find((p) => p.id === detailId) ?? null;
+  const detailLastSoldAt = detailProduct ? lastSoldAtByProduct.get(detailProduct.id) : undefined;
   const selectedProduct = products.find((p) => p.id === stockProductId) ?? null;
   const removeProduct = products.find((p) => p.id === removeProductId) ?? null;
 
@@ -911,6 +936,7 @@ function StocksPage() {
           {visible.map((p) => {
             const state = stateOf(p);
             const isServiceItem = state === "service";
+            const lastSoldAt = lastSoldAtByProduct.get(p.id);
             return (
               <Card
                 key={p.id}
@@ -938,6 +964,13 @@ function StocksPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{p.name}</p>
                     <p className="truncate text-xs text-muted-foreground">{p.category}</p>
+                    {/* Dernière fois que le produit est passé en vente : « il y a 1 j »
+                        donne un ordre de grandeur sans ouvrir la fiche. */}
+                    {!isServiceItem && lastSoldAt !== undefined && (
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        Vendu {formatRelative(lastSoldAt)}
+                      </p>
+                    )}
                     <div className="mt-1.5 flex items-end justify-between gap-2">
                       <span className="text-sm font-semibold tabular-nums">
                         {formatFCFA(p.price)}
@@ -1068,6 +1101,16 @@ function StocksPage() {
                         value={`${thresholdOf(detailProduct)}${
                           typeof detailProduct.min_stock === "number" ? "" : " (défaut)"
                         }`}
+                      />
+                      {/* Réponse directe au « il y a 1 j, il y a 3 j » : dernière vente
+                          connue sur les 30 derniers jours. */}
+                      <InfoCell
+                        label="Dernière vente"
+                        value={
+                          detailLastSoldAt !== undefined
+                            ? formatRelative(detailLastSoldAt)
+                            : "Aucune sur 30 j"
+                        }
                       />
                     </>
                   )}

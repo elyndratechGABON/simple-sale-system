@@ -7,6 +7,15 @@ export function formatFCFA(value: number): string {
   return `${rounded < 0 ? "-" : ""}${str}\u00A0F`;
 }
 
+/** Montant ultra-court pour une cellule de calendrier : « 950 », « 1,5k » (FCFA). */
+export function formatFCFACompact(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  if (value < 1000) return String(Math.round(value));
+  const k = value / 1000;
+  const body = k >= 100 ? String(Math.round(k)) : k.toFixed(1).replace(".", ",");
+  return `${body}k`;
+}
+
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("fr-FR", {
     hour: "2-digit",

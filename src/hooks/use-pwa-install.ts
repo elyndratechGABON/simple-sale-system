@@ -74,6 +74,8 @@ let insecureFlag = false;
 let autoShown = false;
 let autoArmed = false;
 let pending: Promise<InstallOutcome> | null = null;
+/** Attente bornée d'un (re)envoi de `beforeinstallprompt` (cf. `waitForCaptured`). */
+let waiting: Promise<InstallOutcome> | null = null;
 
 let snap: Snapshot = SERVER_SNAPSHOT;
 const subscribers = new Set<() => void>();
@@ -150,6 +152,9 @@ function bootstrap() {
     e.preventDefault();
     captured = e;
     refresh();
+    // Même signal que le script inline de `__root.tsx` : les abonnés (dont
+    // `waitForCaptured`) apprennent qu'un événement vient d'arriver.
+    window.dispatchEvent(new Event("pwa-install-captured"));
     armAutoGesture();
   };
 
@@ -183,11 +188,52 @@ if (typeof window !== "undefined") {
 
 /* ── API publique ────────────────────────────────────────────────────────── */
 
+/**
+ * Attente bornée : Chrome re-émet `beforeinstallprompt` quelques secondes APRÈS
+ * le chargement (une fois manifest + service worker validés), et peut le re-émettre
+ * après un refus et une nouvelle interaction. Plutôt que d'abandonner le clic sur
+ * place, on attend que l'événement arrive puis on ouvre le prompt automatiquement.
+ */
+function waitForCaptured(): Promise<InstallOutcome> {
+  const TIMEOUT_MS = 8000;
+  return new Promise<InstallOutcome>((resolve) => {
+    const onCaptured = () => {
+      cleanup();
+      if (!captured) {
+        resolve("unavailable");
+        return;
+      }
+      const p = consume(captured);
+      pending = p.finally(() => {
+        pending = null;
+        refresh();
+      });
+      resolve(p);
+    };
+    const onTimeout = () => {
+      cleanup();
+      resolve("unavailable");
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      window.removeEventListener("pwa-install-captured", onCaptured);
+    };
+    const timer = setTimeout(onTimeout, TIMEOUT_MS);
+    // Déjà arrivé, capté par le script inline, ou relayé par `bootstrap` ?
+    if (captured || window.__pwaInstallEvent) {
+      onCaptured();
+      return;
+    }
+    window.addEventListener("pwa-install-captured", onCaptured);
+  });
+}
+
 async function install(): Promise<InstallOutcome> {
   // Le geste automatique vient d'ouvrir le prompt natif sur CE clic (pointerdown
   // précède toujours click) : rapporter son issue au lieu d'un faux échec.
   if (pending) return pending;
-  if (captured && !autoShown) {
+  // Événement vivant : le prompt s'ouvre immédiatement.
+  if (captured) {
     autoShown = true;
     const p = consume(captured);
     pending = p.finally(() => {
@@ -197,7 +243,13 @@ async function install(): Promise<InstallOutcome> {
     return p;
   }
   if (iosFlag) return "ios-help";
-  return "unavailable";
+  // Contexte non sécurisé : l'événement ne s'y produit JAMAIS — pas la peine d'attendre.
+  if (insecureFlag) return "unavailable";
+  // L'événement n'est pas encore arrivé (ou l'a été puis consommé par un refus) : on
+  // attend qu'il soit (re)émis, puis on ouvre le prompt — pas de repli précipité.
+  return (waiting ??= waitForCaptured().finally(() => {
+    waiting = null;
+  }));
 }
 
 /**
