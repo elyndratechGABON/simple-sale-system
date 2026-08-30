@@ -39,7 +39,12 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
 - **Ack implicite + idempotence.** `delivered_at` est posé au handshake suivant
   (`last_applied_command_id`) ; `superseded_at` rend le double clic sur Prolonger inoffensif.
 - **Sync = profil + agrégats légers** (7 j, `computePeriodStats`), jamais les lignes de
-  vente brutes.
+  vente brutes — sur le canal historique `sync-data`. Depuis le moteur P2P, les opérations
+  (produits, ventes, stock) transitent par un SECOND canal, `/api/v1/ops` du relais
+  (`syncengine/transport.ts`) : ce sont des paquets de convergence inter-appareils, aveugles
+  pour le relais (il les stocke et les rend, ne les agrège jamais), appliqués via
+  `applyRemoteOps` et dédupliqués par `processed_ops`. Les deux canaux sont **additifs** :
+  le handshake ne porte toujours que les agrégats, jamais les lignes brutes.
 - **`.gitignore` doit rester en UTF-8 sans BOM.** Il a été committé une fois en UTF-16LE :
   git ne parse que l'UTF-8, le fichier devenait un binaire à ses yeux, plus rien n'était
   ignoré et 39 109 fichiers de `node_modules` sont entrés dans le dépôt. Le build Vercel

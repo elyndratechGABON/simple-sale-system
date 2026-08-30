@@ -12,6 +12,9 @@
 //    synchronisation » plus bas. Toute lecture doit donc filtrer les enregistrements
 //    supprimés ; c'est le rôle de `alive()`.
 import Dexie, { type Table } from "dexie";
+import { ensureIdentity, getIdentity, refreshShopId } from "./syncengine/identity";
+import { emitOp } from "./syncengine/ops";
+import type { PairedDevice, ProcessedOp, SyncOp } from "./syncengine/types";
 
 // Catégories produit. Les quatre premières sont fixes ; le `(string & {})` laisse un
 // commerce ajouter les siennes (« Chips », « Sucreries »…) — cf. `addCategory`. Garder
@@ -355,7 +358,7 @@ export interface DayClosure {
   closed_at: number;
 }
 
-class PosDatabase extends Dexie {
+export class PosDatabase extends Dexie {
   products!: Table<Product, string>;
   sales!: Table<Sale, string>;
   sale_items!: Table<SaleItem, string>;
@@ -367,6 +370,9 @@ class PosDatabase extends Dexie {
   stock_movements!: Table<StockMovement, string>;
   day_closures!: Table<DayClosure, string>;
   rentals!: Table<Rental, string>;
+  sync_ops!: Table<SyncOp, string>;
+  processed_ops!: Table<ProcessedOp, string>;
+  paired_devices!: Table<PairedDevice, string>;
 
   constructor() {
     super("pos-db");
@@ -638,17 +644,55 @@ class PosDatabase extends Dexie {
       day_closures: "id, closed_at",
       rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
     });
+
+    // Version 18 — journal d'opérations du moteur de synchronisation P2P.
+    //
+    //  - `sync_ops` : les opérations locales en attente de transmission (outbox). Un
+    //    appareil relit ses `pending`, un pair applique les siennes puis les ACK. Indexé
+    //    sur `[device_id+seq]` : l'ordre d'émission d'un même appareil se relit d'une
+    //    requête. `status` permet de ne ressortir que ce qui n'a pas été acquitté.
+    //  - `processed_ops` : déduplication. Un id d'op déjà appliqué = une application de
+    //    moins, quoi qu'il arrive (ré-envoi après ACK perdu, double transmission).
+    //  - `paired_devices` : le registre des autres appareils du compte (post-pairing).
+    //
+    // Les trois stores sont neufs : aucun `upgrade()` nécessaire.
+    this.version(18).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+      day_closures: "id, closed_at",
+      rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
+
+      sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
+      processed_ops: "id",
+      paired_devices: "id, updated_at, shop_id",
+    });
   }
 }
 
 let instance: PosDatabase | null = null;
 
-function getDB(): PosDatabase {
+export function getDB(): PosDatabase {
   if (typeof window === "undefined") {
     throw new Error("IndexedDB only available in the browser");
   }
   if (!instance) instance = new PosDatabase();
   return instance;
+}
+
+/** Pour les tests uniquement : ferme la base et oublie l'instance, pour repartir d'un
+ *  état vierge entre deux scénarios (le singleton `instance` n'existe pas en production). */
+export async function resetDBForTests(): Promise<void> {
+  const db = instance;
+  instance = null;
+  if (db) await db.delete();
 }
 
 const uid = () =>
@@ -677,6 +721,47 @@ const alive = <T extends SyncFields>(rows: T[]): T[] => rows.filter((r) => !r.de
  */
 const paid = (rows: Sale[]): Sale[] => rows.filter((s) => s.status !== "open");
 
+// ---------- Patchs de synchronisation ----------
+// Les champs propagés par `product.updated` / `client.updated`. Jamais `id`, `stock`
+// (qui passe par les deltas), `photo` (restée locale en v1), ni les champs de sync
+// eux-mêmes (`updated_at`, `deleted_at`, `sync_status`) — ils sont réécrits localement
+// par chaque appareil au moment où il applique l'op.
+
+const SYNC_EXCLUDED = new Set([
+  "id",
+  "stock",
+  "photo",
+  "updated_at",
+  "deleted_at",
+  "sync_status",
+  "last_op",
+]);
+
+function productPatch(
+  previous: Product | undefined,
+  next: Product,
+): Record<string, unknown> | null {
+  if (!previous) return null;
+  const prev = previous as unknown as Record<string, unknown>;
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(next)) {
+    if (SYNC_EXCLUDED.has(key)) continue;
+    if (value !== prev[key]) fields[key] = value;
+  }
+  return Object.keys(fields).length > 0 ? fields : null;
+}
+
+function clientPatch(previous: Client | undefined, next: Client): Record<string, unknown> | null {
+  if (!previous) return null;
+  const prev = previous as unknown as Record<string, unknown>;
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(next)) {
+    if (SYNC_EXCLUDED.has(key)) continue;
+    if (value !== prev[key]) fields[key] = value;
+  }
+  return Object.keys(fields).length > 0 ? fields : null;
+}
+
 // ---------- Products ----------
 export async function listProducts(): Promise<Product[]> {
   const all = await getDB().products.toArray();
@@ -689,46 +774,85 @@ export async function listProducts(): Promise<Product[]> {
 }
 
 export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Promise<Product> {
+  await ensureIdentity();
   const product: Product = { ...p, id: uid(), ...touch() };
   const db = getDB();
-  await db.products.put(product);
-  // Stock initial > 0 : une trace de création, sinon le premier réapprovisionnement
-  // paraîtrait avoir disparu du journal.
-  if (Number.isFinite(product.stock) && product.stock > 0) {
-    await db.stock_movements.put({
-      id: uid(),
-      product_id: product.id,
-      product_name: product.name,
-      delta: product.stock,
-      reason: "creation",
-      created_at: Date.now(),
-    });
-  }
+  // Produit + op dans UNE transaction : un produit présent sans son op de création ne
+  // pourrait jamais arriver seul sur un autre appareil.
+  await db.transaction(
+    "rw",
+    db.products,
+    db.stock_movements,
+    db.sync_ops,
+    db.settings,
+    async () => {
+      await db.products.put(product);
+      // Stock initial > 0 : une trace de création, sinon le premier réapprovisionnement
+      // paraîtrait avoir disparu du journal.
+      if (Number.isFinite(product.stock) && product.stock > 0) {
+        await db.stock_movements.put({
+          id: uid(),
+          product_id: product.id,
+          product_name: product.name,
+          delta: product.stock,
+          reason: "creation",
+          created_at: Date.now(),
+        });
+      }
+      // Le stock ABSOLU part dans la création : il est le point de départ (`STOCK_INITIAL`)
+      // à partir duquel les pairs appliqueront les deltas. Pas d'op `stock.adjusted` ici,
+      // ce serait compter le stock initial deux fois.
+      await emitOp(db, getIdentity(), {
+        type: "product.created",
+        entity_id: product.id,
+        payload: { product },
+      });
+    },
+  );
   return product;
 }
 
 export async function updateProduct(p: Product): Promise<void> {
+  await ensureIdentity();
   const db = getDB();
   const previous = await db.products.get(p.id);
-  await db.products.put({ ...p, ...touch() });
-  // Le formulaire écrit un stock ABSOLU : s'il change, c'est une correction de
-  // comptage et elle doit figurer au journal comme les autres variations.
-  if (
-    previous &&
-    Number.isFinite(previous.stock) &&
-    Number.isFinite(p.stock) &&
-    p.stock !== previous.stock
-  ) {
-    await db.transaction("rw", db.stock_movements, async () => {
-      await recordMovement(db, {
-        product_id: p.id,
-        product_name: p.name,
-        delta: p.stock - previous.stock,
-        reason: "correction",
-        note: "Modification du produit",
-      });
-    });
-  }
+  await db.transaction(
+    "rw",
+    db.products,
+    db.stock_movements,
+    db.sync_ops,
+    db.settings,
+    async () => {
+      await db.products.put({ ...p, ...touch() });
+      // Le formulaire écrit un stock ABSOLU : s'il change, c'est une correction de
+      // comptage et elle doit figurer au journal comme les autres variations.
+      if (
+        previous &&
+        Number.isFinite(previous.stock) &&
+        Number.isFinite(p.stock) &&
+        p.stock !== previous.stock
+      ) {
+        await recordMovement(db, {
+          product_id: p.id,
+          product_name: p.name,
+          delta: p.stock - previous.stock,
+          reason: "correction",
+          note: "Modification du produit",
+        });
+      }
+      // Le stock N'EST PAS propagé par `product.updated` : il passe exclusivement par les
+      // deltas (`stock.adjusted`). Une correction de comptage est un choix local — l'écart
+      // réel entre le stock en rayon et le delta comptable se fige au prochain inventaire.
+      const fields = productPatch(previous, p);
+      if (fields) {
+        await emitOp(db, getIdentity(), {
+          type: "product.updated",
+          entity_id: p.id,
+          payload: { product_id: p.id, fields },
+        });
+      }
+    },
+  );
 }
 
 /**
@@ -737,10 +861,18 @@ export async function updateProduct(p: Product): Promise<void> {
  * l'historique des ventes garde de toute façon nom, prix et coût figés dans ses lignes.
  */
 export async function deleteProduct(id: string): Promise<void> {
+  await ensureIdentity();
   const db = getDB();
   const p = await db.products.get(id);
   if (!p) return;
-  await db.products.put({ ...p, ...touch(), deleted_at: Date.now() });
+  await db.transaction("rw", db.products, db.sync_ops, db.settings, async () => {
+    await db.products.put({ ...p, ...touch(), deleted_at: Date.now() });
+    await emitOp(db, getIdentity(), {
+      type: "product.deleted",
+      entity_id: id,
+      payload: { product_id: id },
+    });
+  });
 }
 
 /**
@@ -756,31 +888,56 @@ export async function addStock(
   quantity: number,
   info?: { unit_cost?: number; supplier?: string; note?: string },
 ): Promise<Product> {
+  await ensureIdentity();
   const db = getDB();
   const p = await db.products.get(productId);
   if (!p || p.deleted_at) throw new Error("Produit introuvable.");
   if (!Number.isFinite(p.stock)) throw new Error("Stock illimité, pas d'initiation possible.");
   const qty = Math.max(0, quantity);
+  const costChanged =
+    typeof info?.unit_cost === "number" && info.unit_cost > 0 && info.unit_cost !== p.cost;
   const updated: Product = {
     ...p,
     stock: p.stock + qty,
     ...(info?.unit_cost && info.unit_cost > 0 ? { cost: info.unit_cost } : {}),
     ...touch(),
   };
-  await db.transaction("rw", db.products, db.stock_movements, async () => {
-    await db.products.put(updated);
-    if (qty > 0) {
-      await recordMovement(db, {
-        product_id: p.id,
-        product_name: p.name,
-        delta: qty,
-        reason: "replenishment",
-        unit_cost: info?.unit_cost,
-        supplier: info?.supplier,
-        note: info?.note,
-      });
-    }
-  });
+  await db.transaction(
+    "rw",
+    db.products,
+    db.stock_movements,
+    db.sync_ops,
+    db.settings,
+    async () => {
+      await db.products.put(updated);
+      if (qty > 0) {
+        await recordMovement(db, {
+          product_id: p.id,
+          product_name: p.name,
+          delta: qty,
+          reason: "replenishment",
+          unit_cost: info?.unit_cost,
+          supplier: info?.supplier,
+          note: info?.note,
+        });
+        // Le réapprovisionnement est un delta : chaque appareil l'applique à SON stock.
+        await emitOp(db, getIdentity(), {
+          type: "stock.adjusted",
+          entity_id: productId,
+          payload: { product_id: productId, delta: qty },
+        });
+      }
+      if (costChanged) {
+        // Le prix d'achat renseigné au réappro met à jour la fiche produit : le propager,
+        // sinon le coût du pair est en retard sur le sien.
+        await emitOp(db, getIdentity(), {
+          type: "product.updated",
+          entity_id: productId,
+          payload: { product_id: productId, fields: { cost: info!.unit_cost } },
+        });
+      }
+    },
+  );
   return updated;
 }
 
@@ -793,24 +950,37 @@ export async function removeStock(
   quantity: number,
   note?: string,
 ): Promise<Product> {
+  await ensureIdentity();
   const db = getDB();
   const p = await db.products.get(productId);
   if (!p || p.deleted_at) throw new Error("Produit introuvable.");
   if (!Number.isFinite(p.stock)) throw new Error("Stock illimité, rien à retirer.");
   const qty = Math.min(Math.max(0, quantity), p.stock);
   const updated: Product = { ...p, stock: p.stock - qty, ...touch() };
-  await db.transaction("rw", db.products, db.stock_movements, async () => {
-    await db.products.put(updated);
-    if (qty > 0) {
-      await recordMovement(db, {
-        product_id: p.id,
-        product_name: p.name,
-        delta: -qty,
-        reason: "correction",
-        note,
-      });
-    }
-  });
+  await db.transaction(
+    "rw",
+    db.products,
+    db.stock_movements,
+    db.sync_ops,
+    db.settings,
+    async () => {
+      await db.products.put(updated);
+      if (qty > 0) {
+        await recordMovement(db, {
+          product_id: p.id,
+          product_name: p.name,
+          delta: -qty,
+          reason: "correction",
+          note,
+        });
+        await emitOp(db, getIdentity(), {
+          type: "stock.adjusted",
+          entity_id: productId,
+          payload: { product_id: productId, delta: -qty },
+        });
+      }
+    },
+  );
   return updated;
 }
 
@@ -869,6 +1039,7 @@ export async function createSale(input: {
   /** Réduction en FCFA, bornée au sous-total. */
   discount?: number;
 }): Promise<Sale> {
+  await ensureIdentity();
   const db = getDB();
   const subtotal = input.lines.reduce((s, l) => s + l.price * l.quantity, 0);
   const discount = Math.min(Math.max(0, Math.round(input.discount ?? 0)), subtotal);
@@ -893,39 +1064,53 @@ export async function createSale(input: {
     ...(input.client_id ? { client_id: input.client_id } : {}),
     ...touch(),
   };
-  await db.transaction("rw", db.sales, db.sale_items, db.products, db.stock_movements, async () => {
-    await db.sales.put(sale);
-    for (const line of input.lines) {
-      await db.sale_items.put({
-        id: uid(),
-        sale_id: sale.id,
-        product_id: line.product_id,
-        name: line.name,
-        quantity: line.quantity,
-        price_at_sale: line.price,
-        cost_at_sale: line.cost,
-        category_at_sale: line.category,
-        ...touch(),
-      });
-      if (!line.product_id) continue; // ligne libre : rien à décrémenter
-      const p = await db.products.get(line.product_id);
-      if (p && Number.isFinite(p.stock)) {
-        await db.products.put({
-          ...p,
-          stock: Math.max(0, p.stock - line.quantity),
+  const items: SaleItem[] = [];
+  await db.transaction(
+    "rw",
+    [db.sales, db.sale_items, db.products, db.stock_movements, db.sync_ops, db.settings],
+    async () => {
+      await db.sales.put(sale);
+      for (const line of input.lines) {
+        const item: SaleItem = {
+          id: uid(),
+          sale_id: sale.id,
+          product_id: line.product_id,
+          name: line.name,
+          quantity: line.quantity,
+          price_at_sale: line.price,
+          cost_at_sale: line.cost,
+          category_at_sale: line.category,
           ...touch(),
-        });
-        if (line.quantity > 0) {
-          await recordMovement(db, {
-            product_id: p.id,
-            product_name: p.name,
-            delta: -line.quantity,
-            reason: "sale",
+        };
+        await db.sale_items.put(item);
+        items.push(item);
+        if (!line.product_id) continue; // ligne libre : rien à décrémenter
+        const p = await db.products.get(line.product_id);
+        if (p && Number.isFinite(p.stock)) {
+          await db.products.put({
+            ...p,
+            stock: Math.max(0, p.stock - line.quantity),
+            ...touch(),
           });
+          if (line.quantity > 0) {
+            await recordMovement(db, {
+              product_id: p.id,
+              product_name: p.name,
+              delta: -line.quantity,
+              reason: "sale",
+            });
+          }
         }
       }
-    }
-  });
+      // La vente ET ses lignes partent dans l'op : elles sont le chiffre d'affaires que
+      // les pairs rejoueront à l'identique (prix, coûts et catégories figés).
+      await emitOp(db, getIdentity(), {
+        type: "sale.created",
+        entity_id: sale.id,
+        payload: { sale, items },
+      });
+    },
+  );
   return sale;
 }
 
@@ -980,36 +1165,48 @@ export async function getProfitToday(): Promise<number> {
  * synchronisation future puisse propager l'annulation à un autre appareil.
  */
 export async function cancelSale(saleId: string): Promise<void> {
+  await ensureIdentity();
   const db = getDB();
-  await db.transaction("rw", db.sales, db.sale_items, db.products, db.stock_movements, async () => {
-    const sale = await db.sales.get(saleId);
-    if (!sale || sale.deleted_at) return;
-    if (isClosed(sale)) {
-      throw new Error("Journée clôturée, annulation impossible.");
-    }
-    const deleted_at = Date.now();
-    const items = await db.sale_items.where("sale_id").equals(saleId).toArray();
-    for (const item of items) {
-      if (item.deleted_at) continue;
-      if (item.product_id) {
-        const p = await db.products.get(item.product_id);
-        if (p && Number.isFinite(p.stock)) {
-          await db.products.put({ ...p, stock: p.stock + item.quantity, ...touch() });
-          if (item.quantity > 0) {
-            await recordMovement(db, {
-              product_id: p.id,
-              product_name: p.name,
-              delta: item.quantity,
-              reason: "cancellation",
-              note: `Vente annulée`,
-            });
+  await db.transaction(
+    "rw",
+    [db.sales, db.sale_items, db.products, db.stock_movements, db.sync_ops, db.settings],
+    async () => {
+      const sale = await db.sales.get(saleId);
+      if (!sale || sale.deleted_at) return;
+      if (isClosed(sale)) {
+        throw new Error("Journée clôturée, annulation impossible.");
+      }
+      const deleted_at = Date.now();
+      const items = await db.sale_items.where("sale_id").equals(saleId).toArray();
+      for (const item of items) {
+        if (item.deleted_at) continue;
+        if (item.product_id) {
+          const p = await db.products.get(item.product_id);
+          if (p && Number.isFinite(p.stock)) {
+            await db.products.put({ ...p, stock: p.stock + item.quantity, ...touch() });
+            if (item.quantity > 0) {
+              await recordMovement(db, {
+                product_id: p.id,
+                product_name: p.name,
+                delta: item.quantity,
+                reason: "cancellation",
+                note: `Vente annulée`,
+              });
+            }
           }
         }
+        await db.sale_items.put({ ...item, ...touch(), deleted_at });
       }
-      await db.sale_items.put({ ...item, ...touch(), deleted_at });
-    }
-    await db.sales.put({ ...sale, ...touch(), deleted_at });
-  });
+      await db.sales.put({ ...sale, ...touch(), deleted_at });
+      // Les pairs restaurent LEUR stock au rejeu de cette op ; l'émetteur l'a déjà fait
+      // juste au-dessus.
+      await emitOp(db, getIdentity(), {
+        type: "sale.cancelled",
+        entity_id: saleId,
+        payload: { sale_id: saleId },
+      });
+    },
+  );
 }
 
 export async function closeDay(): Promise<number> {
@@ -1678,6 +1875,9 @@ export async function setShopAccount(input: {
     ownerName: input.ownerName?.trim() || profile.ownerName,
     ...touch(),
   });
+  // Le `shopId` du moteur descend du compte : une ré-association change donc le groupe
+  // de partage. Inoffensif si l'identité n'est pas encore chargée.
+  await refreshShopId();
 }
 
 /**
@@ -1740,20 +1940,50 @@ export async function searchClients(query: string): Promise<Client[]> {
 }
 
 export async function addClient(c: Omit<Client, "id" | keyof SyncFields>): Promise<Client> {
+  await ensureIdentity();
   const client: Client = { ...c, id: uid(), ...touch() };
-  await getDB().clients.put(client);
+  const db = getDB();
+  await db.transaction("rw", db.clients, db.sync_ops, db.settings, async () => {
+    await db.clients.put(client);
+    await emitOp(db, getIdentity(), {
+      type: "client.created",
+      entity_id: client.id,
+      payload: { client },
+    });
+  });
   return client;
 }
 
 export async function updateClient(c: Client): Promise<void> {
-  await getDB().clients.put({ ...c, ...touch() });
+  await ensureIdentity();
+  const db = getDB();
+  const previous = await db.clients.get(c.id);
+  await db.transaction("rw", db.clients, db.sync_ops, db.settings, async () => {
+    await db.clients.put({ ...c, ...touch() });
+    const fields = clientPatch(previous, c);
+    if (fields) {
+      await emitOp(db, getIdentity(), {
+        type: "client.updated",
+        entity_id: c.id,
+        payload: { client_id: c.id, fields },
+      });
+    }
+  });
 }
 
 export async function deleteClient(id: string): Promise<void> {
+  await ensureIdentity();
   const db = getDB();
   const c = await db.clients.get(id);
   if (!c) return;
-  await db.clients.put({ ...c, ...touch(), deleted_at: Date.now() });
+  await db.transaction("rw", db.clients, db.sync_ops, db.settings, async () => {
+    await db.clients.put({ ...c, ...touch(), deleted_at: Date.now() });
+    await emitOp(db, getIdentity(), {
+      type: "client.deleted",
+      entity_id: id,
+      payload: { client_id: id },
+    });
+  });
 }
 
 /** Nombre de visites (ventes payées) et total dépensé pour un client. */
@@ -1785,11 +2015,22 @@ export async function listCategories(): Promise<Category[]> {
 
 /** Crée une catégorie personnalisée si elle n'existe pas déjà. Renvoie son nom exact. */
 export async function addCategory(label: string): Promise<Category> {
+  await ensureIdentity();
   const name = label.trim();
   if (!name) throw new Error("Nom de catégorie requis.");
   const current = await listCategories();
   if (current.includes(name)) return name;
   const custom = (await getSetting<string[]>(CUSTOM_CATEGORIES_KEY)) ?? [];
-  await setSetting(CUSTOM_CATEGORIES_KEY, [...custom, name]);
+  const db = getDB();
+  await db.transaction("rw", db.settings, db.sync_ops, async () => {
+    await db.settings.put({ key: CUSTOM_CATEGORIES_KEY, value: [...custom, name] });
+    // L'op garde la trace de la création ; l'application côté pair est délibérément
+    // différée (les catégories personnalisées vivent dans les préférences locales).
+    await emitOp(db, getIdentity(), {
+      type: "category.created",
+      entity_id: name,
+      payload: { name },
+    });
+  });
   return name;
 }
