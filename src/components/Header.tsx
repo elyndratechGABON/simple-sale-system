@@ -39,7 +39,7 @@ export function Header() {
   // Logo posé par le commerçant (Paramètres › Logo), sinon l'icône de l'application.
   const { data: shopLogo } = useQuery({
     queryKey: ["shop_logo"],
-    queryFn: () => getSetting<string>("shop_logo"),
+    queryFn: () => getSetting<string>("shop_logo") ?? null,
     staleTime: 60_000,
   });
 

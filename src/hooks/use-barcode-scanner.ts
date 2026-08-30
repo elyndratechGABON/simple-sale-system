@@ -30,6 +30,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * le cleanup du hook si le composant se démonte en pleine passe). */
 let activeStop: (() => void) | null = null;
 
+/** Arrête proprement un scanner html5-qrcode quel que soit son état.
+ *  `Html5Qrcode.stop()` JETTE SYNCHRONIQUEMENT une string dès que le flux n'est pas
+ *  démarré (html5-qrcode.ts:548) — un `.catch()` attaché à la promesse ne rattrape que
+ *  les rejets, pas les throws. Sans ce garde-fou, démonter le composant en pleine passe
+ *  (navigation pendant un refus caméra…) faisait jeter le cleanup du hook, et React
+ *  envoyait la route entière à l'error boundary. */
+async function stopHtml5(scanner: import("html5-qrcode").Html5Qrcode | null) {
+  if (!scanner) return;
+  try {
+    await scanner.stop();
+  } catch {
+    // Flux non démarré : rien à arrêter.
+  }
+  try {
+    scanner.clear();
+  } catch {
+    // Élément déjà nettoyé.
+  }
+}
+
 export interface CameraAccess {
   available: boolean;
   denied: boolean;
@@ -214,8 +234,7 @@ async function startScannerWithOverlay(): Promise<string | null> {
   const stop = () => {
     resolveChoice("cancel");
     resolveCancelled(null);
-    void scanner?.stop().catch(() => {});
-    scanner?.clear();
+    void stopHtml5(scanner);
     teardown();
   };
   activeStop = stop;
@@ -324,8 +343,7 @@ async function startScannerWithOverlay(): Promise<string | null> {
         }
         if (!started) throw lastErr ?? new Error("Caméra indisponible.");
       } catch (err) {
-        await scanner.stop().catch(() => {});
-        scanner.clear();
+        await stopHtml5(scanner);
         showError(toCameraError(err).message);
         const choice = await waitForChoice();
         if (choice === "cancel") return null;
@@ -339,10 +357,7 @@ async function startScannerWithOverlay(): Promise<string | null> {
     }
   } finally {
     activeStop = null;
-    if (scanner) {
-      await scanner.stop().catch(() => {});
-      scanner.clear();
-    }
+    await stopHtml5(scanner);
     teardown();
   }
 }
