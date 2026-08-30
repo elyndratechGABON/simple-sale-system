@@ -112,6 +112,15 @@ const clientSchema = z.object({
   ...syncFields,
 });
 
+// Bilan mensuel du calculateur de bénéfices : local, sans champ de synchronisation.
+const monthlyOverviewSchema = z.object({
+  id: z.string(),
+  charges: z.number(),
+  stock_override: z.number().nullable(),
+  cost_complement: z.number().nullable(),
+  updated_at: z.number().optional(),
+});
+
 const backupSchema = z.object({
   format: z.literal("caisse-pos-backup"),
   version: z.number(),
@@ -125,6 +134,7 @@ const backupSchema = z.object({
   subscriptions: z.array(subscriptionSchema).optional(),
   product_expenses: z.array(productExpenseSchema).optional(),
   clients: z.array(clientSchema).optional(),
+  monthly_overviews: z.array(monthlyOverviewSchema).optional(),
 });
 
 export async function buildBackupBlob(): Promise<Blob> {
@@ -211,6 +221,10 @@ export function parseBackup(text: string): { snapshot: DatabaseSnapshot; summary
       cost: e.cost ?? 0,
     })),
     clients: (data.clients ?? []).map((c) => normalize(c)),
+    monthly_overviews: (data.monthly_overviews ?? []).map((m) => ({
+      ...m,
+      updated_at: m.updated_at ?? now,
+    })),
   };
 
   return {

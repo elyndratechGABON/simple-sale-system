@@ -233,6 +233,23 @@ export interface ProductExpense {
 }
 
 /**
+ * Bilan mensuel du calculateur de bénéfices (header). Un enregistrement par mois
+ * (« YYYY-MM » local). Données LOCALES — comme `product_expenses`, jamais synchronisées :
+ * un autre écran refait son propre bilan.
+ */
+export interface MonthlyOverview {
+  /** Clé du mois : « YYYY-MM » (fuseau local). */
+  id: string;
+  /** Charges fixes du mois (loyer, eau, électricité…). 0 = non renseignées. */
+  charges: number;
+  /** Valeur du stock restant ajustée à la main ; `null` = estimation automatique. */
+  stock_override: number | null;
+  /** Complément de coût non suivi (achats dont le coût n'a jamais été renseigné). */
+  cost_complement: number | null;
+  updated_at: number;
+}
+
+/**
  * Location d'actifs (cluster 'location'). Chaque enregistrement représente une location
  * en cours ou terminée. Le lien avec le produit (actif) est `asset_id` → `Product.id`.
  */
@@ -371,6 +388,7 @@ export class PosDatabase extends Dexie {
   day_closures!: Table<DayClosure, string>;
   rentals!: Table<Rental, string>;
   sync_ops!: Table<SyncOp, string>;
+  monthly_overviews!: Table<MonthlyOverview, string>;
   processed_ops!: Table<ProcessedOp, string>;
   paired_devices!: Table<PairedDevice, string>;
 
@@ -673,6 +691,32 @@ export class PosDatabase extends Dexie {
       sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
       processed_ops: "id",
       paired_devices: "id, updated_at, shop_id",
+    });
+
+    // Version 19 — bilans mensuels du calculateur de bénéfices (header).
+    //
+    // Un enregistrement par mois (« YYYY-MM ») : charges fixes saisies, valeur du
+    // stock restant éventuellement ajustée, complément de coût. Données LOCALES,
+    // comme `product_expenses` : elles ne font pas partie du moteur de synchronisation.
+    this.version(19).stores({
+      products: "id, name, category, barcode, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+      day_closures: "id, closed_at",
+      rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
+
+      sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
+      processed_ops: "id",
+      paired_devices: "id, updated_at, shop_id",
+
+      monthly_overviews: "id, updated_at",
     });
   }
 }
@@ -1555,6 +1599,36 @@ export async function getProductExpenses(from: number, to: number): Promise<Prod
   return db.product_expenses.where("period_from").between(from, to, true, false).toArray();
 }
 
+// ---------- Bilans mensuels (calculateur de bénéfices) ----------
+export async function getMonthlyOverview(month: string): Promise<MonthlyOverview | undefined> {
+  return getDB().monthly_overviews.get(month);
+}
+
+export async function saveMonthlyOverview(
+  month: string,
+  fields: {
+    charges?: number;
+    stock_override?: number | null;
+    cost_complement?: number | null;
+  },
+): Promise<void> {
+  const db = getDB();
+  const existing = await db.monthly_overviews.get(month);
+  await db.monthly_overviews.put({
+    id: month,
+    charges: fields.charges ?? existing?.charges ?? 0,
+    stock_override:
+      fields.stock_override !== undefined
+        ? fields.stock_override
+        : (existing?.stock_override ?? null),
+    cost_complement:
+      fields.cost_complement !== undefined
+        ? fields.cost_complement
+        : (existing?.cost_complement ?? null),
+    updated_at: Date.now(),
+  });
+}
+
 // ---------- Sauvegarde / restauration ----------
 export interface DatabaseSnapshot {
   products: Product[];
@@ -1563,6 +1637,7 @@ export interface DatabaseSnapshot {
   subscriptions: Subscription[];
   clients?: Client[];
   product_expenses?: ProductExpense[];
+  monthly_overviews?: MonthlyOverview[];
 }
 
 /**
@@ -1575,16 +1650,16 @@ export interface DatabaseSnapshot {
  */
 export async function exportSnapshot(): Promise<DatabaseSnapshot> {
   const db = getDB();
-  const [products, sales, sale_items, subscriptions, clients, product_expenses] = await Promise.all(
-    [
+  const [products, sales, sale_items, subscriptions, clients, product_expenses, monthly_overviews] =
+    await Promise.all([
       db.products.toArray(),
       db.sales.toArray(),
       db.sale_items.toArray(),
       db.subscriptions.toArray(),
       db.clients.toArray(),
       db.product_expenses.toArray(),
-    ],
-  );
+      db.monthly_overviews.toArray(),
+    ]);
   return {
     products,
     sales,
@@ -1592,6 +1667,7 @@ export async function exportSnapshot(): Promise<DatabaseSnapshot> {
     subscriptions,
     clients,
     product_expenses,
+    monthly_overviews,
   };
 }
 
@@ -1609,7 +1685,15 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
   const db = getDB();
   await db.transaction(
     "rw",
-    [db.products, db.sales, db.sale_items, db.subscriptions, db.clients, db.product_expenses],
+    [
+      db.products,
+      db.sales,
+      db.sale_items,
+      db.subscriptions,
+      db.clients,
+      db.product_expenses,
+      db.monthly_overviews,
+    ],
     async () => {
       await Promise.all([
         db.products.clear(),
@@ -1618,6 +1702,7 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
         db.subscriptions.clear(),
         db.clients.clear(),
         db.product_expenses.clear(),
+        db.monthly_overviews.clear(),
       ]);
       await Promise.all([
         db.products.bulkPut(snapshot.products),
@@ -1626,6 +1711,7 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
         db.subscriptions.bulkPut(snapshot.subscriptions ?? []),
         db.clients.bulkPut(snapshot.clients ?? []),
         db.product_expenses.bulkPut(snapshot.product_expenses ?? []),
+        db.monthly_overviews.bulkPut(snapshot.monthly_overviews ?? []),
       ]);
     },
   );
@@ -1652,6 +1738,7 @@ export async function purgeAllData(): Promise<void> {
       db.shop_profiles,
       db.clients,
       db.product_expenses,
+      db.monthly_overviews,
     ],
     async () => {
       await Promise.all([
@@ -1663,6 +1750,7 @@ export async function purgeAllData(): Promise<void> {
         db.shop_profiles.clear(),
         db.clients.clear(),
         db.product_expenses.clear(),
+        db.monthly_overviews.clear(),
       ]);
     },
   );

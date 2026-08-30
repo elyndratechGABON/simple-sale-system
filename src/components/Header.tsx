@@ -3,7 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
-import { getSetting } from "@/lib/db";
+import { getMonthlyOverview, getSetting } from "@/lib/db";
+import { currentMonthKey } from "@/lib/profit";
 import { TopNav } from "@/components/Nav";
 import { ProfitSheet } from "@/components/ProfitSheet";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
@@ -41,6 +42,18 @@ export function Header() {
     queryFn: () => getSetting<string>("shop_logo"),
     staleTime: 60_000,
   });
+
+  // Pastille du mois : tant que le mois courant n'a ni charges ni complément renseignés,
+  // le calculateur mérite un coup d'œil. Même clé de cache que ProfitSheet — l'invalidation
+  // après « Calculer mon bénéfice » retire la pastille sans recharger la page.
+  const monthKey = currentMonthKey();
+  const { data: monthOverview } = useQuery({
+    queryKey: ["monthly_overview", monthKey],
+    queryFn: () => getMonthlyOverview(monthKey),
+    staleTime: 30_000,
+  });
+  const needsCycle =
+    (monthOverview?.charges ?? 0) === 0 && (monthOverview?.cost_complement ?? 0) === 0;
 
   function onLogoClick() {
     const now = Date.now();
@@ -81,11 +94,17 @@ export function Header() {
             variant="ghost"
             size="icon"
             className="relative"
-            aria-label="CA du jour et bénéfices"
-            title="CA du jour et bénéfices"
+            aria-label="CA du mois et bénéfices"
+            title="CA du mois et bénéfices"
             onClick={() => setProfitOpen(true)}
           >
             <Calculator className="h-5 w-5" />
+            {needsCycle && (
+              <span
+                className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-background"
+                aria-hidden
+              />
+            )}
           </Button>
           <NotificationBell />
           <Link

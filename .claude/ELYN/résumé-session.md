@@ -1,51 +1,94 @@
 # ELYNDRA CAISSE — Résumé de session (simple-sale-system)
 
 ## Objective
-- Refonte UI/features ELYNDRA CAISSE : workstreams A, G, C, D, B, F, E livrés et vérifiés live. **Nouveau workstream (sans lettre) : canal de notification WhatsApp « paiement confirmé »** — post-validation serveur, jamais la preuve du paiement. **Dernier : compactage des Paramètres + outil « CA & bénéfices » dans l'en-tête** (livré, vérifié live, `npm run check` vert). Le mécanisme inter-dépôt (bridge Android de collecte SMS + PaymentIntent côté orchestrateur) reste à documenter côté `simple-sale-orchestrator`.
-- **Décisions utilisateur (Paramètres)** : 1) le Calculateur de profit quitte les cartes → **icône en-tête** « CA & bénéfices » = **CA total en cours = CA du jour** (ventes réglées aujourd'hui, global — le panier POS est page-local, pas lisible depuis le header) + **bénéfice par produit** + calculateur manuel conservé ; 2) licence + « Changer de plan » déplacés dans **Compte et appareils** (carte « Abonnement ») ; 3) **Photo de profil + Logo fusionnés** en carte « Apparence ».
+- Refonte du calculateur de bénéfices du header (« CA & bénéfices ») : passer du **jour**
+  au **mois**, avec un parcours « 3 questions » — CA automatique, valeur du stock
+  affichée/estimée, charges fixes (loyer, eau, électricité) saisies globalement — puis
+  **bénéfice calculé/estimé** + statut 🟢/🟠/🔴.
+- Terminer le jalon sync P2P : committé (mode 1) ; refonte calculateur livrée (mode 2).
 
 ## Important Details
-- Projet : `C:\Users\Administrator\Desktop\elywrok\jyls\simple-sale-system-main`, branche `main` ; **`npm run check` vert** (uniquement les 7 warnings fast-refresh préexistants — `SubscriptionPlanCard`, `ui/*`). Dev server http://localhost:8080, MCP Chrome DevTools page 3, vueport 390×844 (mobile).
-- **Paramètres après compactage** : section « Boutique » ouverte = **1494 px à 390** (avant 2022-2084 px, −26 %), **1164 px à 768** ; **overflow horizontal 0** à 320/390/768. Cartes retirées/gamètes : les 4 sous-titres d'accordéon, `CardDescription`s de Type de commerce/Installer/Dossier/Sauvegarde, ligne « Compte marchand » de ShopCard (doublon Compte), carnet « Carnet d'adresses **et fidélité** » (aucune fidélité n'existe), logo carte séparée.
-- **« Abonnement »** (`settings.tsx`, section Compte) : profil `shop_profile` (staleTime 60 s), `Badge` Licence · N j / Expiré, inscription + jusqu'au, dernière synchro, `PlanChooser` + `PaymentModal` (déplacés tels quels de ShopCard, `paymentPending` inchangé), note `Wifi` synchronisation.
-- **« Apparence »** (`settings.tsx`, remplace LogoCard) : photo de profil (`usePreferences().ownerPhoto`, crop 128 → préférence) + logo (`shop_logo` IndexedDB, crop 256), deux `ImageCropper`, un seul en-tête CardTitle « Apparence ».
-- **DevicesCard** : sous-bloc « **Téléphone perdu, ou plus de mot de passe ?** » replié dans un `Collapsible` fermé (`CollapsibleTrigger` bouton + `ChevronDown`, état `keywordOpen`).
-- **ProfitSheet** (`src/components/ProfitSheet.tsx`, **nouveau**, ouvert depuis un bouton `Calculator` ghost/icon dans `Header.tsx` entre TopNav et NotificationBell, `aria-label="CA du jour et bénéfices"`) : query `["sales","range",lastDaysRange(1)]` (liste ventes jour via `listSalesToday` + `getSaleItemsForSales`) + `["product_expenses",…]` → `computePeriodStats` (= chiffres du tableau de bord) ; gros **CA du jour**, Ventes, Panier moyen, Bénéfice ; **bénéfice par produit** (top 8, qté × prix unitaire = `revenue/qty`, profit `—` tant qu'aucun coût n'est saisi — `expenseByProduct` Map depuis `product_expenses`, `hasCosts` pour la colonne globale) ; **calculateur manuel** « Estimer avant d'encaisser » (prix/coût/qté, marge %, barre) copié de l'ex-`ProfitCard`. Dialog `max-w-md`, scroll interne du `DialogContent` (déjà borné 100dvh−24px).
-- **Vérifs live ProfitSheet** (390×844) : CA 2 000 F / 1 vente / panier 2 000 F (vente test Sandwich 1×1000 + Coca 2×500), Bénéfice « — » + note ; lignes produit avec profit « — » ; calculateur 2000/1500/3 → **1 500 F, marge 25 %** ; bouton header présent aux 3 largeurs, overflow 0, header 65 px.
+- **Formule figée (décisions utilisateur)** : Bénéfice = **CA du mois − COGS (Σ
+  `cost_at_sale` figés dans les lignes de vente du mois) − charges fixes (montant
+  global)**. La valeur du stock restant est **affichée comme repère** (auto-estimée =
+  Σ stock×coût, éditable/override), jamais soustraite.
+- **Libellé** : « Bénéfice calculé » si toutes les ventes du mois ont un coût
+  (`cost_at_sale` > 0), « Bénéfice estimé » sinon + « évaluation partielle » + champ
+  complément de coût optionnel.
+- **Statut** : 🟢 profit ≥ 0 · 🟠 perte ≤ 10 % du CA · 🔴 sinon. Exemple validé : CA
+  1 500 000 · COGS 450 000 · charges 50 000 → 1 000 000 🟢 (marge 67 %).
+- **Rappel mensuel** : pastille ambre sur l'icône Calculateur du header tant que le mois
+  courant n'a ni charges ni complément renseignés.
+- **Hors périmètre (décidé)** : pas de saisie des achats du mois (« stock initial +
+  achats − stock final » → plus tard, mode détaillé) ; coûts inconnus → 0 + mention.
+- **Bilan mensuel PERSISTÉ** locale : table Dexie v19 `monthly_overviews` (id = « YYYY-MM
+  », `charges`, `stock_override` null = auto, `cost_complement`, `updated_at`), fonctions
+  `getMonthlyOverview`/`saveMonthlyOverview`, intégrée au snapshot JSON (zod, rétro-
+  compatible) et à `purgeAllData`. Données LOCALES — jamais synchronisées.
+- Projet : `C:\Users\Administrator\Desktop\elywrok\jyls\simple-sale-system-main`, branche
+  `main` ; `npm run check` = typecheck + lint (préttier auto-fix) — **vert** (7 warnings
+  fast-refresh préexistants) ; vitest node + fake-indexeddb : **38 tests verts** (24
+  existants + 14 `profit.test.ts`). Node v24.16.0. Dev server http://localhost:8080.
 
 ## Work State
 ### Completed
-- **A, G, C, D, B** : terminés et vérifiés (refonte UI listes, tables, produits, etc.).
-- **F — Export CSV Historique** : `src/lib/exports/sales-csv.ts` (`salesCsvFilename` + `buildSalesCsvBlob`, BOM, `;`, pied « ELYNDRA CAISSE — ELYNDRA TECH ») ; bouton CSV dans l'en-tête de `history.tsx` ; vérifié live.
-- **E — Tuning onboarding cluster** : `KeyRound`/`ICON_MAP`, carte de confirmation sectorielle, mode salon prestation/produit, libellés prix par cluster, cas `location`, écran « éléments ». Vérifié live.
-- **Nouveau — WhatsApp notification « Paiement confirmé »** (live vérifié) : `payment-confirmation.ts` (drapeau one-shot + `wa.me` prérempli vers `241076505254`), `PaymentModal.tsx` (pose le drapeau sur `result.ok`), `DevicesCard` (carte verte « Paiement confirmé » quand `approved` + drapeau, purge sur `rejected`/clic).
-- **Refonte des filtres de catégories du POS** (livré, vérifié multi-largeurs) : pills → grille `CategoryCard` `grid-cols-2 xs:3 md:4 xl:5 2xl:6`, label « Catégories », hiérarchie verticale 16/12/20px, icônes pastille, filtre intact (Boissons → 5 produits).
-- **Améliorations mobile UX de la caisse** (livré, vérifié) : recherche produit, haptique 8ms, bande « Souvent achetés aujourd'hui » (top 8), boutons photo/crayon 28px bas-droit des cartes.
-- **Refonte « Trier par » des filtres Stocks** (livré précédemment) : deux groupes STOCK/CATÉGORIES.
-- **Paramètres compactés + « CA & bénéfices »** (livré, vérifié live + `npm run check` vert) :
-  - Header : bouton `Calculator` ↔ `ProfitSheet` (CA du jour + bénéfice par produit + calculateur manuel).
-  - Boutique : `ShopCard` réduit au formulaire identité (photo/licence/sync/compte marchand retirés), `AppearanceCard` (photo + logo), Type de commerce/Tables sans descriptions.
-  - Compte : `SubscriptionCard` (licence + Changer de plan + sync) au-dessus de `DevicesCard` ; bloc mot clé replié par défaut.
-  - Données : descriptions coupées (Dossier, Sauvegarde) + sous-titres accordéon et « fidélité » supprimés.
+- **Jalon sync P2P committé** : `2070cd57` — `src/lib/syncengine/*` complet + tests,
+  `db.ts` v18 (stores `sync_ops`/`processed_ops`/`paired_devices`), `sync.ts`,
+  `DevicePairingDialog`, `DevicesCard`, `vitest.config.ts`, ADR
+  `docs/adr/0001-moteur-sync-p2p-ops-relais.md` — 22 fichiers, +3335/−257.
+- **Workstreams UI committés** : `913fe1a7` (ProfitSheet jour initial, ImageCropper,
+  payment-confirmation, sales-csv, use-keyboard-height, Paramètres/Header/Nav/Onboarding/
+  pos/stocks/history/reports/PaymentModal/ProductQuickEdit/ShopCard/alerts/analytics/
+  styles.css/.claude) — 19 fichiers.
+- **Refonte calculateur mensuel** (livrée, vérifiée live + check vert) :
+  - `src/lib/db.ts` v19 : table locale `monthly_overviews` (cf. Important Details).
+  - `src/lib/profit.ts` (**nouveau**, pur) : `monthKey`/`monthRange`/`previousMonthKey`/
+    `nextMonthKey`/`monthLabel`/`currentMonthKey`, `isConsumableStock` (ni service, ni
+    actif, stock borné), `estimateStockValue` (Σ stock×coût + partielle known/total),
+    `monthlyCostOfGoods` (COGS + CA + coverage + lignes sans coût),
+    `computeMonthlyResult`, `resultStatus` (🟢/🟠/🔴), testé 14 cas.
+  - `src/components/ProfitSheet.tsx` refondu : sélecteur de mois `‹ Août 2026 ›`
+    (défaut courant, « mois suivant » désactivé) ; bascule segmentée Simple/Détaillé ;
+    Résumé rapide (CA du mois, ventes, panier moyen, stock restant repère, badge statut
+    + « calculé/estimé » + marge) ; « La question de l'argent » (stock pré-rempli auto +
+    éditable, liste repliable « Produits & stock » via Collapsible, charges fixes,
+    complément si partiel, aperçu live « Résultat en direct », bouton « Calculer mon
+    bénéfice » → `saveMonthlyOverview` + toast + invalidation) ; « Comprendre mon
+    résultat » (CA − COGS − Charges) ; « Stocks à surveiller » via `buildAlerts`
+    (ruptures + seuils min_stock) ; vue Détaillé = bénéfice par produit (coûts des
+    Rapports) + calculateur manuel conservé.
+  - `src/components/Header.tsx` : `aria-label`/`title` « CA du mois et bénéfices » +
+    pastille ambre (`needsCycle`) sur clé de cache `["monthly_overview", clé]`.
+  - `src/lib/exports/json.ts` : `monthly_overviews` dans le schema zod (optionnel,
+    `updated_at` optionnel) + restauration.
+- **Vérifs live** (390×844, Snack Océan) : CA mois 2 500 F / 2 ventes / panier 1 250 F /
+  stock repère 53 200 F (partielle 7/9) ; 🟢 Bénéfice calculé 1 100 F (44 %) ; saisie
+  charges 500 → aperçu live « 600 F (24 % à l'avantage) » → « Calculer mon bénéfice »
+  → toast « Bilan enregistré pour août 2026 », résumé 600 F, « Comprendre mon résultat »
+  à jour, bouton re-désactivé, 🟢 pastille header retirée ; « Stocks à surveiller »
+  liste Chawarma rupture + Fanta (seuil 10) + Sandwich (seuil 8) ; vue Détaillé rend.
+- Donnée de démonstration persistée en local (dev) : charges 500 F sur août 2026.
 
 ### Active
-- (none) — tout ce qui était demandé est livré et vérifié.
+- (none) — la refonte est livrée et vérifiée.
 
 ### Blocked
 - (none)
 
 ## Next Move
-1. Sur demande explicite : commit des workstreams (npm run check vert, prêt).
-2. Éventuels finitions proposables : plan wise, mettre la ligne « Enseigne » aussi dans Apparence ; vérifier l'état « Installation » sur stores ; confirmer à l'œil le rendu dela carte verte « Paiement confirmé » (déjà couvert).
-3. Documenter (hors dépôt, dépôt orchestrator) : flux SMS → serveur → `approved` ; bridge Android collecte SMS ; PaymentIntent (id, client, montant, statut PENDING) créé avant de lancer l'USSD ; WhatsApp Business API si envoi automatique un jour.
-4. Démo : « Test Produit » (400 F, stock 10) encore présent — supprimable sur demande.
+1. Commit de la refonte (2e commit du mode 2), après validation utilisateur si besoin.
+2. Éventuelles finitions : plus tard, le « mode détaillé » d'approvisionnement (stock
+   initial + achats − stock final) pour remplacer le complément de coût ; vérifier à
+   l'œil le rendu de la pastille ambre quand le mois est vide.
 
 ## Relevant Files
-- `src/components/ProfitSheet.tsx` (**nouveau**) : outil header CA du jour + bénéfice par produit + calculateur manuel.
-- `src/components/Header.tsx` : bouton `Calculator` + état `profitOpen` + montage `ProfitSheet`.
-- `src/components/ShopCard.tsx` : réduit au formulaire identité (l'essentiel des retraits).
-- `src/routes/_app/settings.tsx` : `AppearanceCard` (photo+logo), `SubscriptionCard` (licence/plan), suppression `ProfitCard`, `Collapsible` mot clé, descriptions/sous-titres coupés ; imports nettoyés (`Calculator`, `formatFCFA`, `UserRound`, `ChevronDown`, `CreditCard`, `Wifi`, `PlanChooser`, `PaymentModal`…).
-- `src/components/PaymentModal.tsx` + `src/lib/payment-confirmation.ts` : workstream WhatsApp (dév. antérieur).
-- `src/lib/exports/sales-csv.ts` + `src/routes/_app/history.tsx` : workstream F.
-- `src/components/Onboarding.tsx`, `src/lib/settings.ts` : workstream E.
-- `src/hooks/use-subscription.ts` : licence.
+- `src/lib/db.ts` : v19 `monthly_overviews` (+ interface `MonthlyOverview`, snapshot,
+  purge) ; `cost_at_sale`/`listSales(from,to)`/`listProducts` (filtres `alive`/`paid`).
+- `src/lib/profit.ts` (**nouveau**) + `src/lib/profit.test.ts` (**nouveau**) : tout le
+  calcul, pur et recalculable à la main.
+- `src/components/ProfitSheet.tsx` (**refondu**) : sélecteur de mois + vue Simple/
+  Détaillé + MoneyBlock.
+- `src/components/Header.tsx` : pastille de rappel du mois + libellé en-tête.
+- `src/lib/exports/json.ts` : sauvegarde/restauration `monthly_overviews`.
+- `src/lib/alerts.ts` : `buildAlerts` (Stocks à surveiller).
+- `src/lib/syncengine/*` : jalon committé — plus actif pour la refonte.
