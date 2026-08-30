@@ -32,10 +32,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { submitSubscriptionRequest } from "@/lib/requests";
+import { PAYMENT_WHATSAPP_NUMBER, setPaymentConfirmationPending } from "@/lib/payment-confirmation";
 import type { PlanInfo } from "@/components/SubscriptionPlanCard";
 
-const SUPPORT_WHATSAPP = "https://wa.me/241076505254";
-const SUPPORT_PHONE = "241076505254";
+const SUPPORT_WHATSAPP = `https://wa.me/${PAYMENT_WHATSAPP_NUMBER}`;
+const SUPPORT_PHONE = PAYMENT_WHATSAPP_NUMBER;
 const USSD_CODE = "*110#";
 
 interface PaymentModalProps {
@@ -70,6 +71,18 @@ export function PaymentModal({
         reference,
       });
       if (result.ok) {
+        // La demande part au serveur : on pose le drapeau de confirmation WhatsApp.
+        // Il ne sera consommé qu'à la VALIDATION serveur (`approved`) — jamais avant.
+        if (selectedPlan) {
+          setPaymentConfirmationPending({
+            planName: selectedPlan.name,
+            planPrice: selectedPlan.price,
+            planDevices: selectedPlan.devices,
+            planPeriod: selectedPlan.period,
+            reference: reference.trim(),
+            requestedAt: Date.now(),
+          });
+        }
         setSent(true);
         toast.success("Demande envoyée — l'administrateur la valide depuis son tableau de bord.");
       } else {

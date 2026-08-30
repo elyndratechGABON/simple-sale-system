@@ -24,6 +24,13 @@ import {
   ArrowRight,
   CircleAlert,
   ArrowDownUp,
+  Check,
+  Layers,
+  LayoutGrid,
+  Sparkles,
+  Tag,
+  TrendingDown,
+  type LucideIcon,
 } from "lucide-react";
 import {
   addStock,
@@ -116,6 +123,79 @@ const STATE_LABEL: Record<Exclude<StockState, "service">, string> = {
   ok: "Disponible",
 };
 
+type FilterTone = "default" | "warning" | "danger";
+
+/** Carte-filtre « Trier par » : vrai bouton (aria-pressed), état actif en vert de
+ *  marque avec coche, compteur secondaire. Le ton warning/danger ne se voit que
+ *  sur les fiches INACTIVES — l'actif passe toujours au vert. */
+function FilterCard({
+  label,
+  count,
+  active,
+  icon: Icon,
+  tone = "default",
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  icon: LucideIcon;
+  onClick: () => void;
+  tone?: FilterTone;
+}) {
+  const unit = count > 1 ? "produits" : "produit";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "group relative flex min-h-16 items-start gap-3 rounded-2xl border bg-card p-4 text-left transition-all duration-200",
+        "shadow-[0_1px_2px_rgba(16,24,40,0.06)]",
+        "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_6px_16px_rgba(16,24,40,0.08)]",
+        "active:scale-[0.98]",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+        active ? "border-primary/70 bg-primary/[0.06]" : "border-border",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors",
+          active
+            ? "border-primary/20 bg-primary/10 text-primary"
+            : tone === "danger"
+              ? "border-destructive/15 bg-destructive/5 text-destructive/80"
+              : tone === "warning"
+                ? "border-amber-500/20 bg-amber-500/10 text-amber-600"
+                : "bg-muted text-muted-foreground",
+        )}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1 pt-0.5">
+        <span className="block truncate text-[15px] font-semibold leading-snug">{label}</span>
+        <span
+          className={cn(
+            "mt-0.5 block truncate text-xs font-medium tabular-nums sm:text-sm",
+            active
+              ? "text-primary/75"
+              : tone === "danger"
+                ? "text-destructive"
+                : tone === "warning"
+                  ? "text-amber-600"
+                  : "text-muted-foreground",
+          )}
+        >
+          {count} {unit}
+        </span>
+      </span>
+      {active && (
+        <Check className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.5} aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
 const REASON_LABEL: Record<StockMovement["reason"], string> = {
   replenishment: "Réapprovisionnement",
   sale: "Vente",
@@ -180,7 +260,7 @@ function StatCard({
   );
 }
 
-type StatusFilter = "all" | "low" | "out";
+type StatusFilter = "all" | "service" | "low" | "out";
 type SortKey = "name" | "stock" | "price" | "updated" | "bestsellers";
 
 function StocksPage() {
@@ -264,6 +344,9 @@ function StocksPage() {
         return false;
       if (statusFilter !== "all") {
         const s = stateOf(p);
+        // « Prestations » cible le TYPE, pas l'état : un produit à stock illimité
+        // n'est pas une prestation.
+        if (statusFilter === "service" && p.type !== "service") return false;
         if (statusFilter === "low" && s !== "low") return false;
         if (statusFilter === "out" && s !== "out") return false;
       }
@@ -393,11 +476,23 @@ function StocksPage() {
     [products, stockSearch],
   );
 
+  const serviceCount = products.filter((p) => p.type === "service").length;
+
   const statusChips: { key: StatusFilter; label: string; count: number }[] = [
     { key: "all", label: "Tous", count: products.length },
+    ...(serviceCount > 0
+      ? [{ key: "service" as const, label: "Prestations", count: serviceCount }]
+      : []),
     { key: "low", label: "Stock faible", count: stats.low },
     { key: "out", label: "Rupture", count: stats.out },
   ];
+
+  const STATUS_ICON: Record<StatusFilter, LucideIcon> = {
+    all: LayoutGrid,
+    service: Sparkles,
+    low: TrendingDown,
+    out: CircleAlert,
+  };
 
   return (
     <div className="app-container space-y-5 py-6">
@@ -692,60 +787,62 @@ function StocksPage() {
         </Select>
       </div>
 
-      {/* ── Filtres statut + catégories ────────────────────────────────────── */}
-      {/* Rangées à défilement horizontal CONTRÔLÉ (chip-row) : les filtres ne
-          réorganisent plus la page en pile de lignes, ils glissent sous le
-          pouce — et débordent DANS la gouttière (bleed-x) pour partir du bord. */}
-      <div className="space-y-2">
-        <div className="chip-row bleed-x">
-          {statusChips.map(({ key, label, count }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setStatusFilter(key)}
-              className={cn(
-                "min-h-11 rounded-full border px-3.5 text-xs font-medium transition-colors sm:min-h-9",
-                statusFilter === key
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "hover:bg-accent",
-              )}
-            >
-              {label} · {count}
-            </button>
-          ))}
-        </div>
-        {categories.length > 1 && (
-          <div className="chip-row bleed-x">
-            <button
-              type="button"
-              onClick={() => setCategoryFilter(null)}
-              className={cn(
-                "min-h-11 rounded-full border px-3.5 text-xs font-medium transition-colors sm:min-h-9",
-                categoryFilter === null
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "hover:bg-accent",
-              )}
-            >
-              Toutes catégories · {products.length}
-            </button>
-            {categories.map(([cat, count]) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
-                className={cn(
-                  "min-h-11 rounded-full border px-3.5 text-xs font-medium transition-colors sm:min-h-9",
-                  categoryFilter === cat
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "hover:bg-accent",
-                )}
-              >
-                {cat} · {count}
-              </button>
+      {/* ── Filtres « Trier par » : statut puis catégories, en cartes ───────── */}
+      {/* Cartes au lieu des pills horizontaux : l'état actif (coche + vert), le
+          compteur et le groupe sont lisibles d'un coup d'œil. Les handlers, les
+          valeurs et le filtrage sous-jacent restent strictement identiques. */}
+      <section>
+        <h2 className="text-sm font-semibold">Trier par</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Sélectionnez un filtre pour afficher vos produits.
+        </p>
+
+        <div className="mt-5">
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Stock
+          </p>
+          <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {statusChips.map(({ key, label, count }) => (
+              <FilterCard
+                key={key}
+                label={label}
+                count={count}
+                active={statusFilter === key}
+                icon={STATUS_ICON[key]}
+                tone={key === "out" ? "danger" : key === "low" ? "warning" : "default"}
+                onClick={() => setStatusFilter(key)}
+              />
             ))}
           </div>
+        </div>
+
+        {categories.length > 1 && (
+          <div className="mt-7">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Catégories
+            </p>
+            <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <FilterCard
+                label="Toutes catégories"
+                count={products.length}
+                active={categoryFilter === null}
+                icon={Layers}
+                onClick={() => setCategoryFilter(null)}
+              />
+              {categories.map(([cat, count]) => (
+                <FilterCard
+                  key={cat}
+                  label={cat}
+                  count={count}
+                  active={categoryFilter === cat}
+                  icon={Tag}
+                  onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
+                />
+              ))}
+            </div>
+          </div>
         )}
-      </div>
+      </section>
 
       {/* ── Bloc attention ─────────────────────────────────────────────────── */}
       {attention.length > 0 && statusFilter === "all" && (

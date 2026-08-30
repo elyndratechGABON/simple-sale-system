@@ -31,7 +31,16 @@ import {
   Users,
   ScanLine,
 } from "lucide-react";
-import { ChefHat, Coffee, Scissors, ShoppingBag, Shirt, Weight, Sparkles } from "lucide-react";
+import {
+  ChefHat,
+  Coffee,
+  KeyRound,
+  Scissors,
+  ShoppingBag,
+  Shirt,
+  Weight,
+  Sparkles,
+} from "lucide-react";
 import {
   CLUSTER_MAP,
   getPreferences,
@@ -67,6 +76,7 @@ const ICON_MAP: Record<string, typeof Store> = {
   Weight,
   Store,
   Sparkles,
+  KeyRound,
 };
 
 function resolveIcon(name: string): typeof Store {
@@ -554,11 +564,25 @@ export function SetupWizard({
                 );
               })}
             </div>
-            {selectedCluster && (
-              <p className="text-center text-xs text-muted-foreground mt-2">
-                <span className="font-medium text-foreground">{clusterConfig?.label}</span> —{" "}
-                {WORKFLOW_DESCRIPTIONS[clusterConfig?.workflowType ?? "direct"]?.title}
-              </p>
+            {selectedCluster && clusterConfig && (
+              /* Carte de confirmation PERSONNALISÉE : le libellé, la description et les
+                 étapes du workflow sont ceux du cluster choisi — l'utilisateur voit dès ici
+                 ce que l'application fera pour lui (coiffure → "réalisez la prestation",
+                 boucherie → "saisissez le poids"…). */
+              <div className="mt-2 space-y-2 rounded-xl border bg-accent/40 p-3 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">{clusterConfig.label}</p>
+                <p>{clusterConfig.description}</p>
+                <p className="flex flex-wrap gap-1">
+                  {(WORKFLOW_DESCRIPTIONS[clusterConfig.workflowType]?.steps ?? []).map((s, i) => (
+                    <span
+                      key={s}
+                      className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                    >
+                      {i + 1}. {s}
+                    </span>
+                  ))}
+                </p>
+              </div>
             )}
 
             {/* Cluster Personnalisé : domaine libre + mode de stock */}
@@ -693,6 +717,11 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const [subStep, setSubStep] = useState<TutorialStep>("confirm");
   const [addedCount, setAddedCount] = useState(0);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  // Salons (coiffure/beauté) : deux natures d'article — prestation SANS stock vs produit
+  // de beauté AVEC stock. L'expérience doit parler la langue du métier dans les deux cas.
+  const [serviceMode, setServiceMode] = useState<"prestation" | "produit">("prestation");
+  const isServiceCluster = cluster === "service";
+  const addingProduct = isServiceCluster && serviceMode === "produit";
 
   // Formulaire produit
   const [productName, setProductName] = useState("");
@@ -725,9 +754,10 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
       barcode: "",
       price: Number(productPrice) || 0,
       cost: 0,
-      category: productCategory.trim() || tutorialConfig.defaultCategory,
+      category:
+        productCategory.trim() || (addingProduct ? "Beauté" : tutorialConfig.defaultCategory),
       stock: Number(productStock) || 0,
-      type: tutorialConfig.isService ? "service" : "product",
+      type: tutorialConfig.isService && serviceMode === "prestation" ? "service" : "product",
       unit: "piece",
       unitType: sellsByWeight ? "weight" : "unit",
       weightUnit: sellsByWeight ? "kg" : undefined,
@@ -777,30 +807,96 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
 
   // Ajout de produits
   if (subStep === "add") {
+    // Copie entièrement pilotée par le cluster — et par le mode choisi dans un salon :
+    //   - bar → boissons, boucherie → prix au kg, coiffeur → prestation sans stock,
+    //     puis produit de beauté avec stock si le salon vend aussi en boutique.
+    const priceLabel =
+      cluster === "location"
+        ? "Prix de location (FCFA)"
+        : isServiceCluster && !addingProduct
+          ? "Prix de la prestation"
+          : sellsByWeight
+            ? "Prix au kg (FCFA)"
+            : "Prix de vente (FCFA)";
+    const showStockField = !tutorialConfig.isService || addingProduct;
+    const showCategoryField = tutorialConfig.showCategory || addingProduct;
+    const productLabel = addingProduct ? "Nom du produit" : tutorialConfig.productLabel;
+    const productPlaceholder = addingProduct
+      ? "Ex : Huile de coco, Shampooing"
+      : tutorialConfig.productPlaceholder;
+    const addTitle = addingProduct ? "Ajoutez un produit à vendre" : tutorialConfig.addTitle;
+    const addDescription = addingProduct
+      ? "Shampooings, huiles, cosmétiques… vendus en boutique, avec stock."
+      : tutorialConfig.addDescription;
+    const categoryPlaceholder = addingProduct
+      ? "Ex : Produits de beauté, Accessoires"
+      : tutorialConfig.categoryPlaceholder;
+    const addedLabel =
+      addedCount === 1
+        ? !tutorialConfig.isService
+          ? "produit ajouté"
+          : addingProduct
+            ? "produit ajouté"
+            : "prestation ajoutée"
+        : !tutorialConfig.isService
+          ? "produits ajoutés"
+          : "prestations et produits ajoutés";
+
     return (
       <div className="w-full max-w-lg rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-        <h1 className="sr-only">{tutorialConfig.addTitle}</h1>
+        <h1 className="sr-only">{addTitle}</h1>
         <div className="space-y-4 py-2">
-          <StepShell
-            icon={Package}
-            title={tutorialConfig.addTitle}
-            description={tutorialConfig.addDescription}
-          >
+          <StepShell icon={Package} title={addTitle} description={addDescription}>
             <div className="space-y-3">
+              {/* Salon de coiffure : choisir ce qu'on ajoute — une prestation (pas de
+                  stock) ou un produit de beauté (avec stock). L'onglet actif change les
+                  champs, pas seulement les mots. */}
+              {isServiceCluster && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setServiceMode("prestation")}
+                    aria-pressed={serviceMode === "prestation"}
+                    className={cn(
+                      "flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left text-xs transition-all",
+                      serviceMode === "prestation"
+                        ? "border-primary bg-accent ring-1 ring-primary"
+                        : "bg-card hover:border-primary/50",
+                    )}
+                  >
+                    <span className="font-medium text-sm">Prestation</span>
+                    <span className="text-muted-foreground">Coiffure, soin, manucure…</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setServiceMode("produit")}
+                    aria-pressed={serviceMode === "produit"}
+                    className={cn(
+                      "flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left text-xs transition-all",
+                      serviceMode === "produit"
+                        ? "border-primary bg-accent ring-1 ring-primary"
+                        : "bg-card hover:border-primary/50",
+                    )}
+                  >
+                    <span className="font-medium text-sm">Produit à vendre</span>
+                    <span className="text-muted-foreground">Produits de beauté, avec stock</span>
+                  </button>
+                </div>
+              )}
               <div>
-                <Label htmlFor="tut-name">{tutorialConfig.productLabel}</Label>
+                <Label htmlFor="tut-name">{productLabel}</Label>
                 <Input
                   id="tut-name"
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
-                  placeholder={tutorialConfig.productPlaceholder}
+                  placeholder={productPlaceholder}
                   className="h-11"
                   autoFocus
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="tut-price">Prix de vente (FCFA)</Label>
+                  <Label htmlFor="tut-price">{priceLabel}</Label>
                   <Input
                     id="tut-price"
                     inputMode="numeric"
@@ -810,7 +906,7 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
                     className="h-11"
                   />
                 </div>
-                {!tutorialConfig.isService && (
+                {showStockField && (
                   <div>
                     <Label htmlFor="tut-stock">{sellsByWeight ? "Stock (kg)" : "Stock"}</Label>
                     <Input
@@ -824,14 +920,14 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
                   </div>
                 )}
               </div>
-              {tutorialConfig.showCategory && (
+              {showCategoryField && (
                 <div>
                   <Label htmlFor="tut-cat">Catégorie</Label>
                   <Input
                     id="tut-cat"
                     value={productCategory}
                     onChange={(e) => setProductCategory(e.target.value)}
-                    placeholder={tutorialConfig.categoryPlaceholder}
+                    placeholder={categoryPlaceholder}
                     className="h-11"
                   />
                 </div>
@@ -841,7 +937,7 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
 
           {addedCount > 0 && (
             <p className="text-center text-sm text-primary font-medium">
-              ✓ {addedCount} {addedCount === 1 ? "produit ajouté" : "produits ajoutés"}
+              ✓ {addedCount} {addedLabel}
             </p>
           )}
 
@@ -895,8 +991,8 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
           <h2 className="text-xl font-bold">Tout est prêt !</h2>
           <p className="text-sm text-muted-foreground max-w-xs mx-auto">
             {addedCount > 0
-              ? `${addedCount} ${addedCount === 1 ? "produit enregistré" : "produits enregistrés"}. Votre boutique "${prefs.workspaceName}" est prête à vendre.`
-              : `Votre boutique "${prefs.workspaceName}" est configurée. Vous pourrez ajouter vos produits plus tard.`}
+              ? `${addedCount} ${addedCount === 1 ? "élément enregistré" : "éléments enregistrés"}. Votre boutique "${prefs.workspaceName}" est prête à vendre.`
+              : `Votre boutique "${prefs.workspaceName}" est configurée. Vous pourrez ajouter vos éléments plus tard.`}
           </p>
         </div>
         <Button size="lg" className="gap-2" onClick={onComplete}>
@@ -947,15 +1043,28 @@ function getTutorialConfig(cluster: ClusterId, subCategory?: SubCategory) {
     case "service":
       return {
         ...base,
-        welcomeMessage: "Ajoutez les prestations que vous proposez à vos clients.",
+        welcomeMessage:
+          "Ajoutez vos coiffures et soins, puis les produits de beauté que vous vendez.",
         ctaLabel: "Ajouter mes prestations",
         addTitle: "Ajoutez une prestation",
-        addDescription: "Nom et prix de la prestation.",
+        addDescription: "Nom et prix de la prestation — sans stock.",
         productLabel: "Nom de la prestation",
         productPlaceholder: "Ex : Coupe homme",
         showCategory: false,
         isService: true,
         finalCtaLabel: "Enregistrer ma première prestation",
+      };
+    case "location":
+      return {
+        ...base,
+        welcomeMessage: "Enregistrez les actifs que vous louez (chaises, tentes, véhicules…).",
+        ctaLabel: "Ajouter mes actifs",
+        addTitle: "Ajoutez un actif à louer",
+        addDescription: "Nom, prix de location et nombre d'exemplaires disponibles.",
+        productLabel: "Nom de l'actif",
+        productPlaceholder: "Ex : Chaise en plastique, Tente 6×12m",
+        categoryPlaceholder: "Ex : Événementiel, Équipement, Véhicules",
+        finalCtaLabel: "Faire ma première location",
       };
     case "clothing":
       return {

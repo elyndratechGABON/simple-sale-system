@@ -185,10 +185,12 @@ function ExpenseInputCard({
           </TableHeader>
           <TableBody>
             {products.map((p) => {
-              const cost = costsByProduct.get(p.name) ?? 0;
+              // Clé `product_id` — les coûts sont indexés par cet identifiant, PAS par le
+              // nom (deux produits homonymes ne partagent pas leur coût d'acquisition).
+              const cost = costsByProduct.get(p.product_id) ?? 0;
               const displayCost =
-                localCosts[p.name] !== undefined
-                  ? localCosts[p.name]
+                localCosts[p.product_id] !== undefined
+                  ? localCosts[p.product_id]
                   : cost > 0
                     ? String(cost)
                     : "";
@@ -196,7 +198,7 @@ function ExpenseInputCard({
               totalRevenue += p.revenue;
               totalCost += cost;
               return (
-                <TableRow key={p.name}>
+                <TableRow key={p.product_id}>
                   <TableCell className="font-medium">
                     {p.name}
                     <span className="ml-2 text-xs text-muted-foreground">{p.category}</span>
@@ -207,8 +209,10 @@ function ExpenseInputCard({
                     <Input
                       inputMode="numeric"
                       value={displayCost}
-                      onChange={(e) => handleChange(p.name, e.target.value.replace(/\D/g, ""))}
-                      onBlur={() => handleBlur(p.name)}
+                      onChange={(e) =>
+                        handleChange(p.product_id, e.target.value.replace(/\D/g, ""))
+                      }
+                      onBlur={() => handleBlur(p.product_id)}
                       placeholder="0"
                       className="ml-auto h-10 w-24 text-right tabular-nums xs:w-28"
                     />

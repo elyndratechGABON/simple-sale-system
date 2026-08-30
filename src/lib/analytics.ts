@@ -40,6 +40,10 @@ export interface TableBucket {
 }
 
 export interface ProductBucket {
+  /** Clé de regroupement : `product_id` du catalogue, nom pour les lignes libres. C'est
+   *  ELLE qui relie le lot aux coûts d'acquisition saisis dans les rapports — chercher
+   *  par nom fusionnerait deux produits homonymes ET raterait l'enregistrement. */
+  product_id: string;
   /** Nom du produit à la vente. Figé dans la ligne comme le prix : une fiche renommée
    *  laisse l'ancien nom sur ses ventes déjà enregistrées. */
   name: string;
@@ -169,6 +173,7 @@ export function computePeriodStats(
       prod.revenue += r;
     } else {
       products.set(productKey, {
+        product_id: productKey,
         name: item.name,
         category: cat,
         quantity: item.quantity,
@@ -222,6 +227,9 @@ export function computePeriodStats(
     }
     const r = lineRevenue(item);
     bucket.revenue += r;
+    // Bénéfice BRUT (coûts figés dans la ligne) — il était resté à zéro : seuls les
+    // revenus s'accumulaient ici.
+    bucket.profit += lineProfit(item);
     let keys = tableRounds.get(label);
     if (!keys) {
       keys = new Set();

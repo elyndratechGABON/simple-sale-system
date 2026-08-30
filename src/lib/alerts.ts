@@ -40,6 +40,8 @@ export function buildAlerts(
   const alerts: AppAlert[] = [];
 
   for (const p of products) {
+    // Une prestation n'a pas de réserve : un service ne déclenche ni rupture ni seuil.
+    if (p.type === "service") continue;
     if (p.stock === Number.POSITIVE_INFINITY) continue;
     if (p.stock <= 0) {
       alerts.push({

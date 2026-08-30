@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { updateProduct, type Product } from "@/lib/db";
-import { fileToScaledDataUrl } from "@/lib/images";
+import { ImageCropper } from "@/components/ImageCropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,26 +29,28 @@ export function ProductPhotoDialog({
 }) {
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropSource, setCropSource] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
 
   // Resynchronisé à chaque ouverture : le composant reste monté, seul `product` change.
   useEffect(() => {
     setPhoto(product?.photo);
   }, [product]);
 
-  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+  function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    setBusy(true);
-    try {
-      const { dataUrl } = await fileToScaledDataUrl(file);
-      setPhoto(dataUrl);
-    } catch {
-      toast.error("Photo illisible");
-    } finally {
-      setBusy(false);
-    }
+    setCropSource(URL.createObjectURL(file));
+    setCropOpen(true);
+  }
+
+  function applyCropped(dataUrl: string) {
+    if (cropSource) URL.revokeObjectURL(cropSource);
+    setCropSource("");
+    setPhoto(dataUrl);
   }
 
   async function save() {
@@ -57,6 +60,7 @@ export function ProductPhotoDialog({
       // Photo retirée → clé explicitement undefined : IndexedDB ne stocke pas les
       // propriétés undefined, la fiche repart sans image.
       await updateProduct({ ...product, ...(photo ? { photo } : { photo: undefined }) });
+      qc.invalidateQueries({ queryKey: ["products"] });
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Enregistrement impossible");
@@ -110,6 +114,9 @@ export function ProductPhotoDialog({
             className="hidden"
             onChange={handleFile}
           />
+          <p className="text-xs text-muted-foreground">
+            La zone choisie au recadrage est réduite à 512 px et stockée sur cet appareil.
+          </p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
@@ -120,13 +127,22 @@ export function ProductPhotoDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <ImageCropper
+        open={cropOpen}
+        onOpenChange={setCropOpen}
+        source={cropSource}
+        outputSize={512}
+        title="Recadrer la photo"
+        onCrop={(d) => void applyCropped(d)}
+      />
     </Dialog>
   );
 }
 
 /**
- * Fiche éclair MODIFICATION : nom, prix et stocks pré-remplis — on change ce qu'on
- * veut et on enregistre, sans rouvrir le formulaire complet de Stocks.
+ * Fiche éclair MODIFICATION : nom, prix, coût et stocks pré-remplis — on change ce
+ * qu'on veut et on enregistre, sans rouvrir le formulaire complet de Stocks.
  */
 export function ProductQuickEditDialog({
   product,
@@ -138,12 +154,15 @@ export function ProductQuickEditDialog({
   const stockable = product !== null && Number.isFinite(product.stock);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [cost, setCost] = useState("");
   const [stock, setStock] = useState("");
   const [minStock, setMinStock] = useState("");
+  const qc = useQueryClient();
 
   useEffect(() => {
     setName(product?.name ?? "");
     setPrice(product ? String(product.price) : "");
+    setCost(product?.cost && product.cost > 0 ? String(product.cost) : "");
     setStock(product && Number.isFinite(product.stock) ? String(product.stock) : "");
     setMinStock(product?.min_stock !== undefined ? String(product.min_stock) : "");
   }, [product]);
@@ -158,11 +177,15 @@ export function ProductQuickEditDialog({
         ...product,
         name: name.trim(),
         price: Number(price),
+        // Coût d'achat : 0 = non renseigné, jamais négatif. Il est figé dans la ligne
+        // de vente à l'encaissement (`cost_at_sale`) pour que les marges d'hier restent.
+        cost: cost.trim() === "" ? 0 : Math.max(0, Number(cost)),
         ...(stockable ? { stock: Math.max(0, Math.round(Number(stock) || 0)) } : {}),
         ...(minStock.trim() === ""
           ? { min_stock: undefined }
           : { min_stock: Math.max(0, Math.round(Number(minStock))) }),
       });
+      qc.invalidateQueries({ queryKey: ["products"] });
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Enregistrement impossible");
@@ -190,6 +213,19 @@ export function ProductQuickEditDialog({
               onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
               placeholder="0"
             />
+          </div>
+          <div>
+            <Label htmlFor="qe-cost">Coût d'achat (F)</Label>
+            <Input
+              id="qe-cost"
+              inputMode="numeric"
+              value={cost}
+              onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
+              placeholder="0"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Facultatif, mais nécessaire au calcul des bénéfices.
+            </p>
           </div>
           {stockable && (
             <>

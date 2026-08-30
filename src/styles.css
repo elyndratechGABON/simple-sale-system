@@ -94,8 +94,12 @@
    * --app-max-w : largeur plafond du contenu — assez large pour que les
    *   tableaux de bord respirent sur 1440p+, sans étirer les lignes de texte.
    */
-  --bottomnav-h: 3.5rem;
+  --bottomnav-h: 4rem;
   --header-h: 4rem;
+  /* Hauteur du clavier virtuel, écrite à chaud par useKeyboardHeight()
+     (src/hooks/use-keyboard-height.ts). Vaut 0 quand le clavier est fermé,
+     ce qui rend toutes les règles qui la référencent inertes au repos. */
+  --kb-h: 0px;
   --page-gutter: clamp(0.75rem, 0.4rem + 1.8vw, 2rem);
   --app-max-w: 1600px;
   --background: oklch(0.985 0.005 120);
@@ -271,20 +275,18 @@
 
   /* Réserve de place pour la barre d'onglets mobile (<lg), posée en `fixed`
      et qui ne pousse donc rien. Exactement sa hauteur + la marge système
-     (`env(safe-area-inset-bottom)`) : ni espace perdu, ni contenu recouvert. */
+     (`env(safe-area-inset-bottom)`) : ni espace perdu, ni contenu recouvert.
+     `--kb-h` (clavier ouvert) vient en plus : les dernières lignes de contenu
+     restent défilables au-dessus des touches pendant qu'on tape. */
   .app-main {
-    padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(
+      var(--bottomnav-h) + var(--kb-h, 0px) + env(safe-area-inset-bottom, 0px)
+    );
   }
 
   @media (min-width: 64rem) {
     .app-main {
       padding-bottom: 0px;
     }
-  }
-
-  /* Tableau de données dense : colonnes garanties lisibles, scroll interne
-     au lieu d'un écrasement illimité des cellules. */
-  .data-table table {
-    min-width: 40rem;
   }
 }

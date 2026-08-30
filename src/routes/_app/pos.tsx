@@ -16,7 +16,14 @@ import {
   Package,
   Camera,
   Pencil,
+  Search,
+  Check,
+  LayoutGrid,
+  CupSoda,
+  CakeSlice,
+  Tag,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   addRound,
   cancelSale,
@@ -277,6 +284,7 @@ function PosPage() {
   const [freeOpen, setFreeOpen] = useState(false);
   const [cashGiven, setCashGiven] = useState<string>("");
   const [filter, setFilter] = useState<Category | "Tous">("Tous");
+  const [search, setSearch] = useState("");
   // Nombre de personnes servies par cette vente. Alimente le KPI « clients » des
   // rapports. Reste à 1 dans le cas courant — un client, une vente.
   const [customers, setCustomers] = useState(1);
@@ -337,6 +345,31 @@ function PosPage() {
     products.forEach((p) => s.add(p.category));
     return Array.from(s);
   }, [products]);
+
+  // Lignes de vente du jour, pour la bande « Souvent achetés » : quelques lignes lues en
+  // mémoire par vente, jamais plus lourdes que la vue des ventes récentes.
+  const { data: todayItems = [] } = useQuery({
+    queryKey: ["sale_items", "popular", salesToday.map((s) => s.id).join(",")],
+    queryFn: () => getSaleItemsForSales(salesToday.map((s) => s.id)),
+    enabled: salesToday.length > 0,
+  });
+
+  // Les produits les plus vendus aujourd'hui, triés par quantité décroissante. Les lignes
+  // libres (product_id absent) et les produits supprimés (sortis du catalogue) sont écartés.
+  const popular = useMemo(() => {
+    const qty = new Map<string, number>();
+    for (const it of todayItems) {
+      if (!it.product_id) continue;
+      qty.set(it.product_id, (qty.get(it.product_id) ?? 0) + it.quantity);
+    }
+    const byProduct = new Map(products.map((p) => [p.id, p]));
+    return Array.from(qty.entries())
+      .map(([id, q]) => ({ product: byProduct.get(id), amount: q }))
+      .filter((x) => x.product)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 8)
+      .map((x) => x.product as Product);
+  }, [todayItems, products]);
 
   const lines: UiLine[] = useMemo(() => {
     const fromCatalog = Object.entries(cart)
@@ -426,8 +459,13 @@ function PosPage() {
     if (!features.isService && filter !== "Tous") {
       list = list.filter((p) => p.category === filter);
     }
+    // Recherche par nom : la grille se resserre pendant la frappe, sans toucher aux états.
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) => p.name.toLowerCase().includes(q));
+    }
     return list;
-  }, [products, filter, features.isService, serviceTab]);
+  }, [products, filter, search, features.isService, serviceTab]);
 
   const saleMut = useMutation({
     mutationFn: () =>
@@ -602,6 +640,9 @@ function PosPage() {
   }
 
   function addOne(p: Product) {
+    // Confirmation tactile du geste : 8 ms de vibration, assez pour « il est dans le
+    // panier » sans gêner le service suivant. Les navigateurs sans vibrateur ignorent.
+    navigator.vibrate?.(8);
     setCart((c) => {
       const next = (c[p.id] ?? 0) + 1;
       if (Number.isFinite(p.stock) && next > p.stock) {
@@ -807,7 +848,7 @@ function PosPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
         {/* Products */}
-        <div className="space-y-3 min-w-0">
+        <div className="flex min-w-0 flex-col">
           {/* Titre seul sur sa ligne en mobile ; les catégories passent dans
               leur propre rangée scrollable (chip-row) au lieu de pousser le
               titre ou de s'empiler en salade de puces. */}
@@ -836,21 +877,92 @@ function PosPage() {
               </div>
             )}
           </div>
+          {/* Recherche : la grille se resserre pendant la frappe (même recette que
+              Stocks). Le clavier remonte déjà le dock via `--kb-h` — rien à câbler. */}
+          <div className="relative mt-3">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un article…"
+              aria-label="Rechercher un article"
+              className="h-11 rounded-xl pl-9"
+            />
+          </div>
+          {/* Catégories : grille responsive de cartes (2 colonnes téléphone, 3-4
+              tablette, 5-6 desktop) à la place de la longue rangée de pills qui
+              débordait. Mêmes `filter`, catégories et handlers — strictement visuel. */}
           {!features.isService && categories.length > 0 && (
-            <div className="chip-row bleed-x -my-1 py-1">
-              <FilterChip active={filter === "Tous"} onClick={() => setFilter("Tous")}>
-                Tous
-              </FilterChip>
-              {categories.map((c) => (
-                <FilterChip key={c} active={filter === c} onClick={() => setFilter(c)}>
-                  {c}
-                </FilterChip>
-              ))}
+            <section className="mt-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Catégories
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2.5 xs:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 xl:gap-3">
+                <CategoryCard
+                  label="Tous"
+                  active={filter === "Tous"}
+                  onClick={() => setFilter("Tous")}
+                />
+                {categories.map((c) => (
+                  <CategoryCard
+                    key={c}
+                    label={c}
+                    active={filter === c}
+                    onClick={() => setFilter(c)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+          {/* Les produits du jour, en un tap : le serveur re-commande sans chercher dans
+              la grille. Masquée dès qu'on cherche ou qu'on filtre — sinon la bande
+              contredirait la sélection courante. Cluster service : respecte l'onglet
+              Prestations/Produits. */}
+          {search.trim() === "" && filter === "Tous" && popular.length > 0 && (
+            <div className="chip-row bleed-x mt-5 py-1">
+              {popular
+                .filter((p) =>
+                  features.isService
+                    ? serviceTab === "prestations"
+                      ? p.type === "service"
+                      : p.type !== "service"
+                    : true,
+                )
+                .map((p) => {
+                  const out = Number.isFinite(p.stock) && p.stock <= 0;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={out}
+                      onClick={() => addOne(p)}
+                      className={cn(
+                        "flex min-h-11 shrink-0 items-center gap-2 rounded-xl border bg-card pl-1.5 pr-3 text-sm shadow-sm",
+                        "hover:border-primary active:scale-[0.98]",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        out && "opacity-50",
+                      )}
+                    >
+                      {p.photo ? (
+                        <img
+                          src={p.photo}
+                          alt=""
+                          className="h-8 w-8 rounded-lg object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                      <span className="font-medium whitespace-nowrap">{p.name}</span>
+                      <span className="font-bold whitespace-nowrap text-primary tabular-nums">
+                        {formatFCFA(p.price)}
+                      </span>
+                    </button>
+                  );
+                })}
             </div>
           )}
           <div
             className={cn(
-              "grid gap-2.5 xs:gap-3",
+              "mt-5 grid gap-2.5 xs:gap-3",
               features.hasTables
                 ? "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
                 : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
@@ -908,22 +1020,24 @@ function PosPage() {
                     )}
                   </button>
                   {/* Deux gestes distincts, FRÈRES de la carte (du HTML invalide sinon) :
-                      l'appareil ouvre la fenêtre PHOTO seule, le crayon la modification
-                      rapide nom/prix/stock. Rupture ou non, les deux restent cliquables.
-                      36px de diamètre : compromis assumé entre la cible tactile et la
-                      surface de carte qu'elles recouvrent sur une grille 2 colonnes. */}
+                       l'appareil ouvre la fenêtre PHOTO seule, le crayon la modification
+                       rapide nom/prix/stock. Rupture ou non, les deux restent cliquables.
+                       Diamètre compact (28px) à dessein : gestes d'appoint du service, ils
+                       ne doivent pas recouvrir la fiche — les vraies cibles restent les
+                       cartes de la grille. Pose en BAS-DROIT, dans le coin vide des cartes
+                       (le badge de quantité, lui, occupe le haut-droit). */}
                   <button
                     type="button"
                     aria-label={`Photo de ${p.name}`}
                     title="Changer la photo"
                     onClick={() => setPhotoTarget(p)}
                     className={cn(
-                      "absolute -top-2.5 -left-2.5 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-card shadow-sm",
+                      "absolute bottom-1 right-1 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
                       "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     )}
                   >
-                    <Camera className="h-4 w-4" />
+                    <Camera className="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
@@ -931,22 +1045,27 @@ function PosPage() {
                     title="Modifier nom, prix, stock"
                     onClick={() => setQuickEditTarget(p)}
                     className={cn(
-                      "absolute -top-2.5 left-7 z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-card shadow-sm",
+                      "absolute bottom-1 right-9 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
                       "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     )}
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
                 </div>
               );
             })}
           </div>
+          {products.length > 0 && filtered.length === 0 && (
+            <p className="mt-3 py-10 text-center text-sm text-muted-foreground">
+              Aucun article ne correspond à la recherche.
+            </p>
+          )}
           {products.length === 0 && (
             // Catalogue vide : c'est le tout premier lancement, et la main est déjà ici.
             // Créer le premier produit sans quitter la caisse évite au nouveau commerçant
             // de chercher l'écran Stocks au moment où il n'a encore rien à vendre.
-            <Card>
+            <Card className="mt-3">
               <CardContent className="space-y-3 p-8 text-center">
                 <p className="font-semibold">Votre catalogue est vide.</p>
                 <p className="text-sm text-muted-foreground">
@@ -976,7 +1095,11 @@ function PosPage() {
               </CardContent>
             </Card>
           )}
-          {salesToday.length > 0 && <RecentSalesMini sales={salesToday} />}
+          {salesToday.length > 0 && (
+            <div className="mt-3">
+              <RecentSalesMini sales={salesToday} />
+            </div>
+          )}
         </div>
 
         {/* Panier / encaissement. Panneau latéral collant sur grand écran, feuille
@@ -1326,11 +1449,12 @@ function PosPage() {
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          // Posée AU-DESSUS de la barre d'onglets, pas par-dessus : `3.5rem` est la
-          // hauteur des onglets (`min-h-[56px]` dans src/components/Nav.tsx) et
-          // `env(safe-area-inset-bottom)` la marge que cette barre s'ajoute. Changer la
-          // hauteur des onglets oblige à changer ce calcul.
-          className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-3 border-t bg-primary px-4 py-2.5 text-primary-foreground shadow-lg"
+          // Posée AU-DESSUS de la barre d'onglets, pas par-dessus : `--bottomnav-h`
+          // est la hauteur des onglets (src/components/Nav.tsx) et
+          // `env(safe-area-inset-bottom)` la marge que cette barre s'ajoute.
+          // `--kb-h` remonte la barre au-dessus du clavier quand il ouvre (le
+          // layout viewport ne rétrécit pas, sans ça elle serait couverte).
+          className="fixed inset-x-0 bottom-[calc(var(--bottomnav-h)+var(--kb-h,0px)+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-3 border-t bg-primary px-4 py-2.5 text-primary-foreground shadow-lg"
         >
           <span className="flex min-w-0 flex-col items-start leading-tight">
             <span className="truncate text-xs opacity-90">
@@ -2089,6 +2213,64 @@ function FilterChip({
       )}
     >
       {children}
+    </button>
+  );
+}
+
+// Icônes discrètes par catégorie connue (lucide, déjà en usage dans l'app) ;
+// toute catégorie inconnue retombe sur Tag. Ne sert qu'à l'habillage.
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  Tous: LayoutGrid,
+  Plats: Utensils,
+  Snacks: Utensils,
+  Boissons: CupSoda,
+  Boisson: CupSoda,
+  Desserts: CakeSlice,
+} as const;
+
+function CategoryCard({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const Icon = CATEGORY_ICON[label] ?? Tag;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={label}
+      className={cn(
+        // Carte de filtre : minimum tactile 44px, coins 16px, bordure subtile, fond
+        // carte. L'état actif passe la carte entière en vert de marque avec une coche —
+        // identifiable d'un coup d'œil SANS peser beaucoup plus qu'une carte neutre.
+        // La coche est réservée (opacity) : changer de filtre ne décale pas le texte.
+        "group flex min-h-11 w-full items-center gap-2 rounded-2xl border px-4 py-3.5 text-left text-sm font-medium transition-all",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        active
+          ? "border-primary bg-primary text-primary-foreground shadow-sm"
+          : "border-border/70 bg-card text-foreground hover:border-primary/50 hover:bg-accent",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors",
+          active
+            ? "bg-primary-foreground/15 text-primary-foreground"
+            : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
+        )}
+      >
+        <Icon className="h-3 w-3" strokeWidth={2.2} />
+      </span>
+      <span className="min-w-0 flex-1 break-words leading-tight">{label}</span>
+      <Check
+        className={cn("h-4 w-4 shrink-0 transition-opacity", active ? "opacity-100" : "opacity-0")}
+        strokeWidth={3}
+      />
     </button>
   );
 }

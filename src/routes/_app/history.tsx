@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay, startOfMonth, startOfWeek, startOfYear } from "date-fns";
-import { History, ChevronDown, ChevronUp, User, X } from "lucide-react";
+import { History, ChevronDown, ChevronUp, Download, User, X } from "lucide-react";
 import {
   cancelSale,
   getSaleItemsForSales,
@@ -13,6 +13,8 @@ import {
 } from "@/lib/db";
 import { lineProfit } from "@/lib/analytics";
 import { formatDay, formatFCFA, formatTime } from "@/lib/format";
+import { buildSalesCsvBlob, salesCsvFilename } from "@/lib/exports/sales-csv";
+import { describeSaveResult, saveDocument } from "@/lib/files";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -138,6 +140,23 @@ function HistoryPage() {
 
   const [period, setPeriod] = useState<Period>("day");
   const [picked, setPicked] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function exportSales() {
+    if (filtered.length === 0) return;
+    setExporting(true);
+    try {
+      const filename = salesCsvFilename(
+        scope === ALL ? "toutes" : scope === COUNTER ? "comptoir" : `table-${scope}`,
+      );
+      const result = await saveDocument(buildSalesCsvBlob(filtered, itemsBySale), filename);
+      toast.success(describeSaveResult(result, filename));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export impossible");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const buckets = useMemo(() => {
     const map = new Map<number, { total: number; count: number; profit: number }>();
@@ -176,15 +195,29 @@ function HistoryPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-4">
-      <div>
-        <h1 className="text-page-title flex items-center gap-2 font-bold">
-          <History className="h-6 w-6 shrink-0" /> Historique des ventes
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {scope === ALL ? "" : `${scopeLabel(scope)} · `}
-          {filtered.length} vente{filtered.length > 1 ? "s" : ""} · Total encaissé{" "}
-          <span className="font-semibold text-foreground">{formatFCFA(total)}</span>
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-page-title flex items-center gap-2 font-bold">
+            <History className="h-6 w-6 shrink-0" /> Historique des ventes
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {scope === ALL ? "" : `${scopeLabel(scope)} · `}
+            {filtered.length} vente{filtered.length > 1 ? "s" : ""} · Total encaissé{" "}
+            <span className="font-semibold text-foreground">{formatFCFA(total)}</span>
+          </p>
+        </div>
+        {/* Export CSV de la liste telle qu'elle est filtrée : un tableau se lit
+            plus commodément dans un tableur que dans l'écran d'un téléphone. */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={filtered.length === 0 || exporting}
+          onClick={() => void exportSales()}
+        >
+          <Download className="h-4 w-4 mr-1.5" />
+          {exporting ? "Export…" : "CSV"}
+        </Button>
       </div>
 
       {scopes.length > 2 && (

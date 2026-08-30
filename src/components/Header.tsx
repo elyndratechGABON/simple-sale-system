@@ -1,11 +1,14 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Calculator } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getSetting } from "@/lib/db";
 import { TopNav } from "@/components/Nav";
+import { ProfitSheet } from "@/components/ProfitSheet";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 import { NotificationBell } from "@/components/NotificationBell";
+import { Button } from "@/components/ui/button";
 
 /** Initiales pour l'avatar sans photo : deux lettres maximum, du nom fourni. */
 function initials(name: string): string {
@@ -28,6 +31,7 @@ const HIDDEN_ACCESS_WINDOW_MS = 2000;
 export function Header() {
   const { workspaceName, ownerName, ownerPhoto } = usePreferences();
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
+  const [profitOpen, setProfitOpen] = useState(false);
   const clicks = useRef(0);
   const lastClick = useRef(0);
 
@@ -73,6 +77,16 @@ export function Header() {
         {/* Sous `lg`, la navigation vit dans `BottomNav` — cf. src/components/Nav.tsx. */}
         <div className="flex shrink-0 items-center gap-1">
           <TopNav />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            aria-label="CA du jour et bénéfices"
+            title="CA du jour et bénéfices"
+            onClick={() => setProfitOpen(true)}
+          >
+            <Calculator className="h-5 w-5" />
+          </Button>
           <NotificationBell />
           <Link
             to="/settings"
@@ -88,6 +102,7 @@ export function Header() {
         </div>
       </div>
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />
+      <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
     </header>
   );
 }
