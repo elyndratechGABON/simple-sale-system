@@ -142,8 +142,18 @@ export function SetupWizard({
       }
       setAccPhone(parsed.phone);
       setAccPassword(parsed.password);
-      // Le nom du QR n'est qu'indicatif : cet écran garde SA propre enseigne.
-      toast.success(`Compte « ${parsed.name || parsed.phone} » récupéré — continuez.`);
+      // Le QR emporte aussi les coordonnées de la boutique principale (nom, propriétaire,
+      // téléphone, quartier) : on pré-remplit l'assistant pour que cette caisse s'ouvre
+      // déjà identique. L'utilisateur reste libre de corriger avant de terminer.
+      if (parsed.storeName) {
+        setName(parsed.storeName);
+        setOwnerName(parsed.ownerName ?? "");
+        setPhone(parsed.shopPhone ?? "");
+        setQuarter(parsed.quarter ?? "");
+      }
+      toast.success(
+        `Compte « ${parsed.name || parsed.phone} » récupéré — coordonnées de la boutique appliquées, continuez.`,
+      );
     } catch {
       toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");
     }

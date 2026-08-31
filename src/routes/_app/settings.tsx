@@ -42,7 +42,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { ACTIVE_CLUSTERS, savePreferences, type Preferences } from "@/lib/settings";
+import { ACTIVE_CLUSTERS, getPreferences, savePreferences, type Preferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
@@ -69,6 +69,7 @@ import {
   restoreBackup,
   type BackupSummary,
 } from "@/lib/exports/json";
+import { saveShopProfile } from "@/lib/db";
 import type { DatabaseSnapshot } from "@/lib/db";
 import {
   getSetting,
@@ -519,9 +520,27 @@ function DevicesCard() {
       }
       setClaimPhone(parsed.phone);
       setClaimPassword(parsed.password);
-      // Le nom du QR n'est qu'indicatif : cet écran garde SA propre enseigne.
+      // La boutique doit s'ouvrir déjà remplie des coordonnées de la caisse principale
+      // (le QR les emporte). On écrase SA fiche locale — le rattachement qui suit la
+      // synchronise vers l'orchestrateur.
+      if (parsed.storeName) {
+        const prefs = getPreferences();
+        await saveShopProfile({
+          storeName: parsed.storeName,
+          ownerName: parsed.ownerName ?? "",
+          phone: parsed.shopPhone ?? "",
+          location: parsed.quarter ?? "",
+        });
+        savePreferences({
+          ...prefs,
+          workspaceName: parsed.storeName,
+          ownerName: parsed.ownerName ?? prefs.ownerName,
+          phone: parsed.shopPhone ?? prefs.phone,
+          quarter: parsed.quarter ?? prefs.quarter,
+        });
+      }
       toast.success(
-        `Compte « ${parsed.name || parsed.phone} » récupéré — vérifiez puis rattachez.`,
+        `Compte « ${parsed.name || parsed.phone} » récupéré — fiche boutique appliquée, vérifiez puis rattachez.`,
       );
     } catch {
       toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");

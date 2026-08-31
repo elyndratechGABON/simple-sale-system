@@ -24,7 +24,19 @@ export interface PairingPayload {
   name: string;
   phone: string;
   password: string;
+  /** Coordonnées de la boutique principale (v1.1) : emportées pour écraser la fiche
+   *  de la nouvelle caisse au scan — la boutique s'ouvre déjà remplie. Champs
+   *  optionnels pour rester lisible par les anciennes versions de parsePairingPayload. */
+  storeName?: string;
+  ownerName?: string;
+  shopPhone?: string;
+  quarter?: string;
 }
+
+type PairingShopInfo = Pick<
+  PairingPayload,
+  "name" | "phone" | "password" | "storeName" | "ownerName" | "shopPhone" | "quarter"
+>;
 
 /** Fabrique le contenu du QR depuis le profil local, ou `null` sans compte marchand. */
 export async function buildPairingPayload(): Promise<string | null> {
@@ -37,6 +49,10 @@ export async function buildPairingPayload(): Promise<string | null> {
     name: profile.accountName ?? profile.storeName,
     phone: profile.accountPhone,
     password: profile.accountPassword,
+    storeName: profile.storeName,
+    ownerName: profile.ownerName,
+    shopPhone: profile.phone,
+    quarter: profile.location,
   };
   return JSON.stringify(payload);
 }
@@ -45,9 +61,7 @@ export async function buildPairingPayload(): Promise<string | null> {
  * Lit un QR scanné. Tolérant : accepte aussi un texte « téléphone motdepasse » sur
  * deux lignes pour une saisie manuelle de secours. Renvoie `null` si méconnaissable.
  */
-export function parsePairingPayload(
-  text: string,
-): Pick<PairingPayload, "name" | "phone" | "password"> | null {
+export function parsePairingPayload(text: string): PairingShopInfo | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
@@ -65,6 +79,10 @@ export function parsePairingPayload(
           name: typeof data.name === "string" ? data.name : "",
           phone: data.phone.trim(),
           password: data.password,
+          storeName: typeof data.storeName === "string" ? data.storeName : undefined,
+          ownerName: typeof data.ownerName === "string" ? data.ownerName : undefined,
+          shopPhone: typeof data.shopPhone === "string" ? data.shopPhone : undefined,
+          quarter: typeof data.quarter === "string" ? data.quarter : undefined,
         };
       }
     } catch {
