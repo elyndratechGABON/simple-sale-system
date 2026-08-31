@@ -45,6 +45,29 @@ export interface SyncFields {
   sync_status: SyncStatus;
 }
 
+/**
+ * Variante d'un produit (vêtements/chaussures : taille, couleur, pointure…). Quand un
+ * produit porte `variants`, c'est le stock et le prix de CHAQUE variante qui font foi à
+ * la vente — `product.stock`/`product.price` deviennent des références (la somme des
+ * variantes, le prix de base). Absent = produit classique, inchangé.
+ */
+export interface ProductVariant {
+  id: string;
+  /** Libellé affiché, ex « Noir M », « 39 », « Rouge ». */
+  name: string;
+  /** Prix de vente de cette variante. Absent → prix de base du produit. */
+  price?: number;
+  /** Coût de cette variante (marge). Absent → coût du produit. */
+  cost?: number;
+  /** Stock propre à la variante. Absent → suivi en nombre infinie/non suivi. */
+  stock?: number;
+  /** Dimensions pour l'affichage du sélecteur (facultatives). */
+  size?: string;
+  color?: string;
+  /** Pointure (chaussures), ex « 39 ». */
+  pointure?: string;
+}
+
 export interface Product extends SyncFields {
   id: string;
   name: string;
@@ -52,6 +75,8 @@ export interface Product extends SyncFields {
   price: number; // prix de revente FCFA
   stock: number; // Number.POSITIVE_INFINITY when unlimited
   category: Category;
+  /** Variantes du produit. Absent = produit classique (stock/prix globaux). */
+  variants?: ProductVariant[];
   /** Type métier : 'product' = bien physique (défaut), 'service' = prestation. */
   type?: "product" | "service";
   // ── V2 : champs pré-configurés (V10) ──────────────────────────────────
@@ -165,6 +190,10 @@ export interface SaleItem extends SyncFields {
   ordered_at?: number;
   /** Numéro de série de l'article (électronique). Absent si non applicable. */
   serial_number?: string;
+  /** Libellé de la variante vendue (ex « Noir M »), figé comme le prix. Absent = produit simple. */
+  variant?: string;
+  /** Identifiant de variante vendue — référence le stock à restaurer à l'annulation. */
+  variant_id?: string;
 }
 
 /**
@@ -1062,6 +1091,65 @@ export async function listStockMovements(opts?: {
   return rows;
 }
 
+/**
+ * Applique un delta de stock à un produit, ou à une de ses variantes si `variantId`
+ * pointe sur une variante existante. Le mouvement est journalisé. Centré ici pour que
+ * les trois chemins (vente directe, tournée, annulation) retranchent/restaurent le
+ * MÊME stock — celui de la variante quand il y en a une, sinon le stock global.
+ * Retourne le produit mis à jour, ou `null` si introuvable.
+ */
+async function applyStockDelta(
+  db: PosDatabase,
+  productId: string,
+  quantity: number,
+  opts?: {
+    variantId?: string;
+    reason?: "replenishment" | "sale" | "round" | "cancellation" | "correction" | "creation";
+    note?: string;
+  },
+): Promise<Product | null> {
+  const p = await db.products.get(productId);
+  if (!p || p.deleted_at) return null;
+  const qty = opts?.variantId
+    ? (p.variants?.find((v) => v.id === opts.variantId)?.stock ?? 0)
+    : p.stock;
+  if (!Number.isFinite(qty) && !opts?.variantId) return p; // stock illimité : rien à faire
+  if (opts?.variantId) {
+    const variant = p.variants?.find((v) => v.id === opts.variantId);
+    if (!variant || !Number.isFinite(variant.stock)) return p;
+    const updated: Product = {
+      ...p,
+      variants: (p.variants ?? []).map((v) =>
+        v.id === opts.variantId ? { ...v, stock: Math.max(0, (v.stock ?? 0) + quantity) } : v,
+      ),
+      ...touch(),
+    };
+    await db.products.put(updated);
+    if (quantity !== 0) {
+      await recordMovement(db, {
+        product_id: p.id,
+        product_name: `${p.name} (${variant.name})`,
+        delta: quantity,
+        reason: opts?.reason ?? "sale",
+        note: opts?.note,
+      });
+    }
+    return updated;
+  }
+  const updated: Product = { ...p, stock: Math.max(0, p.stock + quantity), ...touch() };
+  await db.products.put(updated);
+  if (quantity !== 0) {
+    await recordMovement(db, {
+      product_id: p.id,
+      product_name: p.name,
+      delta: quantity,
+      reason: opts?.reason ?? "sale",
+      note: opts?.note,
+    });
+  }
+  return updated;
+}
+
 // ---------- Sales ----------
 export interface CartLine {
   product_id?: string; // absent = ligne libre, aucun stock à décrémenter
@@ -1070,6 +1158,10 @@ export interface CartLine {
   cost: number;
   category: Category;
   quantity: number;
+  /** Variante choisie (ex « Noir M »). Absent = produit classique. */
+  variant?: string;
+  /** Identifiant de variante (vêtements) — pilote le stock à décrémenter. Absent = stock global. */
+  variant_id?: string;
 }
 
 export async function createSale(input: {
@@ -1123,27 +1215,17 @@ export async function createSale(input: {
           price_at_sale: line.price,
           cost_at_sale: line.cost,
           category_at_sale: line.category,
+          ...(line.variant ? { variant: line.variant } : {}),
+          ...(line.variant_id ? { variant_id: line.variant_id } : {}),
           ...touch(),
         };
         await db.sale_items.put(item);
         items.push(item);
         if (!line.product_id) continue; // ligne libre : rien à décrémenter
-        const p = await db.products.get(line.product_id);
-        if (p && Number.isFinite(p.stock)) {
-          await db.products.put({
-            ...p,
-            stock: Math.max(0, p.stock - line.quantity),
-            ...touch(),
-          });
-          if (line.quantity > 0) {
-            await recordMovement(db, {
-              product_id: p.id,
-              product_name: p.name,
-              delta: -line.quantity,
-              reason: "sale",
-            });
-          }
-        }
+        await applyStockDelta(db, line.product_id, -line.quantity, {
+          variantId: line.variant_id,
+          reason: "sale",
+        });
       }
       // La vente ET ses lignes partent dans l'op : elles sont le chiffre d'affaires que
       // les pairs rejoueront à l'identique (prix, coûts et catégories figés).
@@ -1224,19 +1306,11 @@ export async function cancelSale(saleId: string): Promise<void> {
       for (const item of items) {
         if (item.deleted_at) continue;
         if (item.product_id) {
-          const p = await db.products.get(item.product_id);
-          if (p && Number.isFinite(p.stock)) {
-            await db.products.put({ ...p, stock: p.stock + item.quantity, ...touch() });
-            if (item.quantity > 0) {
-              await recordMovement(db, {
-                product_id: p.id,
-                product_name: p.name,
-                delta: item.quantity,
-                reason: "cancellation",
-                note: `Vente annulée`,
-              });
-            }
-          }
+          await applyStockDelta(db, item.product_id, item.quantity, {
+            variantId: item.variant_id,
+            reason: "cancellation",
+            note: `Vente annulée`,
+          });
         }
         await db.sale_items.put({ ...item, ...touch(), deleted_at });
       }
@@ -1432,22 +1506,16 @@ export async function addRound(saleId: string, lines: CartLine[]): Promise<Sale>
           price_at_sale: line.price,
           cost_at_sale: line.cost,
           category_at_sale: line.category,
+          ...(line.variant ? { variant: line.variant } : {}),
+          ...(line.variant_id ? { variant_id: line.variant_id } : {}),
           ordered_at,
           ...touch(),
         });
         if (!line.product_id) continue; // ligne libre : rien à décrémenter
-        const p = await db.products.get(line.product_id);
-        if (p && Number.isFinite(p.stock)) {
-          await db.products.put({ ...p, stock: Math.max(0, p.stock - line.quantity), ...touch() });
-          if (line.quantity > 0) {
-            await recordMovement(db, {
-              product_id: p.id,
-              product_name: p.name,
-              delta: -line.quantity,
-              reason: "round",
-            });
-          }
-        }
+        await applyStockDelta(db, line.product_id, -line.quantity, {
+          variantId: line.variant_id,
+          reason: "round",
+        });
       }
 
       // Le total se RECALCULE depuis les lignes vivantes plutôt que de s'incrémenter : une

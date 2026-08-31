@@ -118,6 +118,14 @@ function stateOf(p: Product): StockState {
   return "ok";
 }
 
+/** État d'une variante isolée (seuil fixe 5 faute de seuil propre à la variante). */
+function variantState(stock: number | undefined): Exclude<StockState, "service"> {
+  if (stock === undefined || !Number.isFinite(stock)) return "ok";
+  if (stock <= 0) return "out";
+  if (stock <= 5) return "low";
+  return "ok";
+}
+
 const STATE_LABEL: Record<Exclude<StockState, "service">, string> = {
   out: "Rupture",
   low: "Stock faible",
@@ -965,6 +973,29 @@ function StocksPage() {
                       <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                         Vendu {formatRelative(lastSoldAt)}
                       </p>
+                    )}
+                    {p.variants && p.variants.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {p.variants.map((v) => {
+                          const vs = variantState(v.stock);
+                          return (
+                            <span
+                              key={v.id}
+                              className={cn(
+                                "rounded-md border px-1.5 py-0.5 text-[10px] leading-none tabular-nums",
+                                vs === "out"
+                                  ? "border-destructive/30 bg-destructive/5 text-destructive"
+                                  : vs === "low"
+                                    ? "border-amber-500/30 bg-amber-500/5 text-amber-600"
+                                    : "border-border text-muted-foreground",
+                              )}
+                            >
+                              {v.size || v.color || v.pointure || v.name} ·{" "}
+                              {Number.isFinite(v.stock) ? v.stock : "∞"}
+                            </span>
+                          );
+                        })}
+                      </div>
                     )}
                     <div className="mt-1.5 flex items-end justify-between gap-2">
                       <span className="text-sm font-semibold tabular-nums">

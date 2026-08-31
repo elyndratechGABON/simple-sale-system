@@ -9,6 +9,16 @@ type DemoProduct = {
   type?: "product" | "service";
   unitType?: "unit" | "weight";
   weightUnit?: string;
+  variants?: Array<{
+    id: string;
+    name: string;
+    price?: number;
+    cost?: number;
+    stock?: number;
+    size?: string;
+    color?: string;
+    pointure?: string;
+  }>;
 };
 
 const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
@@ -104,13 +114,84 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
     },
   ],
   clothing: [
-    { name: "Pagne wax 6 yards", price: 3000, stock: 20, category: "Pagnes" },
-    { name: "Pagne Bazin 6 yards", price: 8000, stock: 10, category: "Pagnes" },
-    { name: "T-shirt homme", price: 5000, stock: 15, category: "Homme" },
-    { name: "Pantalon jean", price: 10000, stock: 10, category: "Homme" },
-    { name: "Robe wax", price: 8000, stock: 8, category: "Femme" },
-    { name: "Chaussures femme", price: 12000, stock: 6, category: "Chaussures" },
-    { name: "Sac à main", price: 6000, stock: 5, category: "Accessoires" },
+    {
+      name: "Pagne wax 6 yards",
+      price: 3000,
+      stock: 21,
+      category: "Pagnes",
+      variants: [
+        { id: "pw-vert", name: "Vert", color: "Vert", price: 3000, stock: 7 },
+        { id: "pw-rouge", name: "Rouge", color: "Rouge", price: 3000, stock: 7 },
+        { id: "pw-bleu", name: "Bleu", color: "Bleu", price: 3000, stock: 7 },
+      ],
+    },
+    {
+      name: "Pagne Bazin 6 yards",
+      price: 8000,
+      stock: 9,
+      category: "Pagnes",
+      variants: [
+        { id: "pb-or", name: "Or", color: "Or", price: 8000, stock: 3 },
+        { id: "pb-marron", name: "Marron", color: "Marron", price: 8000, stock: 3 },
+        { id: "pb-noir", name: "Noir", color: "Noir", price: 8000, stock: 3 },
+      ],
+    },
+    {
+      name: "T-shirt homme",
+      price: 5000,
+      stock: 16,
+      category: "Homme",
+      variants: [
+        { id: "th-s", name: "T-shirt homme S", size: "S", price: 5000, stock: 4 },
+        { id: "th-m", name: "T-shirt homme M", size: "M", price: 5000, stock: 4 },
+        { id: "th-l", name: "T-shirt homme L", size: "L", price: 5000, stock: 4 },
+        { id: "th-xl", name: "T-shirt homme XL", size: "XL", price: 5000, stock: 4 },
+      ],
+    },
+    {
+      name: "Pantalon jean",
+      price: 10000,
+      stock: 9,
+      category: "Homme",
+      variants: [
+        { id: "pj-38", name: "Jean 38", size: "38", price: 10000, stock: 3 },
+        { id: "pj-40", name: "Jean 40", size: "40", price: 10000, stock: 3 },
+        { id: "pj-42", name: "Jean 42", size: "42", price: 10000, stock: 3 },
+      ],
+    },
+    {
+      name: "Robe wax",
+      price: 8000,
+      stock: 9,
+      category: "Femme",
+      variants: [
+        { id: "rw-s", name: "Robe wax S", size: "S", price: 8000, stock: 3 },
+        { id: "rw-m", name: "Robe wax M", size: "M", price: 8000, stock: 3 },
+        { id: "rw-l", name: "Robe wax L", size: "L", price: 8000, stock: 3 },
+      ],
+    },
+    {
+      name: "Chaussures femme",
+      price: 12000,
+      stock: 8,
+      category: "Chaussures",
+      variants: [
+        { id: "cf-36", name: "Chaussures 36", size: "36", price: 12000, stock: 2 },
+        { id: "cf-37", name: "Chaussures 37", size: "37", price: 12000, stock: 2 },
+        { id: "cf-38", name: "Chaussures 38", size: "38", price: 12000, stock: 2 },
+        { id: "cf-39", name: "Chaussures 39", size: "39", price: 12000, stock: 2 },
+      ],
+    },
+    {
+      name: "Sac à main",
+      price: 6000,
+      stock: 6,
+      category: "Accessoires",
+      variants: [
+        { id: "s-noir", name: "Sac noir", color: "Noir", price: 6000, stock: 3 },
+        { id: "s-marron", name: "Sac marron", color: "Marron", price: 6000, stock: 3 },
+      ],
+    },
   ],
   weight: [
     {
@@ -235,6 +316,7 @@ export async function loadDemoData(cluster: ClusterId, subCategory?: SubCategory
       type: p.type,
       unitType: p.unitType,
       weightUnit: p.weightUnit,
+      ...(p.variants ? { variants: p.variants } : {}),
     });
   }
 

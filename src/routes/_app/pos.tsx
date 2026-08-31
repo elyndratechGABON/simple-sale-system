@@ -238,6 +238,18 @@ interface FreeLine {
 // `key` sert au rendu et aux handlers du panier ; CartLine reste le type envoyé à la DB.
 type UiLine = CartLine & { key: string; productType?: "product" | "service" };
 
+type CartEntry = {
+  qty: number;
+  price: number;
+  cost: number;
+  variant?: string;
+  variant_id?: string;
+};
+
+function cartKey(p: Product, variantId?: string): string {
+  return variantId ? `${p.id}::${variantId}` : p.id;
+}
+
 /**
  * Destination de ce que l'on est en train de saisir.
  *
@@ -279,7 +291,7 @@ function PosPage() {
   const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 
   const [target, setTarget] = useState<Target>({ kind: "direct" });
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<Record<string, CartEntry>>({});
   const [freeLines, setFreeLines] = useState<FreeLine[]>([]);
   const [freeOpen, setFreeOpen] = useState(false);
   const [cashGiven, setCashGiven] = useState<string>("");
@@ -322,6 +334,9 @@ function PosPage() {
   // (bouton crayon) — deux fenêtres séparées, chacune ne montre que l'essentiel.
   const [photoTarget, setPhotoTarget] = useState<Product | null>(null);
   const [quickEditTarget, setQuickEditTarget] = useState<Product | null>(null);
+  // Sélecteur de variante : quand un produit a plusieurs variantes, le clic
+  // ouvre ce panneau au lieu d'ajouter directement.
+  const [variantPicker, setVariantPicker] = useState<{ product: Product } | null>(null);
 
   // Table DÉRIVÉE de la liste des additions ouvertes, jamais copiée dans l'état local :
   // une table encaissée ou annulée disparaît de la liste, `activeTable` retombe à null et
@@ -373,18 +388,21 @@ function PosPage() {
 
   const lines: UiLine[] = useMemo(() => {
     const fromCatalog = Object.entries(cart)
-      .map(([id, qty]): UiLine | null => {
-        const p = products.find((x) => x.id === id);
-        if (!p || qty <= 0) return null;
+      .map(([key, e]): UiLine | null => {
+        const [pid] = key.split("::");
+        const p = products.find((x) => x.id === pid);
+        if (!p || e.qty <= 0) return null;
         return {
-          key: p.id,
+          key,
           product_id: p.id,
           name: p.name,
-          price: p.price,
-          cost: p.cost,
+          price: e.price,
+          cost: e.cost,
           category: p.category,
-          quantity: qty,
+          quantity: e.qty,
           productType: p.type,
+          ...(e.variant ? { variant: e.variant } : {}),
+          ...(e.variant_id ? { variant_id: e.variant_id } : {}),
         };
       })
       .filter((x): x is UiLine => Boolean(x));
@@ -639,23 +657,50 @@ function PosPage() {
     setSheetOpen(false);
   }
 
-  function addOne(p: Product) {
-    // Confirmation tactile du geste : 8 ms de vibration, assez pour « il est dans le
-    // panier » sans gêner le service suivant. Les navigateurs sans vibrateur ignorent.
-    navigator.vibrate?.(8);
+  function variantOf(p: Product, variantId?: string) {
+    if (!variantId || !p.variants?.length) return undefined;
+    return p.variants.find((v) => v.id === variantId);
+  }
+
+  function addEntry(p: Product, variantId: string | undefined, qty = 1) {
+    const v = variantOf(p, variantId);
+    const key = cartKey(p, variantId);
+    const price = v?.price ?? p.price;
+    const cost = v?.cost ?? p.cost;
+    const stock = v?.stock ?? p.stock;
     setCart((c) => {
-      const next = (c[p.id] ?? 0) + 1;
-      if (Number.isFinite(p.stock) && next > p.stock) {
+      const cur = c[key];
+      const next = (cur?.qty ?? 0) + qty;
+      if (stock !== undefined && next > stock + 1e-9) {
         toast.warning(`Stock insuffisant pour ${p.name}`);
         return c;
       }
-      return { ...c, [p.id]: next };
+      return {
+        ...c,
+        [key]: { qty: next, price, cost, ...(v ? { variant: v.name, variant_id: v.id } : {}) },
+      };
     });
+  }
+
+  function addOne(p: Product) {
+    navigator.vibrate?.(8);
+    addEntry(p, undefined, 1);
   }
   function addOneByKey(line: UiLine) {
     if (line.product_id) {
-      const p = products.find((x) => x.id === line.product_id);
-      if (p) addOne(p);
+      setCart((c) => {
+        const cur = c[line.key];
+        if (!cur) return c;
+        const p = products.find((x) => x.id === line.product_id);
+        if (!p) return c;
+        const v = variantOf(p, cur.variant_id);
+        const stock = v?.stock ?? p.stock;
+        if (stock !== undefined && cur.qty + 1 > stock + 1e-9) {
+          toast.warning(`Stock insuffisant pour ${line.name}`);
+          return c;
+        }
+        return { ...c, [line.key]: { ...cur, qty: cur.qty + 1 } };
+      });
       return;
     }
     setFreeLines((f) =>
@@ -664,12 +709,13 @@ function PosPage() {
   }
   function removeOne(line: UiLine) {
     if (line.product_id) {
-      const id = line.product_id;
       setCart((c) => {
-        const next = (c[id] ?? 0) - 1;
+        const cur = c[line.key];
+        if (!cur) return c;
+        const next = cur.qty - 1;
         const copy = { ...c };
-        if (next <= 0) delete copy[id];
-        else copy[id] = next;
+        if (next <= 0) delete copy[line.key];
+        else copy[line.key] = { ...cur, qty: next };
         return copy;
       });
       return;
@@ -682,10 +728,9 @@ function PosPage() {
   }
   function removeLine(line: UiLine) {
     if (line.product_id) {
-      const id = line.product_id;
       setCart((c) => {
         const copy = { ...c };
-        delete copy[id];
+        delete copy[line.key];
         return copy;
       });
       return;
@@ -695,14 +740,15 @@ function PosPage() {
 
   /** Ajout par la dictée : quantités fractionnaires admises (« un kilo et demi »). */
   function addQty(p: Product, qty: number) {
-    setCart((c) => {
-      const next = (c[p.id] ?? 0) + qty;
-      if (Number.isFinite(p.stock) && next > p.stock + 1e-9) {
-        toast.warning(`Stock insuffisant pour ${p.name}`);
-        return c;
-      }
-      return { ...c, [p.id]: next };
-    });
+    addEntry(p, undefined, qty);
+  }
+
+  function onProductClick(p: Product) {
+    if (p.variants && p.variants.length > 0) {
+      setVariantPicker({ product: p });
+      return;
+    }
+    addOne(p);
   }
 
   function applyVoice(result: ParseResult) {
@@ -935,7 +981,7 @@ function PosPage() {
                       key={p.id}
                       type="button"
                       disabled={out}
-                      onClick={() => addOne(p)}
+                      onClick={() => onProductClick(p)}
                       className={cn(
                         "flex min-h-11 shrink-0 items-center gap-2 rounded-xl border bg-card pl-1.5 pr-3 text-sm shadow-sm",
                         "hover:border-primary active:scale-[0.98]",
@@ -969,7 +1015,9 @@ function PosPage() {
             )}
           >
             {filtered.map((p) => {
-              const inCart = cart[p.id] ?? 0;
+              const inCart = Object.entries(cart)
+                .filter(([k]) => k === p.id || k.startsWith(`${p.id}::`))
+                .reduce((s, [, e]) => s + e.qty, 0);
               const out = Number.isFinite(p.stock) && p.stock - inCart <= 0;
               return (
                 // Le bouton photo est un FRÈRE de la carte, pas un enfant : deux
@@ -977,7 +1025,7 @@ function PosPage() {
                 // rester ouvrable même quand la carte est désactivée (rupture).
                 <div key={p.id} className="relative">
                   <button
-                    onClick={() => addOne(p)}
+                    onClick={() => onProductClick(p)}
                     disabled={out}
                     className={cn(
                       "relative w-full h-full rounded-xl border bg-card p-3 text-left min-h-[100px] transition-all sm:p-4",
@@ -1477,6 +1525,57 @@ function PosPage() {
         onOpenChange={setFreeOpen}
         onAdd={(l) => setFreeLines((f) => [...f, l])}
       />
+
+      {/* ── Sélecteur de variante ──────────────────────────────────────── */}
+      <Dialog open={variantPicker !== null} onOpenChange={() => setVariantPicker(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{variantPicker?.product.name} — choisir une variante</DialogTitle>
+          </DialogHeader>
+          {variantPicker && (
+            <div className="grid gap-2">
+              {(variantPicker.product.variants ?? []).map((v) => {
+                const cur = cart[cartKey(variantPicker.product, v.id)]?.qty ?? 0;
+                const stockOk = !Number.isFinite(v.stock) || cur < (v.stock ?? 0);
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    disabled={!stockOk}
+                    onClick={() => {
+                      addEntry(variantPicker.product, v.id, 1);
+                      setVariantPicker(null);
+                    }}
+                    className={cn(
+                      "flex items-center justify-between rounded-xl border bg-card px-4 py-3 text-left",
+                      "hover:border-primary active:scale-[0.98]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      !stockOk && "opacity-50 cursor-not-allowed",
+                    )}
+                  >
+                    <span>
+                      {v.name}
+                      {v.size ? ` · ${v.size}` : ""}
+                      {v.color ? ` · ${v.color}` : ""}
+                      {v.pointure ? ` · ${v.pointure}` : ""}
+                    </span>
+                    <span className="ml-2 flex shrink-0 items-center gap-2">
+                      <span className="font-semibold tabular-nums">
+                        {formatFCFA(v.price ?? variantPicker.product.price ?? 0)}
+                      </span>
+                      {Number.isFinite(v.stock) && (
+                        <span className="text-xs opacity-60">
+                          {(v.stock ?? 0) - cur} restant{(v.stock ?? 0) - cur !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <CloseDayDialog
         open={closeOpen}
