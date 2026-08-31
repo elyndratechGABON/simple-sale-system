@@ -53,7 +53,7 @@ import {
 } from "@/lib/settings";
 import { addProduct, setShopAccount, type Product } from "@/lib/db";
 import { joinByKeyword } from "@/lib/gatekeeper";
-import { parsePairingPayload } from "@/lib/pairing";
+import { parsePairingPayload, applyPairingShop } from "@/lib/pairing";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { loadDemoData } from "@/lib/demo-data";
 import { toast } from "sonner";
@@ -142,17 +142,26 @@ export function SetupWizard({
       }
       setAccPhone(parsed.phone);
       setAccPassword(parsed.password);
-      // Le QR emporte aussi les coordonnées de la boutique principale (nom, propriétaire,
-      // téléphone, quartier) : on pré-remplit l'assistant pour que cette caisse s'ouvre
-      // déjà identique. L'utilisateur reste libre de corriger avant de terminer.
-      if (parsed.storeName) {
-        setName(parsed.storeName);
-        setOwnerName(parsed.ownerName ?? "");
-        setPhone(parsed.shopPhone ?? "");
-        setQuarter(parsed.quarter ?? "");
+      // Copie intégrale de la boutique scannée : fiche (profil+préférences) ET état de
+      // l'assistant (identité + type de boutique). La nouvelle caisse s'ouvre identique ;
+      // l'utilisateur garde la main pour corriger avant de terminer.
+      const applied = await applyPairingShop(parsed.shop);
+      if (parsed.shop) {
+        setName(parsed.shop.storeName ?? "");
+        setOwnerName(parsed.shop.ownerName ?? "");
+        setPhone(parsed.shop.phone ?? "");
+        setQuarter(parsed.shop.quarter ?? "");
+        if (parsed.shop.cluster) {
+          setSelectedCluster(parsed.shop.cluster);
+          setSelectedSubCategory(parsed.shop.subCategory ?? null);
+          setCustomDomain(parsed.shop.customDomain ?? "");
+          setCustomStockChoice(parsed.shop.customUnitType ?? null);
+        }
       }
       toast.success(
-        `Compte « ${parsed.name || parsed.phone} » récupéré — coordonnées de la boutique appliquées, continuez.`,
+        applied
+          ? `Compte « ${parsed.name || parsed.phone} » récupéré — copie de la boutique appliquée, continuez.`
+          : `Compte « ${parsed.name || parsed.phone} » récupéré — continuez.`,
       );
     } catch {
       toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");

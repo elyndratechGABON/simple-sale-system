@@ -13,8 +13,38 @@
 // appareil » reste inactif — le QR transporte ces deux identifiants, que cet écran ne
 // détient pas. Ses caisses supplémentaires rejoignent par le mot clé (saisie manuelle),
 // jamais par QR : c'est voulu et géré côté UI (DevicePairingDialog).
-import { getShopProfile } from "@/lib/db";
+import { getShopProfile, saveShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
+import {
+  getPreferences,
+  savePreferences,
+  type Cluster,
+  type BusinessType,
+  type SubCategory,
+} from "@/lib/settings";
+
+/** Configuration métier de la boutique (le « type de boutique » de l'onboarding).
+ *  Copiée telle quelle d'une fiche à l'autre : la nouvelle caisse s'ouvre identique à
+ *  la boutique scannée (secteur, tables, unités, domaine personnalisé…). */
+export interface PairingShopConfig {
+  /** Profil métier : retail, restaurant, bar, service, clothing, magasin… */
+  cluster: Cluster;
+  /** Sous-catégorie du cluster Magasin, le cas échéant. */
+  subCategory?: SubCategory;
+  /** Domaine d'activité libre saisi pour le cluster Personnalisé. */
+  customDomain: string;
+  /** Stock au kilo ou à l'unité (cluster Personnalisé). */
+  customUnitType?: "unit" | "weight";
+  /** Snack/bar ou restaurant/fastfood. */
+  businessType: BusinessType;
+  /** Système de tables activé ou non (commande puis encaissement). */
+  tablesEnabled: boolean;
+  /** Identité de la boutique. */
+  storeName: string;
+  ownerName: string;
+  phone: string;
+  quarter: string;
+}
 
 export interface PairingPayload {
   v: 1;
@@ -24,24 +54,20 @@ export interface PairingPayload {
   name: string;
   phone: string;
   password: string;
-  /** Coordonnées de la boutique principale (v1.1) : emportées pour écraser la fiche
-   *  de la nouvelle caisse au scan — la boutique s'ouvre déjà remplie. Champs
-   *  optionnels pour rester lisible par les anciennes versions de parsePairingPayload. */
-  storeName?: string;
-  ownerName?: string;
-  shopPhone?: string;
-  quarter?: string;
+  /** Copie de la boutique scannée (v1.1) : identité + type de boutique. Champs
+   *  optionnels pour rester lisibles par les anciennes versions de parsePairingPayload. */
+  shop?: Partial<PairingShopConfig>;
 }
 
-type PairingShopInfo = Pick<
-  PairingPayload,
-  "name" | "phone" | "password" | "storeName" | "ownerName" | "shopPhone" | "quarter"
->;
+type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"> & {
+  shop?: Partial<PairingShopConfig>;
+};
 
 /** Fabrique le contenu du QR depuis le profil local, ou `null` sans compte marchand. */
 export async function buildPairingPayload(): Promise<string | null> {
   const profile = await getShopProfile();
   if (!profile?.accountPhone || !profile.accountPassword) return null;
+  const prefs = getPreferences();
   const payload: PairingPayload = {
     v: 1,
     app: "ecaisse",
@@ -49,10 +75,18 @@ export async function buildPairingPayload(): Promise<string | null> {
     name: profile.accountName ?? profile.storeName,
     phone: profile.accountPhone,
     password: profile.accountPassword,
-    storeName: profile.storeName,
-    ownerName: profile.ownerName,
-    shopPhone: profile.phone,
-    quarter: profile.location,
+    shop: {
+      storeName: profile.storeName || prefs.workspaceName,
+      ownerName: profile.ownerName || prefs.ownerName,
+      phone: profile.phone || prefs.phone,
+      quarter: profile.location || prefs.quarter,
+      cluster: prefs.cluster,
+      subCategory: prefs.subCategory,
+      customDomain: prefs.customDomain,
+      customUnitType: prefs.customUnitType,
+      businessType: prefs.businessType,
+      tablesEnabled: prefs.tablesEnabled,
+    },
   };
   return JSON.stringify(payload);
 }
@@ -75,15 +109,16 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
         typeof data.password === "string" &&
         data.password.length >= 4
       ) {
-        return {
+        const shop = data.shop;
+        const shopInfo: PairingShopInfo = {
           name: typeof data.name === "string" ? data.name : "",
           phone: data.phone.trim(),
           password: data.password,
-          storeName: typeof data.storeName === "string" ? data.storeName : undefined,
-          ownerName: typeof data.ownerName === "string" ? data.ownerName : undefined,
-          shopPhone: typeof data.shopPhone === "string" ? data.shopPhone : undefined,
-          quarter: typeof data.quarter === "string" ? data.quarter : undefined,
         };
+        if (shop && typeof shop === "object") {
+          shopInfo.shop = shop;
+        }
+        return shopInfo;
       }
     } catch {
       // JSON invalide → tenter le format texte ci-dessous.
@@ -95,4 +130,37 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
     return { name: "", phone: lines[0], password: lines[1] };
   }
   return null;
+}
+
+/**
+ * Applique la copie de la boutique scannée à CET appareil : écrase la fiche locale
+ * (profil IndexedDB + préférences) avec l'identité ET le type de boutique de l'écran
+ * principal. Appelé au scan — la nouvelle caisse s'ouvre identique à celle scannée.
+ * Sans coordonnées réussies, ne touche à rien.
+ */
+export async function applyPairingShop(shop?: Partial<PairingShopConfig>): Promise<boolean> {
+  if (!shop || !shop.storeName) return false;
+  const prefs = getPreferences();
+
+  await saveShopProfile({
+    storeName: shop.storeName,
+    ownerName: shop.ownerName ?? "",
+    phone: shop.phone ?? "",
+    location: shop.quarter ?? "",
+  });
+
+  savePreferences({
+    ...prefs,
+    workspaceName: shop.storeName,
+    ownerName: shop.ownerName ?? prefs.ownerName,
+    phone: shop.phone ?? prefs.phone,
+    quarter: shop.quarter ?? prefs.quarter,
+    cluster: shop.cluster ?? prefs.cluster,
+    subCategory: shop.subCategory ?? prefs.subCategory,
+    customDomain: shop.customDomain ?? prefs.customDomain,
+    customUnitType: shop.customUnitType ?? prefs.customUnitType,
+    businessType: shop.businessType ?? prefs.businessType,
+    tablesEnabled: shop.tablesEnabled ?? prefs.tablesEnabled,
+  });
+  return true;
 }
