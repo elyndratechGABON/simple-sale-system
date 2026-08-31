@@ -6,7 +6,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ImagePlus, Trash2 } from "lucide-react";
+import { ImagePlus, Plus, Trash2, X } from "lucide-react";
 import { addProduct, updateProduct, type Category, type Product } from "@/lib/db";
 import { fileToScaledDataUrl } from "@/lib/images";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
+
+// Brouillon de variante dans le formulaire : prix/stock gardés en texte pour la saisie,
+// convertis en `price?`/`stock?` (productVariant) à l'enregistrement.
+type VariantDraft = {
+  id: string;
+  name: string;
+  price: string;
+  stock: string;
+};
+
+function draftId(): string {
+  return `v_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
 
 export function ProductForm({
   editing,
@@ -29,7 +42,8 @@ export function ProductForm({
   defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
-  const { hasSerialNumber, unitType, hasExpiryDate, isLocation } = useClusterFeatures();
+  const { hasSerialNumber, unitType, hasExpiryDate, isLocation, hasVariants } =
+    useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
@@ -76,6 +90,27 @@ export function ProductForm({
     editing?.total_units != null ? String(editing.total_units) : "",
   );
 
+  // Variantes (vêtements) : liste éditable, câblée à `productVariant`.
+  const [variants, setVariants] = useState<VariantDraft[]>(
+    () =>
+      editing?.variants?.map((v) => ({
+        id: v.id,
+        name: v.name,
+        price: v.price !== undefined ? String(v.price) : "",
+        stock: v.stock !== undefined ? String(v.stock) : "",
+      })) ?? [],
+  );
+
+  function addVariant() {
+    setVariants((vs) => [...vs, { id: draftId(), name: "", price: "", stock: "" }]);
+  }
+  function updateVariant(id: string, patch: Partial<VariantDraft>) {
+    setVariants((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+  }
+  function removeVariant(id: string) {
+    setVariants((vs) => vs.filter((v) => v.id !== id));
+  }
+
   async function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -93,6 +128,15 @@ export function ProductForm({
 
   const saveMut = useMutation({
     mutationFn: async () => {
+      const variantsOut =
+        variants.length > 0
+          ? variants.map((v) => ({
+              id: v.id,
+              name: v.name,
+              ...(v.price ? { price: Number(v.price) } : {}),
+              ...(v.stock ? { stock: Number(v.stock) } : {}),
+            }))
+          : undefined;
       const p = {
         name: name.trim(),
         cost: 0,
@@ -109,6 +153,7 @@ export function ProductForm({
         unit: unitType === "mixed" || unitType === "weight" ? unit : undefined,
         expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
         photo,
+        ...(variantsOut ? { variants: variantsOut } : {}),
         // Champs location
         is_asset: isAsset || undefined,
         rental_pricing: isAsset
@@ -284,6 +329,55 @@ export function ProductForm({
             </Button>
           </div>
         </div>
+        {hasVariants && productType === "product" && (
+          <div>
+            <Label>Variantes (taille, couleur, pointure…) — prix et stock par variante</Label>
+            <div className="mt-1.5 space-y-2">
+              {variants.map((v) => (
+                <div key={v.id} className="flex items-center gap-2 rounded-xl border bg-card p-2">
+                  <Input
+                    className="h-9 flex-1"
+                    placeholder="Nom (ex : M)"
+                    value={v.name}
+                    onChange={(e) => updateVariant(v.id, { name: e.target.value })}
+                  />
+                  <Input
+                    className="h-9 w-20"
+                    placeholder="Prix"
+                    inputMode="numeric"
+                    value={v.price}
+                    onChange={(e) =>
+                      updateVariant(v.id, { price: e.target.value.replace(/\D/g, "") })
+                    }
+                  />
+                  <Input
+                    className="h-9 w-20"
+                    placeholder="Stock"
+                    inputMode="numeric"
+                    value={v.stock}
+                    onChange={(e) =>
+                      updateVariant(v.id, { stock: e.target.value.replace(/\D/g, "") })
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => removeVariant(v.id)}
+                    aria-label={`Retirer la variante ${v.name || "sans nom"}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={addVariant}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Ajouter une variante
+              </Button>
+            </div>
+          </div>
+        )}
         {hasSerialNumber && productType === "product" && (
           <div>
             <Label htmlFor="serialNumber">Numéro de série / IMEI</Label>
