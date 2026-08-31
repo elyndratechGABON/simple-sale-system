@@ -14,6 +14,8 @@ import {
   CreditCard,
   CupSoda,
   Download,
+  Eye,
+  EyeOff,
   FolderOpen,
   Info,
   KeyRound,
@@ -78,6 +80,8 @@ import {
   updateClient,
   deleteClient,
   setShopAccount,
+  listOpenTables,
+  cancelSale,
   type Client,
   type ShopProfile,
 } from "@/lib/db";
@@ -308,6 +312,52 @@ function BusinessCard() {
     qc.invalidateQueries({ queryKey: ["preferences"] });
   }
 
+  // Désactiver le système de tables RETIRE les tables : les additions ouvertes sont
+  // annulées (les articles retournent en rayon — ce ne sont pas des ventes encaissées)
+  // et la liste des tables configurées est vidée. Confirmation demandée lorsqu'une
+  // addition reste ouverte.
+  const { data: openTables = [] } = useQuery({
+    queryKey: ["sales", "open"],
+    queryFn: listOpenTables,
+    staleTime: 15_000,
+  });
+  const [confirmingDisable, setConfirmingDisable] = useState(false);
+  const [disabling, setDisabling] = useState(false);
+
+  function onTablesToggle(v: boolean) {
+    if (v) {
+      commit({ tablesEnabled: true });
+      toast.success("Système de tables activé");
+      return;
+    }
+    if (openTables.length > 0) {
+      setConfirmingDisable(true);
+      return;
+    }
+    void disableTables();
+  }
+
+  async function disableTables() {
+    setDisabling(true);
+    try {
+      for (const t of openTables) await cancelSale(t.id);
+      commit({ tablesEnabled: false, tables: [] });
+      qc.invalidateQueries({ queryKey: ["sales", "open"] });
+      qc.invalidateQueries({ queryKey: ["open_tables"] });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      toast.success(
+        openTables.length > 0
+          ? `${openTables.length} table(s) annulée(s) — articles retournés en rayon.`
+          : "Système de tables désactivé",
+      );
+    } catch {
+      toast.error("Impossible de désactiver les tables — réessayez.");
+    } finally {
+      setDisabling(false);
+      setConfirmingDisable(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -344,10 +394,45 @@ function BusinessCard() {
           </div>
           <Switch
             checked={tablesEnabled}
-            onCheckedChange={(v) => commit({ tablesEnabled: v })}
+            onCheckedChange={onTablesToggle}
+            disabled={disabling}
             aria-label="Activer le système de tables"
           />
         </div>
+
+        <AlertDialog
+          open={confirmingDisable}
+          onOpenChange={(v) => !v && setConfirmingDisable(false)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                Désactiver le système de tables ?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="flex flex-col gap-2">
+                  <p>
+                    {openTables.length} table{openTables.length > 1 ? "s" : ""} ouverte
+                    {openTables.length > 1 ? "s" : ""} encore active
+                    {openTables.length > 1 ? "s" : ""} seront annulées : les articles servis
+                    retournent en rayon et ne seront pas encaissés.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Les tables configurées dans « Tables » seront aussi retirées ; réactiver le
+                    système de tables ne les restaurera pas.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={disabling}>Annuler</AlertDialogCancel>
+              <AlertDialogAction onClick={() => void disableTables()} disabled={disabling}>
+                {disabling ? "…" : "Désactiver et annuler"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
@@ -415,6 +500,8 @@ function DevicesCard() {
   const [claimPhone, setClaimPhone] = useState("");
   const [claimPassword, setClaimPassword] = useState("");
   const [claiming, setClaiming] = useState(false);
+  // Afficher/masquer le mot de passe du compte dans la fiche « Compte marchand ».
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
 
   // Scan du QR d'appairage : même parcours que l'onboarding « Rejoindre », proposé
   // ici aux écrans ajoutés APRÈS la création du compte. La caméra ne s'arme que sur
@@ -529,6 +616,61 @@ function DevicesCard() {
             >
               {quota.deviceCount} / {quota.maxDevices}
             </Badge>
+          </div>
+        )}
+
+        {/* Fiche du compte marchand : affichée dès qu'on détient les identifiants
+              (créés à l'onboarding ou rattachés). Rend visibles les informations que
+              la saisie initiale a posées, pour vérifier avant de partager l'appareil. */}
+        {hasAccount && (
+          <div className="space-y-2 rounded-xl border p-3">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Store className="h-4 w-4" /> Compte marchand
+            </p>
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Nom du compte</dt>
+                <dd className="text-right font-medium">
+                  {profile?.accountName || profile?.storeName || "—"}
+                </dd>
+              </div>
+              {profile?.ownerName && (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Propriétaire</dt>
+                  <dd className="text-right">{profile.ownerName}</dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Téléphone</dt>
+                <dd className="text-right font-mono">{profile?.accountPhone}</dd>
+              </div>
+              <div className="flex justify-between items-center gap-2">
+                <dt className="text-muted-foreground">Mot de passe</dt>
+                <dd className="flex items-center gap-2">
+                  <span className="font-mono">
+                    {showAccountPassword ? profile?.accountPassword : "••••••••"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountPassword((v) => !v)}
+                    className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                    aria-label={
+                      showAccountPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"
+                    }
+                  >
+                    {showAccountPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              Ces identifiants servent au partage entre vos caisses : scannez-leur le QR
+              d'appairage, ou saisissez-leur ce téléphone et ce mot de passe.
+            </p>
           </div>
         )}
 
