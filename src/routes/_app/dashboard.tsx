@@ -44,7 +44,7 @@ import {
 } from "@/lib/analytics";
 import { buildAlerts, type AppAlert } from "@/lib/alerts";
 import { SaleItemChips } from "@/components/SaleItemChips";
-import { formatFCFA, formatPercent, formatDayShort, formatRelative } from "@/lib/format";
+import { formatFCFA, formatPercent, formatDayShort, formatRelative, formatKg } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { Card, CardContent } from "@/components/ui/card";
@@ -208,12 +208,6 @@ const weekChartConfig = {
 function roundDuration(d: number): string {
   if (d >= 10) return Math.round(d).toString();
   return d.toFixed(1).replace(".", ",");
-}
-
-/** Poids affiché : 2 chiffres après la virgule, sans décimales inutiles, suivi de « kg ». */
-function formatKg(w: number): string {
-  if (w >= 100) return `${Math.round(w).toString()} kg`;
-  return `${w.toFixed(2).replace(".", ",")} kg`;
 }
 
 function DashboardPage() {

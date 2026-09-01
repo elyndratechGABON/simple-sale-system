@@ -16,6 +16,14 @@ export function formatFCFACompact(value: number): string {
   return `${body}k`;
 }
 
+/** Poids affiché (boucherie) : 2 chiffres après la virgule, sans décimales inutiles,
+ *  suivi de « kg ». */
+export function formatKg(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (value >= 100) return `${Math.round(value).toString()} kg`;
+  return `${value.toFixed(2).replace(".", ",")} kg`;
+}
+
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("fr-FR", {
     hour: "2-digit",

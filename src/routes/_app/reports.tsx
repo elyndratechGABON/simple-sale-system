@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarDays, ChevronLeft, ChevronRight, Scissors, Weight } from "lucide-react";
 import { fr } from "react-day-picker/locale";
 import { endOfMonth, startOfDay, startOfMonth } from "date-fns";
 import type { PaymentMethod } from "@/lib/db";
-import { computeDayDetail, computePeriodStats } from "@/lib/analytics";
+import { listProducts } from "@/lib/db";
+import { computeDayDetail, computePeriodStats, computeWeightSales } from "@/lib/analytics";
 import { usePeriodData } from "@/hooks/use-period-data";
-import { formatDay, formatDayShort, formatFCFA, formatFCFACompact } from "@/lib/format";
+import { useClusterFeatures } from "@/hooks/use-cluster-features";
+import { formatDay, formatDayShort, formatFCFA, formatFCFACompact, formatKg } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
@@ -66,6 +69,54 @@ function ReportsPage() {
     return Array.from({ length: 7 }, (_, i) => monday + i * 86400000);
   }, [focusedDay]);
 
+  const { isService, hasWeightInput } = useClusterFeatures();
+  const { data: products } = useQuery({
+    queryKey: ["products"],
+    queryFn: listProducts,
+    staleTime: 30_000,
+  });
+
+  // Période du rapport sectorisé : celle que montre le calendrier (mois entier, bande
+  // de la semaine, ou seul jour en focus). On la re-questionne une seule fois, indexée,
+  // pour que boucherie et service partagent les mêmes ventes que le calendrier.
+  const sectorRange = useMemo(() => {
+    if (calendarView === "week") return { from: weekDays[0], to: weekDays[6] + 86400000 };
+    if (calendarView === "day") {
+      const from = startOfDay(focusedDay).getTime();
+      return { from, to: from + 86400000 };
+    }
+    return { from: calendarMonthStart, to: calendarMonthEnd };
+  }, [calendarView, focusedDay, weekDays, calendarMonthStart, calendarMonthEnd]);
+  const { data: sectorData } = usePeriodData(sectorRange.from, sectorRange.to);
+
+  const sectorStats = useMemo(
+    () =>
+      sectorData
+        ? computePeriodStats(
+            sectorData.sales,
+            sectorData.items,
+            sectorRange.from,
+            sectorRange.to,
+            [],
+          )
+        : null,
+    [sectorData, sectorRange],
+  );
+  const weightSales = useMemo(
+    () =>
+      sectorData && (sectorData.items.length > 0 || (products ?? []).length > 0)
+        ? computeWeightSales(sectorData.items, products ?? [])
+        : null,
+    [sectorData, products],
+  );
+
+  const periodLabel =
+    calendarView === "month"
+      ? new Date(sectorRange.from).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
+      : calendarView === "week"
+        ? `${formatDayShort(weekDays[0])} – ${formatDayShort(weekDays[6])}`
+        : formatDay(focusedDay);
+
   return (
     <div className="app-container space-y-6 py-6">
       <div>
@@ -122,7 +173,7 @@ function ReportsPage() {
                     >
                       {children}
                       {amount !== undefined && (
-                        <span className="pointer-events-none absolute inset-x-0 bottom-0.5 text-center text-[8px] leading-none lowercase tabular-nums opacity-70">
+                        <span className="pointer-events-none absolute inset-x-0 bottom-0.5 flex justify-center rounded-full bg-primary/10 px-1.5 text-[8px] leading-none lowercase tabular-nums text-primary">
                           {formatFCFACompact(amount)}
                         </span>
                       )}
@@ -218,11 +269,122 @@ function ReportsPage() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
-              <DayDetailContent day={focusedDay} />
+              <DayDetailContent
+                day={focusedDay}
+                isService={isService}
+                hasWeightInput={hasWeightInput}
+              />
             </div>
           )}
         </CardContent>
       </Card>
+
+      {(isService
+        ? sectorStats && (sectorStats.salesCount > 0 || sectorStats.customersCount > 0)
+        : hasWeightInput
+          ? weightSales && weightSales.weightKg > 0
+          : false) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              {isService ? <Scissors className="h-4 w-4" /> : <Weight className="h-4 w-4" />}
+              {isService ? "Service" : "Boucherie"} — {periodLabel}
+            </CardTitle>
+          </CardHeader>
+          {isService && sectorStats && (
+            <>
+              <div className="grid grid-cols-3 gap-3 border-b p-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatFCFA(sectorStats.revenue)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Prestations</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {sectorStats.salesCount}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Clients</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {sectorStats.customersCount}
+                  </p>
+                </div>
+              </div>
+              {sectorStats.topProducts.length > 0 && (
+                <div className="space-y-1 p-2">
+                  {sectorStats.topProducts.slice(0, 3).map((p, index) => (
+                    <div
+                      key={p.product_id}
+                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {p.quantity} prestation{p.quantity > 1 ? "s" : ""}
+                      </span>
+                      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                        {formatFCFA(p.revenue)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          {!isService && hasWeightInput && weightSales && (
+            <>
+              <div className="grid grid-cols-3 gap-3 border-b p-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Vendu au poids</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatKg(weightSales.weightKg)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Poids moyen / pesée</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatKg(weightSales.avgWeightKg)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatFCFA(weightSales.revenue)}
+                  </p>
+                </div>
+              </div>
+              {weightSales.byProduct.length > 0 && (
+                <div className="space-y-1 p-2">
+                  {weightSales.byProduct.slice(0, 3).map((product, index) => (
+                    <div
+                      key={product.product_id}
+                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {product.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {formatKg(product.weightKg)} vendus
+                      </span>
+                      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                        {formatFCFA(product.revenue)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
 
       <Dialog open={detailDay !== null} onOpenChange={(v) => !v && setDetailDay(null)}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
@@ -231,7 +393,11 @@ function ReportsPage() {
               <DialogHeader>
                 <DialogTitle>Ventes du {formatDay(detailDay)}</DialogTitle>
               </DialogHeader>
-              <DayDetailContent day={detailDay} />
+              <DayDetailContent
+                day={detailDay}
+                isService={isService}
+                hasWeightInput={hasWeightInput}
+              />
             </>
           )}
         </DialogContent>
@@ -242,7 +408,15 @@ function ReportsPage() {
 
 /** Photo complète d'un jour : interroge IndexedDB pour CE jour précis puis rend CA,
  *  paiements, clients, produits vendus. */
-function DayDetailContent({ day }: { day: number }) {
+function DayDetailContent({
+  day,
+  isService,
+  hasWeightInput,
+}: {
+  day: number;
+  isService: boolean;
+  hasWeightInput: boolean;
+}) {
   const from = startOfDay(day).getTime();
   const to = from + 86400000;
   const { data, isPending } = usePeriodData(from, to);
@@ -313,7 +487,10 @@ function DayDetailContent({ day }: { day: number }) {
                 <div key={p.product_id} className="flex justify-between gap-3 text-sm">
                   <span className="truncate">
                     {p.name}
-                    <span className="ml-1.5 text-xs text-muted-foreground">×{p.quantity}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      {hasWeightInput ? formatKg(p.quantity) : `×${p.quantity}`}
+                      {isService ? " prestation" : " vente"}
+                    </span>
                   </span>
                   <span className="font-medium tabular-nums">{formatFCFA(p.revenue)}</span>
                 </div>
