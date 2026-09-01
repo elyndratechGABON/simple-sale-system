@@ -66,7 +66,7 @@ export interface PairingPayload {
   shop?: Partial<PairingShopConfig>;
 }
 
-type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"> & {
+export type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"> & {
   pair_code?: string;
   shop?: Partial<PairingShopConfig>;
 };

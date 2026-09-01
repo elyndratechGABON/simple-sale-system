@@ -96,6 +96,7 @@ export function SetupWizard({
   initialAccountMode = "create",
   initialCredentials,
   initialPairCode,
+  initialCluster,
   initialStep,
 }: {
   onComplete: () => void;
@@ -110,6 +111,9 @@ export function SetupWizard({
    *  Le téléphone s'annonce avec lui au moment de terminer l'assistant : le principal
    *  le reconnaît et les données convergent. */
   initialPairCode?: string;
+  /** Type d'activité (cluster) ressorti d'un scan QR AVANT le wizard : présélectionné
+   *  à l'étape secteur, au lieu de le redemander. */
+  initialCluster?: string;
   /** Étape de départ. Un scan QR pré-remplit boutique ET identifiants : on saute
    *  directement à l'étape compte (saisie du code temporaire) au lieu de redemander
    *  le nom d'enseigne. */
@@ -121,7 +125,12 @@ export function SetupWizard({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [quarter, setQuarter] = useState("");
-  const [selectedCluster, setSelectedCluster] = useState<ClusterId | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<ClusterId | null>(() => {
+    if (typeof initialCluster === "string" && initialCluster in CLUSTER_MAP) {
+      return initialCluster as ClusterId;
+    }
+    return null;
+  });
   const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategory | null>(null);
   // Cluster Personnalisé : domaine d'activité libre + mode de stock choisi.
   const [customDomain, setCustomDomain] = useState("");
