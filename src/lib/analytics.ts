@@ -8,7 +8,7 @@
 // Le bénéfice est calculé depuis les coûts d'acquisition saisis dans les rapports
 // (table `product_expenses`), pas depuis `cost_at_sale` figé dans les lignes de vente.
 import { eachDayOfInterval, startOfDay, subDays } from "date-fns";
-import type { Category, PaymentMethod, ProductExpense, Sale, SaleItem } from "./db";
+import type { Category, PaymentMethod, ProductExpense, Rental, Sale, SaleItem } from "./db";
 
 export interface DayBucket {
   day: number; // minuit local, en ms — même clé de regroupement que src/routes/history.tsx
@@ -361,4 +361,98 @@ function computeGrowthRate(days: DayBucket[]): number {
   const second = days.slice(days.length - half).reduce((s, d) => s + d.revenue, 0);
   if (first === 0) return Number.NaN;
   return (second - first) / first;
+}
+
+// ── Agrégats location (cluster 'location') ───────────────────────────────────────
+//
+// Le revenu d'une location n'est PAS une vente : il vit dans le store `rentals`, jamais
+// dans `sales`. La facturation reprend la formule de `use-rentals` (prix unitaire ×
+// quantité × unités de temps, arrondies à l'unité supérieure) — recalée ici pour garder
+// ce module PUR, sans dépendance vers un fichier de hooks.
+
+const RENTAL_DAY_MS = 86_400_000;
+const RENTAL_HOUR_MS = 3_600_000;
+
+function rentalUnits(start: number, end: number, unit: Rental["pricing_unit"]): number {
+  const ms = end - start;
+  switch (unit) {
+    case "hour":
+      return Math.ceil(ms / RENTAL_HOUR_MS);
+    case "day":
+      return Math.ceil(ms / RENTAL_DAY_MS);
+    case "week":
+      return Math.ceil(ms / (7 * RENTAL_DAY_MS));
+    case "month":
+      return Math.ceil(ms / (30 * RENTAL_DAY_MS));
+  }
+}
+
+/** Montant facturé d'une location : la durée retenue est la fin réelle si le retour est
+ *  tombé (`actual_end_date`), la fin prévue sinon. */
+function rentalRevenue(rental: Rental): number {
+  const end = rental.actual_end_date ?? rental.expected_end_date;
+  return (
+    rental.price_per_unit *
+    rental.quantity *
+    rentalUnits(rental.start_date, end, rental.pricing_unit)
+  );
+}
+
+export interface RentalAssetBucket {
+  asset_id: string;
+  name: string;
+  rentalsCount: number;
+  revenue: number;
+}
+
+export interface RentalStats {
+  revenue: number;
+  rentalsCount: number;
+  /** Durée moyenne d'une location, exprimée dans l'unité la plus parlante du parc. */
+  avgDuration: number;
+  /** Unité de `avgDuration` : "heure" si tout le parc est facturé à l'heure, sinon "jour". */
+  avgDurationUnit: "heure" | "jour";
+  byAsset: RentalAssetBucket[];
+}
+
+/** Agrège les locations d'une période : revenu total et par actif, nombre de locations,
+ *  durée moyenne. Une location compte dans la période où elle COMMENCE (`start_date`). */
+export function computeRentalStats(rentals: Rental[], from: number, to: number): RentalStats {
+  const inRange = rentals.filter(
+    (r) => r.status !== "cancelled" && r.start_date >= from && r.start_date < to,
+  );
+
+  const byAsset = new Map<string, RentalAssetBucket>();
+  let revenue = 0;
+  let durationMs = 0;
+
+  for (const r of inRange) {
+    const rev = rentalRevenue(r);
+    revenue += rev;
+    const bucket = byAsset.get(r.asset_id);
+    if (bucket) {
+      bucket.rentalsCount += 1;
+      bucket.revenue += rev;
+    } else {
+      byAsset.set(r.asset_id, {
+        asset_id: r.asset_id,
+        name: r.asset_name,
+        rentalsCount: 1,
+        revenue: rev,
+      });
+    }
+    const end = r.actual_end_date ?? r.expected_end_date;
+    durationMs += Math.max(0, end - r.start_date);
+  }
+
+  const allHourly = inRange.length > 0 && inRange.every((r) => r.pricing_unit === "hour");
+  const avgSeconds = inRange.length > 0 ? durationMs / inRange.length / 1000 : 0;
+
+  return {
+    revenue,
+    rentalsCount: inRange.length,
+    avgDuration: allHourly ? avgSeconds / 3600 : avgSeconds / 86400,
+    avgDurationUnit: allHourly ? "heure" : "jour",
+    byAsset: Array.from(byAsset.values()).sort((a, b) => b.revenue - a.revenue),
+  };
 }

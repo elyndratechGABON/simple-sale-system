@@ -33,8 +33,9 @@ import {
   listSales,
   listOpenTables,
   listActiveRentals,
+  listRentals,
 } from "@/lib/db";
-import { computePeriodStats, lastDaysRange } from "@/lib/analytics";
+import { computePeriodStats, computeRentalStats, lastDaysRange } from "@/lib/analytics";
 import { buildAlerts, type AppAlert } from "@/lib/alerts";
 import { SaleItemChips } from "@/components/SaleItemChips";
 import { formatFCFA, formatPercent, formatDayShort, formatRelative } from "@/lib/format";
@@ -197,6 +198,12 @@ const weekChartConfig = {
   revenue: { label: "Chiffre d'affaires", color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
+/** Durée moyenne affichée : 1 chiffre après la virgule, sans décimales inutiles. */
+function roundDuration(d: number): string {
+  if (d >= 10) return Math.round(d).toString();
+  return d.toFixed(1).replace(".", ",");
+}
+
 function DashboardPage() {
   const { workspaceName } = usePreferences();
   const features = useClusterFeatures();
@@ -238,6 +245,20 @@ function DashboardPage() {
     queryFn: listActiveRentals,
     staleTime: 30_000,
   });
+  // Locations COMMENCÉES dans les 14 derniers jours : c'est le « revenu par actif » du
+  // cluster location, absent du canal des ventes (une location n'est jamais une vente).
+  const { data: fortnightRentals } = useQuery({
+    queryKey: ["rentals", "range", fortnightRange.from, fortnightRange.to],
+    queryFn: () => listRentals(fortnightRange.from, fortnightRange.to),
+  });
+
+  const rentalStats = useMemo(
+    () =>
+      fortnightRentals && fortnightRentals.length > 0
+        ? computeRentalStats(fortnightRentals, fortnightRange.from, fortnightRange.to)
+        : null,
+    [fortnightRentals, fortnightRange],
+  );
 
   const todayStats = useMemo(() => {
     if (!todayData) return null;
@@ -517,6 +538,64 @@ function DashboardPage() {
                 </div>
               ))}
             </div>
+          </Card>
+        </motion.div>
+      )}
+
+      {features.isLocation && rentalStats && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.55 }}
+        >
+          <Card>
+            <div className="border-b px-4 py-3">
+              <p className="text-base font-semibold">Location — 14 jours</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 border-b p-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Revenu locations</p>
+                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  {formatFCFA(rentalStats.revenue)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Locations</p>
+                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  {rentalStats.rentalsCount}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Durée moyenne</p>
+                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  {roundDuration(rentalStats.avgDuration)}{" "}
+                  {rentalStats.avgDurationUnit === "heure" ? "h" : "j"}
+                </p>
+              </div>
+            </div>
+            {rentalStats.byAsset.length > 0 && (
+              <div className="space-y-1 p-2">
+                {rentalStats.byAsset.slice(0, 3).map((asset, index) => (
+                  <div
+                    key={asset.asset_id}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {asset.name}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {asset.rentalsCount} location{asset.rentalsCount > 1 ? "s" : ""}
+                    </span>
+                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                      {formatFCFA(asset.revenue)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </motion.div>
       )}

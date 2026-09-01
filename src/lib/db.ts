@@ -1916,6 +1916,12 @@ export async function listAllRentals(): Promise<Rental[]> {
   return getDB().rentals.orderBy("created_at").reverse().toArray();
 }
 
+/** Locations qui COMMENCENT dans la fenêtre [`from`, `to[ — le revenu d'une location
+ *  compte le jour où elle est prise, pas celui où elle se termine. */
+export async function listRentals(from: number, to: number): Promise<Rental[]> {
+  return getDB().rentals.where("start_date").between(from, to, true, false).toArray();
+}
+
 /**
  * Vérifie la disponibilité d'un actif sur une période donnée.
  * Renvoie le nombre d'unités encore disponibles.
