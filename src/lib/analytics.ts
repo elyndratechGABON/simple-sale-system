@@ -546,3 +546,72 @@ export function computeRentalOccupancy(
     rate: capacity > 0 ? totalOccupied / capacity : Number.NaN,
   };
 }
+
+// ── Ventes au poids (cluster 'weight') ─────────────────────────────────────────────
+//
+// Pour la boucherie, la ligne de vente porte le POIDS vendu dans `quantity` (kg). Un
+// article n'est compté que s'il référence un produit du catalogue vendu au poids
+// (`unitType: "weight"`) : une ligne libre ou un produit à l'unité n'a pas de poids
+// mérité. Le montant est le prix au poids × poids (`price_at_sale` × `quantity`).
+
+export interface WeightSalesBucket {
+  product_id: string;
+  name: string;
+  /** Poids total vendu, en kilogrammes. */
+  weightKg: number;
+  /** Montant (prix au poids × poids), en FCFA. */
+  revenue: number;
+}
+
+export interface WeightSalesStats {
+  /** Poids total vendu sur la période, en kg. */
+  weightKg: number;
+  /** Chiffre d'affaires des ventes au poids, en FCFA. */
+  revenue: number;
+  /** Poids moyen d'une pesée sur la période, en kg. NaN sans aucune vente au poids. */
+  avgWeightKg: number;
+  byProduct: WeightSalesBucket[];
+}
+
+/** Agrège les ventes au poids d'une période (items déjà filtrés), par produit. Les
+ *  articles vendus à l'unité ou sans produit au catalogue n'ont pas de poids : ils
+ *  sont ignorés. */
+export function computeWeightSales(
+  items: SaleItem[],
+  products: Pick<Product, "id" | "name" | "unitType">[],
+): WeightSalesStats {
+  const byProduct = new Map<string, WeightSalesBucket>();
+  let weightKg = 0;
+  let revenue = 0;
+  let count = 0;
+
+  for (const item of items) {
+    if (!item.product_id) continue;
+    const product = products.find((p) => p.id === item.product_id);
+    if (product?.unitType !== "weight") continue;
+    const w = item.quantity;
+    const rev = w * item.price_at_sale;
+    weightKg += w;
+    revenue += rev;
+    count += 1;
+    const bucket = byProduct.get(item.product_id);
+    if (bucket) {
+      bucket.weightKg += w;
+      bucket.revenue += rev;
+    } else {
+      byProduct.set(item.product_id, {
+        product_id: item.product_id,
+        name: item.name,
+        weightKg: w,
+        revenue: rev,
+      });
+    }
+  }
+
+  return {
+    weightKg,
+    revenue,
+    avgWeightKg: count > 0 ? weightKg / count : Number.NaN,
+    byProduct: Array.from(byProduct.values()).sort((a, b) => b.weightKg - a.weightKg),
+  };
+}

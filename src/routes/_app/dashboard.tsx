@@ -38,6 +38,7 @@ import {
 import {
   computePeriodStats,
   computeRentalOccupancy,
+  computeWeightSales,
   computeRentalStats,
   lastDaysRange,
 } from "@/lib/analytics";
@@ -209,6 +210,12 @@ function roundDuration(d: number): string {
   return d.toFixed(1).replace(".", ",");
 }
 
+/** Poids affiché : 2 chiffres après la virgule, sans décimales inutiles, suivi de « kg ». */
+function formatKg(w: number): string {
+  if (w >= 100) return `${Math.round(w).toString()} kg`;
+  return `${w.toFixed(2).replace(".", ",")} kg`;
+}
+
 function DashboardPage() {
   const { workspaceName } = usePreferences();
   const features = useClusterFeatures();
@@ -276,6 +283,16 @@ function DashboardPage() {
           )
         : null,
     [fortnightRentals, products, fortnightRange],
+  );
+
+  // Ventes au poids (boucherie) : le poids vendu vit sur les lignes de vente des
+  // produits vendus au kilo. Seules les lignes portant le poids comptent.
+  const weightSales = useMemo(
+    () =>
+      fortnightData && (fortnightData.items.length > 0 || (products ?? []).length > 0)
+        ? computeWeightSales(fortnightData.items, products ?? [])
+        : null,
+    [fortnightData, products],
   );
 
   const todayStats = useMemo(() => {
@@ -624,6 +641,63 @@ function DashboardPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </Card>
+        </motion.div>
+      )}
+
+      {features.hasWeightInput && weightSales && weightSales.weightKg > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.65 }}
+        >
+          <Card>
+            <div className="border-b px-4 py-3">
+              <p className="text-base font-semibold">Boucherie — 14 jours</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 border-b p-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Vendu au poids</p>
+                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  {formatKg(weightSales.weightKg)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Poids moyen / pesée</p>
+                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  {formatKg(weightSales.avgWeightKg)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
+                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  {formatFCFA(weightSales.revenue)}
+                </p>
+              </div>
+            </div>
+            {weightSales.byProduct.length > 0 && (
+              <div className="space-y-1 p-2">
+                {weightSales.byProduct.slice(0, 3).map((product, index) => (
+                  <div
+                    key={product.product_id}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {product.name}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {formatKg(product.weightKg)} vendus
+                    </span>
+                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                      {formatFCFA(product.revenue)}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </Card>
