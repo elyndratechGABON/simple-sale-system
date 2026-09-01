@@ -150,6 +150,13 @@ export interface Sale extends SyncFields {
   /** Moment où la commande a été servie (restaurant). Absent = pas encore servi. */
   served_at?: number;
   /**
+   * Cycle de service (restaurant) : la commande passe de la prise en cuisine au service.
+   * `preparing_at` : passée « en préparation ». `ready_at` : « prête » à servir.
+   * Absents = commande encore « à préparer ». `served_at` reste le dernier cran.
+   */
+  preparing_at?: number;
+  ready_at?: number;
+  /**
    * Tournées déjà encaissées d'une addition encore ouverte (« Encaisser cette tournée »).
    * Absent = aucune : rien n'a été payé, tout reste dû. Posé dans `payRound`, il reste
    * sur la vente si la table est ensuite réglée entièrement (`payTable`), sans servir.
@@ -1460,6 +1467,30 @@ export async function closeTable(saleId: string): Promise<void> {
     }
     await db.sales.put({ ...sale, ...touch(), deleted_at: Date.now() });
   });
+}
+
+/**
+ * Passe une commande en « préparation » (restaurant) : la table quitte l'état
+ * « à préparer », la cuisine prend la commande en main.
+ */
+export async function prepareTable(saleId: string): Promise<void> {
+  const db = getDB();
+  const sale = await db.sales.get(saleId);
+  if (!sale || sale.deleted_at) return;
+  if (sale.status !== "open") return;
+  await db.sales.put({ ...sale, preparing_at: Date.now(), ...touch() });
+}
+
+/**
+ * Marque une commande « prête » (restaurant) : la cuisine a terminé, rien ne manque
+ * plus pour la servir. `served_at` reste à poser par `serveTable`.
+ */
+export async function readyTable(saleId: string): Promise<void> {
+  const db = getDB();
+  const sale = await db.sales.get(saleId);
+  if (!sale || sale.deleted_at) return;
+  if (sale.status !== "open") return;
+  await db.sales.put({ ...sale, ready_at: Date.now(), ...touch() });
 }
 
 /**

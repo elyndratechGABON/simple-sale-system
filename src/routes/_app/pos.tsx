@@ -38,6 +38,8 @@ import {
   openTable,
   payRound,
   payTable,
+  prepareTable,
+  readyTable,
   serveTable,
   type CartLine,
   type Category,
@@ -271,6 +273,9 @@ function PosPage() {
   const qc = useQueryClient();
   const { tables: tableLabels } = usePreferences();
   const features = useClusterFeatures();
+  // Le cycle de service « Préparer / Prêt / Servir » ne concerne que les cuisines :
+  // une addition de bar est servie dès qu'elle est versée, sans étape intermédiaire.
+  const isOrderPrep = features.workflowType === "order-prep";
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
@@ -538,6 +543,26 @@ function PosPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sales"] });
       toast.success("Commande servie — paiement débloqué");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Cycle de service (restaurant) : « Préparer » puis « Prêt » avancent la commande en
+  // cuisine, sans toucher au paiement — seul `serveTable` le débloque.
+  const prepareMut = useMutation({
+    mutationFn: (saleId: string) => prepareTable(saleId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Commande en préparation");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const readyMut = useMutation({
+    mutationFn: (saleId: string) => readyTable(saleId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      toast.success("Commandes prêtes à servir");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -828,6 +853,10 @@ function PosPage() {
                 table={table}
                 active={activeTable?.table === label}
                 disabled={openMut.isPending || closeMut.isPending}
+                showServiceCycle={isOrderPrep}
+                onPrepare={table ? () => prepareMut.mutate(table.id) : undefined}
+                onReady={table ? () => readyMut.mutate(table.id) : undefined}
+                onServe={table ? () => serveMut.mutate(table.id) : undefined}
                 onClick={() =>
                   table ? selectTarget({ kind: "table", saleId: table.id }) : openMut.mutate(label)
                 }
@@ -848,20 +877,43 @@ function PosPage() {
           </div>
           {/* Légende du code couleur des étapes : toujours affichée, elle est ce qui rend
               la lecture d'un coup d'œil possible pour un serveur qui ne connaît pas encore
-              le code. */}
+              le code. Le restaurant distingue les crans du service ; les autres métiers à
+              tables n'en ont que trois (libre, en cours, payée). */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-border" />
               Libre
             </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-warning" />
-              En cours
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-orange-500" />
-              Servi
-            </span>
+            {isOrderPrep ? (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-orange-500" />À préparer
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-warning" />
+                  En préparation
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  Prête
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-primary" />
+                  Servie
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-warning" />
+                  En cours
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-orange-500" />
+                  Servi
+                </span>
+              </>
+            )}
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-primary" />
               Payé
@@ -1600,10 +1652,17 @@ function PosPage() {
                 {openTables
                   .slice()
                   .sort((a, b) => {
-                    // pending d'abord (plus urgent), puis served, puis paid
-                    const order: Record<string, number> = { pending: 0, served: 1, paid: 2 };
-                    const sa = order[tableStage(a)] ?? 3;
-                    const sb = order[tableStage(b)] ?? 3;
+                    // Les plus urgents d'abord : à préparer, puis en préparation,
+                    // prête, servie, et enfin réglée.
+                    const order: Record<string, number> = {
+                      "to-prepare": 0,
+                      preparing: 1,
+                      ready: 2,
+                      served: 3,
+                      paid: 4,
+                    };
+                    const sa = order[tableStage(a)] ?? 5;
+                    const sb = order[tableStage(b)] ?? 5;
                     return sa - sb || (a.opened_at ?? 0) - (b.opened_at ?? 0);
                   })
                   .map((t) => {
@@ -1650,9 +1709,12 @@ function PosPage() {
                         key={t.id}
                         className={cn(
                           "flex items-center justify-between gap-3 rounded-lg border p-3",
-                          stage === "pending" && "border-warning/40 bg-warning/5",
-                          stage === "served" &&
+                          stage === "to-prepare" &&
                             "border-orange-400/40 bg-orange-50/50 dark:bg-orange-950/10",
+                          stage === "preparing" && "border-warning/40 bg-warning/5",
+                          stage === "ready" &&
+                            "border-green-500/40 bg-green-50/50 dark:bg-green-950/10",
+                          stage === "served" && "border-primary/30 bg-accent/50",
                           stage === "paid" && "border-primary/30 bg-accent/50",
                         )}
                       >
@@ -1662,17 +1724,24 @@ function PosPage() {
                             <span
                               className={cn(
                                 "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                                stage === "pending" && "bg-warning/20 text-warning-foreground",
-                                stage === "served" &&
+                                stage === "to-prepare" &&
                                   "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-                                stage === "paid" && "bg-primary/10 text-primary",
+                                stage === "preparing" && "bg-warning/20 text-warning-foreground",
+                                stage === "ready" &&
+                                  "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                                (stage === "served" || stage === "paid") &&
+                                  "bg-primary/10 text-primary",
                               )}
                             >
-                              {stage === "pending"
-                                ? "en cours"
-                                : stage === "served"
-                                  ? "servi"
-                                  : "payé"}
+                              {stage === "to-prepare"
+                                ? "à préparer"
+                                : stage === "preparing"
+                                  ? "en préparation"
+                                  : stage === "ready"
+                                    ? "prête"
+                                    : stage === "served"
+                                      ? "servie"
+                                      : "payée"}
                             </span>
                           </div>
                           <div className="text-sm text-muted-foreground">
@@ -1987,15 +2056,19 @@ const LONG_PRESS_MS = 500;
 /**
  * Étape d'une table, lue sur les données existantes — aucun geste supplémentaire.
  *
- *  - "libre"   : aucune addition ouverte.
- *  - "pending" : table ouverte, commande pas encore servie (`served_at` absent).
- *  - "served"  : table ouverte, commande servie mais pas encore payée (`served_at` défini).
- *  - "paid"    : table ouverte dont au moins une tournée a été encaissée (`rounds_paid`)
- *                ou entièrement réglée.
+ *  - "libre"      : aucune addition ouverte.
+ *  - "to-prepare" : table ouverte, commande prise, pas encore passée en cuisine.
+ *  - "preparing"  : la cuisine a pris la commande (`preparing_at` défini).
+ *  - "ready"      : la cuisine a terminé, à servir (`ready_at` défini).
+ *  - "served"     : commande servie mais pas encore payée (`served_at` défini).
+ *  - "paid"       : table dont au moins une tournée a été encaissée (`rounds_paid`)
+ *                   ou entièrement réglée.
  *
- * Chaque étape a sa couleur sur le plan de salle, expliquée par la légende.
+ * Une table sans étape cuisine (bar, snack) saute directement de "to-prepare" à
+ * "served"/"paid". Chaque étape a sa couleur sur le plan de salle, expliquée par la
+ * légende.
  */
-type TableStage = "libre" | "pending" | "served" | "paid";
+type TableStage = "libre" | "to-prepare" | "preparing" | "ready" | "served" | "paid";
 
 function tableStage(table: Sale | null): TableStage {
   if (!table) return "libre";
@@ -2003,8 +2076,12 @@ function tableStage(table: Sale | null): TableStage {
   if ((table.rounds_paid ?? 0) > 0 || table.total <= 0) return "paid";
   // Servie : la commande a été livrée, paiement débloqué
   if (table.served_at) return "served";
-  // En cours : table ouverte, commande pas encore prise / servie
-  return "pending";
+  // Prête : la cuisine a terminé, la commande n'attend plus qu'à être portée
+  if (table.ready_at) return "ready";
+  // En préparation : la cuisine a pris la commande en main
+  if (table.preparing_at) return "preparing";
+  // À préparer : table ouverte, commande prise, pas encore passée en cuisine
+  return "to-prepare";
 }
 
 /**
@@ -2019,15 +2096,23 @@ function TableCard({
   table,
   active,
   disabled,
+  showServiceCycle,
   onClick,
   onLongPress,
+  onPrepare,
+  onReady,
+  onServe,
 }: {
   label: string;
   table: Sale | null;
   active: boolean;
   disabled: boolean;
+  showServiceCycle: boolean;
   onClick: () => void;
   onLongPress?: () => void;
+  onPrepare?: () => void;
+  onReady?: () => void;
+  onServe?: () => void;
 }) {
   const stage = tableStage(table);
   // `busy` sert aussi de narrowing : TypeScript ne sait pas déduire `table` depuis
@@ -2045,106 +2130,135 @@ function TableCard({
     }
   }
 
+  // La cuisine n'avance qu'au cran où elle se trouve : une commande « à préparer » n'a
+  // qu'un bouton « Préparer », une « en préparation » un « Prêt », une « prête » un
+  // « Servir ». Servie ou réglée, il n'y a plus rien à cuisiner.
+  const cycleAction =
+    showServiceCycle && busy
+      ? stage === "to-prepare"
+        ? { label: "Préparer", cb: onPrepare }
+        : stage === "preparing"
+          ? { label: "Prêt", cb: onReady }
+          : stage === "ready"
+            ? { label: "Servir", cb: onServe }
+            : null
+      : null;
+
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (fired.current) return;
-        onClick();
-      }}
-      onPointerDown={() => {
-        fired.current = false;
-        if (!onLongPress) return;
-        timer.current = window.setTimeout(() => {
-          fired.current = true;
-          onLongPress();
-        }, LONG_PRESS_MS);
-      }}
-      onPointerUp={stop}
-      onPointerLeave={stop}
-      onPointerCancel={stop}
-      // Sur téléphone, un appui long ouvre sinon le menu contextuel du navigateur
-      // par-dessus le plan de salle.
-      onContextMenu={(e) => e.preventDefault()}
-      disabled={disabled}
-      aria-pressed={active}
-      aria-label={
-        !busy
-          ? `Table ${label}, libre`
-          : stage === "pending"
-            ? `Table ${label}, commande en cours`
-            : stage === "served"
-              ? table.total > 0
-                ? `Table ${label}, servie, ${formatFCFA(table.total)} à encaisser`
-                : `Table ${label}, servie. Appui long pour libérer.`
-              : table.total > 0
-                ? `Table ${label}, partiellement encaissée, ${formatFCFA(table.total)} restants`
-                : `Table ${label}, réglée. Appui long pour libérer.`
-      }
+    <div
       className={cn(
         "select-none [-webkit-touch-callout:none]",
         "flex min-h-[64px] flex-col rounded-lg border px-2 py-1.5 text-left transition-all",
-        "hover:border-primary active:scale-[0.98] disabled:opacity-60",
+        "hover:border-primary",
         stage === "libre" && "bg-card",
-        stage === "pending" && "border-warning/60 bg-warning/15",
-        stage === "served" && "border-orange-400/60 bg-orange-50 dark:bg-orange-950/20",
+        stage === "to-prepare" && "border-orange-400/60 bg-orange-50 dark:bg-orange-950/20",
+        stage === "preparing" && "border-warning/60 bg-warning/15",
+        stage === "ready" && "border-green-500/60 bg-green-50 dark:bg-green-950/20",
+        stage === "served" && "border-primary/40 bg-accent",
         stage === "paid" && "border-primary/40 bg-accent",
         active && "ring-2 ring-primary ring-offset-1",
       )}
     >
-      <span className="flex items-center justify-between gap-1">
-        <span className="truncate text-sm font-semibold leading-tight">{label}</span>
-        {stage !== "libre" && (
-          <span
-            className={cn(
-              "h-2 w-2 shrink-0 rounded-full",
-              stage === "pending"
-                ? "bg-warning"
-                : stage === "served"
-                  ? "bg-orange-500"
-                  : "bg-primary",
-            )}
-          />
+      <button
+        type="button"
+        onClick={() => {
+          if (fired.current) return;
+          onClick();
+        }}
+        onPointerDown={() => {
+          fired.current = false;
+          if (!onLongPress) return;
+          timer.current = window.setTimeout(() => {
+            fired.current = true;
+            onLongPress();
+          }, LONG_PRESS_MS);
+        }}
+        onPointerUp={stop}
+        onPointerLeave={stop}
+        onPointerCancel={stop}
+        // Sur téléphone, un appui long ouvre sinon le menu contextuel du navigateur
+        // par-dessus le plan de salle.
+        onContextMenu={(e) => e.preventDefault()}
+        disabled={disabled}
+        aria-pressed={active}
+        aria-label={
+          !busy
+            ? `Table ${label}, libre`
+            : stage === "to-prepare"
+              ? `Table ${label}, à préparer`
+              : stage === "preparing"
+                ? `Table ${label}, en préparation`
+                : stage === "ready"
+                  ? `Table ${label}, prête à servir`
+                  : stage === "served"
+                    ? table.total > 0
+                      ? `Table ${label}, servie, ${formatFCFA(table.total)} à encaisser`
+                      : `Table ${label}, servie. Appui long pour libérer.`
+                    : table.total > 0
+                      ? `Table ${label}, partiellement encaissée, ${formatFCFA(table.total)} restants`
+                      : `Table ${label}, réglée. Appui long pour libérer.`
+        }
+        className={cn(
+          "flex w-full flex-col gap-0.5 rounded-md text-left",
+          !disabled && "active:scale-[0.98]",
+          !busy && disabled && "cursor-default",
         )}
-      </span>
-      {!busy ? (
-        <span className="text-xs leading-tight text-muted-foreground">libre</span>
-      ) : stage === "pending" ? (
-        <>
-          <span className="font-bold leading-tight text-warning tabular-nums">en cours</span>
-          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
-            {table.opened_at ? formatTime(table.opened_at) : "occupée"}
-          </span>
-        </>
-      ) : stage === "served" ? (
-        <>
+      >
+        <span className="flex items-center justify-between gap-1">
+          <span className="truncate text-sm font-semibold leading-tight">{label}</span>
+          {stage !== "libre" && (
+            <span
+              className={cn(
+                "h-2 w-2 shrink-0 rounded-full",
+                stage === "to-prepare" && "bg-orange-500",
+                stage === "preparing" && "bg-warning",
+                stage === "ready" && "bg-green-500",
+                (stage === "served" || stage === "paid") && "bg-primary",
+              )}
+            />
+          )}
+        </span>
+        {!busy ? (
+          <span className="text-xs leading-tight text-muted-foreground">libre</span>
+        ) : stage === "to-prepare" ? (
           <span className="font-bold leading-tight text-orange-600 dark:text-orange-400 tabular-nums">
-            servi
+            à préparer
           </span>
-          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
-            {formatFCFA(table.total)} · {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+        ) : stage === "preparing" ? (
+          <span className="font-bold leading-tight text-warning tabular-nums">en préparation</span>
+        ) : stage === "ready" ? (
+          <span className="font-bold leading-tight text-green-600 dark:text-green-400 tabular-nums">
+            prête
           </span>
-        </>
-      ) : stage === "paid" && table.total <= 0 ? (
-        <>
+        ) : stage === "served" ? (
+          <span className="font-bold leading-tight text-primary tabular-nums">servie</span>
+        ) : stage === "paid" && table.total <= 0 ? (
           <span className="font-bold leading-tight text-primary tabular-nums">réglée</span>
-          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
-            {table.opened_at ? formatTime(table.opened_at) : "occupée"}
-          </span>
-        </>
-      ) : (
-        <>
-          {/* `truncate` comme pour le label : une grosse addition partielle ne
-              doit pas pousser la carte du plan de salle plus large que sa case. */}
+        ) : (
           <span className="max-w-full truncate font-bold leading-tight text-primary tabular-nums">
             {formatFCFA(table.total)}
           </span>
-          <span className="mt-auto text-[11px] leading-tight text-muted-foreground">
-            payée partiel · {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+        )}
+        {busy && stage !== "served" && stage !== "paid" && (
+          <span className="text-[11px] leading-tight text-muted-foreground">
+            {table.opened_at ? formatTime(table.opened_at) : "occupée"}
           </span>
-        </>
+        )}
+      </button>
+      {busy && cycleAction && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={cycleAction.cb}
+          className={cn(
+            "mt-1 w-full rounded-md border px-1 py-0.5 text-[11px] font-semibold leading-tight transition-colors",
+            "border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-60",
+          )}
+        >
+          {cycleAction.label}
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 
