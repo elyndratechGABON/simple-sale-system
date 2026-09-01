@@ -197,6 +197,7 @@ function WelcomePage() {
               initialAccountMode={mode}
               initialCredentials={joinCreds}
               initialPairCode={joinPairCode ?? undefined}
+              initialStep={joinCreds ? 2 : undefined}
               onComplete={() => setPhase("tutorial")}
             />
           </motion.div>

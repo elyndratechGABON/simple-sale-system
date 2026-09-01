@@ -96,6 +96,7 @@ export function SetupWizard({
   initialAccountMode = "create",
   initialCredentials,
   initialPairCode,
+  initialStep,
 }: {
   onComplete: () => void;
   /** « join » = arrivée via « Se connecter » : le wizard démarre directement sur
@@ -109,9 +110,13 @@ export function SetupWizard({
    *  Le téléphone s'annonce avec lui au moment de terminer l'assistant : le principal
    *  le reconnaît et les données convergent. */
   initialPairCode?: string;
+  /** Étape de départ. Un scan QR pré-remplit boutique ET identifiants : on saute
+   *  directement à l'étape compte (saisie du code temporaire) au lieu de redemander
+   *  le nom d'enseigne. */
+  initialStep?: number;
 }) {
   const qc = useQueryClient();
-  const [step, setStep] = useState(initialAccountMode === "join" ? 1 : 0);
+  const [step, setStep] = useState(initialStep ?? (initialAccountMode === "join" ? 1 : 0));
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -135,9 +140,11 @@ export function SetupWizard({
   // convergeraient jamais entre les deux caisses).
   const [pairCode, setPairCode] = useState(initialPairCode ?? "");
   // QR scanné : suit que le compte/boutique provient d'un scan (téléphone+mot de passe
-  // pré-remplis). Tant qu'un QR a été scanné, la saisie du code temporaire est EXIGÉE
-  // avant de pouvoir continuer — même si les identifiants sont déjà remplis.
-  const [qrScanned, setQrScanned] = useState(false);
+  // pré-remplis). Initialisé à vrai quand les identifiants arrivent d'un scan faît AVANT
+  // le wizard (bouton « Rejoindre via code QR » de l'écran de bienvenue). Tant qu'un QR
+  // a été scanné, la saisie du code temporaire est EXIGÉE avant de pouvoir continuer —
+  // même si les identifiants sont déjà remplis.
+  const [qrScanned, setQrScanned] = useState(Boolean(initialCredentials));
   // Mot clé de récupération (v3) : alternative au téléphone+mot de passe pour rattacher
   // un écran au compte — utilisé quand les identifiants du compte sont perdus.
   const [accKeyword, setAccKeyword] = useState("");
