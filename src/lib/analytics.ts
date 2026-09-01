@@ -8,7 +8,15 @@
 // Le bénéfice est calculé depuis les coûts d'acquisition saisis dans les rapports
 // (table `product_expenses`), pas depuis `cost_at_sale` figé dans les lignes de vente.
 import { eachDayOfInterval, startOfDay, subDays } from "date-fns";
-import type { Category, PaymentMethod, ProductExpense, Rental, Sale, SaleItem } from "./db";
+import type {
+  Category,
+  PaymentMethod,
+  Product,
+  ProductExpense,
+  Rental,
+  Sale,
+  SaleItem,
+} from "./db";
 
 export interface DayBucket {
   day: number; // minuit local, en ms — même clé de regroupement que src/routes/history.tsx
@@ -454,5 +462,87 @@ export function computeRentalStats(rentals: Rental[], from: number, to: number):
     avgDuration: allHourly ? avgSeconds / 3600 : avgSeconds / 86400,
     avgDurationUnit: allHourly ? "heure" : "jour",
     byAsset: Array.from(byAsset.values()).sort((a, b) => b.revenue - a.revenue),
+  };
+}
+
+// ── Taux d'occupation (cluster 'location') ───────────────────────────────────────
+//
+// Pourcentage du parc loué sur une fenêtre : durée facturée (overlaps fenêtre) ×
+// quantité, rapportée à la capacité (unités physiques × durée de la fenêtre). Seules
+// les unités connues (`total_units`, sinon `stock`) sont comptées. Sans capacité
+// connu, le taux vaut NaN (l'affichage montre « — »).
+
+export interface RentalOccupancyBucket {
+  asset_id: string;
+  name: string;
+  /** Taux d'occupation de l'actif sur la fenêtre, dans [0,1]. Peut valoir NaN si la
+   *  capacité de l'actif est inconnue. */
+  rate: number;
+}
+
+export interface RentalOccupancyStats {
+  /** Occupation rapportée à la cellule colorée, par actif. */
+  byAsset: RentalOccupancyBucket[];
+  /** Taux d'occupation du parc entier sur la fenêtre, dans [0,1]. NaN sans capacité. */
+  rate: number;
+}
+
+/** Taux d'occupation du parc sur [`from`, `to[`. Une location qui déborde de la fenêtre
+ *  compte pour la seule partie qui y tombe ; les locations annulées sont ignorées. */
+export function computeRentalOccupancy(
+  rentals: Rental[],
+  products: Pick<Product, "id" | "name" | "is_asset" | "total_units" | "stock">[],
+  from: number,
+  to: number,
+): RentalOccupancyStats {
+  const windowMs = Math.max(0, to - from);
+
+  // Capacité par actif (unités physiques) — seuls les actifs de location comptent.
+  const units = new Map<string, number>();
+  for (const p of products) {
+    if (p.is_asset !== true && p.total_units == null) continue;
+    const n = p.total_units ?? p.stock;
+    if (Number.isFinite(n) && n > 0) units.set(p.id, n);
+  }
+
+  // Unités·durée occupées sur la fenêtre, par actif.
+  const occupiedMs = new Map<string, number>();
+  let totalOccupied = 0;
+  for (const r of rentals) {
+    if (r.status === "cancelled") continue;
+    const cap = units.get(r.asset_id);
+    if (cap === undefined) continue; // actif inconnu : aucune capacité à rapporter dessus
+    const end = r.actual_end_date ?? r.expected_end_date;
+    const overlap = Math.max(0, Math.min(end, to) - Math.max(r.start_date, from));
+    if (overlap <= 0) continue;
+    const occ = overlap * r.quantity;
+    occupiedMs.set(r.asset_id, (occupiedMs.get(r.asset_id) ?? 0) + occ);
+    totalOccupied += occ;
+  }
+
+  let capacity = 0;
+  for (const n of units.values()) capacity += n * windowMs;
+
+  const byAsset: RentalOccupancyBucket[] = units.size
+    ? Array.from(units.entries())
+        .map(([asset_id, unitCount]) => {
+          const occ = occupiedMs.get(asset_id) ?? 0;
+          const cap = unitCount * windowMs;
+          return {
+            asset_id,
+            name: products.find((p) => p.id === asset_id)?.name ?? asset_id,
+            rate: cap > 0 ? occ / cap : Number.NaN,
+          };
+        })
+        .sort((a, b) => {
+          const ra = Number.isFinite(a.rate) ? a.rate : -1;
+          const rb = Number.isFinite(b.rate) ? b.rate : -1;
+          return rb - ra;
+        })
+    : [];
+
+  return {
+    byAsset,
+    rate: capacity > 0 ? totalOccupied / capacity : Number.NaN,
   };
 }

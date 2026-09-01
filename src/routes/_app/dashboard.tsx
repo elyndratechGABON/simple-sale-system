@@ -35,7 +35,12 @@ import {
   listActiveRentals,
   listRentals,
 } from "@/lib/db";
-import { computePeriodStats, computeRentalStats, lastDaysRange } from "@/lib/analytics";
+import {
+  computePeriodStats,
+  computeRentalOccupancy,
+  computeRentalStats,
+  lastDaysRange,
+} from "@/lib/analytics";
 import { buildAlerts, type AppAlert } from "@/lib/alerts";
 import { SaleItemChips } from "@/components/SaleItemChips";
 import { formatFCFA, formatPercent, formatDayShort, formatRelative } from "@/lib/format";
@@ -258,6 +263,19 @@ function DashboardPage() {
         ? computeRentalStats(fortnightRentals, fortnightRange.from, fortnightRange.to)
         : null,
     [fortnightRentals, fortnightRange],
+  );
+
+  const rentalOccupancy = useMemo(
+    () =>
+      fortnightRentals && (fortnightRentals.length > 0 || (products ?? []).length > 0)
+        ? computeRentalOccupancy(
+            fortnightRentals,
+            products ?? [],
+            fortnightRange.from,
+            fortnightRange.to,
+          )
+        : null,
+    [fortnightRentals, products, fortnightRange],
   );
 
   const todayStats = useMemo(() => {
@@ -552,7 +570,7 @@ function DashboardPage() {
             <div className="border-b px-4 py-3">
               <p className="text-base font-semibold">Location — 14 jours</p>
             </div>
-            <div className="grid grid-cols-3 gap-3 border-b p-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 border-b p-4">
               <div>
                 <p className="text-xs text-muted-foreground">Revenu locations</p>
                 <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
@@ -572,28 +590,40 @@ function DashboardPage() {
                   {rentalStats.avgDurationUnit === "heure" ? "h" : "j"}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Occupation</p>
+                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                  {formatPercent(rentalOccupancy?.rate ?? Number.NaN)}
+                </p>
+              </div>
             </div>
             {rentalStats.byAsset.length > 0 && (
               <div className="space-y-1 p-2">
-                {rentalStats.byAsset.slice(0, 3).map((asset, index) => (
-                  <div
-                    key={asset.asset_id}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
-                  >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
-                      {index + 1}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {asset.name}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                      {asset.rentalsCount} location{asset.rentalsCount > 1 ? "s" : ""}
-                    </span>
-                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                      {formatFCFA(asset.revenue)}
-                    </span>
-                  </div>
-                ))}
+                {rentalStats.byAsset.slice(0, 3).map((asset, index) => {
+                  const occ = rentalOccupancy?.byAsset.find((o) => o.asset_id === asset.asset_id);
+                  return (
+                    <div
+                      key={asset.asset_id}
+                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {asset.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {asset.rentalsCount} location{asset.rentalsCount > 1 ? "s" : ""}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {formatPercent(occ?.rate ?? Number.NaN)}
+                      </span>
+                      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                        {formatFCFA(asset.revenue)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Card>

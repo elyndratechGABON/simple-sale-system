@@ -1,8 +1,8 @@
 // Tests des agrégats location (src/lib/analytics.ts) — fonctions pures,
 // recalculables à la main, comme le reste des agrégations de l'application.
 import { describe, it, expect } from "vitest";
-import type { Rental } from "./db";
-import { computeRentalStats } from "./analytics";
+import type { Product, Rental } from "./db";
+import { computeRentalOccupancy, computeRentalStats } from "./analytics";
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -120,5 +120,100 @@ describe("computeRentalStats", () => {
     expect(stats.rentalsCount).toBe(0);
     expect(stats.avgDuration).toBe(0);
     expect(stats.byAsset).toEqual([]);
+  });
+});
+
+const asset = (over: Partial<Product> & { id: string }): Product =>
+  ({
+    name: over.id,
+    cost: 0,
+    price: 0,
+    stock: Number.POSITIVE_INFINITY,
+    category: "Événementiel",
+    updated_at: 0,
+    sync_status: "local",
+    ...over,
+  }) as Product;
+
+const WINDOW_MS = TO - FROM;
+
+describe("computeRentalOccupancy", () => {
+  const assets = [asset({ id: "a1", name: "Tente", is_asset: true, total_units: 2 })];
+
+  it("rapporte les unités·durée louées sur la fenêtre à la capacité totale", () => {
+    const r = rental({
+      id: "r1",
+      asset_id: "a1",
+      quantity: 2,
+      expected_end_date: (1_000_000 + 1) * DAY,
+    });
+    const stats = computeRentalOccupancy([r], assets, FROM, TO);
+    // occupé = 1 jour × 2 unités = 2 unités·jours ; capacité = 14 jours × 2 unités = 28
+    expect(stats.rate).toBeCloseTo(2 / 28, 6);
+    expect(stats.byAsset[0]).toMatchObject({ asset_id: "a1", name: "Tente" });
+    expect(stats.byAsset[0].rate).toBeCloseTo(2 / 28, 6);
+  });
+
+  it("ne compte que la partie d'une location qui tombe dans la fenêtre (chevauchement)", () => {
+    const overlapsStart = rental({
+      id: "r1",
+      asset_id: "a1",
+      start_date: FROM - 5 * DAY,
+      expected_end_date: FROM + 1 * DAY,
+    });
+    const overlapsEnd = rental({
+      id: "r2",
+      asset_id: "a1",
+      start_date: TO - 2 * DAY,
+      expected_end_date: TO + 3 * DAY,
+    });
+    const stats = computeRentalOccupancy([overlapsStart, overlapsEnd], assets, FROM, TO);
+    // 1 jour (début) + 2 jours (fin) = 3 unités·jours ; capacité = 28
+    expect(stats.rate).toBeCloseTo(3 / 28, 6);
+  });
+
+  it("ignore les locations annulées et celles entièrement hors fenêtre", () => {
+    const cancelled = rental({ id: "r1", asset_id: "a1", status: "cancelled" });
+    const outside = rental({
+      id: "r2",
+      asset_id: "a1",
+      start_date: TO,
+      expected_end_date: TO + DAY,
+    });
+    const stats = computeRentalOccupancy([cancelled, outside], assets, FROM, TO);
+    expect(stats.rate).toBe(0);
+  });
+
+  it("utilise la fin réelle quand le retour est tombé", () => {
+    const r = rental({
+      id: "r1",
+      asset_id: "a1",
+      expected_end_date: (1_000_000 + 5) * DAY,
+      actual_end_date: (1_000_000 + 2) * DAY,
+    });
+    const stats = computeRentalOccupancy([r], assets, FROM, TO);
+    expect(stats.rate).toBeCloseTo(2 / 28, 6);
+  });
+
+  it("exclut les produits non-loués et vaut NaN sans aucune capacité connue", () => {
+    const consumable = asset({
+      id: "x",
+      name: "Chaise",
+      is_asset: false,
+      total_units: undefined,
+      stock: 10,
+    });
+    const none = computeRentalOccupancy([], [consumable], FROM, TO);
+    expect(none.rate).toBe(Number.NaN);
+    expect(none.byAsset).toEqual([]);
+
+    const withCustom = asset({ id: "a1", name: "Tente", is_asset: false, total_units: 1 });
+    const byUnits = computeRentalOccupancy(
+      [rental({ id: "r1", asset_id: "a1" })],
+      [withCustom],
+      FROM,
+      TO,
+    );
+    expect(byUnits.rate).toBeCloseTo(2 / 14, 6);
   });
 });
