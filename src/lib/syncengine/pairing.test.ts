@@ -261,6 +261,74 @@ describe("rencontre par relais", () => {
   });
 });
 
+describe("QR + code de confirmation temporaire", () => {
+  it("scan → compte posé → annonce avec le code → le principal le pair d'office", async () => {
+    // Principal : compte, code actif, apprendra l'écran par le relais.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const code = await generatePairingCode();
+    const relay = makeRelay();
+    const shopId = getIdentity().shopId;
+
+    // Nouvelle caisse : annonce avec le code lu dans le QR (même appel que le wizard),
+    // puis pousse son op vers le relais.
+    await freshDevice();
+    await setShopAccount(ACCOUNT); // le compte → même groupe s_
+    await ensureIdentity();
+    expect(getIdentity().shopId).toBe(shopId);
+    const res = await enterPairingCode(code);
+    expect(res).toBe("sent");
+    const pending = (await listPendingOps(shopId)).filter((o) => o.type === "device.announce");
+    expect(pending).toHaveLength(1);
+    expect((pending[0].payload as DeviceAnnouncePayload).pair_code).toBe(code);
+    await exchangeOps(relay.client);
+
+    // Le principal tire : reconnaît le code → `paired` d'office.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    expect(getIdentity().shopId).toBe(shopId);
+    const state = await exchangeOps(relay.client);
+    expect(state.applied).toBeGreaterThan(0);
+    const peer = (await listPairedDevices(shopId)).find((p) => p.id !== getIdentity().deviceId);
+    expect(peer?.status).toBe("paired");
+    expect(peer?.role).toBe("owner");
+  });
+
+  it("un code périmé dans le QR laisse l'écran en attente d'approbation (pas pairé)", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const code = await generatePairingCode();
+    const shopId = getIdentity().shopId;
+    await getDB().settings.put({ key: PAIRING_KEYS.codeExpiresAt, value: Date.now() - 1000 });
+
+    // Nouvelle caisse : lit le QR (code expiré), pose le compte, s'annonce en employé
+    // (un rôle employé n'est pas « de confiance » : seule la preuve du code le pair),
+    // puis pousse son op vers le relais.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    await setIdentityRole("employee");
+    const scannerId = getIdentity().deviceId;
+    await enterPairingCode(code);
+    const relay = makeRelay();
+    await exchangeOps(relay.client);
+
+    // Le principal tire : le code est périmé → l'écran reste en attente, pas pairé.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const state = await exchangeOps(relay.client);
+    expect(state.applied).toBeGreaterThan(0);
+    const peer = (await listPairedDevices(shopId)).find((p) => p.id === scannerId);
+    expect(peer).toBeDefined();
+    expect(peer?.status).toBe("pending");
+    expect(peer?.paired_at).toBeUndefined();
+  });
+});
+
 describe("groupes", () => {
   it("deux écrans rattachés par le même mot clé partagent le même shopId", async () => {
     await freshDevice();

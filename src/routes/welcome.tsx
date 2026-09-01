@@ -53,6 +53,7 @@ function WelcomePage() {
   });
   const [mode, setMode] = useState<EntryMode>("create");
   const [joinCreds, setJoinCreds] = useState<{ phone: string; password: string } | null>(null);
+  const [joinPairCode, setJoinPairCode] = useState<string | undefined>();
   const { startScan } = useBarcodeScanner();
 
   /** « Rejoindre via code QR » : scan DIRECT depuis l'écran de bienvenue, puis entrée
@@ -67,6 +68,7 @@ function WelcomePage() {
         return;
       }
       setJoinCreds({ phone: parsed.phone, password: parsed.password });
+      setJoinPairCode(parsed.pair_code);
       setMode("join");
       setPhase("wizard");
       toast.success(`Compte « ${parsed.name || parsed.phone} » lu — vérifiez puis continuez.`);
@@ -79,12 +81,14 @@ function WelcomePage() {
 
   function startCreate() {
     setJoinCreds(null);
+    setJoinPairCode(undefined);
     setMode("create");
     setPhase("wizard");
   }
 
   function startJoinManual() {
     setJoinCreds(null);
+    setJoinPairCode(undefined);
     setMode("join");
     setPhase("wizard");
   }
@@ -190,6 +194,7 @@ function WelcomePage() {
             <SetupWizard
               initialAccountMode={mode}
               initialCredentials={joinCreds}
+              initialPairCode={joinPairCode ?? undefined}
               onComplete={() => setPhase("tutorial")}
             />
           </motion.div>

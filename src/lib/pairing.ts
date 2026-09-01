@@ -15,6 +15,7 @@
 // jamais par QR : c'est voulu et géré côté UI (DevicePairingDialog).
 import { getShopProfile, saveShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
+import { getActivePairingCode } from "@/lib/syncengine/pairing";
 import {
   getPreferences,
   savePreferences,
@@ -54,12 +55,19 @@ export interface PairingPayload {
   name: string;
   phone: string;
   password: string;
+  /** Code de confirmation TEMPORAIRE (code de paire P2P, valable 10 min) affiché par
+   *  le principal au moment de fabriquer le QR. Le téléphone qui scanne s'annonce avec
+   *  cette preuve : le principal le reconnaît `paired` d'office et les données
+   *  (produits, ventes, stock) convergent au prochain échange P2P. Optionnel — absent
+   *  quand aucun code n'est actif, le scan fonctionne quand même (copie boutique). */
+  pair_code?: string;
   /** Copie de la boutique scannée (v1.1) : identité + type de boutique. Champs
    *  optionnels pour rester lisibles par les anciennes versions de parsePairingPayload. */
   shop?: Partial<PairingShopConfig>;
 }
 
 type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"> & {
+  pair_code?: string;
   shop?: Partial<PairingShopConfig>;
 };
 
@@ -68,6 +76,7 @@ export async function buildPairingPayload(): Promise<string | null> {
   const profile = await getShopProfile();
   if (!profile?.accountPhone || !profile.accountPassword) return null;
   const prefs = getPreferences();
+  const pairCode = await getActivePairingCode();
   const payload: PairingPayload = {
     v: 1,
     app: "ecaisse",
@@ -75,6 +84,7 @@ export async function buildPairingPayload(): Promise<string | null> {
     name: profile.accountName ?? profile.storeName,
     phone: profile.accountPhone,
     password: profile.accountPassword,
+    ...(pairCode ? { pair_code: pairCode } : {}),
     shop: {
       storeName: profile.storeName || prefs.workspaceName,
       ownerName: profile.ownerName || prefs.ownerName,
@@ -114,6 +124,7 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
           name: typeof data.name === "string" ? data.name : "",
           phone: data.phone.trim(),
           password: data.password,
+          pair_code: typeof data.pair_code === "string" ? data.pair_code.trim() : undefined,
         };
         if (shop && typeof shop === "object") {
           shopInfo.shop = shop;

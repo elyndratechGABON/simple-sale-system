@@ -99,6 +99,18 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     setQrError(false);
     void (async () => {
       try {
+        // Le QR transporte désormais un code de confirmation TEMPORAIRE (code de paire
+        // P2P) : le scanner s'annonce avec lui et le principal le reconnaît d'office.
+        // On garantit un code frais actif avant de fabriquer le QR.
+        if (pairCode === null) {
+          const code = await generatePairingCode();
+          if (!cancelled) {
+            setPairCode(code);
+            setCodeExpiry(await pairCodeExpiry());
+          }
+          await announceDevice().catch(() => {});
+        }
+        if (cancelled) return;
         const text = await buildPairingPayload();
         if (!text) throw new Error("no-payload");
         const { default: QRCode } = await import("qrcode");
@@ -115,7 +127,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     return () => {
       cancelled = true;
     };
-  }, [open, hasAccount]);
+  }, [open, hasAccount, pairCode]);
 
   // Code de paire : recharger le code actif (et son expiration) à chaque ouverture.
   useEffect(() => {

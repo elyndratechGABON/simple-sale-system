@@ -54,6 +54,7 @@ import {
 import { addProduct, setShopAccount, type Product } from "@/lib/db";
 import { joinByKeyword } from "@/lib/gatekeeper";
 import { parsePairingPayload, applyPairingShop } from "@/lib/pairing";
+import { enterPairingCode } from "@/lib/syncengine/pairing";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { loadDemoData } from "@/lib/demo-data";
 import { toast } from "sonner";
@@ -94,6 +95,7 @@ export function SetupWizard({
   onComplete,
   initialAccountMode = "create",
   initialCredentials,
+  initialPairCode,
 }: {
   onComplete: () => void;
   /** « join » = arrivée via « Se connecter » : le wizard démarre directement sur
@@ -103,6 +105,10 @@ export function SetupWizard({
   /** Identifiants recueillis par un scan QR AVANT l'ouverture du wizard (bouton
    *  « Rejoindre via code QR » de l'écran de bienvenue) : pré-remplis. */
   initialCredentials?: { phone: string; password: string } | null;
+  /** Code de confirmation TEMPORAIRE transporté par le QR scanné AVANT le wizard.
+   *  Le téléphone s'annonce avec lui au moment de terminer l'assistant : le principal
+   *  le reconnaît et les données convergent. */
+  initialPairCode?: string;
 }) {
   const qc = useQueryClient();
   const [step, setStep] = useState(initialAccountMode === "join" ? 1 : 0);
@@ -123,6 +129,10 @@ export function SetupWizard({
   const [accountMode, setAccountMode] = useState<"create" | "join">(initialAccountMode);
   const [accPhone, setAccPhone] = useState(initialCredentials?.phone ?? "");
   const [accPassword, setAccPassword] = useState(initialCredentials?.password ?? "");
+  // Code de confirmation temporaire porté par le QR scanné : refusé au téléphone qui
+  // rejoint, il devient la preuve de son appairage auprès du principal à la fin de
+  // l'assistant (sinon les données ne convergeraient jamais entre les deux caisses).
+  const [pairCode, setPairCode] = useState(initialPairCode ?? "");
   // Mot clé de récupération (v3) : alternative au téléphone+mot de passe pour rattacher
   // un écran au compte — utilisé quand les identifiants du compte sont perdus.
   const [accKeyword, setAccKeyword] = useState("");
@@ -142,6 +152,7 @@ export function SetupWizard({
       }
       setAccPhone(parsed.phone);
       setAccPassword(parsed.password);
+      if (parsed.pair_code) setPairCode(parsed.pair_code);
       // Copie intégrale de la boutique scannée : fiche (profil+préférences) ET état de
       // l'assistant (identité + type de boutique). La nouvelle caisse s'ouvre identique ;
       // l'utilisateur garde la main pour corriger avant de terminer.
@@ -214,6 +225,14 @@ export function SetupWizard({
         password: accPassword,
         ownerName: owner,
       });
+    }
+
+    // Jonction via QR : le compte (téléphone+mot de passe) vient d'être posé → le groupe
+    // de partage P2P (`s_`) existe maintenant. On s'annonce avec le code de confirmation
+    // temporaire lu dans le QR : le principal le reconnaît `paired` d'office et les
+    // données (produits, ventes, stock) convergent au prochain échange P2P.
+    if (pairCode && accPhone.trim() && accPassword) {
+      await enterPairingCode(pairCode).catch(() => {});
     }
 
     savePreferences({
