@@ -129,10 +129,15 @@ export function SetupWizard({
   const [accountMode, setAccountMode] = useState<"create" | "join">(initialAccountMode);
   const [accPhone, setAccPhone] = useState(initialCredentials?.phone ?? "");
   const [accPassword, setAccPassword] = useState(initialCredentials?.password ?? "");
-  // Code de confirmation temporaire porté par le QR scanné : refusé au téléphone qui
-  // rejoint, il devient la preuve de son appairage auprès du principal à la fin de
-  // l'assistant (sinon les données ne convergeraient jamais entre les deux caisses).
+  // Code de confirmation temporaire : l'utilisateur DOIT le saisir sur ce téléphone
+  // (il est affiché en grand sur la caisse principale). Il devient la preuve de son
+  // appairage auprès du principal à la fin de l'assistant (sinon les données ne
+  // convergeraient jamais entre les deux caisses).
   const [pairCode, setPairCode] = useState(initialPairCode ?? "");
+  // QR scanné : suit que le compte/boutique provient d'un scan (téléphone+mot de passe
+  // pré-remplis). Tant qu'un QR a été scanné, la saisie du code temporaire est EXIGÉE
+  // avant de pouvoir continuer — même si les identifiants sont déjà remplis.
+  const [qrScanned, setQrScanned] = useState(false);
   // Mot clé de récupération (v3) : alternative au téléphone+mot de passe pour rattacher
   // un écran au compte — utilisé quand les identifiants du compte sont perdus.
   const [accKeyword, setAccKeyword] = useState("");
@@ -152,7 +157,7 @@ export function SetupWizard({
       }
       setAccPhone(parsed.phone);
       setAccPassword(parsed.password);
-      if (parsed.pair_code) setPairCode(parsed.pair_code);
+      setQrScanned(true);
       // Copie intégrale de la boutique scannée : fiche (profil+préférences) ET état de
       // l'assistant (identité + type de boutique). La nouvelle caisse s'ouvre identique ;
       // l'utilisateur garde la main pour corriger avant de terminer.
@@ -263,6 +268,9 @@ export function SetupWizard({
     if (step === 0) return privacyAccepted;
     if (step === 1) return name.trim().length > 0;
     if (step === 2) {
+      // QR scanné → le compte/boutique sont déjà pré-remplis, mais le code temporaire
+      // affiché sur la caisse principale reste À SAISIR : on bloque tant qu'il n'est pas là.
+      if (accountMode === "join" && qrScanned) return pairCode.trim().length >= 6;
       // Jonction par mot clé : les identifiants téléphone/mdp ne sont plus exigés.
       if (accountMode === "join" && accKeyword.trim() && !(accPhone.trim() && accPassword)) {
         return accKeyword.trim().replace(/\s/g, "").length >= 8;
@@ -416,6 +424,7 @@ export function SetupWizard({
                     // un simple choix de mode surprend et se fait refuser. L'activation
                     // passe par le bouton « Scanner » dédié ci-dessous : UN geste
                     // clair = UN prompt, au moment où l'utilisateur l'attend.
+                    if (m.id !== accountMode) setQrScanned(false);
                     setAccountMode(m.id);
                   }}
                   aria-pressed={accountMode === m.id}
@@ -457,6 +466,25 @@ export function SetupWizard({
                       <ScanLine className="h-4 w-4 mr-2" />
                       {scanning ? "Caméra active…" : "Scanner le QR maintenant"}
                     </Button>
+                  </div>
+                  <div className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">
+                    <p className="flex items-center gap-1.5 text-sm font-medium">
+                      <KeyRound className="h-4 w-4 shrink-0 text-primary" />
+                      Saisissez le code temporaire affiché sur votre caisse principale
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Sur l'autre téléphone : Réglages → Appareils → « Ajouter un appareil ». Le
+                      code est affiché en grand, valable 10 minutes.
+                    </p>
+                    <Input
+                      id="ob-pair-code"
+                      value={pairCode}
+                      onChange={(e) => setPairCode(e.target.value.toUpperCase())}
+                      placeholder="Code sur l'autre caisse"
+                      className="h-12 font-mono tracking-widest"
+                      autoComplete="off"
+                      autoFocus={qrScanned}
+                    />
                   </div>
                   <div className="relative py-1">
                     <div className="absolute inset-0 flex items-center">

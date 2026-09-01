@@ -68,7 +68,9 @@ function WelcomePage() {
         return;
       }
       setJoinCreds({ phone: parsed.phone, password: parsed.password });
-      setJoinPairCode(parsed.pair_code);
+      // Le code temporaire N'EST PAS porté depuis le QR : il doit être saisi à la main
+      // dans l'assistant (écran « Saisissez le code temporaire… » de l'étape compte).
+      setJoinPairCode(undefined);
       setMode("join");
       setPhase("wizard");
       toast.success(`Compte « ${parsed.name || parsed.phone} » lu — vérifiez puis continuez.`);
