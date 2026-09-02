@@ -144,11 +144,26 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         if (item.product_id) {
           const p = await db.products.get(item.product_id);
           if (p && Number.isFinite(p.stock)) {
-            await db.products.put({
-              ...p,
-              stock: Math.max(0, p.stock - item.quantity),
-              ...touch(),
-            });
+            // Variante : le stock a quitté la VARIANTE sur la caisse émettrice (comme
+            // `applyStockDelta`) — le pair doit ajuster la même, pas le stock global.
+            const variant = item.variant_id && p.variants?.find((v) => v.id === item.variant_id);
+            await db.products.put(
+              variant
+                ? {
+                    ...p,
+                    variants: (p.variants ?? []).map((v) =>
+                      v.id === item.variant_id
+                        ? { ...v, stock: Math.max(0, (v.stock ?? 0) - item.quantity) }
+                        : v,
+                    ),
+                    ...touch(),
+                  }
+                : {
+                    ...p,
+                    stock: Math.max(0, p.stock - item.quantity),
+                    ...touch(),
+                  },
+            );
           }
         }
       }
@@ -164,7 +179,20 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         if (item.product_id) {
           const p = await db.products.get(item.product_id);
           if (p && Number.isFinite(p.stock)) {
-            await db.products.put({ ...p, stock: p.stock + item.quantity, ...touch() });
+            const variant = item.variant_id && p.variants?.find((v) => v.id === item.variant_id);
+            await db.products.put(
+              variant
+                ? {
+                    ...p,
+                    variants: (p.variants ?? []).map((v) =>
+                      v.id === item.variant_id
+                        ? { ...v, stock: (v.stock ?? 0) + item.quantity }
+                        : v,
+                    ),
+                    ...touch(),
+                  }
+                : { ...p, stock: p.stock + item.quantity, ...touch() },
+            );
           }
         }
         if (!item.deleted_at) {

@@ -782,6 +782,10 @@ const uid = () =>
 /** Champs de synchronisation d'un enregistrement qu'on vient d'écrire. */
 const touch = (): SyncFields => ({ updated_at: Date.now(), sync_status: "local" });
 
+/** Entier ≥ 1, jamais NaN : `Math.max(1, NaN)` laisserait passer NaN dans les sommes. */
+const clampPositiveInt = (v: number): number =>
+  Number.isFinite(v) ? Math.max(1, Math.round(v)) : 1;
+
 /** Filtre des enregistrements non supprimés. Toute lecture publique passe par là. */
 const alive = <T extends SyncFields>(rows: T[]): T[] => rows.filter((r) => !r.deleted_at);
 
@@ -1197,7 +1201,7 @@ export async function createSale(input: {
     cash_given: cashGiven,
     change_due: cashGiven - total,
     day_closed: false,
-    customers_count: Math.max(1, input.customers_count ?? 1),
+    customers_count: clampPositiveInt(input.customers_count ?? 1),
     // Explicite bien qu'omis : une vente directe est encaissée au moment où on la crée.
     status: "paid",
     ...(discount > 0 ? { discount } : {}),

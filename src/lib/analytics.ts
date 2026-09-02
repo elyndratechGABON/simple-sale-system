@@ -249,6 +249,9 @@ export function computePeriodStats(
     const bucket = day === undefined ? undefined : buckets.get(day);
     if (bucket) {
       bucket.revenue += r;
+      // Bénéfice du jour : coût figé dans la ligne, jamais le coût d'acquisition — cohérent
+      // avec `computeDayDetail` (calendrier des rapports) qui alimente l'écran.
+      bucket.profit += lineProfit(item);
     }
 
     const cat = lineCategory(item);
@@ -280,10 +283,23 @@ export function computePeriodStats(
     }
   }
 
-  // Calcul du profit par produit : on retire le coût d'acquisition du revenu du produit.
+  // Calcul du profit : SANS carte des coûts d'acquisition (`sync.ts`), on s'appuie sur le
+  // coût d'acquisition FIGÉ dans chaque ligne de vente (`cost_at_sale`) — un profit à
+  // 100 % du CA (coût absent) serait un faux chiffre pour le dashboard de l'orchestrateur.
+  // AVEC la carte (`ProfitSheet`), on garde la sémantique « prix d'acquisition saisi pour
+  // la période », qui s'applique produit par produit puis remonte catégorie, global et jour.
+  const usingLineCosts = !productExpenses || productExpenses.length === 0;
   for (const [key, prod] of products) {
-    const cost = expenseByProduct.get(key) ?? 0;
-    prod.profit = prod.revenue - cost;
+    if (usingLineCosts) {
+      prod.profit = 0;
+    } else {
+      const cost = expenseByProduct.get(key) ?? 0;
+      prod.profit = prod.revenue - cost;
+    }
+  }
+  for (const item of inRangeItems) {
+    const prod = products.get(item.product_id ?? item.name);
+    if (usingLineCosts && prod) prod.profit += lineProfit(item);
   }
 
   // Profit par catégorie = somme des profits des produits de la catégorie.

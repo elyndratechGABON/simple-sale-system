@@ -2326,17 +2326,24 @@ function FreeLineDialog({
       toast.error("Libellé requis");
       return;
     }
-    if ((Number(price) || 0) <= 0) {
+    const priceNum = Number(price);
+    const qtyNum = Number(quantity);
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
       toast.error("Prix de vente invalide");
       return;
     }
+    // Bornes de sécurité : une unité (FCFA) ou une quantité délirante corrompt la caisse.
+    const cappedPrice = Math.min(priceNum, 999_999_999);
+    const cappedQty = Number.isFinite(qtyNum)
+      ? Math.max(1, Math.min(Math.round(qtyNum), 10_000))
+      : 1;
     onAdd({
       key: `libre_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       name: label,
       cost: 0,
-      price: Number(price),
+      price: cappedPrice,
       category,
-      quantity: Math.max(1, Number(quantity) || 1),
+      quantity: cappedQty,
     });
     reset();
     onOpenChange(false);
