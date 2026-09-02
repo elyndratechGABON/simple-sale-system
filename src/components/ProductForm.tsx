@@ -419,7 +419,11 @@ export function ProductForm({
                   />
                 </div>
                 <div>
-                  <Label>Tarifs de location (FCFA)</Label>
+                  <Label>Tarifs de location (FCFA) — prix unitaire par période</Label>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Le prix saisi est le tarif unitaire (ex: 35 000/jour). Le total se calcule
+                    automatiquement selon la période choisie.
+                  </div>
                   <div className="grid grid-cols-2 gap-2 mt-1">
                     <div>
                       <Label htmlFor="rental_hour" className="text-xs text-muted-foreground">

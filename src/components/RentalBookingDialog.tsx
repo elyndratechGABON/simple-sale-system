@@ -214,9 +214,14 @@ export function RentalBookingDialog({
             </div>
           )}
 
-          {/* Tarif unitaire */}
+          {/* Tarif unitaire par période */}
           <div>
-            <Label htmlFor="rental-price">Tarif unitaire (FCFA)</Label>
+            <Label htmlFor="rental-price">
+              Tarif unitaire — par {UNIT_LABELS[pricingUnit].toLowerCase()} (FCFA)
+            </Label>
+            <div className="text-xs text-muted-foreground mb-1">
+              Ex : 35 000 FCFA/jour → 1 mois = 35 000 × 30 = 1 050 000 FCFA
+            </div>
             <Input
               id="rental-price"
               value={pricePerUnit}
