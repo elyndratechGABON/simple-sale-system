@@ -2,63 +2,9 @@ import { Check, MonitorSmartphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PLANS, type PlanInfo } from "@/lib/pricing";
 
-export interface PlanInfo {
-  id: "essentiel" | "confort" | "affluence";
-  name: string;
-  price: number;
-  /** Durée couverte par le palier, en jours (miroir du serveur : 30 j par palier). */
-  period: string;
-  /** Nombre d'appareils (caisses) autorisés simultanément sur le compte. */
-  devices: number;
-  features: string[];
-  isPopular?: boolean;
-}
-
-// Paliers d'abonnement ELYNDRA CAISSE — miroir de PRICE_TIERS côté orchestrateur
-// (10 000 F = 2 appareils · 25 000 F = 4 · 50 000 F = 8, pour 30 jours chacun).
-export const PLANS: PlanInfo[] = [
-  {
-    id: "essentiel",
-    name: "Essentiel",
-    price: 10_000,
-    period: "30 jours",
-    devices: 2,
-    features: [
-      "2 caisses simultanées",
-      "Accès complet à la caisse",
-      "Export PDF / Excel / CSV",
-      "Support WhatsApp",
-    ],
-  },
-  {
-    id: "confort",
-    name: "Confort",
-    price: 25_000,
-    period: "30 jours",
-    devices: 4,
-    features: [
-      "4 caisses simultanées",
-      "Tout du palier Essentiel",
-      "Rapports multi-boutiques",
-      "Support WhatsApp prioritaire",
-    ],
-    isPopular: true,
-  },
-  {
-    id: "affluence",
-    name: "Affluence",
-    price: 50_000,
-    period: "30 jours",
-    devices: 8,
-    features: [
-      "8 caisses simultanées",
-      "Tout du palier Confort",
-      "Idéal bars & restaurants animés",
-      "Support téléphonique dédié",
-    ],
-  },
-];
+export { PLANS, type PlanInfo };
 
 interface PlanCardProps {
   plan: PlanInfo;
