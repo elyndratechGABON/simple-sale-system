@@ -34,3 +34,4 @@ bun.lock
 # Captures des tests responsive (tools/responsive-test.mjs).
 .responsive-shots/
 
+.aider*

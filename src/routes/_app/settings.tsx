@@ -94,6 +94,7 @@ import {
   resetGatekeeper,
 } from "@/lib/gatekeeper";
 import { DevicePairingDialog } from "@/components/DevicePairingDialog";
+import { MasterSyncBadge } from "@/components/MasterSyncBadge";
 import { ensureIdentity } from "@/lib/syncengine/identity";
 import { listPairedDevices } from "@/lib/syncengine/peers";
 import { ROLE_LABELS } from "@/lib/syncengine/pairing";
@@ -802,11 +803,14 @@ function DevicesCard() {
               <p className="flex items-center gap-2 text-sm font-medium">
                 <Wifi className="h-4 w-4" /> Caisses synchronisées
               </p>
-              {peers && (
-                <Badge variant="secondary" className="tabular-nums">
-                  {peers.length} appareil{peers.length > 1 ? "s" : ""}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                <MasterSyncBadge peersCount={peers?.length ?? 0} />
+                {peers && (
+                  <Badge variant="secondary" className="tabular-nums">
+                    {peers.length} appareil{peers.length > 1 ? "s" : ""}
+                  </Badge>
+                )}
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
               Les caisses du même compte relient produits, ventes et stock hors serveur — le relais
