@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Smartphone,
+  Star,
   TrendingUp,
   Users,
   WifiOff,
@@ -247,21 +248,73 @@ function Features() {
             Pas dix modules à apprendre. Quatre outils, ceux dont vous vous servez chaque jour.
           </p>
         </motion.div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {FEATURES.map((f, i) => (
-            <motion.div
-              key={f.title}
-              className={`rounded-[1.75rem] border bg-card p-6 ${glowShadow}`}
-              {...fadeUp}
-              transition={{ ...fadeUp.transition, delay: i * 0.07 }}
-            >
-              <span className="inline-flex rounded-xl bg-accent p-2.5 text-primary ring-1 ring-primary/10">
-                <f.icon className="h-5 w-5" />
-              </span>
-              <h3 className="mt-4 font-semibold">{f.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
-            </motion.div>
-          ))}
+        {/* Bento asymétrique : la Caisse (le cœur) est la grande cellule, les trois autres
+            outils s'alignent en zig-zag sous elle. Quatre tuiles identiques en rangée =
+            anti-pattern (cf. DESIGN.md) ; l'asymétrie donne une hiérarchie sans surcharger. */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <motion.div
+            className={`rounded-[2rem] border bg-card p-7 lg:col-span-2 lg:p-9 ${glowShadow}`}
+            {...fadeUp}
+          >
+            <span className="inline-flex rounded-xl bg-primary p-3 text-primary-foreground">
+              <ShoppingCart className="h-6 w-6" />
+            </span>
+            <h3 className="mt-5 text-xl font-bold tracking-tight">{FEATURES[0].title}</h3>
+            <p className="mt-2 max-w-[52ch] leading-relaxed text-muted-foreground">
+              {FEATURES[0].body}
+            </p>
+            <ul className="mt-6 space-y-3 border-t pt-5">
+              {[
+                "La monnaie est rendue automatiquement, sans calcul mental",
+                "Le ticket se ferme en deux ou trois touches, même sans réseau",
+                "Chaque vente alimente les rapports à la seconde",
+              ].map((line) => (
+                <li key={line} className="flex items-start gap-2.5 text-sm">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span className="leading-snug">{line}</span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+          <motion.div
+            className={`rounded-[1.75rem] border bg-card p-6 lg:row-span-2 ${glowShadow}`}
+            {...fadeUp}
+            transition={{ ...fadeUp.transition, delay: 0.07 }}
+          >
+            <span className="inline-flex rounded-xl bg-accent p-2.5 text-primary ring-1 ring-primary/10">
+              <Boxes className="h-5 w-5" />
+            </span>
+            <h3 className="mt-4 font-semibold">{FEATURES[1].title}</h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              {FEATURES[1].body}
+            </p>
+          </motion.div>
+          <motion.div
+            className={`rounded-[1.75rem] border bg-card p-6 ${glowShadow}`}
+            {...fadeUp}
+            transition={{ ...fadeUp.transition, delay: 0.14 }}
+          >
+            <span className="inline-flex rounded-xl bg-accent p-2.5 text-primary ring-1 ring-primary/10">
+              <TrendingUp className="h-5 w-5" />
+            </span>
+            <h3 className="mt-4 font-semibold">{FEATURES[2].title}</h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              {FEATURES[2].body}
+            </p>
+          </motion.div>
+          <motion.div
+            className={`rounded-[1.75rem] border bg-card p-6 ${glowShadow}`}
+            {...fadeUp}
+            transition={{ ...fadeUp.transition, delay: 0.21 }}
+          >
+            <span className="inline-flex rounded-xl bg-accent p-2.5 text-primary ring-1 ring-primary/10">
+              <Users className="h-5 w-5" />
+            </span>
+            <h3 className="mt-4 font-semibold">{FEATURES[3].title}</h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              {FEATURES[3].body}
+            </p>
+          </motion.div>
         </div>
       </div>
     </section>
@@ -323,14 +376,14 @@ function Pricing() {
                 </span>
               )}
               {plan.premium && (
-                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-[#d4af37] px-4 py-1 text-xs font-bold whitespace-nowrap text-[#231a02]">
-                  ★ Premium
+                <span className="absolute -top-3.5 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#d4af37] px-4 py-1 text-xs font-bold whitespace-nowrap text-[#231a02]">
+                  <Star className="h-3.5 w-3.5 fill-current" /> Premium
                 </span>
               )}
               <h3
                 className={
                   plan.premium
-                    ? "text-lg font-bold tracking-tight text-[#8a6d1f]"
+                    ? "text-lg font-bold tracking-tight text-[#6e5310]"
                     : "text-lg font-bold tracking-tight"
                 }
               >
