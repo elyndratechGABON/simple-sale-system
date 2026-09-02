@@ -804,7 +804,7 @@ function DevicesCard() {
                 <Wifi className="h-4 w-4" /> Caisses synchronisées
               </p>
               <div className="flex items-center gap-2">
-                <MasterSyncBadge peersCount={peers?.length ?? 0} />
+                <MasterSyncBadge peers={peers ?? []} />
                 {peers && (
                   <Badge variant="secondary" className="tabular-nums">
                     {peers.length} appareil{peers.length > 1 ? "s" : ""}
