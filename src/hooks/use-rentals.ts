@@ -89,48 +89,11 @@ export function useUpdateRental() {
 }
 
 // ── Utilitaires métier ──────────────────────────────────────────────────────────
-
-const DAY_MS = 86_400_000;
-const HOUR_MS = 3_600_000;
-
-/** Calcule le nombre d'unités de temps entre deux dates selon l'unité de tarification. */
-export function unitsBetween(start: number, end: number, unit: Rental["pricing_unit"]): number {
-  const ms = end - start;
-  switch (unit) {
-    case "hour":
-      return Math.ceil(ms / HOUR_MS);
-    case "day":
-      return Math.ceil(ms / DAY_MS);
-    case "week":
-      return Math.ceil(ms / (7 * DAY_MS));
-    case "month":
-      return Math.ceil(ms / (30 * DAY_MS));
-  }
-}
-
-/** Calcule le coût total d'une location. */
-export function rentalTotal(
-  pricePerUnit: number,
-  quantity: number,
-  start: number,
-  end: number,
-  unit: Rental["pricing_unit"],
-): number {
-  return pricePerUnit * quantity * unitsBetween(start, end, unit);
-}
-
-/** Calcule les jours de retard (0 si pas en retard). */
-export function overdueDays(expectedEnd: number): number {
-  const now = Date.now();
-  if (now <= expectedEnd) return 0;
-  return Math.ceil((now - expectedEnd) / DAY_MS);
-}
-
-/** Calcule la pénalité de retard (10% du total par jour de retard). */
-export function lateFee(total: number, expectedEnd: number): number {
-  const days = overdueDays(expectedEnd);
-  return Math.round(total * 0.1 * days);
-}
+//
+// Les formules (unités, total, retard, pénalité) vivent dans `@/lib/rentals` — module PUR,
+// source de vérité partagée avec les agrégats de `analytics.ts`. Re-exportées ici pour
+// préserver le point d'import des écrans sans dupliquer l'arithmétique.
+export { unitsBetween, rentalTotal, overdueDays, lateFee } from "@/lib/rentals";
 
 /** Met à jour le statut des locations en retard. À appeler au démarrage de l'app. */
 export function useMarkOverdueRentals() {

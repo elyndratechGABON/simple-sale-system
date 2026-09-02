@@ -8,6 +8,7 @@
 // Le bénéfice est calculé depuis les coûts d'acquisition saisis dans les rapports
 // (table `product_expenses`), pas depuis `cost_at_sale` figé dans les lignes de vente.
 import { eachDayOfInterval, startOfDay, subDays } from "date-fns";
+import { unitsBetween } from "./rentals";
 import type {
   Category,
   PaymentMethod,
@@ -390,26 +391,8 @@ function computeGrowthRate(days: DayBucket[]): number {
 // ── Agrégats location (cluster 'location') ───────────────────────────────────────
 //
 // Le revenu d'une location n'est PAS une vente : il vit dans le store `rentals`, jamais
-// dans `sales`. La facturation reprend la formule de `use-rentals` (prix unitaire ×
-// quantité × unités de temps, arrondies à l'unité supérieure) — recalée ici pour garder
-// ce module PUR, sans dépendance vers un fichier de hooks.
-
-const RENTAL_DAY_MS = 86_400_000;
-const RENTAL_HOUR_MS = 3_600_000;
-
-function rentalUnits(start: number, end: number, unit: Rental["pricing_unit"]): number {
-  const ms = end - start;
-  switch (unit) {
-    case "hour":
-      return Math.ceil(ms / RENTAL_HOUR_MS);
-    case "day":
-      return Math.ceil(ms / RENTAL_DAY_MS);
-    case "week":
-      return Math.ceil(ms / (7 * RENTAL_DAY_MS));
-    case "month":
-      return Math.ceil(ms / (30 * RENTAL_DAY_MS));
-  }
-}
+// dans `sales`. La durée facturée (unités de temps, arrondies à l'unité supérieure) vient de
+// `@/lib/rentals` — le module PUR source de vérité, partagé avec les écrans (`use-rentals`).
 
 /** Montant facturé d'une location : la durée retenue est la fin réelle si le retour est
  *  tombé (`actual_end_date`), la fin prévue sinon. */
@@ -418,7 +401,7 @@ function rentalRevenue(rental: Rental): number {
   return (
     rental.price_per_unit *
     rental.quantity *
-    rentalUnits(rental.start_date, end, rental.pricing_unit)
+    unitsBetween(rental.start_date, end, rental.pricing_unit)
   );
 }
 
