@@ -679,17 +679,7 @@ function DevicesCard() {
           </div>
         )}
 
-        {!hasAccount && (
-          <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
-            <div>
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <Users className="h-4 w-4" /> Rejoindre le compte marchand
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Scannez le QR affiché par une caisse déjà abonnée, ou saisissez son téléphone et son
-                mot de passe — puis « Ajouter un appareil » deviendra disponible.
-              </p>
-            </div>
+        {(hasAccount || hasKeywordOnly) && identity && (
             {/* Chemin primaire : scanner le QR d'une caisse abonnée (même parcours
                 que l'onboarding « Rejoindre ») — la saisie manuelle reste en repli. */}
             <Button
@@ -800,6 +790,7 @@ function DevicesCard() {
         {(hasAccount || hasKeywordOnly) && identity && (
           <div className="space-y-2 rounded-xl border bg-muted/30 p-4">
             <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 text-sm font-medium">
                 <Wifi className="h-4 w-4" /> Caisses synchronisées
               </p>
@@ -853,9 +844,10 @@ function DevicesCard() {
           </div>
         )}
 
+        </div>
         <Button onClick={() => setPairingOpen(true)} disabled={!hasAccount && !hasKeywordOnly}>
           <QrCode className="h-4 w-4 mr-2" />
-          Ajouter un appareil
+          {hasAccount ? "Ajouter un appareil" : "Rejoindre un compte"}
         </Button>
       </CardContent>
 
