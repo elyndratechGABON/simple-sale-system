@@ -61,6 +61,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   const [codeExpiry, setCodeExpiry] = useState<number | null>(null);
   const [enteredCode, setEnteredCode] = useState("");
   const [employeeName, setEmployeeName] = useState("");
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const { data: profile } = useQuery({
     queryKey: ["shop_profile"],
@@ -172,6 +173,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     }
     setEnteredCode("");
     toast.success("Demande envoyée — le principal l'accepte au prochain échange.");
+    setInfoOpen(true);
   }
 
   async function changeRole(role: DeviceRole) {
