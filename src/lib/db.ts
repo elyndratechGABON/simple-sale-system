@@ -111,6 +111,7 @@ export interface Product extends SyncFields {
     day?: number;
     week?: number;
     month?: number;
+    year?: number;
   };
   /** Montant de caution par défaut pour cet actif. */
   deposit_amount?: number;
@@ -299,7 +300,7 @@ export interface Rental {
   /** Téléphone du client (optionnel). */
   client_phone?: string;
   /** Unité de tarification choisie par le vendeur. */
-  pricing_unit: "hour" | "day" | "week" | "month";
+  pricing_unit: "hour" | "day" | "week" | "month" | "year";
   /** Tarif unitaire choisi (FCFA). */
   price_per_unit: number;
   /** Nombre d'unités louées (ex: 5 chaises). */

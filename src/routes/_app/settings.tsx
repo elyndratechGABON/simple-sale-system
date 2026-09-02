@@ -678,74 +678,6 @@ function DevicesCard() {
           </div>
         )}
 
-        {request && (
-          <div className="flex items-center justify-between rounded-lg border border-dashed px-3 py-2">
-            <span className="text-sm text-muted-foreground">
-              Demande d'abonnement
-              {typeof request.plan_price === "number" && request.plan_price > 0
-                ? ` (${request.plan_price.toLocaleString("fr-FR")} F)`
-                : ""}
-            </span>
-            <Badge
-              variant={
-                request.status === "pending"
-                  ? "secondary"
-                  : request.status === "approved"
-                    ? "default"
-                    : "destructive"
-              }
-            >
-              {request.status === "pending"
-                ? "En attente de validation"
-                : request.status === "approved"
-                  ? "Validée"
-                  : "Refusée"}
-            </Badge>
-          </div>
-        )}
-
-        {paymentPending && request?.status === "approved" && (
-          <div className="space-y-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <BadgeCheck className="h-4 w-4 text-emerald-600" /> Paiement confirmé
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  clearPaymentConfirmationPending();
-                  setPaymentPending(null);
-                }}
-                className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                aria-label="Masquer la confirmation"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Votre abonnement est activé ({paymentPending.planName} ·{" "}
-              {paymentPending.planPrice.toLocaleString("fr-FR")} F · réf. {paymentPending.reference}
-              ). Prévenez l'administrateur sur WhatsApp : le message est prêt, appuyez sur Envoyer.
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                window.open(
-                  buildPaymentConfirmedWhatsappUrl(paymentPending, request.decided_at ?? undefined),
-                  "_blank",
-                  "noreferrer",
-                );
-                clearPaymentConfirmationPending();
-                setPaymentPending(null);
-              }}
-            >
-              <MessageCircle className="h-4 w-4 mr-2" /> Notifier sur WhatsApp
-            </Button>
-          </div>
-        )}
-
         {!hasAccount && (
           <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
             <div>
@@ -866,9 +798,16 @@ function DevicesCard() {
 
         {(hasAccount || hasKeywordOnly) && identity && (
           <div className="space-y-2 rounded-xl border bg-muted/30 p-4">
-            <p className="flex items-center gap-2 text-sm font-medium">
-              <Wifi className="h-4 w-4" /> Caisses synchronisées
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Wifi className="h-4 w-4" /> Caisses synchronisées
+              </p>
+              {peers && (
+                <Badge variant="secondary" className="tabular-nums">
+                  {peers.length} appareil{peers.length > 1 ? "s" : ""}
+                </Badge>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Les caisses du même compte relient produits, ventes et stock hors serveur — le relais
               ne stocke qu'un temps, jamais les lignes de vente.

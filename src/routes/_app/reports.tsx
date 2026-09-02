@@ -12,6 +12,8 @@ import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { formatDay, formatDayShort, formatFCFA, formatFCFACompact, formatKg } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -45,6 +47,9 @@ function ReportsPage() {
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
   const [detailDay, setDetailDay] = useState<number | null>(null);
+  // Sélection de période personnalisée (range picker)
+  const [rangeFrom, setRangeFrom] = useState<number | null>(null);
+  const [rangeTo, setRangeTo] = useState<number | null>(null);
 
   // Montant par jour du mois affiché — indépendant de toute période choisie, pour que
   // chaque cellule porte son revenu.
@@ -274,6 +279,67 @@ function ReportsPage() {
                 isService={isService}
                 hasWeightInput={hasWeightInput}
               />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Période personnalisée ────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CalendarDays className="h-4 w-4" /> Période personnalisée
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="range-start" className="text-xs">
+                Début
+              </Label>
+              <Input
+                id="range-start"
+                type="date"
+                value={rangeFrom ? new Date(rangeFrom).toISOString().split("T")[0] : ""}
+                onChange={(e) =>
+                  setRangeFrom(
+                    e.target.value ? new Date(e.target.value + "T00:00:00").getTime() : null,
+                  )
+                }
+              />
+            </div>
+            <div>
+              <Label htmlFor="range-end" className="text-xs">
+                Fin
+              </Label>
+              <Input
+                id="range-end"
+                type="date"
+                value={rangeTo ? new Date(rangeTo).toISOString().split("T")[0] : ""}
+                onChange={(e) =>
+                  setRangeTo(
+                    e.target.value
+                      ? new Date(e.target.value + "T00:00:00").getTime() + 86400000
+                      : null,
+                  )
+                }
+                min={rangeFrom ? new Date(rangeFrom).toISOString().split("T")[0] : undefined}
+              />
+            </div>
+          </div>
+          {rangeFrom != null && rangeTo != null && rangeTo > rangeFrom && (
+            <div className="rounded-lg border p-3 text-sm bg-muted/30">
+              <div className="flex justify-between font-medium">
+                <span>Plage sélectionnée</span>
+                <span>
+                  {new Date(rangeFrom).toLocaleDateString("fr-FR")} →{" "}
+                  {new Date(rangeTo - 86400000).toLocaleDateString("fr-FR")}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                L'agrégat de cette période s'affiche dans le panneau de statistiques ci-dessus
+                (calendrier actuel).
+              </p>
             </div>
           )}
         </CardContent>

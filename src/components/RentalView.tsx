@@ -66,6 +66,7 @@ const UNIT_LABELS: Record<string, string> = {
   day: "/jour",
   week: "/semaine",
   month: "/mois",
+  year: "/an",
 };
 
 function formatDate(ts: number): string {
@@ -84,6 +85,7 @@ function buildPricingSummary(p: Product): string {
   if (rp.day) parts.push(`${formatFCFA(rp.day)}/jour`);
   if (rp.week) parts.push(`${formatFCFA(rp.week)}/semaine`);
   if (rp.month) parts.push(`${formatFCFA(rp.month)}/mois`);
+  if (rp.year) parts.push(`${formatFCFA(rp.year)}/an`);
   return parts.length > 0 ? parts.join(", ") : "—";
 }
 

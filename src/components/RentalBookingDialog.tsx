@@ -26,17 +26,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-type PricingUnit = "hour" | "day" | "week" | "month";
+type PricingUnit = "hour" | "day" | "week" | "month" | "year";
 
 const UNIT_LABELS: Record<PricingUnit, string> = {
   hour: "Heure",
   day: "Jour",
   week: "Semaine",
   month: "Mois",
+  year: "An",
 };
 
 /** Ordre de préférence pour l'unité par défaut. */
-const UNIT_PRIORITY: PricingUnit[] = ["day", "hour", "week", "month"];
+const UNIT_PRIORITY: PricingUnit[] = ["day", "hour", "week", "month", "year"];
 
 function todayISO(): string {
   const d = new Date();

@@ -9,6 +9,7 @@ import type { Rental } from "@/lib/db";
 
 export const RENTAL_HOUR_MS = 3_600_000;
 export const RENTAL_DAY_MS = 86_400_000;
+export const RENTAL_YEAR_MS = 365 * RENTAL_DAY_MS;
 
 /** Unités de temps écoulées entre deux dates, arrondies à l'unité supérieure (entamée = payée). */
 export function unitsBetween(start: number, end: number, unit: Rental["pricing_unit"]): number {
@@ -22,6 +23,8 @@ export function unitsBetween(start: number, end: number, unit: Rental["pricing_u
       return Math.ceil(ms / (7 * RENTAL_DAY_MS));
     case "month":
       return Math.ceil(ms / (30 * RENTAL_DAY_MS));
+    case "year":
+      return Math.ceil(ms / RENTAL_YEAR_MS);
   }
 }
 

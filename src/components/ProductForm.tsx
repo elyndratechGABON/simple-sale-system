@@ -83,6 +83,9 @@ export function ProductForm({
   const [rentalMonth, setRentalMonth] = useState<string>(
     editing?.rental_pricing?.month != null ? String(editing.rental_pricing.month) : "",
   );
+  const [rentalYear, setRentalYear] = useState<string>(
+    editing?.rental_pricing?.year != null ? String(editing.rental_pricing.year) : "",
+  );
   const [depositAmount, setDepositAmount] = useState<string>(
     editing?.deposit_amount != null ? String(editing.deposit_amount) : "",
   );
@@ -158,10 +161,11 @@ export function ProductForm({
         is_asset: isAsset || undefined,
         rental_pricing: isAsset
           ? {
-              hour: rentalHour ? Number(rentalHour) : undefined,
-              day: rentalDay ? Number(rentalDay) : undefined,
-              week: rentalWeek ? Number(rentalWeek) : undefined,
-              month: rentalMonth ? Number(rentalMonth) : undefined,
+              hour: rentalHour !== "" ? Number(rentalHour) : undefined,
+              day: rentalDay !== "" ? Number(rentalDay) : undefined,
+              week: rentalWeek !== "" ? Number(rentalWeek) : undefined,
+              month: rentalMonth !== "" ? Number(rentalMonth) : undefined,
+              year: rentalYear !== "" ? Number(rentalYear) : undefined,
             }
           : undefined,
         deposit_amount: isAsset && depositAmount ? Number(depositAmount) : undefined,
@@ -462,6 +466,18 @@ export function ProductForm({
                         inputMode="numeric"
                         value={rentalMonth}
                         onChange={(e) => setRentalMonth(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Optionnel"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="rental_year" className="text-xs text-muted-foreground">
+                        Par an
+                      </Label>
+                      <Input
+                        id="rental_year"
+                        inputMode="numeric"
+                        value={rentalYear}
+                        onChange={(e) => setRentalYear(e.target.value.replace(/\D/g, ""))}
                         placeholder="Optionnel"
                       />
                     </div>
