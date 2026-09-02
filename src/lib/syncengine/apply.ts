@@ -108,6 +108,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     }
     case "product.updated": {
       const pl = op.payload as ProductUpdatedPayload;
+      if (!pl?.product_id) break;
       const existing = await db.products.get(pl.product_id);
       if (!existing || existing.deleted_at) break;
       await db.products.put({ ...existing, ...pl.fields, ...touch() });
@@ -115,6 +116,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     }
     case "product.deleted": {
       const pl = op.payload as { product_id: string };
+      if (!pl?.product_id) break;
       const existing = await db.products.get(pl.product_id);
       if (!existing || existing.deleted_at) break;
       await db.products.put({ ...existing, ...touch(), deleted_at: Date.now() });
@@ -122,7 +124,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     }
     case "stock.adjusted": {
       const pl = op.payload as StockAdjustedPayload;
-      if (typeof pl.delta !== "number" || !Number.isFinite(pl.delta)) break;
+      if (!pl?.product_id || typeof pl.delta !== "number" || !Number.isFinite(pl.delta)) break;
       const existing = await db.products.get(pl.product_id);
       // Stock illimité : rien à ajuster. Produit absent : il arrivera avec sa création.
       if (!existing || existing.deleted_at || !Number.isFinite(existing.stock)) break;
@@ -171,6 +173,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     }
     case "sale.cancelled": {
       const pl = op.payload as SaleCancelledPayload;
+      if (!pl?.sale_id) break;
       const sale = await db.sales.get(pl.sale_id);
       if (!sale || sale.deleted_at) break;
       const deleted_at = Date.now();
@@ -212,6 +215,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     }
     case "client.updated": {
       const pl = op.payload as ClientUpdatedPayload;
+      if (!pl?.client_id) break;
       const existing = await db.clients.get(pl.client_id);
       if (!existing || existing.deleted_at) break;
       await db.clients.put({ ...existing, ...pl.fields, ...touch() });
@@ -219,6 +223,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     }
     case "client.deleted": {
       const pl = op.payload as { client_id: string };
+      if (!pl?.client_id) break;
       const existing = await db.clients.get(pl.client_id);
       if (!existing || existing.deleted_at) break;
       await db.clients.put({ ...existing, ...touch(), deleted_at: Date.now() });
