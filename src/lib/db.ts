@@ -1280,17 +1280,6 @@ export async function getSaleItemsForSales(saleIds: string[]): Promise<SaleItem[
   return alive(await getDB().sale_items.where("sale_id").anyOf(saleIds).toArray());
 }
 
-export async function getProfitToday(): Promise<number> {
-  const sales = await listSalesToday();
-  const items = await getSaleItemsForSales(sales.map((s) => s.id));
-  // cost_at_sale absent sur les ventes antérieures au suivi du prix d'acquisition :
-  // leur bénéfice vaut alors leur chiffre d'affaires.
-  return items.reduce(
-    (sum, it) => sum + (it.price_at_sale - (it.cost_at_sale ?? 0)) * it.quantity,
-    0,
-  );
-}
-
 /**
  * Annule une vente : réintègre les stocks et marque vente + lignes comme supprimées.
  * La suppression est LOGIQUE — les enregistrements restent en base pour qu'une
@@ -1354,11 +1343,6 @@ export async function closeDay(): Promise<number> {
     }
   });
   return sales.length;
-}
-
-/** Dernières clôtures enregistrées, la plus récente d'abord. */
-export async function listDayClosures(limit = 5): Promise<DayClosure[]> {
-  return getDB().day_closures.orderBy("closed_at").reverse().limit(limit).toArray();
 }
 
 // ---------- Clôture automatique ----------
