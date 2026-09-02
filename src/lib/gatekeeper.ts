@@ -351,9 +351,9 @@ export async function handshake(): Promise<HandshakeResult> {
     const overLimit = data.over_limit === true;
     const suspended = data.status === "suspended";
     const reason: LockReason | null = overLimit ? "device_limit" : suspended ? "suspended" : null;
-    await setSetting(SETTING_LOCKED, suspended);
+    await setSetting(SETTING_LOCKED, overLimit || suspended);
     await setSetting(SETTING_LOCK_REASON, reason);
-    setLock(suspended, reason);
+    setLock(overLimit || suspended, reason);
 
     // Mot clé généré à la création : l'écran fondateur est le SEUL à le recevoir — il
     // doit le conserver (il resservira sur un autre téléphone). Posé une seule fois,

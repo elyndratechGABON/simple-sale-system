@@ -8,7 +8,16 @@ import type { Sale, SaleItem } from "../db";
 const SEP = ";";
 const BOM = String.fromCharCode(0xfeff);
 
-const escape = (value: string) => (value.includes(SEP) ? `"${value.replace(/"/g, '""')}"` : value);
+// Échappe une cellule CSV : neutralise l'injection de formule (préfixe `'` sur
+// `=`, `+`, `-`, `@`, pour que Excel/LibreOffice ne l'exécutent pas), puis quote
+// les valeurs qui contiennent le séparateur ou un saut de ligne.
+const neutralized = (value: string) => (/^[=+\-@\t\r]/.test(value) ? `'${value}` : value);
+
+const escape = (value: string) => {
+  let out = neutralized(value);
+  if (out.includes(SEP) || /[\r\n]/.test(out)) out = `"${out.replace(/"/g, '""')}"`;
+  return out;
+};
 
 /** Nom de fichier en accord avec le panneau affiché : scope + date du jour. */
 export function salesCsvFilename(scopeLabel: string): string {

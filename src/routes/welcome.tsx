@@ -133,7 +133,13 @@ function WelcomePage() {
         ownerName: scanInfo.shop?.ownerName ?? "",
       });
       if (tempCode.trim()) {
-        await enterPairingCode(tempCode).catch(() => {});
+        const pairing = await enterPairingCode(tempCode).catch(() => "invalid" as const);
+        if (pairing === "invalid") {
+          toast.warning("Boutique rejointe, mais le code temporaire n'a pas été accepté.", {
+            description:
+              "Vérifiez le code de la caisse principale (6 caractères) et ressayez dans Réglages → Appareils.",
+          });
+        }
       }
       savePreferences({
         workspaceName: store,
@@ -331,7 +337,7 @@ function WelcomePage() {
                   id="join-code"
                   value={tempCode}
                   onChange={(e) => setTempCode(e.target.value.toUpperCase())}
-                  placeholder="A1B2C3"
+                  placeholder="A2B3C4"
                   className="h-12 font-mono tracking-widest"
                   maxLength={6}
                   autoCapitalize="characters"

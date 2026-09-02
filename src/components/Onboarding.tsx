@@ -253,7 +253,13 @@ export function SetupWizard({
     // temporaire lu dans le QR : le principal le reconnaît `paired` d'office et les
     // données (produits, ventes, stock) convergent au prochain échange P2P.
     if (pairCode && accPhone.trim() && accPassword) {
-      await enterPairingCode(pairCode).catch(() => {});
+      const pairing = await enterPairingCode(pairCode).catch(() => "invalid" as const);
+      if (pairing === "invalid") {
+        toast.warning("Compte créé, mais le code temporaire n'a pas été accepté.", {
+          description:
+            "Rejoignez l'autre caisse dans Réglages → Appareils avec le bon code (6 caractères).",
+        });
+      }
     }
 
     savePreferences({
@@ -498,6 +504,7 @@ export function SetupWizard({
                       onChange={(e) => setPairCode(e.target.value.toUpperCase())}
                       placeholder="Code sur l'autre caisse"
                       className="h-12 font-mono tracking-widest"
+                      maxLength={6}
                       autoComplete="off"
                       autoFocus={qrScanned}
                     />

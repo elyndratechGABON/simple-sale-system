@@ -116,7 +116,10 @@ export async function announceDevice(pairCode?: string): Promise<void> {
 export async function enterPairingCode(input: string): Promise<"invalid" | "sent"> {
   const identity = await ensureIdentity();
   const code = normPairCode(input);
-  if (!code || !isSharedGroup(identity.shopId)) return "invalid";
+  // 6 caractères exacts : une saisie plus courte (un « 0/1/I/O » tombé hors du jeu de
+  // caractères) ne peut PAS être une vraie preuve — refuser plutôt que d'annoncer un
+  // code tronqué qui laisserait l'appareil `pending` sans erreur.
+  if (code.length !== PAIR_CODE_LENGTH || !isSharedGroup(identity.shopId)) return "invalid";
   await announceDevice(code);
   return "sent";
 }
