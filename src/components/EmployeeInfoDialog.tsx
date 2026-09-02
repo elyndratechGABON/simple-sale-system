@@ -39,11 +39,7 @@ export function EmployeeInfoDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            Appareil associé :{" "}
-            <span className="font-medium text-foreground">{peerName || "—"}</span>
-          </p>
-          <p className="text-xs">Ces informations apparaissent sur l'écran du propriétaire.</p>
+          <p>Après association, indiquez votre prénom et nom. Le propriétaire verra ces informations.</p>
         </div>
         <div className="space-y-3">
           <div>
