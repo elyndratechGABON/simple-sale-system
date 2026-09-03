@@ -15,6 +15,7 @@
 import { Link } from "@tanstack/react-router";
 import { Home, ShoppingCart, Package, BarChart3, Settings as SettingsIcon } from "lucide-react";
 import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
+import { useAccess } from "@/hooks/use-access";
 
 export const NAV_LINKS = [
   { to: "/dashboard", label: "Accueil", icon: Home },
@@ -27,9 +28,11 @@ export const NAV_LINKS = [
 /** Barre haute, à partir de `lg` seulement. L'onglet actif devient une pilule
  *  de la couleur de marque, lisible d'un coup d'œil contre le reste. */
 export function TopNav() {
+  const { nav } = useAccess();
+  const links = NAV_LINKS.filter((l) => nav.includes(l.to));
   return (
     <nav className="hidden items-center gap-1 lg:flex">
-      {NAV_LINKS.map(({ to, label, icon: Icon }) => (
+      {links.map(({ to, label, icon: Icon }) => (
         <Link
           key={to}
           to={to}
@@ -68,6 +71,8 @@ export function TopNav() {
  */
 export function BottomNav() {
   const { keyboardHeight } = useKeyboardHeight();
+  const { nav } = useAccess();
+  const links = NAV_LINKS.filter((l) => nav.includes(l.to));
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] lg:hidden"
@@ -75,7 +80,7 @@ export function BottomNav() {
       aria-label="Navigation principale"
     >
       <div className="flex items-stretch gap-1 rounded-2xl border bg-card/95 p-1.5 shadow-[0_10px_30px_-12px_rgb(0_0_0/0.3)] backdrop-blur">
-        {NAV_LINKS.map(({ to, label, icon: Icon }) => (
+        {links.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
             to={to}

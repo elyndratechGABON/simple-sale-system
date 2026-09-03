@@ -10,6 +10,7 @@ import { ProfitSheet } from "@/components/ProfitSheet";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
+import { useAccess } from "@/hooks/use-access";
 
 /** Initiales pour l'avatar sans photo : deux lettres maximum, du nom fourni. */
 function initials(name: string): string {
@@ -31,6 +32,7 @@ const HIDDEN_ACCESS_WINDOW_MS = 2000;
 
 export function Header() {
   const { workspaceName, ownerName, ownerPhoto } = usePreferences();
+  const { role } = useAccess();
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
   const [profitOpen, setProfitOpen] = useState(false);
   const clicks = useRef(0);
@@ -56,6 +58,7 @@ export function Header() {
     (monthOverview?.charges ?? 0) === 0 && (monthOverview?.cost_complement ?? 0) === 0;
 
   function onLogoClick() {
+    if (role !== "owner") return;
     const now = Date.now();
     if (now - lastClick.current > HIDDEN_ACCESS_WINDOW_MS) clicks.current = 0;
     lastClick.current = now;
@@ -107,17 +110,19 @@ export function Header() {
             )}
           </Button>
           <NotificationBell />
-          <Link
-            to="/settings"
-            aria-label="Profil et réglages"
-            className="ml-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 sm:h-9 sm:w-9"
-          >
-            {ownerPhoto ? (
-              <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />
-            ) : (
-              initials(ownerName || workspaceName)
-            )}
-          </Link>
+          {role === "owner" && (
+            <Link
+              to="/settings"
+              aria-label="Profil et réglages"
+              className="ml-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 sm:h-9 sm:w-9"
+            >
+              {ownerPhoto ? (
+                <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials(ownerName || workspaceName)
+              )}
+            </Link>
+          )}
         </div>
       </div>
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />

@@ -32,6 +32,7 @@ import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
 import { ensureShopProfile } from "../lib/db";
 import { getPreferences } from "../lib/settings";
 import { backgroundSync } from "../lib/sync";
+import { useAccess } from "../hooks/use-access";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -55,6 +56,22 @@ function AppLayout() {
   const onboarded =
     getPreferences().onboarded === true && getPreferences().onboardingCompleted === true;
 
+  // Garde de route par rôle d'appareil : un employé (/pos, /stocks) ou un gérant
+  // (caisse, stocks, rapports, historique) qui tombe sur un écran interdit — lien
+  // direct, icône d'en-tête, historique de navigation — est renvoyé vers le repli.
+  // Ne s'évalue que le rôle chargé ; tant qu'il est inconnu on suppose le plus
+  // permissif et on ne restreint jamais (aucun risque de flasher l'employé).
+  const access = useAccess();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { canAccess, fallback } = access;
+
+  useEffect(() => {
+    if (onboarded && pathname && !canAccess(pathname)) {
+      void router.navigate({ to: fallback });
+    }
+  }, [onboarded, pathname, canAccess, fallback, router]);
+
+  // Garde anti-onboarding (voir commentaire plus bas).
   useEffect(() => {
     if (!onboarded) {
       void router.navigate({ to: "/welcome" });
