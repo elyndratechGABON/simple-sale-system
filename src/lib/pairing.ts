@@ -19,7 +19,7 @@ import { getActivePairingCode } from "@/lib/syncengine/pairing";
 import {
   getPreferences,
   savePreferences,
-  type Cluster,
+  type ClusterId,
   type BusinessType,
   type SubCategory,
 } from "@/lib/settings";
@@ -29,7 +29,7 @@ import {
  *  la boutique scannée (secteur, tables, unités, domaine personnalisé…). */
 export interface PairingShopConfig {
   /** Profil métier : retail, restaurant, bar, service, clothing, magasin… */
-  cluster: Cluster;
+  cluster: ClusterId;
   /** Sous-catégorie du cluster Magasin, le cas échéant. */
   subCategory?: SubCategory;
   /** Domaine d'activité libre saisi pour le cluster Personnalisé. */

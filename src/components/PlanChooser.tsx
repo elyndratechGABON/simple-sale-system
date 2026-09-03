@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PlanCard, PLANS, type PlanInfo } from "@/components/SubscriptionPlanCard";
+import { PlanCard } from "@/components/SubscriptionPlanCard";
+import { PLANS, type PlanInfo } from "@/lib/pricing";
 
 interface PlanChooserProps {
   open: boolean;

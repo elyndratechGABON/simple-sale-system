@@ -2,9 +2,7 @@ import { Check, MonitorSmartphone, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { PLANS, type PlanInfo } from "@/lib/pricing";
-
-export { PLANS, type PlanInfo };
+import type { PlanInfo } from "@/lib/pricing";
 
 interface PlanCardProps {
   plan: PlanInfo;

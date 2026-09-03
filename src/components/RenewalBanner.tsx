@@ -11,7 +11,7 @@ import { useSubscription } from "@/hooks/use-subscription";
 import { PlanChooser } from "@/components/PlanChooser";
 import { PaymentModal } from "@/components/PaymentModal";
 import { cn } from "@/lib/utils";
-import type { PlanInfo } from "@/components/SubscriptionPlanCard";
+import type { PlanInfo } from "@/lib/pricing";
 
 export function RenewalBanner() {
   const { isExpiringSoon, isExpired, isInGrace, daysRemaining, graceHoursRemaining } =

@@ -102,7 +102,7 @@ import { ShopCard } from "@/components/ShopCard";
 import { ImageCropper } from "@/components/ImageCropper";
 import { PlanChooser } from "@/components/PlanChooser";
 import { PaymentModal } from "@/components/PaymentModal";
-import type { PlanInfo } from "@/components/SubscriptionPlanCard";
+import type { PlanInfo } from "@/lib/pricing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

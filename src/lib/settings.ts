@@ -31,9 +31,6 @@ export type ClusterId =
 /** Sous-catégorie du cluster "Magasin" — détermine les champs spécifiques dans le formulaire produit. */
 export type SubCategory = "electronics" | "appliance" | "furniture" | "hardware_store";
 
-/** Rétrocompat : l'alias `Cluster` est encore utilisé par de nombreux fichiers. */
-export type Cluster = ClusterId;
-
 /**
  * Les 6 grands workflows métier qui pilotent l'expérience utilisateur.
  * Le cluster choisi au onboarding active un workflow spécifique.
@@ -99,7 +96,7 @@ export interface Preferences {
   /** Snack/bar — service direct — ou restaurant/fastfood — commande puis encaissement. */
   businessType: BusinessType;
   /** Profil métier déterminant le comportement de l'interface. */
-  cluster: Cluster;
+  cluster: ClusterId;
   /** Sous-catégorie du cluster Magasin (optionnel). */
   subCategory?: SubCategory;
   /** Domaine d'activité libre saisi pour le cluster Personnalisé. */

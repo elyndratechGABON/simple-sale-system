@@ -33,7 +33,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { submitSubscriptionRequest } from "@/lib/requests";
 import { PAYMENT_WHATSAPP_NUMBER, setPaymentConfirmationPending } from "@/lib/payment-confirmation";
-import type { PlanInfo } from "@/components/SubscriptionPlanCard";
+import type { PlanInfo } from "@/lib/pricing";
 
 const SUPPORT_WHATSAPP = `https://wa.me/${PAYMENT_WHATSAPP_NUMBER}`;
 const SUPPORT_PHONE = PAYMENT_WHATSAPP_NUMBER;
