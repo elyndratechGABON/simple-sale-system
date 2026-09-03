@@ -1,12 +1,11 @@
-// Modal de renouvellement manuel via Airtel Money. Trois étapes guidées :
-// 1. Instructions USSD (*110#) avec bouton qui compose le numéro
-// 2. Saisie de la référence de transaction
-// 3. Envoi de la demande à l'administrateur (un clic) + confirmation WhatsApp en secours
-//
-// La demande part à l'orchestrateur (POST /api/v1/requests) : le tableau de bord de
-// l'administrateur la reçoit en temps réel et valide EN UN CLIC — plus besoin de
-// ressaisir le montant à la main. Le lien WhatsApp reste en secours si le serveur est
-// injoignable.
+// Modal de renouvellement manuel via Mobile Money. Deux chemins, au choix après le
+// paiement :
+//   A. Déblocage OFFLINE (recommandé « sans serveur ») : le marchand colle le SMS de
+//      confirmation de l'opérateur → la caisse parse montant/TID et déverrouille sur
+//      place, même si l'orchestrateur (sur le PC du marchand) est éteint.
+//   B. Validation admin (serveur) : saisie de la référence + envoi de la demande à
+//      l'orchestrateur (POST /api/v1/requests), validée en un clic depuis le tableau de
+//      bord. Le lien WhatsApp reste en secours si le serveur est injoignable.
 import { useState } from "react";
 import {
   BadgeCheck,
@@ -17,6 +16,8 @@ import {
   CreditCard,
   Send,
   Smartphone,
+  ScanLine,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,6 +34,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { submitSubscriptionRequest } from "@/lib/requests";
 import { PAYMENT_WHATSAPP_NUMBER, setPaymentConfirmationPending } from "@/lib/payment-confirmation";
+import { unlockFromPaymentSms } from "@/lib/offline-unlock";
 import type { PlanInfo } from "@/lib/pricing";
 
 const SUPPORT_WHATSAPP = `https://wa.me/${PAYMENT_WHATSAPP_NUMBER}`;
@@ -47,6 +49,9 @@ interface PaymentModalProps {
   selectedPlan?: PlanInfo | null;
 }
 
+// 1 = USSD, 2 = choix du chemin, 3 = admin, 4 = SMS offline.
+type Step = 1 | 2 | 3 | 4;
+
 export function PaymentModal({
   open,
   onOpenChange,
@@ -54,11 +59,14 @@ export function PaymentModal({
   ownerName,
   selectedPlan,
 }: PaymentModalProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<Step>(1);
   const [reference, setReference] = useState("");
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [smsText, setSmsText] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockedPlan, setUnlockedPlan] = useState<string | null>(null);
 
   async function handleSendRequest() {
     if (!reference.trim() || sending) return;
@@ -93,12 +101,40 @@ export function PaymentModal({
     }
   }
 
+  /** Déblocage OFFLINE : colle le SMS de confirmation de l'opérateur → déverrouille sur place. */
+  async function handleOfflineUnlock() {
+    if (!smsText.trim() || unlocking) return;
+    setUnlocking(true);
+    try {
+      const result = await unlockFromPaymentSms(smsText.trim());
+      if (result.ok && result.receipt) {
+        setUnlockedPlan(result.receipt.planName);
+        toast.success(`Abonnement ${result.receipt.planName} débloqué hors ligne`, {
+          description: `Reçu ${result.receipt.amount.toLocaleString("fr-FR")} F — le prochain contact serveur confirmera.`,
+        });
+      } else {
+        const reason = result.reason ?? "unknown";
+        const messages: Record<string, string> = {
+          not_a_payment_sms: "Ce texte ne ressemble pas à un SMS de confirmation de paiement.",
+          no_matching_tier: "Le montant ne correspond à aucun palier (10 000 / 25 000 / 50 000 F).",
+          phone_mismatch: "Le numéro du payeur ne correspond pas à la demande en cours.",
+        };
+        toast.error(messages[reason] ?? "Impossible de déverrouiller à partir de ce SMS.");
+      }
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   function handleClose() {
     setStep(1);
     setReference("");
     setCopied(false);
     setSending(false);
     setSent(false);
+    setSmsText("");
+    setUnlocking(false);
+    setUnlockedPlan(null);
     onOpenChange(false);
   }
 
@@ -139,12 +175,13 @@ export function PaymentModal({
             {selectedPlan ? `Souscrire — Plan ${selectedPlan.name}` : "Renouveler l'abonnement"}
           </DialogTitle>
           <DialogDescription>
-            Étape {step}/3 —{" "}
             {step === 1
-              ? "Effectuez le paiement"
+              ? "Étape 1/2 — Effectuez le paiement"
               : step === 2
-                ? "Entrez la référence"
-                : "Confirmez via WhatsApp"}
+                ? "Étape 2/2 — Comment confirmer le paiement ?"
+                : step === 3
+                  ? "Validation par l'administrateur"
+                  : "Déblocage immédiat (hors ligne)"}
           </DialogDescription>
         </DialogHeader>
 
@@ -189,32 +226,110 @@ export function PaymentModal({
 
         {step === 2 && (
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Choisissez comment confirmer ce paiement :
+            </p>
+
+            <div className="rounded-lg border bg-accent/50 p-3">
+              <p className="text-sm font-semibold flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                Déblocage immédiat, hors ligne
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Idéal quand l'orchestrateur (sur votre PC) est éteint : collez le SMS de
+                confirmation reçu de l'opérateur, la caisse déverrouille sur place.
+              </p>
+              <Button className="mt-3 w-full" onClick={() => setStep(4)}>
+                <ScanLine className="h-4 w-4" />
+                Coller le SMS de confirmation
+              </Button>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <p className="text-sm font-semibold flex items-center gap-1.5">
+                <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                Validation par l'administrateur
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                La demande part au serveur, l'administrateur la valide en un clic depuis son tableau
+                de bord (ou via WhatsApp en secours).
+              </p>
+              <Button variant="outline" className="mt-3 w-full" onClick={() => setStep(3)}>
+                Passer par l'administrateur
+              </Button>
+            </div>
+
+            <Button variant="ghost" className="w-full" onClick={() => setStep(1)}>
+              Retour
+            </Button>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-4">
             <div>
-              <Label htmlFor="payment-ref">Référence de la transaction</Label>
-              <Input
-                id="payment-ref"
-                placeholder="Ex : 241076505254"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                autoFocus
+              <Label htmlFor="payment-sms">SMS de confirmation de l'opérateur</Label>
+              <textarea
+                id="payment-sms"
+                className="w-full min-h-24 rounded-lg border bg-input px-3 py-2 text-sm"
+                placeholder={
+                  'Collez ici le SMS reçu, ex : "Recu 10000F du 076505254,Client. Nouveau solde … TID: …."'
+                }
+                value={smsText}
+                onChange={(e) => setSmsText(e.target.value)}
+                rows={4}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Le numéro ou la référence reçu par SMS après le paiement.
+                L'app extrait le montant et le TID, vérifie le palier, puis déverrouille
+                immédiatement — même sans serveur.
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
-                Retour
-              </Button>
-              <Button className="flex-1" disabled={!reference.trim()} onClick={() => setStep(3)}>
-                Continuer
-              </Button>
-            </div>
+
+            {unlockedPlan ? (
+              <div className="flex items-start gap-2 rounded-lg border border-primary/40 bg-primary/10 p-3">
+                <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p className="text-sm text-foreground">
+                  Abonnement <strong>{unlockedPlan}</strong> débloqué. Le prochain appel au serveur
+                  (au retour en ligne) confirmera définitivement.
+                </p>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep(2)} className="flex-1">
+                  Retour
+                </Button>
+                <Button
+                  className="flex-1 gap-2"
+                  disabled={!smsText.trim() || unlocking}
+                  onClick={() => void handleOfflineUnlock()}
+                >
+                  <ScanLine className="h-4 w-4" />
+                  {unlocking ? "Vérification…" : "Déverrouiller"}
+                </Button>
+              </div>
+            )}
+
+            <Button variant="ghost" className="w-full" onClick={handleClose}>
+              Fermer
+            </Button>
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-4">
+            <div>
+              <Label htmlFor="payment-ref">Référence de la transaction</Label>
+              <Input
+                id="payment-ref"
+                placeholder="Référence reçue (TID / numéro de transaction)"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Le TID ou la référence reçu par SMS avec la confirmation de paiement.
+              </p>
+            </div>
+
             <div className="rounded-lg border p-4 text-sm space-y-2">
               <p className="font-medium">Récapitulatif :</p>
               {selectedPlan && (
@@ -282,6 +397,10 @@ export function PaymentModal({
                 </p>
               </>
             )}
+
+            <Button variant="ghost" className="w-full" onClick={() => setStep(2)}>
+              Retour au choix du chemin
+            </Button>
 
             <Button variant="ghost" className="w-full" onClick={handleClose}>
               Fermer

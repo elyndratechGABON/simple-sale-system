@@ -128,6 +128,19 @@ export async function loadLockState(): Promise<void> {
   setLock(locked, locked ? (reason ?? "suspended") : null);
 }
 
+/**
+ * Déverrouille la caisse LOCALEMENT, sans passer par le serveur. Utilisé par le flux de
+ * paiement offline-first : une fois la preuve de paiement (SMS opérateur) validée sur
+ * l'appareil, on lève le verrou et on efface son motif persistant. Le prochain handshake
+ * réconciliera avec le serveur — si le compte est réellement à jour, la suspension ne
+ * reviendra pas ; sinon, le serveur la re-posera (source de vérité).
+ */
+export async function unlockLocal(): Promise<void> {
+  await setSetting(SETTING_LOCKED, false);
+  await setSetting(SETTING_LOCK_REASON, null);
+  setLock(false, null);
+}
+
 // ── Mémoire des ordres appliqués (idempotence) ────────────────────────────────────
 // Persistée : si l'app meurt entre « appliquer » et « accuser », le même ordre peut
 // revenir au prochain handshake — on le saute, on a déjà ses effets.
