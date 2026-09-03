@@ -1,7 +1,13 @@
 // Paliers d'abonnement — source de vérité (module PUR, sans JSX).
 //
-// Miroir de PRICE_TIERS côté orchestrateur (10 000 F = 2 appareils · 25 000 F = 4 ·
-// 50 000 F = 8, pour 30 jours chacun). Ne touchez pas un prix sans l'orchestrateur.
+// Miroir de PRICE_TIERS côté orchestrateur (10 000 F = 3 écrans · 25 000 F = 5 ·
+// 50 000 F = 9, pour 30 jours chacun). Le nombre d'écrans inclut TOUJOURS la caisse
+// du propriétaire (+1) : « 3 écrans » = propriétaire + 2 employés/gérants.
+//
+// IMPORTANT : l'orchestrateur (dépôt séparé, simple-sale-orchestrator) doit renvoyer
+// les mêmes max_devices (3/5/9) à la place du compte, sinon l'indicateur « Places
+// utilisées » des réglages — alimenté par le handshake serveur — restera à 2/4/8.
+// Ne touchez pas un prix sans l'orchestrateur.
 export interface PlanInfo {
   id: "essentiel" | "confort" | "affluence";
   name: string;
@@ -20,9 +26,9 @@ export const PLANS: PlanInfo[] = [
     name: "Essentiel",
     price: 10_000,
     period: "30 jours",
-    devices: 2,
+    devices: 3,
     features: [
-      "2 caisses simultanées",
+      "3 caisses simultanées",
       "Accès complet à la caisse",
       "Export PDF / Excel / CSV",
       "Support WhatsApp",
@@ -33,9 +39,9 @@ export const PLANS: PlanInfo[] = [
     name: "Confort",
     price: 25_000,
     period: "30 jours",
-    devices: 4,
+    devices: 5,
     features: [
-      "4 caisses simultanées",
+      "5 caisses simultanées",
       "Tout du palier Essentiel",
       "Rapports multi-boutiques",
       "Support WhatsApp prioritaire",
@@ -47,9 +53,9 @@ export const PLANS: PlanInfo[] = [
     name: "Affluence",
     price: 50_000,
     period: "30 jours",
-    devices: 8,
+    devices: 9,
     features: [
-      "8 caisses simultanées",
+      "9 caisses simultanées",
       "Tout du palier Confort",
       "Idéal bars & restaurants animés",
       "Support téléphonique dédié",

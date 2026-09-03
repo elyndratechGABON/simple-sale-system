@@ -608,7 +608,7 @@ export function SetupWizard({
             </div>
             <p className="text-xs text-muted-foreground">
               {accountMode === "create"
-                ? "Paliers : 10 000 F (2 appareils) · 25 000 F (4) · 50 000 F (8) / 30 jours. Vous démarrez avec un essai gratuit."
+                ? "Paliers : 10 000 F (3 écrans) · 25 000 F (5) · 50 000 F (9) / 30 jours. Vous démarrez avec un essai gratuit."
                 : "Scannez le QR affiché par une de vos caisses abonnées, ou saisissez son téléphone et mot de passe."}
             </p>
           </StepShell>

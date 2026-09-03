@@ -82,7 +82,7 @@ export function SuspendedScreen() {
         )}
         <p className="mt-3 text-xs text-muted-foreground">
           {overLimit
-            ? "Paliers : 10 000 F (2 appareils) · 25 000 F (4) · 50 000 F (8) / 30 jours."
+            ? "Paliers : 10 000 F (3 écrans) · 25 000 F (5) · 50 000 F (9) / 30 jours."
             : keywordInvalid
               ? "Préparez le mot clé reçu à la création du compte (format XXXX-XXXX)."
               : "Renouvelez votre abonnement via WhatsApp, votre caisse sera relancée rapidement."}
