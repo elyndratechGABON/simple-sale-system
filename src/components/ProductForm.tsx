@@ -57,7 +57,7 @@ export function ProductForm({
     editing?.category ?? defaultCategory ?? "Boisson",
   );
   const [productType, setProductType] = useState<"product" | "service">(
-    editing?.type ?? defaultType ?? "product",
+    isLocation ? "service" : (editing?.type ?? defaultType ?? "product"),
   );
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
   const [unit, setUnit] = useState<"piece" | "meter" | "liter">(editing?.unit ?? "piece");
@@ -69,8 +69,9 @@ export function ProductForm({
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
 
-  // Champs location (cluster 'location')
-  const [isAsset, setIsAsset] = useState(editing?.is_asset ?? isLocation);
+  // Champs location (cluster 'location') : dans ce cluster tout produit est un actif
+  // de location, donc `isAsset` est dérivé et non toggleable.
+  const isAsset = isLocation || editing?.is_asset === true;
   const [rentalHour, setRentalHour] = useState<string>(
     editing?.rental_pricing?.hour != null ? String(editing.rental_pricing.hour) : "",
   );
@@ -242,97 +243,100 @@ export function ProductForm({
             onChange={handlePhoto}
           />
         </div>
-        {productType === "service" ? (
-          <div>
-            <Label htmlFor="price">Prix de vente</Label>
-            <Input
-              id="price"
-              inputMode="numeric"
-              value={price}
-              onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-              placeholder="300"
-            />
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="price">Prix de vente</Label>
-                <Input
-                  id="price"
-                  inputMode="numeric"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-                  placeholder="300"
-                />
-              </div>
-              <div>
-                <Label htmlFor="stock">Stock</Label>
-                <Input
-                  id="stock"
-                  inputMode="numeric"
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
-                  placeholder="50"
-                  disabled={unlimited}
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="unlimited"
-                checked={unlimited}
-                onCheckedChange={(v) => setUnlimited(Boolean(v))}
+        {!isAsset &&
+          (productType === "service" ? (
+            <div>
+              <Label htmlFor="price">Prix de vente</Label>
+              <Input
+                id="price"
+                inputMode="numeric"
+                value={price}
+                onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+                placeholder="300"
               />
-              <Label htmlFor="unlimited" className="cursor-pointer">
-                Stock illimité
-              </Label>
             </div>
-            {!unlimited && (
-              <div>
-                <Label htmlFor="min-stock">Stock minimum (alerte)</Label>
-                <Input
-                  id="min-stock"
-                  inputMode="numeric"
-                  value={minStock}
-                  onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Par défaut : 5"
-                  className="mt-1.5"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Sous ce seuil, le produit apparaît comme « stock faible ».
-                </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="price">Prix de vente</Label>
+                  <Input
+                    id="price"
+                    inputMode="numeric"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+                    placeholder="300"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="stock">Stock</Label>
+                  <Input
+                    id="stock"
+                    inputMode="numeric"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
+                    placeholder="50"
+                    disabled={unlimited}
+                  />
+                </div>
               </div>
-            )}
-          </>
-        )}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="unlimited"
+                  checked={unlimited}
+                  onCheckedChange={(v) => setUnlimited(Boolean(v))}
+                />
+                <Label htmlFor="unlimited" className="cursor-pointer">
+                  Stock illimité
+                </Label>
+              </div>
+              {!unlimited && (
+                <div>
+                  <Label htmlFor="min-stock">Stock minimum (alerte)</Label>
+                  <Input
+                    id="min-stock"
+                    inputMode="numeric"
+                    value={minStock}
+                    onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Par défaut : 5"
+                    className="mt-1.5"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sous ce seuil, le produit apparaît comme « stock faible ».
+                  </p>
+                </div>
+              )}
+            </>
+          ))}
         {/* Un seul enfant : une grille 2 colonnes laissait une moitié vide. */}
-        <div>
-          <Label>Type</Label>
-          <div className="flex gap-2 mt-1">
-            <Button
-              type="button"
-              variant={productType === "product" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setProductType("product")}
-              className="flex-1"
-            >
-              Produit
-            </Button>
-            <Button
-              type="button"
-              variant={productType === "service" ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setProductType("service");
-                setUnlimited(true);
-              }}
-              className="flex-1"
-            >
-              Prestation
-            </Button>
+        {!isLocation && (
+          <div>
+            <Label>Type</Label>
+            <div className="flex gap-2 mt-1">
+              <Button
+                type="button"
+                variant={productType === "product" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setProductType("product")}
+                className="flex-1"
+              >
+                Produit
+              </Button>
+              <Button
+                type="button"
+                variant={productType === "service" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setProductType("service");
+                  setUnlimited(true);
+                }}
+                className="flex-1"
+              >
+                Prestation
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
         {hasVariants && productType === "product" && (
           <div>
             <Label>Variantes (taille, couleur, pointure…) — prix et stock par variante</Label>
@@ -393,112 +397,98 @@ export function ProductForm({
             />
           </div>
         )}
-        {/* Champs location : actif de location avec tarification par période */}
-        {isLocation && productType === "product" && (
+        {/* Champs location : tout produit est un actif de location, formulaire dédié */}
+        {isLocation && (
           <>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="is_asset"
-                checked={isAsset}
-                onCheckedChange={(v) => setIsAsset(Boolean(v))}
+            <div>
+              <Label htmlFor="total_units">Nombre d'unités physiques</Label>
+              <Input
+                id="total_units"
+                inputMode="numeric"
+                value={totalUnits}
+                onChange={(e) => setTotalUnits(e.target.value.replace(/\D/g, ""))}
+                placeholder="Ex : 50 chaises, 3 voitures"
               />
-              <Label htmlFor="is_asset" className="cursor-pointer">
-                Actif de location (chaises, tentes, voitures…)
-              </Label>
             </div>
-            {isAsset && (
-              <>
+            <div>
+              <Label>Tarifs de location (FCFA) — prix unitaire par période</Label>
+              <div className="text-xs text-muted-foreground mb-2">
+                Le prix saisi est le tarif unitaire (ex: 35 000/jour). Le total se calcule
+                automatiquement selon la période choisie.
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-1">
                 <div>
-                  <Label htmlFor="total_units">Nombre d'unités physiques</Label>
+                  <Label htmlFor="rental_hour" className="text-xs text-muted-foreground">
+                    Par heure
+                  </Label>
                   <Input
-                    id="total_units"
+                    id="rental_hour"
                     inputMode="numeric"
-                    value={totalUnits}
-                    onChange={(e) => setTotalUnits(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Ex : 50 chaises, 3 voitures"
+                    value={rentalHour}
+                    onChange={(e) => setRentalHour(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Optionnel"
                   />
                 </div>
                 <div>
-                  <Label>Tarifs de location (FCFA) — prix unitaire par période</Label>
-                  <div className="text-xs text-muted-foreground mb-2">
-                    Le prix saisi est le tarif unitaire (ex: 35 000/jour). Le total se calcule
-                    automatiquement selon la période choisie.
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div>
-                      <Label htmlFor="rental_hour" className="text-xs text-muted-foreground">
-                        Par heure
-                      </Label>
-                      <Input
-                        id="rental_hour"
-                        inputMode="numeric"
-                        value={rentalHour}
-                        onChange={(e) => setRentalHour(e.target.value.replace(/\D/g, ""))}
-                        placeholder="Optionnel"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="rental_day" className="text-xs text-muted-foreground">
-                        Par jour
-                      </Label>
-                      <Input
-                        id="rental_day"
-                        inputMode="numeric"
-                        value={rentalDay}
-                        onChange={(e) => setRentalDay(e.target.value.replace(/\D/g, ""))}
-                        placeholder="Ex : 5000"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="rental_week" className="text-xs text-muted-foreground">
-                        Par semaine
-                      </Label>
-                      <Input
-                        id="rental_week"
-                        inputMode="numeric"
-                        value={rentalWeek}
-                        onChange={(e) => setRentalWeek(e.target.value.replace(/\D/g, ""))}
-                        placeholder="Optionnel"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="rental_month" className="text-xs text-muted-foreground">
-                        Par mois
-                      </Label>
-                      <Input
-                        id="rental_month"
-                        inputMode="numeric"
-                        value={rentalMonth}
-                        onChange={(e) => setRentalMonth(e.target.value.replace(/\D/g, ""))}
-                        placeholder="Optionnel"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="rental_year" className="text-xs text-muted-foreground">
-                        Par an
-                      </Label>
-                      <Input
-                        id="rental_year"
-                        inputMode="numeric"
-                        value={rentalYear}
-                        onChange={(e) => setRentalYear(e.target.value.replace(/\D/g, ""))}
-                        placeholder="Optionnel"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="deposit">Caution par défaut (FCFA)</Label>
+                  <Label htmlFor="rental_day" className="text-xs text-muted-foreground">
+                    Par jour
+                  </Label>
                   <Input
-                    id="deposit"
+                    id="rental_day"
                     inputMode="numeric"
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Optionnel — montant retenu au client"
+                    value={rentalDay}
+                    onChange={(e) => setRentalDay(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Ex : 5000"
                   />
                 </div>
-              </>
-            )}
+                <div>
+                  <Label htmlFor="rental_week" className="text-xs text-muted-foreground">
+                    Par semaine
+                  </Label>
+                  <Input
+                    id="rental_week"
+                    inputMode="numeric"
+                    value={rentalWeek}
+                    onChange={(e) => setRentalWeek(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Optionnel"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="rental_month" className="text-xs text-muted-foreground">
+                    Par mois
+                  </Label>
+                  <Input
+                    id="rental_month"
+                    inputMode="numeric"
+                    value={rentalMonth}
+                    onChange={(e) => setRentalMonth(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Optionnel"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="rental_year" className="text-xs text-muted-foreground">
+                    Par an
+                  </Label>
+                  <Input
+                    id="rental_year"
+                    inputMode="numeric"
+                    value={rentalYear}
+                    onChange={(e) => setRentalYear(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Optionnel"
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="deposit">Caution par défaut (FCFA)</Label>
+              <Input
+                id="deposit"
+                inputMode="numeric"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value.replace(/\D/g, ""))}
+                placeholder="Optionnel — montant retenu au client"
+              />
+            </div>
           </>
         )}
         {!isAsset &&
