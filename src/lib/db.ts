@@ -1264,7 +1264,7 @@ export async function listSales(from?: number, to?: number): Promise<Sale[]> {
     .sort((a, b) => b.timestamp - a.timestamp);
 }
 
-export function startOfToday(): number {
+function startOfToday(): number {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   return start.getTime();

@@ -679,7 +679,8 @@ function DevicesCard() {
           </div>
         )}
 
-        {(hasAccount || hasKeywordOnly) && identity && (
+        {!hasAccount && (
+          <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
             {/* Chemin primaire : scanner le QR d'une caisse abonnée (même parcours
                 que l'onboarding « Rejoindre ») — la saisie manuelle reste en repli. */}
             <Button
@@ -787,9 +788,8 @@ function DevicesCard() {
           </div>
         )}
 
-        {(hasAccount || hasKeywordOnly) && identity && (
+        {identity && (
           <div className="space-y-2 rounded-xl border bg-muted/30 p-4">
-            <div className="flex items-center justify-between">
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 text-sm font-medium">
                 <Wifi className="h-4 w-4" /> Caisses synchronisées
@@ -844,7 +844,6 @@ function DevicesCard() {
           </div>
         )}
 
-        </div>
         <Button onClick={() => setPairingOpen(true)} disabled={!hasAccount && !hasKeywordOnly}>
           <QrCode className="h-4 w-4 mr-2" />
           {hasAccount ? "Ajouter un appareil" : "Rejoindre un compte"}
