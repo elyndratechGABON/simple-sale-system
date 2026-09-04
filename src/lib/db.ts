@@ -416,6 +416,46 @@ export interface DayClosure {
   closed_at: number;
 }
 
+/**
+ * Clôture d'un employé IMPORTÉE par le propriétaire via le QR de restitution (restitution.ts).
+ *
+ * Les ventes de l'employé vivent sur SON appareil ; le QR transporte des AGRÉGATS (jamais
+ * les lignes brutes). Cette entrée est la trace locale du côté propriétaire : elle cumule ce
+ * que l'employé a généré et sert de protection anti-doublon (id déterministe). Local par
+ * nature — comme `product_expenses`, elle ne fait pas partie du moteur de synchronisation.
+ */
+export interface ClosingImport extends SyncFields {
+  /** Identifiant déterministe (anti-doublon) : hash du contenu + appareil employé. */
+  id: string;
+  /** Enseigne / nom de compte de la boutique de l'employé. */
+  shopName: string;
+  /** Identifiant d'appareil de la caisse EMPLOYÉ qui a vendu. */
+  employeeDeviceId: string;
+  /** Nom du vendeur (libellé) — absent si l'employé n'a pas de nom saisi. */
+  employeeName: string;
+  /** Identifiant de l'appareil PROPRIÉTAIRE qui a importé (deviceId local). */
+  ownerDeviceId: string;
+  /** Début de la période couverte, en ms. */
+  periodFrom: number;
+  /** Fin EXCLUSIVE de la période couverte, en ms. */
+  periodTo: number;
+  /** Nombre de ventes encaissées dans la période. */
+  salesCount: number;
+  /** Nombre d'articles vendus. */
+  itemsCount: number;
+  /** Chiffre d'affaires, en FCFA. */
+  revenue: number;
+  /** Bénéfice, en FCFA. */
+  profit: number;
+  /** Moment où le propriétaire a importé le QR. */
+  importedAt: number;
+  /** Répartition du revenu et du bénéfice par catégorie (libellé). */
+  byCategory: { category: string; revenue: number; profit: number }[];
+  /** Répartition par produit (nom, quantité, revenu, bénéfice). Optionnel — peut être
+   *  vide si le QR ne le transporte pas (limite de capacité). */
+  byProduct: { name: string; quantity: number; revenue: number; profit: number }[];
+}
+
 export class PosDatabase extends Dexie {
   products!: Table<Product, string>;
   sales!: Table<Sale, string>;
@@ -428,6 +468,7 @@ export class PosDatabase extends Dexie {
   stock_movements!: Table<StockMovement, string>;
   day_closures!: Table<DayClosure, string>;
   rentals!: Table<Rental, string>;
+  closings!: Table<ClosingImport, string>;
   sync_ops!: Table<SyncOp, string>;
   monthly_overviews!: Table<MonthlyOverview, string>;
   processed_ops!: Table<ProcessedOp, string>;
@@ -758,6 +799,35 @@ export class PosDatabase extends Dexie {
       paired_devices: "id, updated_at, shop_id",
 
       monthly_overviews: "id, updated_at",
+    });
+
+    // Version 20 — clôtures d'employés importées par le propriétaire (QR de restitution).
+    //
+    // Un enregistrement par QR agrégé (restitution.ts). Données LOCALES du propriétaire,
+    // comme `product_expenses` / `monthly_overviews` : elles ne font pas partie du moteur
+    // de synchronisation. Indexées sur `imported_at` (histogramme) et `employee_device_id`
+    // (regroupement par employé). Store neuf : aucun `upgrade()` nécessaire.
+    this.version(20).stores({
+      products: "id, name, category, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+      day_closures: "id, closed_at",
+      rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
+
+      sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
+      processed_ops: "id",
+      paired_devices: "id, updated_at, shop_id",
+
+      monthly_overviews: "id, updated_at",
+
+      closings: "id, imported_at, employee_device_id, period_from, updated_at",
     });
   }
 }
@@ -2099,6 +2169,37 @@ export async function markShopSynced(syncedAt: number): Promise<void> {
     lastSyncedAt: syncedAt,
     sync_status: "synced",
   });
+}
+
+// ---------- Clôtures d'employés importées (QR de restitution) ----------
+// Trace locale du côté propriétaire : chaque QR agrégé scanné devient un enregistrement.
+// L'id est DÉTERMINISTE (restitution.ts) — l'insérer suppose qu'il n'existe pas déjà,
+// c'est la protection anti-doublon (rescanner un QR déjà importé ne change rien).
+
+/** Toutes les clôtures importées, de la plus récente à la plus ancienne. */
+export async function listClosings(): Promise<ClosingImport[]> {
+  const rows = await getDB().closings.toArray();
+  return alive(rows).sort((a, b) => b.importedAt - a.importedAt);
+}
+
+/** Une clôture importée par son identifiant (anti-doublon). */
+export async function getClosing(id: string): Promise<ClosingImport | undefined> {
+  const row = await getDB().closings.get(id);
+  return row && !row.deleted_at ? row : undefined;
+}
+
+/** Enregistre une clôture importée. Écrase si l'id existe déjà (idempotent). */
+export async function saveClosingImport(
+  closing: Omit<ClosingImport, keyof SyncFields>,
+): Promise<void> {
+  await getDB().closings.put({ ...closing, ...touch() });
+}
+
+/** Retire logiquement une clôture importée (ne touche jamais aux ventes réelles). */
+export async function deleteClosingImport(id: string): Promise<void> {
+  const row = await getDB().closings.get(id);
+  if (!row || row.deleted_at) return;
+  await getDB().closings.put({ ...row, deleted_at: Date.now(), ...touch() });
 }
 
 // ---------- Settings ----------

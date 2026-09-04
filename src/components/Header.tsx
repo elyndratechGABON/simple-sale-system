@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Calculator, Users } from "lucide-react";
+import { Activity, Calculator, Users, QrCode } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getMonthlyOverview, getSetting } from "@/lib/db";
 import { currentMonthKey } from "@/lib/profit";
@@ -11,6 +11,7 @@ import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 import { NotificationBell } from "@/components/NotificationBell";
 import { TeamDialog } from "@/components/TeamDialog";
 import { ActivityDialog } from "@/components/ActivityDialog";
+import { EmployeesDialog } from "@/components/EmployeesDialog";
 import { Button } from "@/components/ui/button";
 import { useAccess } from "@/hooks/use-access";
 
@@ -39,6 +40,7 @@ export function Header() {
   const [profitOpen, setProfitOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [employeesOpen, setEmployeesOpen] = useState(false);
   const clicks = useRef(0);
   const lastClick = useRef(0);
 
@@ -140,6 +142,17 @@ export function Header() {
             </Button>
           )}
           {isOwner && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Employés — importer clôture"
+              title="Employés — scanner QR de clôture"
+              onClick={() => setEmployeesOpen(true)}
+            >
+              <QrCode className="h-5 w-5" />
+            </Button>
+          )}
+          {isOwner && (
             <Link
               to="/settings"
               aria-label="Profil et réglages"
@@ -157,6 +170,7 @@ export function Header() {
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />
       <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
       <TeamDialog open={teamOpen} onOpenChange={setTeamOpen} />
+      <EmployeesDialog open={employeesOpen} onOpenChange={setEmployeesOpen} />
       <ActivityDialog open={activityOpen} onOpenChange={setActivityOpen} />
     </header>
   );

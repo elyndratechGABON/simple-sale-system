@@ -44,7 +44,7 @@ export function navRoutes(role: DeviceRole): string[] {
     case "manager":
       return ["/pos", "/stocks", "/reports"];
     default:
-      return ["/pos", "/stocks"];
+      return ["/accueil", "/pos", "/stocks"];
   }
 }
 

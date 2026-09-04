@@ -831,7 +831,13 @@ function PosPage() {
               · {salesToday.length} vente{salesToday.length > 1 ? "s" : ""}
             </span>
           </span>
-          <Button variant="outline" size="sm" onClick={() => setCloseOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {}}
+            className="opacity-0 pointer-events-none"
+            aria-hidden="true"
+          >
             <Lock className="h-4 w-4 mr-1" /> Clôturer la journée
           </Button>
         </div>
@@ -1685,7 +1691,9 @@ function PosPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setCloseOpen(true)}
+                                onClick={() => {}}
+                                className="opacity-0 pointer-events-none"
+                                aria-hidden="true"
                               >
                                 <Lock className="h-4 w-4 mr-1" /> Clôturer la journée
                               </Button>
