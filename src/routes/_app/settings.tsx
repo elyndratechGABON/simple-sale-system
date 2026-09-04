@@ -500,6 +500,10 @@ function DevicesCard() {
   // accepte la réclamation car ce device_id est déjà membre du compte visé.
   const [claimPhone, setClaimPhone] = useState("");
   const [claimPassword, setClaimPassword] = useState("");
+  // Nom du COMPTE du principal (lu dans le QR, `data.name` = `accountName`) — PAS l'enseigne.
+  // Il entre dans le calcul du `shopId` P2P : le réutiliser aligne la nouvelle caisse sur le
+  // groupe du propriétaire, sinon elle dérive un `shopId` différent et ne se rencontre jamais.
+  const [claimName, setClaimName] = useState("");
   const [claiming, setClaiming] = useState(false);
   // Afficher/masquer le mot de passe du compte dans la fiche « Compte marchand ».
   const [showAccountPassword, setShowAccountPassword] = useState(false);
@@ -520,6 +524,7 @@ function DevicesCard() {
       }
       setClaimPhone(parsed.phone);
       setClaimPassword(parsed.password);
+      setClaimName(parsed.name);
       // Copie intégrale de la boutique scannée (identité + type de boutique) : on écrase
       // la fiche locale — le rattachement qui suit synchronise vers l'orchestrateur.
       const applied = await applyPairingShop(parsed.shop);
@@ -546,7 +551,11 @@ function DevicesCard() {
     }
     setClaiming(true);
     try {
-      await setShopAccount({ name: profile?.storeName ?? "", phone, password });
+      await setShopAccount({
+        name: claimName.trim() || (profile?.storeName ?? ""),
+        phone,
+        password,
+      });
       const result = await handshake();
       if (result.ok) {
         toast.success("Écran rattaché au compte marchand.");

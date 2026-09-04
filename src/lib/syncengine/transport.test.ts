@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import {
   addProduct,
+  addStock,
   createSale,
   getSaleItems,
   getDB,
@@ -186,5 +187,87 @@ describe("transport P2P via relais", () => {
     await new Promise((r) => setTimeout(r, 10)); // laisser l'op vieillir d'un TTL
     await purgeSyncedOps(1);
     expect(await getDB().sync_ops.count()).toBe(0);
+  });
+
+  it("émet un snapshot du catalogue quand un écran inconnu s'annonce", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const id = getIdentity();
+    const relay = makeRelay();
+
+    // Le propriétaire a un catalogue vivant : création + réappro (stock courant 15).
+    const product = await addProduct({
+      name: "Coca 1L",
+      price: 600,
+      cost: 300,
+      category: "Boisson",
+      stock: 10,
+    });
+    await addStock(product.id, 5);
+
+    // Un écran inconnu s'annonce au groupe : op étrangère injectée directement.
+    const newcomerId = "00000000-0000-0000-0000-0000000000aa";
+    const announceOp: SyncOp = {
+      id: "otr:1",
+      shop_id: id.shopId,
+      device_id: newcomerId,
+      seq: 1,
+      type: "device.announce",
+      entity_id: newcomerId,
+      payload: { device_id: newcomerId },
+      created_at: Date.now(),
+      status: "synced",
+    };
+    await relay.client.push(id.shopId, [announceOp]);
+
+    await exchangeOps(relay.client);
+    const pending = await listPendingOps(id.shopId);
+    const snap = pending.find((o) => o.type === "catalogue.snapshot");
+    expect(snap).toBeTruthy();
+    // Le snapshot porte le stock ABSOLU courant (15) et exclut les photos (binaire local).
+    const payload = snap!.payload as {
+      products: Array<{ id: string; stock: number; photo?: unknown }>;
+    };
+    expect(payload.products.find((p) => p.id === product.id)?.stock).toBe(15);
+    expect(payload.products[0]).not.toHaveProperty("photo");
+  });
+
+  it("applique un snapshot du catalogue sur un écran neuf (stock absolu)", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const id = getIdentity();
+    const relay = makeRelay();
+
+    const snapOp: SyncOp = {
+      id: "snap:1",
+      shop_id: id.shopId,
+      device_id: "un-proprietaire",
+      seq: 1,
+      type: "catalogue.snapshot",
+      entity_id: "catalog",
+      payload: {
+        products: [
+          {
+            id: "p1",
+            name: "Coca 1L",
+            price: 600,
+            cost: 300,
+            category: "Boisson",
+            stock: 15,
+            updated_at: 0,
+            sync_status: "local",
+          },
+        ],
+      },
+      created_at: Date.now(),
+      status: "synced",
+    };
+    await relay.client.push(id.shopId, [snapOp]);
+
+    await exchangeOps(relay.client);
+    const products = await listProducts();
+    expect(products.find((p) => p.id === "p1")?.stock).toBe(15);
   });
 });

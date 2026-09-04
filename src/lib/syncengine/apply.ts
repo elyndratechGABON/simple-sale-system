@@ -15,6 +15,7 @@
 import { getDB } from "../db";
 import type { PosDatabase } from "../db";
 import type {
+  CatalogueSnapshotPayload,
   ClientCreatedPayload,
   ClientUpdatedPayload,
   DeviceAnnouncePayload,
@@ -276,6 +277,19 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         paired_at: existing.paired_at ?? now,
         updated_at: now,
       });
+      break;
+    }
+    case "catalogue.snapshot": {
+      // Un appareil qui rejoint reçoit l'instantané du catalogue du membre qui l'a vu
+      // s'annoncer. Stock ABSOLU : c'est le point de départ de ses deltas. Idempotent —
+      // un produit déjà présent est simplement écrasé à la même valeur.
+      const pl = op.payload as CatalogueSnapshotPayload;
+      for (const p of pl?.products ?? []) {
+        if (!p?.id || p.deleted_at) continue;
+        const existing = await db.products.get(p.id);
+        if (existing?.deleted_at) continue;
+        await db.products.put({ ...p, ...touch() });
+      }
       break;
     }
     case "category.created":

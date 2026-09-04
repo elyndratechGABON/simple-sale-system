@@ -18,8 +18,10 @@
 // on n'applique rien. Un relais muet n'a aucun effet sur la caisse.
 import { applyRemoteOps } from "./apply";
 import { isSharedGroup, getIdentity } from "./identity";
+import { emitOp } from "./ops";
 import { listPendingOps, markOpsSynced } from "./outbox";
-import type { SyncOp } from "./types";
+import { getDB, listProducts } from "../db";
+import type { SyncIdentity, SyncOp } from "./types";
 
 /** La bouche d'entrée/sortie d'un canal d'échange. Remplaçable inconditionnellement. */
 export interface TransportClient {
@@ -70,8 +72,38 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     }
     foreign.push(op);
   }
+  // Une caisse du groupe vient de s'annoncer pour la première fois AVEC NOUS : elle est
+  // neuve et partirait vide (les deltas seuls ne reconstruisent pas le catalogue d'un
+  // écran sans historiques). Un membre non-employé lui renvoie alors l'instantané complet
+  // des produits — stock ABSOLU courant — qu'elle prendra comme point de départ.
+  const known = new Set(
+    (await getDB().paired_devices.where("shop_id").equals(identity.shopId).toArray()).map(
+      (d) => d.id,
+    ),
+  );
+  const newcomerAnnounced = foreign.some(
+    (op) => op.type === "device.announce" && !known.has(op.entity_id),
+  );
   const { applied } = await applyRemoteOps(foreign);
+  if (newcomerAnnounced && identity.role !== "employee") {
+    await emitCatalogSnapshot(identity);
+  }
   return { pushed, applied, skipped, remote: foreign.length };
+}
+
+/** Instantané du catalogue vivant, émis pour un écran qui vient de rejoindre le groupe. */
+async function emitCatalogSnapshot(identity: SyncIdentity): Promise<void> {
+  const db = getDB();
+  // Photo exclue : c'est du binaire dataURL lourd, la doc la garde LOCALE (cf. db.ts) —
+  // le relais ne transporte que de la donnée légère.
+  const products = (await listProducts()).map(({ photo: _photo, ...p }) => p);
+  await db.transaction("rw", db.sync_ops, db.settings, async () => {
+    await emitOp(db, identity, {
+      type: "catalogue.snapshot",
+      entity_id: "catalog",
+      payload: { products },
+    });
+  });
 }
 
 /** Adaptateur du relais PC Master en HTTP. `fetchImpl` injectable pour les tests.

@@ -33,7 +33,8 @@ export type OpType =
   | "client.deleted"
   | "category.created"
   | "device.announce"
-  | "device.approve";
+  | "device.approve"
+  | "catalogue.snapshot";
 
 /** Une opération du journal. Idempotente : rejouée, elle ne doit produire qu'UN effet. */
 export interface SyncOp {
@@ -127,6 +128,13 @@ export interface DeviceAnnouncePayload {
 export interface DeviceApprovePayload {
   org_device_id: string;
   role: DeviceRole;
+}
+
+/** Instantané du catalogue vivant, envoyé à un appareil qui vient de rejoindre le groupe.
+ *  Les produits portent leur stock ABSOLU courant : c'est le point de départ à partir duquel
+ *  le nouvel écran rejouera les deltas ultérieurs. Idempotent (mêmes ids écrasés à l'identique). */
+export interface CatalogueSnapshotPayload {
+  products: import("@/lib/db").Product[];
 }
 
 /** Clés de persistence de l'appairage P2P — partagées entre `db.ts` et `syncengine/pairing.ts`. */

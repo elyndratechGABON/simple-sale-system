@@ -143,6 +143,12 @@ export function SetupWizard({
   const [accountMode, setAccountMode] = useState<"create" | "join">(initialAccountMode);
   const [accPhone, setAccPhone] = useState(initialCredentials?.phone ?? "");
   const [accPassword, setAccPassword] = useState(initialCredentials?.password ?? "");
+  // Nom du COMPTE marchand porté par le QR scanné (`data.name` = `accountName` du
+  // principal). Distinct du `storeName` : c'est ce nom — pas l'enseigne — qui entre
+  // dans le calcul du `shopId` du groupe P2P. Le réutiliser au rattachement fait
+  // converger les deux caisses vers le MÊME groupe, sinon l'employé et le propriétaire
+  // dérivent chacun un `shopId` différent et ne se rencontrent jamais sur le relais.
+  const [accAccountName, setAccAccountName] = useState("");
   // Code de confirmation temporaire : l'utilisateur DOIT le saisir sur ce téléphone
   // (il est affiché en grand sur la caisse principale). Il devient la preuve de son
   // appairage auprès du principal à la fin de l'assistant (sinon les données ne
@@ -173,6 +179,7 @@ export function SetupWizard({
       }
       setAccPhone(parsed.phone);
       setAccPassword(parsed.password);
+      setAccAccountName(parsed.name);
       setQrScanned(true);
       // Copie intégrale de la boutique scannée : fiche (profil+préférences) ET état de
       // l'assistant (identité + type de boutique). La nouvelle caisse s'ouvre identique ;
@@ -240,8 +247,10 @@ export function SetupWizard({
         );
       }
     } else {
+      // Le nom du COMPTE doit être celui du principal (lu dans le QR), PAS l'enseigne : le
+      // `shopId` P2P en dérive. Un écart ici isole la nouvelle caisse du reste du groupe.
       await setShopAccount({
-        name: store,
+        name: accAccountName.trim() || store,
         phone: accPhone.trim(),
         password: accPassword,
         ownerName: owner,
