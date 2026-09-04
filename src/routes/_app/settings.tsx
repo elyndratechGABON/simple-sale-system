@@ -523,6 +523,10 @@ function DevicesCard() {
       // Copie intégrale de la boutique scannée (identité + type de boutique) : on écrase
       // la fiche locale — le rattachement qui suit synchronise vers l'orchestrateur.
       const applied = await applyPairingShop(parsed.shop);
+      // Rafraîchir immédiatement l'en-tête et la fiche : `usePreferences` a un staleTime
+      // infini — sans invalidation, l'ancien nom de boutique resterait affiché.
+      await qc.invalidateQueries({ queryKey: ["preferences"] });
+      await qc.invalidateQueries({ queryKey: ["shop_profile"] });
       toast.success(
         applied
           ? `Compte « ${parsed.name || parsed.phone} » récupéré — copie de la boutique appliquée, vérifiez puis rattachez.`
@@ -547,6 +551,7 @@ function DevicesCard() {
       if (result.ok) {
         toast.success("Écran rattaché au compte marchand.");
         setClaimPassword("");
+        await qc.invalidateQueries({ queryKey: ["preferences"] });
         await qc.invalidateQueries({ queryKey: ["shop_profile"] });
         await qc.invalidateQueries({ queryKey: ["account_quota"] });
         await qc.invalidateQueries({ queryKey: ["subscription_request"] });

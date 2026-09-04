@@ -174,6 +174,11 @@ export interface Sale extends SyncFields {
   payment_method?: PaymentMethod;
   /** Réduction accordée en FCFA, déjà déduite de `total`. Absente = aucune remise. */
   discount?: number;
+  /** Nom du vendeur (rôle gérant/employé) qui a encaissé — pour le suivi d'activité.
+   *  Absent sur les ventes antérieures au suivi → « — ». */
+  seller_name?: string;
+  /** Identifiant d'appareil de la caisse qui a encaissé — relie la vente à son écran. */
+  seller_device_id?: string;
 }
 
 /** Moyens de paiement acceptés au comptoir. */
@@ -1195,6 +1200,11 @@ export async function createSale(input: {
   // Hors espèces, le montant débité est exact : rien ne rentre physiquement dans le
   // tiroir-caisse, il n'y a donc rien à rendre.
   const cashGiven = method === "cash" ? input.cash_given : total;
+  // Qui encaisse : le rôle (gérant/employé) et le nom de l'appareil, pour le suivi
+  // d'activité du propriétaire. Sur une caisse propriétaire, la vente reste à lui.
+  const identity = getIdentity();
+  const roleLabel = identity.role === "manager" ? "Gérant" : "Employé";
+  const sellerLabel = identity.role === "owner" ? "" : identity.employeeName?.trim() || roleLabel;
   const sale: Sale = {
     id: uid(),
     timestamp: Date.now(),
@@ -1209,6 +1219,7 @@ export async function createSale(input: {
     payment_method: method,
     ...(input.client_name ? { client_name: input.client_name } : {}),
     ...(input.client_id ? { client_id: input.client_id } : {}),
+    ...(sellerLabel ? { seller_name: sellerLabel, seller_device_id: identity.deviceId } : {}),
     ...touch(),
   };
   const items: SaleItem[] = [];
