@@ -18,33 +18,12 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, KeyRound, LogIn, QrCode, Store, WifiOff } from "lucide-react";
+import { ArrowRight, Check, LogIn, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { ClusterTutorial, SetupWizard } from "@/components/Onboarding";
 import { CLUSTER_MAP, getPreferences, savePreferences } from "@/lib/settings";
-import { applyPairingShop, parsePairingPayload } from "@/lib/pairing";
 import { setShopAccount } from "@/lib/db";
-import { enterPairingCode } from "@/lib/syncengine/pairing";
-import {
-  ensureIdentity,
-  setIdentityEmployeeName,
-  setIdentityRole,
-} from "@/lib/syncengine/identity";
-import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
-import type { DeviceRole } from "@/lib/syncengine/types";
-import type { PairingShopInfo } from "@/lib/pairing";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/welcome")({
@@ -62,21 +41,6 @@ export const Route = createFileRoute("/welcome")({
 type Phase = "welcome" | "wizard" | "tutorial";
 type EntryMode = "create" | "join";
 
-/** Libellé du type de boutique (cluster) scanné, pour la carte d'infos du popup. */
-function shopTypeLabel(cluster?: string): string {
-  if (typeof cluster === "string" && cluster in CLUSTER_MAP) {
-    return CLUSTER_MAP[cluster as keyof typeof CLUSTER_MAP].label;
-  }
-  return "Boutique";
-}
-
-/** Cluster récupéré par le scan pour tracer le type d'activité scanné. */
-function clusterFromScan(payload: PairingShopInfo): string | undefined {
-  const cluster = payload.shop?.cluster;
-  if (typeof cluster === "string" && cluster in CLUSTER_MAP) return cluster;
-  return undefined;
-}
-
 function WelcomePage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -89,124 +53,12 @@ function WelcomePage() {
   const [mode, setMode] = useState<EntryMode>("create");
   const [joinCreds, setJoinCreds] = useState<{ phone: string; password: string } | null>(null);
   const [joinPairCode, setJoinPairCode] = useState<string | undefined>();
-  // Cluster scanné : pré-remplit le secteur d'activité du wizard si l'on revient là
-  // via « Se connecter » après un scan (au lieu de le redemander à l'étape 3).
-  const [joinCluster, setJoinCluster] = useState<string | undefined>();
-  // Popup de confirmation post-scan : affiche la boutique scannée + le champ du code
-  // temporaire. L'accès à la boutique se décide ICI (rejoindre directement), plus
-  // rien de l'assistant n'est demandé — le QR porte tout.
-  const [scanInfo, setScanInfo] = useState<PairingShopInfo | null>(null);
-  const [tempCode, setTempCode] = useState("");
-  const [accepting, setAccepting] = useState(false);
-  const { startScan } = useBarcodeScanner();
-  // Rôle assigné par le propriétaire dans le QR (gérant/employé). Quand présent,
-  // un popup post-acceptation demande le nom de l'employé/gérant avant d'ouvrir l'app.
-  const [pendingRole, setPendingRole] = useState<DeviceRole | null>(null);
-  const [pendingName, setPendingName] = useState("");
-
-  /** « Rejoindre via code QR » : scan DIRECT depuis l'écran de bienvenue, puis popup
-   *  de confirmation affichant la boutique scannée et le champ du code temporaire. */
-  async function joinViaQr() {
-    try {
-      const raw = await startScan();
-      if (raw === null) return;
-      const parsed = parsePairingPayload(raw);
-      if (!parsed) {
-        toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
-        return;
-      }
-      setJoinCreds({ phone: parsed.phone, password: parsed.password });
-      setJoinCluster(clusterFromScan(parsed));
-      setJoinPairCode(undefined);
-      setTempCode("");
-      setAccepting(false);
-      setPendingRole(parsed.role ?? null);
-      setPendingName("");
-      setScanInfo(parsed);
-    } catch {
-      toast.error(
-        "Caméra indisponible — utilisez « Se connecter » et saisissez le téléphone à la main.",
-      );
-    }
-  }
-
-  /** Accepter : copie la boutique scannée, pose le compte, s'annonce avec le code de
-   *  paire, et OUVRE DIRECTEMENT la boutique — plus rien de l'assistant n'est demandé. */
-  async function acceptViaQr() {
-    if (!scanInfo || !joinCreds) return;
-    setAccepting(true);
-    try {
-      const applied = await applyPairingShop(scanInfo.shop);
-      const store = scanInfo.shop?.storeName || scanInfo.name || "Ma boutique";
-      await setShopAccount({
-        name: store,
-        phone: joinCreds.phone,
-        password: joinCreds.password,
-        ownerName: scanInfo.shop?.ownerName ?? "",
-      });
-      if (tempCode.trim()) {
-        const pairing = await enterPairingCode(tempCode).catch(() => "invalid" as const);
-        if (pairing === "invalid") {
-          toast.warning("Boutique rejointe, mais le code temporaire n'a pas été accepté.", {
-            description:
-              "Vérifiez le code de la caisse principale (6 caractères) et ressayez dans Réglages → Appareils.",
-          });
-        }
-      }
-      savePreferences({
-        workspaceName: store,
-        ownerName: scanInfo.shop?.ownerName ?? "",
-        phone: scanInfo.shop?.phone ?? "",
-        quarter: scanInfo.shop?.quarter ?? "",
-        cluster: scanInfo.shop?.cluster ?? "retail",
-        onboarded: true,
-        onboardingCompleted: true,
-        privacyAccepted: true,
-      });
-      qc.invalidateQueries({ queryKey: ["preferences"] });
-      setScanInfo(null);
-      // Si le propriétaire a assigné un rôle dans le QR, il faut d'abord
-      // saisir le nom de l'employé/gérant avant d'ouvrir l'application.
-      if (pendingRole && pendingRole !== "owner") {
-        toast.success(
-          applied
-            ? `Boutique « ${store} » rejointe — complétez votre profil.`
-            : "Boutique rejointe — complétez votre profil.",
-        );
-        return;
-      }
-      toast.success(
-        applied
-          ? `Boutique « ${store} » rejointe — accès direct.`
-          : "Boutique rejointe — accès direct.",
-      );
-      navigate({ to: "/pos" });
-    } catch {
-      setAccepting(false);
-      toast.error("Impossible d'enregistrer la boutique — réessayez.");
-    }
-  }
 
   function startCreate() {
     setJoinCreds(null);
     setJoinPairCode(undefined);
     setMode("create");
     setPhase("wizard");
-  }
-
-  /** Soumettre le nom de l'employé/gérant : pose le rôle et le nom, puis ouvre l'app. */
-  async function submitEmployeeName() {
-    if (!pendingRole) return;
-    const trimmed = pendingName.trim();
-    if (!trimmed) {
-      toast.error("Saisissez votre nom pour continuer.");
-      return;
-    }
-    await ensureIdentity();
-    await setIdentityRole(pendingRole);
-    await setIdentityEmployeeName(trimmed);
-    toast.success(`${trimmed} — ${pendingRole === "manager" ? "Gérant" : "Employé"}.`);
-    navigate({ to: "/pos" });
   }
 
   function startJoinManual() {
@@ -292,13 +144,6 @@ function WelcomePage() {
               >
                 <LogIn className="h-4 w-4" /> Se connecter
               </Button>
-              <Button
-                variant="outline"
-                className="-mt-2 h-11 gap-2 text-base"
-                onClick={() => void joinViaQr()}
-              >
-                <QrCode className="h-4 w-4" /> Rejoindre via code QR
-              </Button>
             </div>
 
             <span className="mt-6 inline-flex items-center gap-1.5 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -318,7 +163,6 @@ function WelcomePage() {
               initialAccountMode={mode}
               initialCredentials={joinCreds}
               initialPairCode={joinPairCode}
-              initialCluster={joinCluster}
               initialStep={joinCreds ? 2 : undefined}
               onComplete={() => setPhase("tutorial")}
             />
@@ -336,137 +180,6 @@ function WelcomePage() {
           </motion.div>
         )}
       </main>
-
-      {/* Popup post-scan : la boutique scannée y est affichée (nom, type, coordonnées),
-          l'utilisateur saisit le code de confirmation TEMPORAIRE affiché par la caisse
-          principale, puis accède DIRECTEMENT à la boutique — plus rien n'est demandé. */}
-      {scanInfo && joinCreds && (
-        <Dialog
-          open
-          onOpenChange={() => {
-            setScanInfo(null);
-            setPendingRole(null);
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Store className="h-5 w-5" /> Rejoindre cette boutique
-              </DialogTitle>
-              <DialogDescription>
-                La caisse scannée partage ses accès. Vérifiez, saisissez le code temporaire affiché
-                sur la caisse principale, puis accédez directement à toutes ses données.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {/* Carte d'infos de la boutique scannée — déjà enregistrées grâce au QR */}
-              <div className="rounded-xl border bg-card p-4">
-                <p className="text-lg font-semibold">
-                  {scanInfo.shop?.storeName || scanInfo.name || joinCreds.phone}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {shopTypeLabel(scanInfo.shop?.cluster)}
-                </p>
-                <p className="text-xs text-muted-foreground">{joinCreds.phone}</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <p className="flex items-center gap-1.5 text-sm font-medium">
-                  <KeyRound className="h-4 w-4 shrink-0 text-primary" />
-                  Saisissez le code temporaire de la caisse principale
-                </p>
-                <Input
-                  id="join-code"
-                  value={tempCode}
-                  onChange={(e) => setTempCode(e.target.value.toUpperCase())}
-                  placeholder="A2B3C4"
-                  className="h-12 font-mono tracking-widest"
-                  maxLength={6}
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  autoFocus
-                  onKeyDown={(e) =>
-                    e.key === "Enter" &&
-                    !accepting &&
-                    tempCode.trim().length >= 6 &&
-                    void acceptViaQr()
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Sur l'autre téléphone : Réglages → Appareils → « Ajouter un appareil ». Le code
-                  est affiché en grand, valable 10 minutes.
-                </p>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <DialogClose>Annuler</DialogClose>
-              <Button
-                type="button"
-                onClick={() => void acceptViaQr()}
-                disabled={accepting || tempCode.trim().length < 6}
-              >
-                {accepting ? "Connexion…" : "Rejoindre"} <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Popup nom post-scan : le propriétaire a assigné un rôle (gérant/employé) dans le
-          QR. L'appareil qui a scanné doit saisir son nom avant d'accéder à l'application. */}
-      {pendingRole && pendingRole !== "owner" && !scanInfo && (
-        <Dialog
-          open
-          onOpenChange={() => {
-            setPendingRole(null);
-            setPendingName("");
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Store className="h-5 w-5" /> Votre profil
-              </DialogTitle>
-              <DialogDescription>
-                Vous rejoignez la boutique en tant que{" "}
-                <span className="font-medium text-foreground">
-                  {pendingRole === "manager" ? "Gérant" : "Employé"}
-                </span>
-                . Saisissez votre nom pour que le propriétaire puisse vous identifier.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="emp-name">Votre nom</Label>
-                <Input
-                  id="emp-name"
-                  value={pendingName}
-                  onChange={(e) => setPendingName(e.target.value)}
-                  placeholder="Ex : Jean Dupont"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && pendingName.trim()) void submitEmployeeName();
-                  }}
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <DialogClose>Annuler</DialogClose>
-              <Button
-                type="button"
-                onClick={() => void submitEmployeeName()}
-                disabled={!pendingName.trim()}
-              >
-                Continuer <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
