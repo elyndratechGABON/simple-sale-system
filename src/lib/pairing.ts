@@ -16,6 +16,7 @@
 import { getShopProfile, saveShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { getActivePairingCode } from "@/lib/syncengine/pairing";
+import type { DeviceRole } from "@/lib/syncengine/types";
 import {
   getPreferences,
   savePreferences,
@@ -64,15 +65,20 @@ export interface PairingPayload {
   /** Copie de la boutique scannée (v1.1) : identité + type de boutique. Champs
    *  optionnels pour rester lisibles par les anciennes versions de parsePairingPayload. */
   shop?: Partial<PairingShopConfig>;
+  /** Rôle assigné par le propriétaire au moment du partage (gérant / employé).
+   *  Optionnel : absent dans les QR générés avant cette fonctionnalité. */
+  role?: DeviceRole;
 }
 
 export type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"> & {
   pair_code?: string;
   shop?: Partial<PairingShopConfig>;
+  role?: DeviceRole;
 };
 
-/** Fabrique le contenu du QR depuis le profil local, ou `null` sans compte marchand. */
-export async function buildPairingPayload(): Promise<string | null> {
+/** Fabrique le contenu du QR depuis le profil local, ou `null` sans compte marchand.
+ *  @param role  Rôle assigné au futur appareil (optionnel — absent = ancien comportement). */
+export async function buildPairingPayload(role?: DeviceRole): Promise<string | null> {
   const profile = await getShopProfile();
   if (!profile?.accountPhone || !profile.accountPassword) return null;
   const prefs = getPreferences();
@@ -85,6 +91,7 @@ export async function buildPairingPayload(): Promise<string | null> {
     phone: profile.accountPhone,
     password: profile.accountPassword,
     ...(pairCode ? { pair_code: pairCode } : {}),
+    ...(role && role !== "owner" ? { role } : {}),
     shop: {
       storeName: profile.storeName || prefs.workspaceName,
       ownerName: profile.ownerName || prefs.ownerName,
@@ -125,6 +132,7 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
           phone: data.phone.trim(),
           password: data.password,
           pair_code: typeof data.pair_code === "string" ? data.pair_code.trim() : undefined,
+          role: data.role === "manager" || data.role === "employee" ? data.role : undefined,
         };
         if (shop && typeof shop === "object") {
           shopInfo.shop = shop;

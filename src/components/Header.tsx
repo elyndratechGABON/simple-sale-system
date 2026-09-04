@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Calculator } from "lucide-react";
+import { Calculator, Users } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getMonthlyOverview, getSetting } from "@/lib/db";
 import { currentMonthKey } from "@/lib/profit";
@@ -9,8 +9,11 @@ import { TopNav } from "@/components/Nav";
 import { ProfitSheet } from "@/components/ProfitSheet";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 import { NotificationBell } from "@/components/NotificationBell";
+import { TeamDialog } from "@/components/TeamDialog";
 import { Button } from "@/components/ui/button";
 import { useAccess } from "@/hooks/use-access";
+import { ensureIdentity } from "@/lib/syncengine/identity";
+import { listPairedDevices } from "@/lib/syncengine/peers";
 
 /** Initiales pour l'avatar sans photo : deux lettres maximum, du nom fourni. */
 function initials(name: string): string {
@@ -35,6 +38,7 @@ export function Header() {
   const { role } = useAccess();
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
   const [profitOpen, setProfitOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const clicks = useRef(0);
   const lastClick = useRef(0);
 
@@ -56,6 +60,22 @@ export function Header() {
   });
   const needsCycle =
     (monthOverview?.charges ?? 0) === 0 && (monthOverview?.cost_complement ?? 0) === 0;
+
+  // Icône Équipe : visible uniquement pour le propriétaire quand au moins 1 appareil
+  // est pairé (owner inclus). Le count n'a pas besoin d'être live — un refresher à
+  // l'ouverture du dialog suffit.
+  const { data: identity } = useQuery({
+    queryKey: ["sync_identity"],
+    queryFn: ensureIdentity,
+    staleTime: 60_000,
+  });
+  const { data: peers } = useQuery({
+    queryKey: ["paired_devices"],
+    queryFn: () => listPairedDevices(identity?.shopId ?? ""),
+    staleTime: 30_000,
+    enabled: role === "owner" && Boolean(identity),
+  });
+  const hasTeam = role === "owner" && (peers?.length ?? 0) > 0;
 
   function onLogoClick() {
     if (role !== "owner") return;
@@ -110,6 +130,17 @@ export function Header() {
             )}
           </Button>
           <NotificationBell />
+          {hasTeam && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Équipe"
+              title="Équipe — appareils connectés"
+              onClick={() => setTeamOpen(true)}
+            >
+              <Users className="h-5 w-5" />
+            </Button>
+          )}
           {role === "owner" && (
             <Link
               to="/settings"
@@ -127,6 +158,7 @@ export function Header() {
       </div>
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />
       <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
+      <TeamDialog open={teamOpen} onOpenChange={setTeamOpen} />
     </header>
   );
 }

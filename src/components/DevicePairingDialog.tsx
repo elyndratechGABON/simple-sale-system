@@ -62,6 +62,8 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   const [enteredCode, setEnteredCode] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
+  // Rôle assigné par le propriétaire au futur appareil (inscrit dans le QR).
+  const [shareRole, setShareRole] = useState<DeviceRole>("employee");
 
   const { data: profile } = useQuery({
     queryKey: ["shop_profile"],
@@ -112,7 +114,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           await announceDevice().catch(() => {});
         }
         if (cancelled) return;
-        const text = await buildPairingPayload();
+        const text = await buildPairingPayload(shareRole);
         if (!text) throw new Error("no-payload");
         const { default: QRCode } = await import("qrcode");
         const url = await QRCode.toDataURL(text, {
@@ -128,7 +130,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     return () => {
       cancelled = true;
     };
-  }, [open, hasAccount, pairCode]);
+  }, [open, hasAccount, pairCode, shareRole]);
 
   // Code de paire : recharger le code actif (et son expiration) à chaque ouverture.
   useEffect(() => {
@@ -224,6 +226,25 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                 Toutes les places du palier sont prises : le nouvel écran restera bloqué jusqu'à
                 libérer une place ou monter de palier.
               </p>
+            )}
+
+            {isOwner && (
+              <div className="space-y-1.5">
+                <Label htmlFor="share-role">Rôle du nouvel appareil</Label>
+                <Select value={shareRole} onValueChange={(v) => setShareRole(v as DeviceRole)}>
+                  <SelectTrigger id="share-role" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employee">Employé</SelectItem>
+                    <SelectItem value="manager">Gérant</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Le rôle est inscrit dans le QR : l'appareil qui le scanne sera automatiquement
+                  configuré avec les droits correspondants.
+                </p>
+              </div>
             )}
 
             <div className="flex flex-col items-center gap-3 rounded-xl border bg-card p-4">

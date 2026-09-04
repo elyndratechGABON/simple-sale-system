@@ -37,7 +37,13 @@ import { CLUSTER_MAP, getPreferences, savePreferences } from "@/lib/settings";
 import { applyPairingShop, parsePairingPayload } from "@/lib/pairing";
 import { setShopAccount } from "@/lib/db";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
+import {
+  ensureIdentity,
+  setIdentityEmployeeName,
+  setIdentityRole,
+} from "@/lib/syncengine/identity";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import type { DeviceRole } from "@/lib/syncengine/types";
 import type { PairingShopInfo } from "@/lib/pairing";
 import { toast } from "sonner";
 
@@ -93,6 +99,10 @@ function WelcomePage() {
   const [tempCode, setTempCode] = useState("");
   const [accepting, setAccepting] = useState(false);
   const { startScan } = useBarcodeScanner();
+  // Rôle assigné par le propriétaire dans le QR (gérant/employé). Quand présent,
+  // un popup post-acceptation demande le nom de l'employé/gérant avant d'ouvrir l'app.
+  const [pendingRole, setPendingRole] = useState<DeviceRole | null>(null);
+  const [pendingName, setPendingName] = useState("");
 
   /** « Rejoindre via code QR » : scan DIRECT depuis l'écran de bienvenue, puis popup
    *  de confirmation affichant la boutique scannée et le champ du code temporaire. */
@@ -110,6 +120,8 @@ function WelcomePage() {
       setJoinPairCode(undefined);
       setTempCode("");
       setAccepting(false);
+      setPendingRole(parsed.role ?? null);
+      setPendingName("");
       setScanInfo(parsed);
     } catch {
       toast.error(
@@ -153,6 +165,16 @@ function WelcomePage() {
       });
       qc.invalidateQueries({ queryKey: ["preferences"] });
       setScanInfo(null);
+      // Si le propriétaire a assigné un rôle dans le QR, il faut d'abord
+      // saisir le nom de l'employé/gérant avant d'ouvrir l'application.
+      if (pendingRole && pendingRole !== "owner") {
+        toast.success(
+          applied
+            ? `Boutique « ${store} » rejointe — complétez votre profil.`
+            : "Boutique rejointe — complétez votre profil.",
+        );
+        return;
+      }
       toast.success(
         applied
           ? `Boutique « ${store} » rejointe — accès direct.`
@@ -170,6 +192,21 @@ function WelcomePage() {
     setJoinPairCode(undefined);
     setMode("create");
     setPhase("wizard");
+  }
+
+  /** Soumettre le nom de l'employé/gérant : pose le rôle et le nom, puis ouvre l'app. */
+  async function submitEmployeeName() {
+    if (!pendingRole) return;
+    const trimmed = pendingName.trim();
+    if (!trimmed) {
+      toast.error("Saisissez votre nom pour continuer.");
+      return;
+    }
+    await ensureIdentity();
+    await setIdentityRole(pendingRole);
+    await setIdentityEmployeeName(trimmed);
+    toast.success(`${trimmed} — ${pendingRole === "manager" ? "Gérant" : "Employé"}.`);
+    navigate({ to: "/pos" });
   }
 
   function startJoinManual() {
@@ -304,7 +341,13 @@ function WelcomePage() {
           l'utilisateur saisit le code de confirmation TEMPORAIRE affiché par la caisse
           principale, puis accède DIRECTEMENT à la boutique — plus rien n'est demandé. */}
       {scanInfo && joinCreds && (
-        <Dialog open onOpenChange={() => setScanInfo(null)}>
+        <Dialog
+          open
+          onOpenChange={() => {
+            setScanInfo(null);
+            setPendingRole(null);
+          }}
+        >
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -365,6 +408,60 @@ function WelcomePage() {
                 disabled={accepting || tempCode.trim().length < 6}
               >
                 {accepting ? "Connexion…" : "Rejoindre"} <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Popup nom post-scan : le propriétaire a assigné un rôle (gérant/employé) dans le
+          QR. L'appareil qui a scanné doit saisir son nom avant d'accéder à l'application. */}
+      {pendingRole && pendingRole !== "owner" && !scanInfo && (
+        <Dialog
+          open
+          onOpenChange={() => {
+            setPendingRole(null);
+            setPendingName("");
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Store className="h-5 w-5" /> Votre profil
+              </DialogTitle>
+              <DialogDescription>
+                Vous rejoignez la boutique en tant que{" "}
+                <span className="font-medium text-foreground">
+                  {pendingRole === "manager" ? "Gérant" : "Employé"}
+                </span>
+                . Saisissez votre nom pour que le propriétaire puisse vous identifier.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="emp-name">Votre nom</Label>
+                <Input
+                  id="emp-name"
+                  value={pendingName}
+                  onChange={(e) => setPendingName(e.target.value)}
+                  placeholder="Ex : Jean Dupont"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && pendingName.trim()) void submitEmployeeName();
+                  }}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <DialogClose>Annuler</DialogClose>
+              <Button
+                type="button"
+                onClick={() => void submitEmployeeName()}
+                disabled={!pendingName.trim()}
+              >
+                Continuer <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             </DialogFooter>
           </DialogContent>
