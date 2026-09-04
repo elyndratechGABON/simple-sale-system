@@ -45,7 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { MockSaleToast, MockTabletScreen } from "@/components/landing/mockups";
+import { MockSaleToast } from "@/components/landing/mockups";
 import { PLANS, type PlanInfo } from "@/lib/pricing";
 
 // Apparition commune : montée + fondu quand la section entre dans le viewport.
@@ -180,8 +180,6 @@ function Hero() {
           </ul>
         </motion.div>
 
-        {/* Ely porte elle-même la boutique : l'écran de sa tablette diffuse la caisse
-            réelle (MockTabletScreen, positionné sur l'écran repéré dans l'illustration). */}
         <motion.div
           className="relative mx-auto flex w-full max-w-[520px] items-end justify-center pb-6 lg:max-w-none lg:justify-end"
           initial={{ opacity: 0, y: 20 }}
@@ -190,17 +188,11 @@ function Hero() {
         >
           <div className="relative w-full max-w-[330px] lg:w-[78%] lg:max-w-[430px]">
             <img
-              src="/splash/ely-tablette.png"
-              alt="Ely, la mascotte ELYNDRA CAISSE, tenant la tablette qui affiche la caisse"
+              src="/logo-body.png"
+              alt="ELYNDRA CAISSE — gérez votre boutique simplement"
               className="w-full select-none object-contain"
               draggable={false}
-              width={433}
-              height={577}
             />
-            {/* Écran de la tablette : coordonnées en % de l'illustration (433×577). */}
-            <div className="absolute top-[37%] left-[36.5%] h-[20.5%] w-[31.8%]">
-              <MockTabletScreen />
-            </div>
           </div>
           <MockSaleToast />
         </motion.div>
