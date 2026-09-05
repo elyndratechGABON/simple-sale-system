@@ -9,8 +9,10 @@
 // L'accès reste donc un réglage par caisse, pas une authentification.
 import type { DeviceRole } from "./syncengine/types";
 
-/** Routes ouvertes à chaque rôle. Le propriétaire n'a pas de liste : il ouvre tout. */
-const EMPLOYEE_ROUTES = ["/pos", "/stocks"] as const;
+/** Routes ouvertes à chaque rôle. Le propriétaire n'a pas de liste : il ouvre tout.
+ *  `/settings` est limité côté employé à UN panneau (demande de suppression de compte,
+ *  cf. `EmployeeAccountPanel`) — c'est la page elle-même qui masque le reste. */
+const EMPLOYEE_ROUTES = ["/pos", "/stocks", "/settings"] as const;
 const MANAGER_ROUTES = ["/pos", "/stocks", "/reports", "/history"] as const;
 
 function allowedRoutes(role: DeviceRole): readonly string[] {
@@ -44,7 +46,7 @@ export function navRoutes(role: DeviceRole): string[] {
     case "manager":
       return ["/pos", "/stocks", "/reports"];
     default:
-      return ["/accueil", "/pos", "/stocks"];
+      return ["/accueil", "/pos", "/stocks", "/settings"];
   }
 }
 

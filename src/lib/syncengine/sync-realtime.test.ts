@@ -299,12 +299,14 @@ describe("sync temps réel : convergence après hors-ligne", () => {
 
 // ─── Scénario 5 : garde d'accès par rôle ──────────────────────────────────────
 describe("sync temps réel : garde d'accès par rôle", () => {
-  it("un employé ne peut accéder qu'à /pos et /stocks", () => {
+  it("un employé ne peut accéder qu'à /pos, /stocks et /settings", () => {
     expect(canAccessRoute("/pos", "employee")).toBe(true);
     expect(canAccessRoute("/stocks", "employee")).toBe(true);
+    // /settings est ouvert à l'employé MAIS réduit à la seule demande de suppression
+    // de compte — c'est la page elle-même qui masque le reste (EmployeeAccountPanel).
+    expect(canAccessRoute("/settings", "employee")).toBe(true);
     expect(canAccessRoute("/reports", "employee")).toBe(false);
     expect(canAccessRoute("/history", "employee")).toBe(false);
-    expect(canAccessRoute("/settings", "employee")).toBe(false);
   });
 
   it("un gérant peut accéder à /pos, /stocks, /reports et /history", () => {

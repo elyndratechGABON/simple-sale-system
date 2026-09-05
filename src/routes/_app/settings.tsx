@@ -95,6 +95,8 @@ import {
 } from "@/lib/gatekeeper";
 import { DevicePairingDialog } from "@/components/DevicePairingDialog";
 import { MasterSyncBadge } from "@/components/MasterSyncBadge";
+import { EmployeeAccountPanel } from "@/components/settings/EmployeeAccountPanel";
+import { useAccess } from "@/hooks/use-access";
 import { ensureIdentity } from "@/lib/syncengine/identity";
 import { listPairedDevices } from "@/lib/syncengine/peers";
 import { ROLE_LABELS } from "@/lib/syncengine/pairing";
@@ -159,6 +161,10 @@ function SettingsPage() {
   const { tablesEnabled } = usePreferences();
   const isMobile = useIsMobile(1024);
   const [openSections, setOpenSections] = useState<string[]>(["shop"]);
+  // Un employé n'a RIEN à modifier ici : la page se réduit à sa demande de suppression
+  // de compte (dernier QR de clôture avant effacement). Toutes les cartes ci-dessous
+  // relèvent du compte marchand — hors de portée d'un écran employé.
+  const { role } = useAccess();
 
   // Sur téléphone, une seule section dépliée à la fois évite le mur de 11 cartes qui se
   // regardait une à une au défilement. Au-delà de `lg`, tout est déplié d'office ; l'util-
@@ -166,6 +172,20 @@ function SettingsPage() {
   useEffect(() => {
     setOpenSections(isMobile ? ["shop"] : ["shop", "clients", "compte", "donnees"]);
   }, [isMobile]);
+
+  if (role === "employee") {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-6 space-y-2">
+        <div className="mb-5">
+          <h1 className="text-page-title font-bold">Paramètres</h1>
+          <p className="text-sm text-muted-foreground">
+            Compte employé : partagez vos derniers chiffres et supprimez cette caisse.
+          </p>
+        </div>
+        <EmployeeAccountPanel />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-2">
