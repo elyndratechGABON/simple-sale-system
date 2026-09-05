@@ -165,6 +165,8 @@ function SettingsPage() {
   // de compte (dernier QR de clôture avant effacement). Toutes les cartes ci-dessous
   // relèvent du compte marchand — hors de portée d'un écran employé.
   const { role } = useAccess();
+  // Étiquette du compte dans l'en-tête : qui voit la page ?
+  const accountLabel = `Compte ${ROLE_LABELS[role]}`;
 
   // Sur téléphone, une seule section dépliée à la fois évite le mur de 11 cartes qui se
   // regardait une à une au défilement. Au-delà de `lg`, tout est déplié d'office ; l'util-
@@ -177,9 +179,12 @@ function SettingsPage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-6 space-y-2">
         <div className="mb-5">
-          <h1 className="text-page-title font-bold">Paramètres</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-page-title font-bold">Paramètres</h1>
+            <Badge variant="secondary">{accountLabel}</Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Compte employé : partagez vos derniers chiffres et supprimez cette caisse.
+            Partagez vos derniers chiffres et supprimez cette caisse.
           </p>
         </div>
         <EmployeeAccountPanel />
@@ -190,7 +195,10 @@ function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-2">
       <div className="mb-5">
-        <h1 className="text-page-title font-bold">Paramètres</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-page-title font-bold">Paramètres</h1>
+          <Badge variant="secondary">{accountLabel}</Badge>
+        </div>
         <p className="text-sm text-muted-foreground">
           Tout ce qui a été demandé au premier lancement se modifie ici.
         </p>
