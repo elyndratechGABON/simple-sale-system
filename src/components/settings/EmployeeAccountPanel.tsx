@@ -29,9 +29,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAccess } from "@/hooks/use-access";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
-import { ensureIdentity } from "@/lib/syncengine/identity";
+import { ensureIdentity, resetDeviceIdentity } from "@/lib/syncengine/identity";
 import { buildClosingPayload, parseRestitutionRequest } from "@/lib/restitution";
-import { purgeAllData } from "@/lib/db";
+import { closeEmployeeHistory, purgeAllData } from "@/lib/db";
 import {
   clearDeleteAccountRequest,
   getDeleteAccountRequest,
@@ -59,7 +59,13 @@ export function EmployeeAccountPanel() {
 
   const deleteMut = useMutation({
     mutationFn: async () => {
+      // La fin d'expérience se joue AVANT la purge : le `shopId` n'est lisible que dans
+      // l'identité encore en place. Le carnet (identité stable + `employee_history`)
+      // survit à la purge — c'est lui qui s'affichera sur « Mon expérience ».
+      const identity = await ensureIdentity();
+      await closeEmployeeHistory(identity.shopId);
       await purgeAllData();
+      await resetDeviceIdentity();
       resetGatekeeper();
       savePreferences({ onboarded: false });
     },

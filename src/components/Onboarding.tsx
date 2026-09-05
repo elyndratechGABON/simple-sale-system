@@ -51,10 +51,17 @@ import {
   type ClusterId,
   type SubCategory,
 } from "@/lib/settings";
-import { addProduct, setShopAccount, type Product } from "@/lib/db";
+import {
+  addProduct,
+  addEmployeeHistory,
+  ensureEmployeeId,
+  setShopAccount,
+  type Product,
+} from "@/lib/db";
 import { joinByKeyword } from "@/lib/gatekeeper";
 import { parsePairingPayload, applyPairingShop } from "@/lib/pairing";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
+import { ensureIdentity } from "@/lib/syncengine/identity";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { loadDemoData } from "@/lib/demo-data";
 import { toast } from "sonner";
@@ -269,6 +276,22 @@ export function SetupWizard({
             "Rejoignez l'autre caisse dans Réglages → Appareils avec le bon code (6 caractères).",
         });
       }
+    }
+
+    // Carnet d'expérience : un mobile qui REJOINT un compte existant (scan du QR d'une
+    // caisse, mot clé, ou téléphone+mot de passe) est une personne qui commence une
+    // expérience dans ce business. L'entrée ouverte vit en local (table
+    // `employee_history` + identité stable en localStorage) : c'est elle que l'écran
+    // « Mon expérience » du welcome affichera, même après la suppression du compte.
+    if (accountMode === "join") {
+      const identity = await ensureIdentity();
+      await addEmployeeHistory({
+        employeeId: ensureEmployeeId(),
+        deviceId: identity.deviceId,
+        shopId: identity.shopId,
+        storeName: store,
+        cluster: selectedCluster ?? "retail",
+      });
     }
 
     savePreferences({

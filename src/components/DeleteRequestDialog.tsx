@@ -28,7 +28,8 @@ import {
   getDeleteAccountRequest,
   type DeleteAccountRequest,
 } from "@/lib/gatekeeper";
-import { purgeAllData } from "@/lib/db";
+import { purgeAllData, closeEmployeeHistory } from "@/lib/db";
+import { ensureIdentity, resetDeviceIdentity } from "@/lib/syncengine/identity";
 import { resetGatekeeper } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
 import { ShieldAlert, Trash2 } from "lucide-react";
@@ -56,7 +57,10 @@ export function DeleteRequestDialog() {
 
   const deleteMut = useMutation({
     mutationFn: async () => {
+      const identity = await ensureIdentity();
+      await closeEmployeeHistory(identity.shopId);
       await purgeAllData();
+      await resetDeviceIdentity();
       resetGatekeeper();
       savePreferences({ onboarded: false });
     },

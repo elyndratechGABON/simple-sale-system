@@ -15,6 +15,7 @@ import Dexie, { type Table } from "dexie";
 import { ensureIdentity, getIdentity, refreshShopId } from "./syncengine/identity";
 import { emitOp } from "./syncengine/ops";
 import type { PairedDevice, ProcessedOp, SyncOp } from "./syncengine/types";
+import type { ClusterId } from "./settings";
 
 // Catégories produit. Les quatre premières sont fixes ; le `(string & {})` laisse un
 // commerce ajouter les siennes (« Chips », « Sucreries »…) — cf. `addCategory`. Garder
@@ -456,6 +457,42 @@ export interface ClosingImport extends SyncFields {
   byProduct: { name: string; quantity: number; revenue: number; profit: number }[];
 }
 
+/**
+ * Carnet d'expérience employé — l'historique LOCAL des business où cette personne a
+ * travaillé. Une entrée s'ouvre au rattachement (`SetupWizard` en mode « join ») et se
+ * ferme à la suppression du compte employé (`closeEmployeeHistory`).
+ *
+ * Données de la PERSONNE, pas de la caisse : l'entrée est rattachée à un `employeeId`
+ * stable (localStorage) qui SURVIT à `purgeAllData` et `resetDeviceIdentity` — un
+ * employé qui quitte un business et en rejoint un autre retrouve ses expériences sur
+ * l'écran « Mon expérience » du welcome.
+ *
+ * Local par nature : comme `product_expenses`, hors moteur de synchronisation.
+ */
+export interface EmployeeHistory {
+  /** Clé déterministe : `${employeeId}|${shopId}|${startedAt}` (anti-doublon). */
+  id: string;
+  /** Identité stable de la personne (localStorage `elyndra_employee_id`). */
+  employeeId: string;
+  /** DeviceId au moment de l'expérience — change après `resetDeviceIdentity`. */
+  deviceId: string;
+  /** Groupe de partage P2P du business (`s_…`). */
+  shopId: string;
+  /** Enseigne du business, figée à l'ouverture. */
+  storeName: string;
+  /** Cluster métier du business (coiffeur, épicerie…). */
+  cluster: ClusterId;
+  role: "employee";
+  /** Nom du vendeur s'il a été saisi (libellé). */
+  employeeName?: string;
+  /** Début de l'expérience, en ms. */
+  startedAt: number;
+  /** Fin de l'expérience, en ms. Absent = expérience en cours. */
+  endedAt?: number;
+  /** Durée en jours entiers ; posée à la fermeture. */
+  durationDays: number;
+}
+
 export class PosDatabase extends Dexie {
   products!: Table<Product, string>;
   sales!: Table<Sale, string>;
@@ -469,6 +506,7 @@ export class PosDatabase extends Dexie {
   day_closures!: Table<DayClosure, string>;
   rentals!: Table<Rental, string>;
   closings!: Table<ClosingImport, string>;
+  employee_history!: Table<EmployeeHistory, string>;
   sync_ops!: Table<SyncOp, string>;
   monthly_overviews!: Table<MonthlyOverview, string>;
   processed_ops!: Table<ProcessedOp, string>;
@@ -828,6 +866,36 @@ export class PosDatabase extends Dexie {
       monthly_overviews: "id, updated_at",
 
       closings: "id, imported_at, employee_device_id, period_from, updated_at",
+    });
+
+    // Version 21 — carnet d'expérience employé. Store neuf, aucun upgrade() : rien à
+    // migrer. Indexé sur `employeeId` (lecture du carnet d'une personne) et sur
+    // `[employeeId+startedAt]` (tri chronologique par personne). Table de la PERSONNE,
+    // jamais effacée par `purgeAllData`/`resetDeviceIdentity` : c'est elle qui rend le
+    // carnet visible après la suppression du compte.
+    this.version(21).stores({
+      products: "id, name, category, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+      day_closures: "id, closed_at",
+      rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
+
+      sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
+      processed_ops: "id",
+      paired_devices: "id, updated_at, shop_id",
+
+      monthly_overviews: "id, updated_at",
+
+      closings: "id, imported_at, employee_device_id, period_from, updated_at",
+
+      employee_history: "id, employeeId, shopId, [employeeId+startedAt]",
     });
   }
 }
@@ -2200,6 +2268,88 @@ export async function deleteClosingImport(id: string): Promise<void> {
   const row = await getDB().closings.get(id);
   if (!row || row.deleted_at) return;
   await getDB().closings.put({ ...row, deleted_at: Date.now(), ...touch() });
+}
+
+// ---------- Carnet d'expérience employé ----------
+// L'historique des business où cette personne a travaillé, 100 % local. L'identité de
+// la PERSONNE (`employeeId`) vit en localStorage : elle n'est PAS une donnée d'appareil,
+// ce qui la fait survivre à `purgeAllData` et `resetDeviceIdentity`. Le carnet (table
+// `employee_history`, IndexedDB) est dans le même cas — la personne qui supprime son
+// compte retrouve ses expériences, puis en ouvre de nouvelles au prochain join.
+
+/** Clé localStorage de l'identité stable de la personne employée. */
+export const EMPLOYEE_ID_KEY = "elyndra_employee_id";
+
+/** Identité employé persistante, ou null si cette personne n'a jamais travaillé. */
+export function getEmployeeId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(EMPLOYEE_ID_KEY);
+  } catch {
+    // localStorage inaccessible (mode privé strict) : pas d'identité, carnet vide.
+    return null;
+  }
+}
+
+/** Crée — ou relit — l'identité employé stable. Indépendante du `deviceId` : elle
+ *  rattache les entrées du carnet d'un business à l'autre et survit aux purges. */
+export function ensureEmployeeId(): string {
+  const existing = getEmployeeId();
+  if (existing) return existing;
+  const id = uid();
+  try {
+    window.localStorage.setItem(EMPLOYEE_ID_KEY, id);
+  } catch {
+    // Quota plein ou stockage refusé : l'identité ne survivra pas au rechargement,
+    // mais le carnet reste utilisable pour cette session.
+  }
+  return id;
+}
+
+/**
+ * Ouvre une expérience au rattachement d'un employé (SetupWizard, mode « join »).
+ * Id déterministe : terminer deux fois le même rattachement ne crée pas de doublon —
+ * un `put` écrase l'entrée existante au lieu d'en empiler une seconde.
+ */
+export async function addEmployeeHistory(input: {
+  employeeId: string;
+  deviceId: string;
+  shopId: string;
+  storeName: string;
+  cluster: ClusterId;
+  employeeName?: string;
+}): Promise<EmployeeHistory> {
+  const startedAt = Date.now();
+  const entry: EmployeeHistory = {
+    id: `${input.employeeId}|${input.shopId}|${startedAt}`,
+    role: "employee",
+    ...input,
+    startedAt,
+    durationDays: 0,
+  };
+  await getDB().employee_history.put(entry);
+  return entry;
+}
+
+/** Carnet complet d'une personne, de la dernière expérience à la première. */
+export async function listEmployeeHistory(employeeId: string): Promise<EmployeeHistory[]> {
+  const rows = await getDB().employee_history.where("employeeId").equals(employeeId).toArray();
+  return rows.sort((a, b) => b.startedAt - a.startedAt);
+}
+
+/**
+ * Ferme l'expérience du business `shopId` encore ouverte et pose sa durée (jours
+ * entiers). Appelée à la suppression du compte employé, AVANT la purge — le `shopId`
+ * n'est lisible qu'ici, dans l'identité encore en place.
+ */
+export async function closeEmployeeHistory(shopId: string): Promise<void> {
+  const db = getDB();
+  const rows = await db.employee_history.where("shopId").equals(shopId).toArray();
+  const open = rows.find((r) => !r.endedAt);
+  if (!open) return;
+  const endedAt = Date.now();
+  const durationDays = Math.max(1, Math.round((endedAt - open.startedAt) / 86_400_000));
+  await db.employee_history.put({ ...open, endedAt, durationDays });
 }
 
 // ---------- Settings ----------

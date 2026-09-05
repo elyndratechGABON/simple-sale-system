@@ -18,12 +18,13 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, LogIn, WifiOff } from "lucide-react";
+import { ArrowRight, Check, History, LogIn, ScanLine, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ClusterTutorial, SetupWizard } from "@/components/Onboarding";
 import { CLUSTER_MAP, getPreferences, savePreferences } from "@/lib/settings";
-import { setShopAccount } from "@/lib/db";
+import { getEmployeeId, listEmployeeHistory, setShopAccount, type EmployeeHistory } from "@/lib/db";
+import { formatDateShort, formatExperienceDuration } from "@/lib/format";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/welcome")({
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/welcome")({
   component: WelcomePage,
 });
 
-type Phase = "welcome" | "wizard" | "tutorial";
+type Phase = "welcome" | "wizard" | "tutorial" | "experience";
 type EntryMode = "create" | "join";
 
 function WelcomePage() {
@@ -53,6 +54,8 @@ function WelcomePage() {
   const [mode, setMode] = useState<EntryMode>("create");
   const [joinCreds, setJoinCreds] = useState<{ phone: string; password: string } | null>(null);
   const [joinPairCode, setJoinPairCode] = useState<string | undefined>();
+  const [employeeId, setEmployeeId] = useState<string | null>(() => getEmployeeId());
+  const [history, setHistory] = useState<EmployeeHistory[] | null>(null);
 
   function startCreate() {
     setJoinCreds(null);
@@ -72,6 +75,24 @@ function WelcomePage() {
     savePreferences({ onboardingCompleted: true });
     qc.invalidateQueries({ queryKey: ["preferences"] });
     navigate({ to: "/pos" });
+  }
+
+  /** Ouvre le carnet « Mon expérience » : liste des business travaillés + durée. */
+  async function openExperience() {
+    const id = getEmployeeId();
+    if (!id) return;
+    setEmployeeId(id);
+    setHistory(await listEmployeeHistory(id));
+    setPhase("experience");
+  }
+
+  /** Depuis le carnet, repart vers un nouveau business : la machine d'onboarding en
+   *  mode « join » (scan du QR d'une caisse déjà abonnée). */
+  async function joinNewBusiness() {
+    setJoinCreds(null);
+    setJoinPairCode(undefined);
+    setMode("join");
+    setPhase("wizard");
   }
 
   return (
@@ -146,6 +167,16 @@ function WelcomePage() {
               </Button>
             </div>
 
+            {employeeId && (
+              <Button
+                variant="outline"
+                className="mt-2 h-11 w-full max-w-xs gap-2 text-sm"
+                onClick={() => void openExperience()}
+              >
+                <History className="h-4 w-4" /> Mon expérience
+              </Button>
+            )}
+
             <span className="mt-6 inline-flex items-center gap-1.5 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
               <WifiOff className="h-3 w-3" /> 100% hors ligne · vos données restent chez vous
             </span>
@@ -179,7 +210,159 @@ function WelcomePage() {
             <ClusterTutorial onComplete={finishTutorial} />
           </motion.div>
         )}
+
+        {phase === "experience" && employeeId && history && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex w-full justify-center"
+          >
+            <ExperiencePage
+              employeeId={employeeId}
+              history={history}
+              onBack={() => setPhase("welcome")}
+              onJoin={() => void joinNewBusiness()}
+            />
+          </motion.div>
+        )}
       </main>
+    </div>
+  );
+}
+
+/* ── Carnet d'expérience employé ──────────────────────────────────────────── */
+
+function ExperiencePage({
+  employeeId,
+  history,
+  onBack,
+  onJoin,
+}: {
+  employeeId: string;
+  history: EmployeeHistory[];
+  onBack: () => void;
+  onJoin: () => void;
+}) {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrError, setQrError] = useState(false);
+
+  // Durée totale du carnet : les expériences fermées portent leur durée, une expérience
+  // encore ouverte est comptée jusqu'à maintenant (défense — le welcome n'y accède pas).
+  const totalDays = history.reduce((sum, h) => {
+    if (h.endedAt) return sum + h.durationDays;
+    return sum + Math.max(1, Math.round((Date.now() - h.startedAt) / 86_400_000));
+  }, 0);
+
+  /** Un QR de profil porteur du résumé du carnet : le propriétaire d'un nouveau
+   *  business peut le scanner pour vérifier l'expérience déclarée. */
+  async function showQrProfile() {
+    setQrError(false);
+    setQrDataUrl(null);
+    try {
+      const payload = {
+        app: "ecaisse",
+        type: "exp-profile",
+        employee: employeeId,
+        stores: history.map((h) => ({
+          name: h.storeName,
+          cluster: h.cluster,
+          days: h.endedAt
+            ? h.durationDays
+            : Math.max(1, Math.round((Date.now() - h.startedAt) / 86_400_000)),
+        })),
+      };
+      const { default: QRCodeLib } = await import("qrcode");
+      setQrDataUrl(await QRCodeLib.toDataURL(JSON.stringify(payload)));
+    } catch {
+      setQrError(true);
+    }
+  }
+
+  return (
+    <div className="w-full max-w-lg rounded-2xl border bg-card p-5 text-left shadow-sm sm:p-6">
+      <h1 className="sr-only">Mon expérience</h1>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">Mon expérience</h2>
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          Retour
+        </Button>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Les business où vous avez travaillé, 100 % enregistré sur votre téléphone.
+      </p>
+
+      {history.length > 0 ? (
+        <>
+          <div className="mt-4 space-y-3">
+            {history.map((h) => {
+              const endDay = h.endedAt
+                ? h.durationDays
+                : Math.max(1, Math.round((Date.now() - h.startedAt) / 86_400_000));
+              return (
+                <div key={h.id} className="rounded-xl border bg-muted/20 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold">{h.storeName}</p>
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                      {formatExperienceDuration(endDay)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {CLUSTER_MAP[h.cluster]?.label ?? "Activité"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatDateShort(h.startedAt)} →{" "}
+                    {h.endedAt ? formatDateShort(h.endedAt) : "aujourd'hui"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 rounded-xl border bg-accent/40 p-3 text-sm">
+            <span className="font-medium">
+              {history.length} business {history.length > 1 ? "travaillés" : "travaillé"} ·{" "}
+              {formatExperienceDuration(totalDays)} au total
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Button size="lg" className="w-full gap-2" onClick={onJoin}>
+              <ScanLine className="h-4 w-4" /> Scanner un QR pour rejoindre un nouveau business
+            </Button>
+            <Button variant="outline" className="w-full gap-2" onClick={() => void showQrProfile()}>
+              <History className="h-4 w-4" /> Afficher mon QR profil
+            </Button>
+          </div>
+
+          {qrError && (
+            <p className="mt-2 text-center text-xs text-destructive">
+              Impossible de générer le QR — réessayez.
+            </p>
+          )}
+          {qrDataUrl && (
+            <div className="mt-3 text-center space-y-1">
+              <img
+                src={qrDataUrl}
+                alt="QR profil expérience"
+                className="mx-auto h-44 w-44 rounded-lg border"
+              />
+              <p className="text-xs text-muted-foreground">
+                Présentez ce QR à un propriétaire pour prouver votre expérience.
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mt-6 space-y-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            Aucune expérience pour le moment. Rejoignez un business pour commencer.
+          </p>
+          <Button size="lg" className="w-full gap-2" onClick={onJoin}>
+            <ScanLine className="h-4 w-4" /> Scanner un QR pour rejoindre un business
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

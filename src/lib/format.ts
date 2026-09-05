@@ -80,3 +80,26 @@ export function formatDay(ts: number): string {
     year: "numeric",
   });
 }
+
+/**
+ * Durée lisible d'une expérience employé, depuis des jours entiers : « 5 jours »,
+ * « 2 mois et 15 j », « 1 an et 3 mois ». Convention des mois = 30 jours, années = 365
+ * jours — bornes affichées du carnet, pas une mesure civile.
+ */
+export function formatExperienceDuration(days: number): string {
+  if (!Number.isFinite(days) || days <= 0) return "moins d'un jour";
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days % 365) / 30);
+  const restDays = days % 30;
+  if (years > 0) {
+    const parts = [`${years} an${years > 1 ? "s" : ""}`];
+    if (months > 0) parts.push(`${months} mois`);
+    return parts.join(" et ");
+  }
+  if (months > 0) {
+    const parts = [`${months} mois`];
+    if (restDays > 0) parts.push(`${restDays} j`);
+    return parts.join(" et ");
+  }
+  return `${restDays} jour${restDays > 1 ? "s" : ""}`;
+}
