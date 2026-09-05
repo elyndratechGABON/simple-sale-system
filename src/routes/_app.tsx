@@ -29,6 +29,7 @@ import { LoadingScreen } from "../components/LoadingScreen";
 import { RenewalBanner } from "../components/RenewalBanner";
 import { SuspendedScreen } from "../components/SuspendedScreen";
 import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
+import { DeleteRequestDialog } from "../components/DeleteRequestDialog";
 import { ensureShopProfile } from "../lib/db";
 import { getPreferences } from "../lib/settings";
 import { backgroundSync } from "../lib/sync";
@@ -111,6 +112,7 @@ function AppLayout() {
       </div>
       <BottomNav />
       <GatekeeperAlerts />
+      <DeleteRequestDialog />
       <SuspendedScreen />
     </>
   );

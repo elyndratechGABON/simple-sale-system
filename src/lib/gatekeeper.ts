@@ -29,6 +29,7 @@ const SETTING_MESSAGES = "gatekeeper_messages";
 const SETTING_QUOTA = "gatekeeper_account_quota";
 const SETTING_REQUEST = "gatekeeper_subscription_request";
 const SETTING_GRACE_ENDS_AT = "gatekeeper_grace_ends_at";
+const SETTING_DELETE_REQUEST = "gatekeeper_delete_request";
 
 /** Places du compte marchand, telles que le serveur les voit au dernier handshake. */
 export interface AccountQuota {
@@ -66,7 +67,7 @@ export async function getGraceEndsAt(): Promise<number | null> {
   return (await getSetting<number>(SETTING_GRACE_ENDS_AT)) ?? null;
 }
 
-export type CommandType = "suspend" | "renew" | "broadcast_message";
+export type CommandType = "suspend" | "renew" | "broadcast_message" | "delete_account_request";
 
 /** Pourquoi la caisse est bloquée : abonnement suspendu, quota d'appareils dépassé,
  * ou mot clé de récupération rejeté par le serveur. */
@@ -80,9 +81,34 @@ export interface AdminCommand {
     days?: number;
     max_devices?: number;
     message_text?: string;
+    /** Cible d'une suppression de compte : device_id de la caisse concernée. */
+    device_id?: string;
   };
   expires_at: number;
   created_at: number;
+}
+
+/**
+ * Demande de suppression de compte, envoyée par l'orchestrateur (tableau de bord) et
+ * CONSENTIE par le vendeur devant la caisse. Contrat du payload `device_id` : le
+ * `device_id` que l'orchestrateur voit (celui de la fiche locale, envoyé au handshake).
+ * La commande n'est honorée QUE sur l'appareil qui porte ce device_id — jamais sur les
+ * autres caisses du groupe. L'acceptation reste LOCALE (purge de cet appareil) : l'orchestrateur
+ * a déjà fait son office côté serveur.
+ */
+export interface DeleteAccountRequest {
+  command_id: string;
+  device_id: string;
+  message?: string;
+  requested_at: number;
+}
+
+export async function getDeleteAccountRequest(): Promise<DeleteAccountRequest | null> {
+  return (await getSetting<DeleteAccountRequest>(SETTING_DELETE_REQUEST)) ?? null;
+}
+
+export async function clearDeleteAccountRequest(): Promise<void> {
+  await setSetting(SETTING_DELETE_REQUEST, null);
 }
 
 export interface HandshakeResult {
@@ -218,6 +244,23 @@ async function applyCommand(command: AdminCommand): Promise<void> {
       SETTING_MESSAGES,
       [...messages, { text: command.payload.message_text, at: Date.now() }].slice(-5),
     );
+  }
+  // Demande de suppression de compte (orchestrateur → caisse d'un employé). Envoyée
+  // sans doute à tout le groupe, elle n'est CONSENTIE que sur la caisse cible : si le
+  // `device_id` du payload diffère de celui de CET appareil, la commande est acquittée
+  // sans effet (elle ne reviendra pas chaque handshake). Sur la cible, on pose la
+  // demande en attente — l'employé l'accepte ou la refuse depuis l'écran.
+  if (command.action_type === "delete_account_request") {
+    const profile = await getShopProfile();
+    const target = command.payload.device_id;
+    if (profile && target && target === profile.deviceId) {
+      await setSetting(SETTING_DELETE_REQUEST, {
+        command_id: command.id,
+        device_id: profile.deviceId,
+        message: command.payload.message_text?.trim() || undefined,
+        requested_at: command.created_at ?? Date.now(),
+      } satisfies DeleteAccountRequest);
+    }
   }
 }
 
