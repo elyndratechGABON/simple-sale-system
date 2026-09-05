@@ -8,7 +8,7 @@ import { ensureIdentity } from "@/lib/syncengine/identity";
 import { canAccessRoute, fallbackRoute, isOwner, navRoutes } from "@/lib/access";
 
 export interface AccessInfo {
-  role: "owner" | "manager" | "employee";
+  role: "owner" | "employee";
   nav: string[];
   isOwner: boolean;
   canAccess: (route: string) => boolean;

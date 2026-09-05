@@ -165,9 +165,9 @@ describe("sync temps réel : vente créée par l'employé", () => {
   });
 });
 
-// ─── Scénario 3 : ajustement de stock par le gérant → visible partout ────────
-describe("sync temps réel : ajustement de stock par le gérant", () => {
-  it("le gérant ajuste le stock → le propriétaire et l'employé voient le nouveau stock", async () => {
+// ─── Scénario 3 : ajustement de stock par l'employé → visible partout ──────────
+describe("sync temps réel : ajustement de stock par l'employé", () => {
+  it("un employé ajuste le stock → le propriétaire et l'employé voient le nouveau stock", async () => {
     // Propriétaire crée le produit
     await freshDevice();
     await setShopAccount(ACCOUNT);
@@ -183,11 +183,11 @@ describe("sync temps réel : ajustement de stock par le gérant", () => {
     });
     await exchangeOps(relay.client);
 
-    // Gérant reçoit le produit, ajuste le stock
+    // Employé reçoit le produit, ajuste le stock
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
-    await setIdentityRole("manager");
+    await setIdentityRole("employee");
     await exchangeOps(relay.client);
 
     const before = await listProducts();
@@ -307,14 +307,6 @@ describe("sync temps réel : garde d'accès par rôle", () => {
     expect(canAccessRoute("/settings", "employee")).toBe(true);
     expect(canAccessRoute("/reports", "employee")).toBe(false);
     expect(canAccessRoute("/history", "employee")).toBe(false);
-  });
-
-  it("un gérant peut accéder à /pos, /stocks, /reports et /history", () => {
-    expect(canAccessRoute("/pos", "manager")).toBe(true);
-    expect(canAccessRoute("/stocks", "manager")).toBe(true);
-    expect(canAccessRoute("/reports", "manager")).toBe(true);
-    expect(canAccessRoute("/history", "manager")).toBe(true);
-    expect(canAccessRoute("/settings", "manager")).toBe(false);
   });
 
   it("un propriétaire peut accéder à tout", () => {

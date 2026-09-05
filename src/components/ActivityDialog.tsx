@@ -1,7 +1,7 @@
 // Dialog « Activité » — suivi du personnel pour le propriétaire.
 //
 // Accessible depuis une icône du header (propriétaire uniquement). Trois volets :
-//   1. CA par vendeur : chaque gérant/employé avec son nombre de ventes et son montant
+//   1. CA par vendeur : chaque employé avec son nombre de ventes et son montant
 //      encaissé sur la période. Les ventes d'une caisse propriétaire (aucun `seller_name`)
 //      sont agrégées sous « Direct ».
 //   2. Actions récentes : les ventes et ajustements de stock les plus récents, horodatés.
@@ -16,7 +16,6 @@ import {
   Clock,
   MonitorSmartphone,
   Receipt,
-  UserCheck,
   UserRound,
   Users,
 } from "lucide-react";
@@ -69,17 +68,6 @@ function RoleBadge({ role }: { role?: DeviceRole }) {
       <Badge variant="default" className="bg-primary text-primary-foreground gap-1">
         <BadgeCheck className="h-3 w-3" />
         Propriétaire
-      </Badge>
-    );
-  }
-  if (role === "manager") {
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 gap-1"
-      >
-        <UserCheck className="h-3 w-3" />
-        Gérant
       </Badge>
     );
   }
@@ -155,7 +143,7 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
 
   const paired = (peers ?? []).filter((p) => p.status !== "pending");
   const pending = (peers ?? []).filter((p) => p.status === "pending");
-  const roleOrder: Record<string, number> = { owner: 0, manager: 1, employee: 2 };
+  const roleOrder: Record<string, number> = { owner: 0, employee: 1 };
   const sortedPeers = [...paired].sort(
     (a, b) => (roleOrder[a.role ?? "employee"] ?? 9) - (roleOrder[b.role ?? "employee"] ?? 9),
   );

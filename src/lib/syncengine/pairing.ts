@@ -25,7 +25,6 @@ const PAIR_CODE_TTL_MS = 10 * 60_000;
 
 export const ROLE_LABELS: Record<DeviceRole, string> = {
   owner: "Propriétaire",
-  manager: "Gérant",
   employee: "Employé",
 };
 

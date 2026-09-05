@@ -65,7 +65,7 @@ export interface PairingPayload {
   /** Copie de la boutique scannée (v1.1) : identité + type de boutique. Champs
    *  optionnels pour rester lisibles par les anciennes versions de parsePairingPayload. */
   shop?: Partial<PairingShopConfig>;
-  /** Rôle assigné par le propriétaire au moment du partage (gérant / employé).
+  /** Rôle assigné par le propriétaire au moment du partage (employé).
    *  Optionnel : absent dans les QR générés avant cette fonctionnalité. */
   role?: DeviceRole;
 }
@@ -127,12 +127,15 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
         data.password.length >= 4
       ) {
         const shop = data.shop;
+        // Le rôle porté par un QR héritage (généré avant la suppression du gérant)
+        // peut être « manager » : on le relit comme « employee », jamais comme owner.
+        const rawRole = data.role as string | undefined;
         const shopInfo: PairingShopInfo = {
           name: typeof data.name === "string" ? data.name : "",
           phone: data.phone.trim(),
           password: data.password,
           pair_code: typeof data.pair_code === "string" ? data.pair_code.trim() : undefined,
-          role: data.role === "manager" || data.role === "employee" ? data.role : undefined,
+          role: rawRole === "employee" || rawRole === "manager" ? "employee" : undefined,
         };
         if (shop && typeof shop === "object") {
           shopInfo.shop = shop;

@@ -1,4 +1,4 @@
-// Droits d'accès des écrans selon leur rôle d'appareil (owner / manager / employee).
+// Droits d'accès des écrans selon leur rôle d'appareil (owner / employee).
 //
 // Source de vérité unique pour ce que chaque rôle peut ouvrir. L'UI (navigation)
 // et la garde de route (redirection dans _app) lisent toutes deux ici, pour qu'une
@@ -13,20 +13,12 @@ import type { DeviceRole } from "./syncengine/types";
  *  `/settings` est limité côté employé à UN panneau (demande de suppression de compte,
  *  cf. `EmployeeAccountPanel`) — c'est la page elle-même qui masque le reste. */
 const EMPLOYEE_ROUTES = ["/pos", "/stocks", "/settings"] as const;
-const MANAGER_ROUTES = ["/pos", "/stocks", "/reports", "/history"] as const;
 
 function allowedRoutes(role: DeviceRole): readonly string[] {
-  switch (role) {
-    case "employee":
-      return EMPLOYEE_ROUTES;
-    case "manager":
-      return MANAGER_ROUTES;
-    default:
-      return [];
-  }
+  return role === "employee" ? EMPLOYEE_ROUTES : [];
 }
 
-/** Le propriétaire a seul la main sur l'appareil (vrai propriétaire, pas le gérant). */
+/** Le propriétaire a seul la main sur l'appareil (vrai propriétaire, pas un employé). */
 export function isOwner(role: DeviceRole): boolean {
   return role === "owner";
 }
@@ -43,8 +35,6 @@ export function navRoutes(role: DeviceRole): string[] {
   switch (role) {
     case "owner":
       return ["/dashboard", "/pos", "/stocks", "/reports", "/settings"];
-    case "manager":
-      return ["/pos", "/stocks", "/reports"];
     default:
       return ["/accueil", "/pos", "/stocks", "/settings"];
   }

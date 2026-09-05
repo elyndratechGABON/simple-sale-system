@@ -233,7 +233,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     case "device.announce": {
       // Une caisse se présente. Elle est `paired` si son code correspond à celui affiché
       // localement (preuve par le principal), sinon elle reste `pending` — sauf appareil
-      // déjà pairé (re-annonce) ou rôle de confiance (owner/manager qui se présentent).
+      // déjà pairé (re-annonce) ou rôle de confiance (owner qui se présente).
       const pl = op.payload as DeviceAnnouncePayload;
       if (!pl?.device_id) break;
       const now = Date.now();
@@ -248,7 +248,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         pl.pair_code && activeCode?.value === pl.pair_code && Number(expiresAt?.value ?? 0) > now,
       );
       const wasPaired = existing.status === "paired";
-      const autoPaired = codeOk || wasPaired || pl.role === "owner" || pl.role === "manager";
+      const autoPaired = codeOk || wasPaired || pl.role === "owner";
       await db.paired_devices.put({
         ...existing,
         device_name: pl.employee_name || existing.device_name,

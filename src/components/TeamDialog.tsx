@@ -1,11 +1,10 @@
-// Dialog « Équipe » : liste des appareils du compte marchand (propriétaire, gérants,
-// employés). Accessible depuis l'icône Users dans le header — owner only.
+// Dialog « Équipe » : liste des appareils du compte marchand (propriétaire, employés). Accessible depuis l'icône Users dans le header — owner only.
 //
 // Chaque ligne affiche le nom de l'appareil (`employee_name`), le rôle (badge coloré)
 // et le dernier contact (`last_seen`). Les appareils en attente d'approbation sont
 // signalés séparément avec un bouton « Approuver ».
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, Clock, MonitorSmartphone, UserCheck, Users } from "lucide-react";
+import { BadgeCheck, Clock, MonitorSmartphone, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -33,17 +32,6 @@ function RoleBadge({ role }: { role?: DeviceRole }) {
       <Badge variant="default" className="bg-primary text-primary-foreground gap-1">
         <BadgeCheck className="h-3 w-3" />
         {ROLE_LABELS.owner}
-      </Badge>
-    );
-  }
-  if (role === "manager") {
-    return (
-      <Badge
-        variant="secondary"
-        className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 gap-1"
-      >
-        <UserCheck className="h-3 w-3" />
-        {ROLE_LABELS.manager}
       </Badge>
     );
   }
@@ -83,8 +71,8 @@ export function TeamDialog({ open, onOpenChange }: TeamDialogProps) {
   const pending = allDevices.filter((d) => d.status === "pending");
   const paired = allDevices.filter((d) => d.status !== "pending");
 
-  // Trier : owner en premier, puis managers, puis employés, puis pending.
-  const roleOrder: Record<string, number> = { owner: 0, manager: 1, employee: 2 };
+  // Trier : owner en premier, puis employés, puis pending.
+  const roleOrder: Record<string, number> = { owner: 0, employee: 1 };
   const sorted = [...paired].sort(
     (a, b) => (roleOrder[a.role ?? "employee"] ?? 9) - (roleOrder[b.role ?? "employee"] ?? 9),
   );

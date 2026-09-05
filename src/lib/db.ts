@@ -174,7 +174,7 @@ export interface Sale extends SyncFields {
   payment_method?: PaymentMethod;
   /** Réduction accordée en FCFA, déjà déduite de `total`. Absente = aucune remise. */
   discount?: number;
-  /** Nom du vendeur (rôle gérant/employé) qui a encaissé — pour le suivi d'activité.
+  /** Nom du vendeur (rôle employé) qui a encaissé — pour le suivi d'activité.
    *  Absent sur les ventes antérieures au suivi → « — ». */
   seller_name?: string;
   /** Identifiant d'appareil de la caisse qui a encaissé — relie la vente à son écran. */
@@ -1270,10 +1270,10 @@ export async function createSale(input: {
   // Hors espèces, le montant débité est exact : rien ne rentre physiquement dans le
   // tiroir-caisse, il n'y a donc rien à rendre.
   const cashGiven = method === "cash" ? input.cash_given : total;
-  // Qui encaisse : le rôle (gérant/employé) et le nom de l'appareil, pour le suivi
+  // Qui encaisse : le rôle (employé) et le nom de l'appareil, pour le suivi
   // d'activité du propriétaire. Sur une caisse propriétaire, la vente reste à lui.
   const identity = getIdentity();
-  const roleLabel = identity.role === "manager" ? "Gérant" : "Employé";
+  const roleLabel = "Employé";
   const sellerLabel = identity.role === "owner" ? "" : identity.employeeName?.trim() || roleLabel;
   const sale: Sale = {
     id: uid(),

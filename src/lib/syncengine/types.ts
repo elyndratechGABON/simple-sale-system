@@ -3,7 +3,9 @@
 // Aucun import depuis `db` ici (feuille du graphe) : ces types sont consommés par les
 // deux faces du moteur — `identity.ts` (qui ne lit qu'IndexedDB via db) et `db.ts`
 // (qui écrit). Garder ce fichier sans dépendance évite tout cycle d'import.
-export type DeviceRole = "owner" | "manager" | "employee";
+/** Deux types de compte : le propriétaire et les employés. Le rôle `manager` a été
+ *  supprimé — un ancien « gérant » se lit comme un employé. */
+export type DeviceRole = "owner" | "employee";
 
 export interface SyncIdentity {
   /** Identifiant d'appareil stable — unique par mobile. */
@@ -115,7 +117,7 @@ export interface ClientUpdatedPayload {
 /**
  * Une caisse se présente au groupe : nom, rôle, clé publique. `pair_code` est le code
  * de paire affiché par le principal — la seule preuve dont ce groupe dispose. L'absence
- * de code n'est acceptée que pour un appareil déjà `paired` (ou un rôle `owner`/`manager`).
+ * de code n'est acceptée que pour un appareil déjà `paired` (ou un rôle `owner`).
  */
 export interface DeviceAnnouncePayload {
   device_id: string;

@@ -188,7 +188,7 @@ describe("décision d'application du code (côté principal)", () => {
     expect(peer?.status).toBe("pending");
   });
 
-  it("une annonce sans code n'est acceptée que pour un rôle de confiance (owner/manager)", async () => {
+  it("une annonce sans code n'est acceptée que pour un rôle de confiance (owner)", async () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
@@ -245,11 +245,11 @@ describe("rencontre par relais", () => {
     await approveDevice("device-e9", "employee");
     await exchangeOps(relay.client); // pousse l'approbation vers le relais
 
-    // Troisième écran (gérant) tire : il voit le pair PENDING puis la décision le PAIR.
+    // Troisième écran (employé) tire : il voit le pair PENDING puis la décision le PAIR.
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
-    await setIdentityRole("manager");
+    await setIdentityRole("employee");
     const state = await exchangeOps(relay.client);
     expect(state.applied).toBeGreaterThan(0);
     const peers = await listPairedDevices(getIdentity().shopId);

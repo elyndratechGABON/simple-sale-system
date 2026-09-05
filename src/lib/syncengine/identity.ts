@@ -76,7 +76,9 @@ export async function ensureIdentity(): Promise<SyncIdentity> {
   cache = {
     deviceId,
     shopId: await deriveShopId(deviceId),
-    role: roleRow?.value === "manager" || roleRow?.value === "employee" ? roleRow.value : "owner",
+    // Le rôle `manager` n'existe plus : une caisse qui en conserve la valeur stockée en
+    // base devient employé — jamais propriétaire (pas de montée de privilège).
+    role: roleRow?.value === "employee" || roleRow?.value === "manager" ? "employee" : "owner",
     employeeName: typeof nameRow?.value === "string" ? nameRow.value : "",
   };
   return cache;

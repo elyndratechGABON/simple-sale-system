@@ -237,7 +237,6 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="employee">Employé</SelectItem>
-                    <SelectItem value="manager">Gérant</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
