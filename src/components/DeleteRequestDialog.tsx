@@ -7,9 +7,10 @@
 // de l'application, la surveille et demande au vendeur de CONSENTIR : accepter purge
 // CET appareil (retour au premier lancement), refuser l'écarte sans rien détruire.
 //
-// Tout est local, comme dans le panneau QR (`EmployeeAccountPanel`) : jamais de
-// `deleteShopRemote` — l'orchestrateur a déjà tranché côté serveur, l'employé qui
-// refuse reste simplement une caisse rattachée que le compte pourra libérer plus tard.
+// Message à l'orchestrateur avant la purge locale, comme le panneau QR
+// (`EmployeeAccountPanel`) : `deleteShopRemote` efface la fiche de CET écran — la place
+// qu'il occupait sur le compte se libère. Un employé qui refuse reste simplement une
+// caisse rattachée que le compte continue d'utiliser.
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -25,10 +26,11 @@ import {
 import { useAccess } from "@/hooks/use-access";
 import {
   clearDeleteAccountRequest,
+  deleteShopRemote,
   getDeleteAccountRequest,
   type DeleteAccountRequest,
 } from "@/lib/gatekeeper";
-import { purgeAllData, closeEmployeeHistory } from "@/lib/db";
+import { getShopProfile, purgeAllData, closeEmployeeHistory } from "@/lib/db";
 import { ensureIdentity, resetDeviceIdentity } from "@/lib/syncengine/identity";
 import { resetGatekeeper } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
@@ -57,6 +59,15 @@ export function DeleteRequestDialog() {
 
   const deleteMut = useMutation({
     mutationFn: async () => {
+      // Message à l'orchestrateur : la fiche de CET écran est supprimée côté serveur
+      // (place du compte libérée). Serveur d'abord, purge locale ensuite — un réseau
+      // manquant prévient mais ne bloque pas la purge (offline-first).
+      const profile = await getShopProfile();
+      if (!profile) throw new Error("Aucune boutique enregistrée sur cet appareil.");
+      const remote = await deleteShopRemote(profile.deviceId, profile.storeName);
+      if (!remote.ok) {
+        toast.warning(`Serveur : ${remote.error ?? "injoignable"}. Purge locale quand même.`);
+      }
       const identity = await ensureIdentity();
       await closeEmployeeHistory(identity.shopId);
       await purgeAllData();

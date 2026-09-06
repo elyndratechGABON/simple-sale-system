@@ -10,9 +10,10 @@
 import type { DeviceRole } from "./syncengine/types";
 
 /** Routes ouvertes à chaque rôle. Le propriétaire n'a pas de liste : il ouvre tout.
- *  `/settings` est limité côté employé à UN panneau (demande de suppression de compte,
- *  cf. `EmployeeAccountPanel`) — c'est la page elle-même qui masque le reste. */
-const EMPLOYEE_ROUTES = ["/pos", "/stocks", "/settings"] as const;
+ *  `/dashboard` (page d'accueil) est ouvert à l'employé. `/settings` est limité côté
+ *  employé à UN panneau (demande de suppression de compte, cf. `EmployeeAccountPanel`) —
+ *  c'est la page elle-même qui masque le reste. */
+const EMPLOYEE_ROUTES = ["/dashboard", "/pos", "/stocks", "/settings"] as const;
 
 function allowedRoutes(role: DeviceRole): readonly string[] {
   return role === "employee" ? EMPLOYEE_ROUTES : [];
@@ -36,7 +37,7 @@ export function navRoutes(role: DeviceRole): string[] {
     case "owner":
       return ["/dashboard", "/pos", "/stocks", "/reports", "/settings"];
     default:
-      return ["/accueil", "/pos", "/stocks", "/settings"];
+      return ["/dashboard", "/pos", "/stocks", "/settings"];
   }
 }
 

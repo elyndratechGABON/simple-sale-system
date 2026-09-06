@@ -4,16 +4,16 @@
 // compte » (toujours visible) propose au vendeur :
 //
 // Path QR — le vendeur scanne le QR de restitution du propriétaire, l'app agrège ses
-//            ventes du jour et affiche un QR de clôture (même aller-retour optique qu'à
-//            l'accueil `accueil.tsx`) : ses dernières ventes sont donc partagées avant
-//            que la caisse soit purgée.
+//            ventes du jour et affiche un QR de clôture (aller-retour optique) : ses
+//            dernières ventes sont donc partagées avant que la caisse soit purgée.
 // Path orchestrateur — le tableau de bord a envoyé une demande (`delete_account_request`,
 //            consommée par le handshake et stockée : `getDeleteAccountRequest`). Le vendeur
 //            la voit ici et la consent, ou l'écarte.
 //
-// Dans les DEUX cas, tout est local : purge de la base, remise à zéro du gatekeeper,
-// retour au premier lancement. Jamais `deleteShopRemote` — le compte entier du commerce
-// n'est pas touché, l'orchestrateur a déjà tranché côté serveur le cas échéant.
+// Dans les DEUX cas, le message part à l'orchestrateur AVANT la purge locale :
+// `deleteShopRemote` efface la fiche de CET écran (le serveur d'abord), puis la purge
+// locale repart au premier lancement. Rien de plus — seul l'écran disparaît ; le compte
+// entier du commerce n'est supprimé côté serveur que si aucun autre écran n'en dépendait.
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -31,9 +31,10 @@ import { useAccess } from "@/hooks/use-access";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { ensureIdentity, resetDeviceIdentity } from "@/lib/syncengine/identity";
 import { buildClosingPayload, parseRestitutionRequest } from "@/lib/restitution";
-import { closeEmployeeHistory, purgeAllData } from "@/lib/db";
+import { closeEmployeeHistory, getShopProfile, purgeAllData } from "@/lib/db";
 import {
   clearDeleteAccountRequest,
+  deleteShopRemote,
   getDeleteAccountRequest,
   resetGatekeeper,
   type DeleteAccountRequest,
@@ -59,6 +60,16 @@ export function EmployeeAccountPanel() {
 
   const deleteMut = useMutation({
     mutationFn: async () => {
+      // Message à l'orchestrateur : la fiche de CET écran est supprimée côté serveur
+      // (place libérée sur le compte du marchand). Serveur d'abord, purge locale ensuite ;
+      // si le réseau manque on prévient mais on purge quand même — un employé qui veut
+      // partir ne doit pas rester bloqué sur un serveur HS.
+      const profile = await getShopProfile();
+      if (!profile) throw new Error("Aucune boutique enregistrée sur cet appareil.");
+      const remote = await deleteShopRemote(profile.deviceId, profile.storeName);
+      if (!remote.ok) {
+        toast.warning(`Serveur : ${remote.error ?? "injoignable"}. Purge locale quand même.`);
+      }
       // La fin d'expérience se joue AVANT la purge : le `shopId` n'est lisible que dans
       // l'identité encore en place. Le carnet (identité stable + `employee_history`)
       // survit à la purge — c'est lui qui s'affichera sur « Mon expérience ».
