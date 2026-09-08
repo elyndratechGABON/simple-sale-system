@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { parsePairingPayload } from "@/lib/pairing";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
+import { ensureIdentity, setIdentityEmployeeName } from "@/lib/syncengine/identity";
 
 export const Route = createFileRoute("/welcome")({
   // Utilisateur déjà installé → straight to the till : rafraîchissement,
@@ -93,6 +94,12 @@ function WelcomePage() {
       // Annonce P2P avec le code du QR
       if (parsed.pair_code) {
         await enterPairingCode(parsed.pair_code);
+      }
+      // Demande le nom de l'employé (stocké localement + transmis au relais)
+      const employeeName = window.prompt("Votre nom (pour l'équipe) :");
+      if (employeeName?.trim()) {
+        const identity = await ensureIdentity();
+        await setIdentityEmployeeName(employeeName.trim());
       }
       toast.success("Boutique récupérée — stock et ventes synchronisés.");
       const prefs = getPreferences();

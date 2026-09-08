@@ -270,7 +270,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             Ajouter un appareil
           </DialogTitle>
           <DialogDescription>
-            Sur la nouvelle caisse, choisissez « Rejoindre un compte » puis scannez ce code.
+            L'employé scanne ce code, entre son nom, et reçoit le stock, les ventes et la caisse du propriétaire via le relais.
           </DialogDescription>
         </DialogHeader>
 
@@ -356,123 +356,67 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           </p>
         )}
 
-        {hasAnyAccount && (
-          <div className="space-y-3 rounded-xl border p-4">
-            <div>
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <Users className="h-4 w-4" />
-                Synchroniser deux caisses, sans serveur de données
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Vos caisses convergent produits, ventes et stock via le relais : un code de paire
-                suffit à les relier.
-              </p>
-            </div>
-
-            {isOwner && (
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void togglePairCode()}
-                >
-                  {pairCode ? "Masquer le code" : "Afficher le code de paire"}
-                </Button>
-                {pairCode && (
-                  <div className="mt-2 rounded-lg border border-dashed bg-accent/40 py-3 text-center">
-                    <p className="font-mono text-3xl font-bold tracking-[0.3em]">{pairCode}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      À saisir sur l'autre caisse. Valable encore {minutesLeft} min.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="pair-code">Code affiché par une autre caisse</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="pair-code"
-                  value={enteredCode}
-                  onChange={(e) => setEnteredCode(e.target.value.toUpperCase())}
-                  placeholder="A1B2C3"
-                  className="font-mono tracking-widest"
-                  maxLength={6}
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                />
-                <Button type="button" variant="secondary" onClick={() => void submitPairCode()}>
-                  Associer
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="pair-role">Rôle de cet écran</Label>
-                <Select
-                  value={identity?.role ?? "employee"}
-                  onValueChange={(v) => void changeRole(v as DeviceRole)}
-                >
-                  <SelectTrigger id="pair-role" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(ROLE_LABELS) as DeviceRole[]).map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {ROLE_LABELS[r]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pair-name">Nom affiché aux autres caisses</Label>
-                <Input
-                  id="pair-name"
-                  value={employeeName}
-                  onChange={(e) => setEmployeeName(e.target.value)}
-                  onBlur={() => void saveName()}
-                  placeholder="Ex : Caisse bar"
-                />
-              </div>
-            </div>
-
-            {isOwner && pending.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  En attente d'approbation ({pending.length})
-                </p>
-                {pending.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border bg-accent/30 px-3 py-2"
+{hasAnyAccount && (
+            <div className="space-y-3 rounded-xl border p-4">
+              {isOwner && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Le code de paire est valable 10 minutes. L'employé scanne le QR, entre son nom,
+                    et il est ajouté à la boutique.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void togglePairCode()}
+                    className="w-full"
                   >
-                    <span className="truncate text-sm">
-                      {p.device_name || "Écran inconnu"}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        · {p.id.slice(0, 6)}…
-                      </span>
-                    </span>
-                    <Button type="button" size="sm" onClick={() => void approve(p.id)}>
-                      Approuver
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
+                    {pairCode ? "Masquer le code de paire" : "Afficher le code de paire"}
+                  </Button>
+                  {pairCode && (
+                    <div className="mt-2 rounded-lg border border-dashed bg-accent/40 py-3 text-center">
+                      <p className="font-mono text-3xl font-bold tracking-[0.3em]">{pairCode}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        À saisir si l'employé ne peut pas scanner. Valable {minutesLeft} min.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
-            {peers && (
-              <p className="text-xs text-muted-foreground">
-                {pairedCount > 0
-                  ? `${pairedCount} écran${pairedCount > 1 ? "s" : ""} déjà synchronisé${pairedCount > 1 ? "s" : ""} avec celui-ci.`
-                  : "Aucun autre écran rencontré pour l'instant : gardez le relais joignable."}
-              </p>
-            )}
-          </div>
-        )}
+              {isOwner && pending.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    En attente d'approbation ({pending.length})
+                  </p>
+                  {pending.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border bg-accent/30 px-3 py-2"
+                    >
+                      <span className="truncate text-sm">
+                        {p.device_name || "Écran inconnu"}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          · {p.id.slice(0, 6)}…
+                        </span>
+                      </span>
+                      <Button type="button" size="sm" onClick={() => void approve(p.id)}>
+                        Approuver
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {peers && (
+                <p className="text-xs text-muted-foreground">
+                  {pairedCount > 0
+                    ? `${pairedCount} employé${pairedCount > 1 ? "s" : ""} connecté${pairedCount > 1 ? "s" : ""} à cette boutique.`
+                    : "Aucun employé connecté pour l'instant. Partagez le QR ci-dessus."}
+                </p>
+              )}
+            </div>
+          )}
       </DialogContent>
     </Dialog>
   );
