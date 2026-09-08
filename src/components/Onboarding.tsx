@@ -148,7 +148,8 @@ export function SetupWizard({
   // Compte marchand (v3) : un téléphone + mot de passe partagés par toutes les caisses
   // du même commerçant. « create » pour la première boutique, « join » pour rattacher
   // cet écran à un compte existant (même abonnement).
-  const [accountMode, setAccountMode] = useState<"create" | "join">(initialAccountMode);
+  // Étape 2 : Compte marchand — création uniquement (rejoindre via le QR du propriétaire au step 3)
+  const [accountMode] = useState<"create" | "join">(initialAccountMode);
   const [accPhone, setAccPhone] = useState(initialCredentials?.phone ?? "");
   const [accPassword, setAccPassword] = useState(initialCredentials?.password ?? "");
   // Nom du COMPTE marchand porté par le QR scanné (`data.name` = `accountName` du
@@ -457,45 +458,18 @@ export function SetupWizard({
             title="Compte marchand"
             description="Un seul compte pour toutes vos caisses, un seul abonnement."
           >
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                {
-                  id: "create" as const,
-                  title: "Créer un compte",
-                  desc: "Première boutique — essai gratuit 30 jours",
-                },
-                {
-                  id: "join" as const,
-                  title: "Rejoindre",
-                  desc: "Rattacher cette caisse à un compte existant",
-                },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    // Sélection SILENCIEUSE : la caméra n'est JAMAIS armée depuis le
-                    // choix de la tuile. Les navigateurs mobiles (Safari iOS en
-                    // tête) n'accordent getUserMedia que dans la fenêtre d'activation
-                    // qui suit un geste — et un prompt d'autorisation qui surgit sur
-                    // un simple choix de mode surprend et se fait refuser. L'activation
-                    // passe par le bouton « Scanner » dédié ci-dessous : UN geste
-                    // clair = UN prompt, au moment où l'utilisateur l'attend.
-                    if (m.id !== accountMode) setQrScanned(false);
-                    setAccountMode(m.id);
-                  }}
-                  aria-pressed={accountMode === m.id}
-                  className={cn(
-                    "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
-                    accountMode === m.id
-                      ? "border-primary bg-accent ring-1 ring-primary"
-                      : "bg-card hover:border-primary/50",
-                  )}
-                >
-                  <span className="font-medium">{m.title}</span>
-                  <span className="text-xs text-muted-foreground">{m.desc}</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                key="create"
+                type="button"
+                aria-pressed={true}
+                className={cn(
+                  "flex flex-col items-start gap-1 rounded-2xl border p-4 text-left shadow-sm transition-all bg-card border-primary ring-1 ring-primary",
+                )}
+              >
+                <span className="font-semibold">Créer un compte</span>
+                <span className="text-xs text-muted-foreground">Première boutique — essai gratuit 30 jours, un seul abonnement pour toutes vos caisses.</span>
+              </button>
             </div>
             <div className="mt-4 flex justify-center">
               <Button

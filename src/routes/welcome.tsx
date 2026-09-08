@@ -140,25 +140,24 @@ function WelcomePage() {
               </p>
             </div>
 
-            {/* Trois grands chemins : la création n'ouvre qu'un compte PROPRIÉTAIRE,
-                la connexion ne rattache qu'un EMPLOYÉ, et « Mon expérience » — aussi
-                employé — n'apparaît que si un compte employé a déjà existé sur cet
-                appareil (identité stable + carnet en local). */}
+            {/* Trois grands chemins : la création ouvre un compte PROPRIÉTAIRE (crée sa boutique),
+                la connexion (employé) scanne le QR du propriétaire et récupère tout via le relais
+                (stocks, ventes, entrées/sorties d'argent) — pas de saisie manuelle. */}
             <div className="mt-8 flex w-full flex-col gap-3">
               <WelcomeCard
                 tone="primary"
                 icon={<Store className="h-5 w-5" />}
                 role="Propriétaire"
                 title="Créer un compte"
-                description="Ouvrir ma boutique et encaisser sur cet écran."
+                description="Ouvrir ma boutique, définir mes produits et encaisser."
                 onClick={startCreate}
               />
               <WelcomeCard
                 tone="neutral"
-                icon={<LogIn className="h-5 w-5" />}
+                icon={<ScanLine className="h-5 w-5" />}
                 role="Employé"
-                title="Se connecter"
-                description="Rejoindre le compte de mon propriétaire grâce à son QR."
+                title="Rejoindre via code QR"
+                description="Scanner le QR du propriétaire — stock, ventes et encaissements prêts."
                 onClick={startJoinManual}
               />
               {employeeId && (
