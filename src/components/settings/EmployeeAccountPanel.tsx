@@ -3,14 +3,17 @@
 // Deux chemins pour supprimer ce compte employé, que le bouton « Supprimer mon
 // compte » (toujours visible) propose au vendeur :
 //
+// Path demande (chemin PRINCIPAL) — le clic envoie une demande à l'orchestrateur
+//            (`requestShopDeletion`) que le propriétaire approuve d'un bouton
+//            « Supprimer » dans son tableau de bord (ou refuse) ; la décision revient
+//            au handshake sous forme d'`delete_account_request` et l'employé consent
+//            depuis DeleteRequestDialog. Rien n'est détruit ici : la fiche serveur ne
+//            part qu'à la décision du propriétaire.
 // Path QR — le vendeur scanne le QR de restitution du propriétaire, l'app agrège ses
 //            ventes du jour et affiche un QR de clôture (aller-retour optique) : ses
 //            dernières ventes sont donc partagées avant que la caisse soit purgée.
-// Path orchestrateur — le tableau de bord a envoyé une demande (`delete_account_request`,
-//            consommée par le handshake et stockée : `getDeleteAccountRequest`). Le vendeur
-//            la voit ici et la consent, ou l'écarte.
 //
-// Dans les DEUX cas, le message part à l'orchestrateur AVANT la purge locale :
+// Dans le path QR, le message part à l'orchestrateur AVANT la purge locale :
 // `deleteShopRemote` efface la fiche de CET écran (le serveur d'abord), puis la purge
 // locale repart au premier lancement. Rien de plus — seul l'écran disparaît ; le compte
 // entier du commerce n'est supprimé côté serveur que si aucun autre écran n'en dépendait.
@@ -32,15 +35,9 @@ import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { ensureIdentity, resetDeviceIdentity } from "@/lib/syncengine/identity";
 import { buildClosingPayload, parseRestitutionRequest } from "@/lib/restitution";
 import { closeEmployeeHistory, getShopProfile, purgeAllData } from "@/lib/db";
-import {
-  clearDeleteAccountRequest,
-  deleteShopRemote,
-  getDeleteAccountRequest,
-  resetGatekeeper,
-  type DeleteAccountRequest,
-} from "@/lib/gatekeeper";
+import { deleteShopRemote, requestShopDeletion, resetGatekeeper } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
-import { Lock, ShieldAlert, Trash2 } from "lucide-react";
+import { Lock, Send, ShieldAlert, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 const DAY_MS = 86_400_000;
@@ -55,9 +52,32 @@ export function EmployeeAccountPanel() {
   const [error, setError] = useState<string | null>(null);
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [orchestratorOpen, setOrchestratorOpen] = useState(false);
-  const [orchRequest, setOrchRequest] = useState<DeleteAccountRequest | null>(null);
 
+  // Chemin demande : le propriétaire décide côté serveur, on ne purge rien ici.
+  const requestMut = useMutation({
+    mutationFn: async () => {
+      const result = await requestShopDeletion();
+      if (!result.submitted) {
+        toast.error(result.error ?? "Impossible d'envoyer la demande.");
+        return;
+      }
+      if (result.pending) {
+        toast.success("Demande enregistrée — elle sera envoyée dès que le serveur répond.", {
+          description: "Le propriétaire la tranchera depuis son tableau de bord.",
+        });
+      } else {
+        toast.success("Demande envoyée au propriétaire.", {
+          description: "Il l'acceptera ou la refusera depuis son tableau de bord.",
+        });
+      }
+    },
+    onError: (e: Error) => {
+      setChoiceOpen(false);
+      toast.error(e.message);
+    },
+  });
+
+  // Chemin QR : suppression directe — message à l'orchestrateur puis purge locale.
   const deleteMut = useMutation({
     mutationFn: async () => {
       // Message à l'orchestrateur : la fiche de CET écran est supprimée côté serveur
@@ -86,7 +106,6 @@ export function EmployeeAccountPanel() {
     },
     onError: (e: Error) => {
       setConfirmOpen(false);
-      setOrchestratorOpen(false);
       toast.error(e.message);
     },
   });
@@ -130,35 +149,14 @@ export function EmployeeAccountPanel() {
     }
   }
 
-  // Path orchestrateur : une demande déposée par le handshake est consentie ici. Sans
-  // demande en attente, on l'explique au vendeur — le propriétaire lance la suppression
-  // depuis son tableau de bord.
-  async function pickOrchestrator() {
-    setChoiceOpen(false);
-    const req = await getDeleteAccountRequest();
-    if (req) {
-      setOrchRequest(req);
-      setOrchestratorOpen(true);
-    } else {
-      toast.info(
-        "Aucune demande en attente. Le propriétaire doit demander la suppression depuis son tableau de bord — ou présentez-vous son QR de restitution.",
-      );
-    }
-  }
-
-  async function refuseOrchestrator() {
-    await clearDeleteAccountRequest();
-    setOrchestratorOpen(false);
-    setOrchRequest(null);
-  }
-
   return (
     <div className="rounded-xl border p-4 space-y-3">
       <h3 className="font-semibold text-sm">Mon compte</h3>
       <p className="text-sm text-muted-foreground">
-        Supprimer ce compte employé efface <strong>cet appareil</strong> (ventes, produits,
-        historique) et fait repartir l'application au premier lancement. Les données du compte
-        marchand ne sont jamais touchées.
+        Pour supprimer ce compte, le plus simple est d'envoyer une demande au propriétaire : il
+        décide depuis son tableau de bord. Vous pouvez aussi présenter son QR de restitution. La
+        suppression n'efface que <strong>cet appareil</strong> (ventes, produits, historique) et
+        fait repartir l'application au premier lancement — le compte marchand n'est jamais touché.
       </p>
 
       <Button
@@ -168,7 +166,25 @@ export function EmployeeAccountPanel() {
         onClick={() => setChoiceOpen(true)}
       >
         <Trash2 className="h-4 w-4 mr-1" />
-        Supprimer mon compte
+        Envoi demande au propriétaire
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full text-xs"
+        onClick={() => {
+          // Suppression directe (compte partagé — données locales seules)
+          if (
+            confirm(
+              "Effacer cet appareil (ventes, produits, historique local) ? Le stock du propriétaire reste intact.",
+            )
+          ) {
+            deleteMut.mutate();
+          }
+        }}
+      >
+        <Trash2 className="h-3 w-3 mr-1" />
+        Supprimer cet appareil immédiatement
       </Button>
 
       {error && (
@@ -228,11 +244,26 @@ export function EmployeeAccountPanel() {
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
-                <p>Comment souhaitez-vous procéder ?</p>
+                <p>
+                  Envoyez une demande au propriétaire (&agrave; trancher depuis son tableau de bord)
+                  ou passez par son QR de restitution.
+                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2">
+            <Button
+              variant="destructive"
+              className="w-full"
+              disabled={requestMut.isPending}
+              onClick={() => {
+                setChoiceOpen(false);
+                requestMut.mutate();
+              }}
+            >
+              <Send className="h-4 w-4 mr-1" />
+              {requestMut.isPending ? "Envoi…" : "Envoyer une demande au propriétaire"}
+            </Button>
             <Button
               variant="outline"
               className="w-full"
@@ -244,14 +275,6 @@ export function EmployeeAccountPanel() {
             >
               <Lock className="h-4 w-4 mr-1" />
               {scanning ? "Scan en cours…" : "Via le QR de restitution du propriétaire"}
-            </Button>
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={() => void pickOrchestrator()}
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Demande envoyée depuis l'orchestrateur
             </Button>
             <AlertDialogCancel className="w-full mt-0">Annuler</AlertDialogCancel>
           </AlertDialogFooter>
@@ -290,50 +313,6 @@ export function EmployeeAccountPanel() {
               disabled={deleteMut.isPending}
             >
               {deleteMut.isPending ? "Suppression…" : "Tout effacer"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Consente à la demande envoyée par l'orchestrateur */}
-      <AlertDialog open={orchestratorOpen} onOpenChange={(v) => !v && refuseOrchestrator()}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-destructive" /> Suppression demandée par le
-              propriétaire
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2">
-                <p>
-                  Le propriétaire a demandé la suppression de cette caisse depuis le tableau de
-                  bord. En acceptant, les données locales <strong>de cet appareil</strong> seront{" "}
-                  <strong>définitivement effacées</strong> : ventes, produits et historique.
-                </p>
-                {orchRequest?.message && (
-                  <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">
-                    {orchRequest.message}
-                  </p>
-                )}
-                <p className="text-sm text-muted-foreground">
-                  L'application repart au premier lancement. Vous pouvez aussi refuser : la caisse
-                  reste en place et rien n'est effacé.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => void refuseOrchestrator()}>Refuser</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                deleteMut.mutate();
-              }}
-              disabled={deleteMut.isPending}
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              {deleteMut.isPending ? "Suppression…" : "Accepter et effacer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
