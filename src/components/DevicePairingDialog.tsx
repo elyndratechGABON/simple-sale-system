@@ -28,6 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { buildPairingPayload } from "@/lib/pairing";
+import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
+import { getPreferences } from "@/lib/settings";
 import { getAccountQuota } from "@/lib/gatekeeper";
 import { getShopProfile } from "@/lib/db";
 import {
@@ -114,7 +116,70 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           await announceDevice().catch(() => {});
         }
         if (cancelled) return;
-        const text = await buildPairingPayload(shareRole);
+        // Jeton de partage : frappe au relais (pas de mot de passe dans le QR).
+        // Si le relais est inaccessible, on revient au QR classique (compat).
+        let token = null;
+        try {
+          const relayUrl = (
+            getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? "")
+          ).replace(/\/$/, "");
+          const mintRes = await fetch(relayUrl + "/api/v1/share/mint", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-ops-token":
+                typeof import.meta.env?.VITE_OPS_TOKEN === "string"
+                  ? import.meta.env.VITE_OPS_TOKEN
+                  : "",
+            },
+            body: JSON.stringify({
+              shop_id: identity?.shopId ?? "",
+              account_name: profile?.accountName ?? profile?.storeName ?? "",
+              account_phone: profile?.accountPhone ?? profile?.phone ?? "",
+              pair_code: pairCode ?? generatePairingCode(),
+            }),
+          });
+          if (mintRes.ok) {
+            const mintData = await mintRes.json();
+            token = mintData.token;
+          }
+        } catch {
+          /* relay hors ligne → fallback QR classic */
+        }
+        let text: string | null = null;
+        if (!token && pairCode) {
+          // fallback : QR ancien (compat) — le mot de passe reste sur cet écran
+          const legacy = await buildPairingPayload(shareRole);
+          if (legacy) text = legacy;
+        } else if (token && pairCode) {
+          // QR du jeton (v2) : pas de password, juste le token + pair_code
+          const payload = {
+            v: 2,
+            app: "ecaisse" as const,
+            url: getOrchestratorUrl() ?? "",
+            token,
+            name: profile?.accountName ?? profile?.storeName ?? "",
+            account_phone: profile?.accountPhone ?? profile?.phone ?? "",
+            pair_code: pairCode,
+            ...(profile?.storeName
+              ? {
+                  shop: {
+                    storeName: profile.storeName,
+                    ownerName: profile.ownerName ?? "",
+                    phone: profile.phone ?? "",
+                    quarter: profile.location ?? "",
+                    cluster: (getPreferences().cluster as any) ?? "retail",
+                    subCategory: (getPreferences().subCategory as any) ?? undefined,
+                    customDomain: getPreferences().customDomain ?? "",
+                    customUnitType: getPreferences().customUnitType ?? "unit",
+                    businessType: getPreferences().businessType ?? "retail",
+                    tablesEnabled: getPreferences().tablesEnabled ?? false,
+                  },
+                }
+              : {}),
+          };
+          text = JSON.stringify(payload);
+        }
         if (!text) throw new Error("no-payload");
         const { default: QRCode } = await import("qrcode");
         const url = await QRCode.toDataURL(text, {

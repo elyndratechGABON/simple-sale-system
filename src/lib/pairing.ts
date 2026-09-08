@@ -14,7 +14,7 @@
 // détient pas. Ses caisses supplémentaires rejoignent par le mot clé (saisie manuelle),
 // jamais par QR : c'est voulu et géré côté UI (DevicePairingDialog).
 import { getShopProfile, saveShopProfile } from "@/lib/db";
-import { getOrchestratorUrl } from "@/lib/sync";
+import { getOrchestratorUrl, getOpsRelayUrl } from "@/lib/sync";
 import { getActivePairingCode } from "@/lib/syncengine/pairing";
 import type { DeviceRole } from "@/lib/syncengine/types";
 import {
@@ -76,6 +76,18 @@ export type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"
   role?: DeviceRole;
 };
 
+export interface SharePayload {
+  v: 2;
+  app: "ecaisse";
+  url: string;
+  token: string;
+  name: string;
+  account_phone: string;
+  pair_code: string;
+  shop?: Partial<PairingShopConfig>;
+  role?: DeviceRole;
+}
+
 /** Fabrique le contenu du QR depuis le profil local, ou `null` sans compte marchand.
  *  @param role  Rôle assigné au futur appareil (optionnel — absent = ancien comportement). */
 export async function buildPairingPayload(role?: DeviceRole): Promise<string | null> {
@@ -118,29 +130,56 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
 
   if (trimmed.startsWith("{")) {
     try {
-      const data = JSON.parse(trimmed) as Partial<PairingPayload>;
+      const data = JSON.parse(trimmed) as Partial<PairingPayload | SharePayload>;
       if (
         data.app === "ecaisse" &&
-        typeof data.phone === "string" &&
-        data.phone.trim().length > 0 &&
-        typeof data.password === "string" &&
-        data.password.length >= 4
+        (data as Partial<PairingPayload>).phone !== undefined &&
+        typeof (data as Partial<PairingPayload>).password === "string" &&
+        (data as Partial<PairingPayload>).password!.length >= 4
       ) {
-        const shop = data.shop;
-        // Le rôle porté par un QR héritage (généré avant la suppression du gérant)
-        // peut être « manager » : on le relit comme « employee », jamais comme owner.
-        const rawRole = data.role as string | undefined;
+        const d = data as Partial<PairingPayload>;
+        const shop = d.shop;
+        const rawRole = d.role as string | undefined;
         const shopInfo: PairingShopInfo = {
-          name: typeof data.name === "string" ? data.name : "",
-          phone: data.phone.trim(),
-          password: data.password,
-          pair_code: typeof data.pair_code === "string" ? data.pair_code.trim() : undefined,
-          role: rawRole === "employee" || rawRole === "manager" ? "employee" : undefined,
+          name: typeof d.name === "string" ? d.name : "",
+          phone: (d.phone ?? "").trim(),
+          password: d.password ?? "",
+          pair_code: typeof d.pair_code === "string" ? d.pair_code.trim() : undefined,
+          role:
+            rawRole === "employee" || rawRole === "manager" || rawRole === "owner"
+              ? rawRole === "owner"
+                ? "owner"
+                : "employee"
+              : undefined,
         };
         if (shop && typeof shop === "object") {
           shopInfo.shop = shop;
         }
         return shopInfo;
+      }
+      // Jeton de partage (v2) — pas de mot de passe, token opaque + code de paire
+      if (
+        data.app === "ecaisse" &&
+        typeof (data as SharePayload).token === "string" &&
+        (data as SharePayload).token.length > 8 &&
+        typeof (data as SharePayload).pair_code === "string" &&
+        (data as SharePayload).pair_code.length === 6
+      ) {
+        const s = data as SharePayload;
+        return {
+          name: typeof s.name === "string" ? s.name : "",
+          phone: s.account_phone ?? "",
+          password: "", // aucun mot de passe — le handshake passera par lien/bénédiction
+          pair_code: s.pair_code.trim(),
+          role:
+            s.role === "employee" || s.role === "owner"
+              ? s.role === "owner"
+                ? "owner"
+                : "employee"
+              : undefined,
+          shop: s.shop,
+          token: s.token,
+        } as PairingShopInfo & { token: string };
       }
     } catch {
       // JSON invalide → tenter le format texte ci-dessous.
@@ -160,6 +199,35 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
  * principal. Appelé au scan — la nouvelle caisse s'ouvre identique à celle scannée.
  * Sans coordonnées réussies, ne touche à rien.
  */
+/** Réclame le jeton au relais (redeem) — renvoie la boutique et le code. */
+export async function redeemShareToken(
+  token: string,
+  deviceId?: string,
+): Promise<{
+  shop_id?: string;
+  account_name?: string;
+  account_phone?: string;
+  pair_code?: string;
+} | null> {
+  try {
+    const relay = getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? "");
+    const url = (relay || "").replace(/\/$/, "") + "/api/v1/share/redeem";
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-ops-token":
+          typeof import.meta.env?.VITE_OPS_TOKEN === "string" ? import.meta.env.VITE_OPS_TOKEN : "",
+      },
+      body: JSON.stringify({ token, device_id: deviceId ?? "" }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function applyPairingShop(shop?: Partial<PairingShopConfig>): Promise<boolean> {
   if (!shop || !shop.storeName) return false;
   const prefs = getPreferences();
