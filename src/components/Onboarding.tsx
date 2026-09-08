@@ -329,7 +329,11 @@ export function SetupWizard({
       }
       return accPhone.trim().length > 0 && accPassword.trim().length >= 4;
     }
-    if (step === 3) return true; // identifiants compte (téléphone/mdp/QR) — toujours valide dès saisi
+    if (step === 3) {
+      // Étape réservée aux employés : scanner le QR du propriétaire
+      // OU saisir le code temporaire. Si mode=create, on passe directement.
+      return accountMode === "create" ? true : (pairCode.trim().length >= 6 || qrScanned);
+    }
     if (step === 4) return true; // coordonnées optionnelles
     if (step === 5) {
       if (selectedCluster === null) return false;
@@ -508,19 +512,7 @@ export function SetupWizard({
           </StepShell>
         )}
 
-        {/* Étape 3 : Informations rapides (une seule carte, pas tout à la fois) */}
-        {step === 3 && (
-          <StepShell icon={FileText} title="Résumé" description="Vérifiez rapidement vos infos avant de continuer.">
-            <div className="rounded-xl border bg-muted/30 p-3 text-sm space-y-1">
-              <p><strong>Nom :</strong> {name}</p>
-              <p><strong>Compte :</strong> {accountMode === "create" ? "Nouveau" : "Rejoindre"}</p>
-              <p><strong>Téléphone :</strong> {accPhone || "—"}</p>
-              {qrScanned && <p><strong>QR scanné :</strong> Oui (code {pairCode})</p>}
-            </div>
-          </StepShell>
-        )}
-
-        {/* Étape 3 : Identifiants du compte (séparés du mode pour ne pas tout mélanger) */}
+        {/* Étape 3 : Identifiants du compte (séparés du mode pour ne pas tout mélanger) — réservée aux employé qui scannent le QR du propriétaire */}
         {step === 3 && (
           <StepShell
             icon={Users}
