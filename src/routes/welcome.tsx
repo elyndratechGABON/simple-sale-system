@@ -7,7 +7,7 @@
 // de _app.tsx) — donc aucune caisse, aucun stock, aucune donnée métier derrière.
 //
 // Machine à états du parcours :
-//   WELCOME (héro + choix Créer / Se connecter)
+//   WELCOME (mascotte + trois cartes : Créer un compte / Se connecter / Mon expérience)
 //     → WIZARD (SetupWizard : confidentialité, enseigne, compte, secteur…)
 //       → TUTORIAL (ClusterTutorial : premiers produits ou démo)
 //         → /pos (l'application, désormais autorisée par _app)
@@ -16,15 +16,16 @@
 // mobile = vraie page 100vw × 100dvh avec safe-area insets respectés.
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, History, LogIn, ScanLine, WifiOff } from "lucide-react";
+import { ArrowRight, History, LogIn, ScanLine, Store, WifiOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ClusterTutorial, SetupWizard } from "@/components/Onboarding";
 import { CLUSTER_MAP, getPreferences, savePreferences } from "@/lib/settings";
 import { getEmployeeId, listEmployeeHistory, setShopAccount, type EmployeeHistory } from "@/lib/db";
 import { formatDateShort, formatExperienceDuration } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/welcome")({
@@ -126,7 +127,7 @@ function WelcomePage() {
               alt="ELYNDRA CAISSE"
               width={560}
               height={582}
-              className="w-44 h-auto rounded-xl sm:w-52"
+              className="w-40 h-auto rounded-xl sm:w-48"
             />
 
             <div className="mt-5 space-y-2">
@@ -139,43 +140,38 @@ function WelcomePage() {
               </p>
             </div>
 
-            <ul className="mt-6 w-full max-w-xs space-y-2.5 text-left text-sm">
-              {[
-                "Encaissez vos ventes en temps réel",
-                "Gérez votre stock automatiquement",
-                "Suivez vos performances",
-                "Fonctionne hors connexion",
-              ].map((b) => (
-                <li key={b} className="flex items-start gap-2.5">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-8 flex w-full max-w-xs flex-col items-center gap-3">
-              <Button size="lg" className="h-13 w-full px-8 text-base" onClick={startCreate}>
-                Créer mon compte <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
-              <p className="text-sm text-muted-foreground">Déjà inscrit ?</p>
-              <Button
-                variant="ghost"
-                className="-mt-2 h-11 gap-2 text-base"
+            {/* Trois grands chemins : la création n'ouvre qu'un compte PROPRIÉTAIRE,
+                la connexion ne rattache qu'un EMPLOYÉ, et « Mon expérience » — aussi
+                employé — n'apparaît que si un compte employé a déjà existé sur cet
+                appareil (identité stable + carnet en local). */}
+            <div className="mt-8 flex w-full flex-col gap-3">
+              <WelcomeCard
+                tone="primary"
+                icon={<Store className="h-5 w-5" />}
+                role="Propriétaire"
+                title="Créer un compte"
+                description="Ouvrir ma boutique et encaisser sur cet écran."
+                onClick={startCreate}
+              />
+              <WelcomeCard
+                tone="neutral"
+                icon={<LogIn className="h-5 w-5" />}
+                role="Employé"
+                title="Se connecter"
+                description="Rejoindre le compte de mon propriétaire grâce à son QR."
                 onClick={startJoinManual}
-              >
-                <LogIn className="h-4 w-4" /> Se connecter
-              </Button>
+              />
+              {employeeId && (
+                <WelcomeCard
+                  tone="neutral"
+                  icon={<History className="h-5 w-5" />}
+                  role="Employé"
+                  title="Mon expérience"
+                  description="Voir les business où j'ai travaillé et ma durée."
+                  onClick={() => void openExperience()}
+                />
+              )}
             </div>
-
-            {employeeId && (
-              <Button
-                variant="outline"
-                className="mt-2 h-11 w-full max-w-xs gap-2 text-sm"
-                onClick={() => void openExperience()}
-              >
-                <History className="h-4 w-4" /> Mon expérience
-              </Button>
-            )}
 
             <span className="mt-6 inline-flex items-center gap-1.5 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
               <WifiOff className="h-3 w-3" /> 100% hors ligne · vos données restent chez vous
@@ -228,6 +224,59 @@ function WelcomePage() {
         )}
       </main>
     </div>
+  );
+}
+
+/* ── Carte d'entrée de l'écran de bienvenue ──────────────────────────────── */
+
+function WelcomeCard({
+  tone,
+  icon,
+  role,
+  title,
+  description,
+  onClick,
+}: {
+  tone: "primary" | "neutral";
+  icon: ReactNode;
+  role: string;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  const primary = tone === "primary";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md active:scale-[0.99]"
+    >
+      <span
+        className={cn(
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+          primary ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary",
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="font-semibold">{title}</span>
+          {role && (
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                primary ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {role}
+            </span>
+          )}
+        </span>
+        <span className="mt-0.5 block text-sm text-muted-foreground">{description}</span>
+      </span>
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+    </button>
   );
 }
 

@@ -30,6 +30,7 @@ const SETTING_QUOTA = "gatekeeper_account_quota";
 const SETTING_REQUEST = "gatekeeper_subscription_request";
 const SETTING_GRACE_ENDS_AT = "gatekeeper_grace_ends_at";
 const SETTING_DELETE_REQUEST = "gatekeeper_delete_request";
+const SETTING_DELETE_PENDING = "gatekeeper_delete_online_pending";
 
 /** Places du compte marchand, telles que le serveur les voit au dernier handshake. */
 export interface AccountQuota {
@@ -70,7 +71,7 @@ export async function getGraceEndsAt(): Promise<number | null> {
 export type CommandType = "suspend" | "renew" | "broadcast_message" | "delete_account_request";
 
 /** Pourquoi la caisse est bloquée : abonnement suspendu, quota d'appareils dépassé,
- * ou mot clé de récupération rejeté par le serveur. */
+ *  ou mot clé de récupération rejeté par le serveur. */
 export type LockReason = "suspended" | "device_limit" | "keyword_invalid";
 
 export interface AdminCommand {
@@ -83,22 +84,29 @@ export interface AdminCommand {
     message_text?: string;
     /** Cible d'une suppression de compte : device_id de la caisse concernée. */
     device_id?: string;
+    /** Décision du propriétaire pour une `delete_account_request` : `approved` purge
+     *  l'appareil (au consentement), `rejected` se contente d'afficher le refus. */
+    status?: "approved" | "rejected";
+    /** Motif libre du propriétaire (approbation comme refus). */
+    message?: string;
   };
   expires_at: number;
   created_at: number;
 }
 
 /**
- * Demande de suppression de compte, envoyée par l'orchestrateur (tableau de bord) et
- * CONSENTIE par le vendeur devant la caisse. Contrat du payload `device_id` : le
- * `device_id` que l'orchestrateur voit (celui de la fiche locale, envoyé au handshake).
- * La commande n'est honorée QUE sur l'appareil qui porte ce device_id — jamais sur les
- * autres caisses du groupe. L'acceptation reste LOCALE (purge de cet appareil) : l'orchestrateur
- * a déjà fait son office côté serveur.
+ * Demande de suppression de compte, envoyée par l'orchestrateur (tableau de bord) après
+ * décision du propriétaire sur une demande soumise par l'employé. Contract du payload
+ * `device_id` : le `device_id` que l'orchestrateur voit (celui de la fiche locale, envoyé
+ * au handshake). La commande n'est honorée QUE sur l'appareil qui porte ce device_id —
+ * jamais sur les autres caisses du groupe. `status` distingue l'approbation (purge locale
+ * au CONSENTEMENT de l'employé) du refus (simple affichage, rien n'est détruit) ; une
+ * commande émise par un orchestrateur ancien sans `status` vaut approbation.
  */
 export interface DeleteAccountRequest {
   command_id: string;
   device_id: string;
+  status: "approved" | "rejected";
   message?: string;
   requested_at: number;
 }
@@ -245,11 +253,12 @@ async function applyCommand(command: AdminCommand): Promise<void> {
       [...messages, { text: command.payload.message_text, at: Date.now() }].slice(-5),
     );
   }
-  // Demande de suppression de compte (orchestrateur → caisse d'un employé). Envoyée
-  // sans doute à tout le groupe, elle n'est CONSENTIE que sur la caisse cible : si le
-  // `device_id` du payload diffère de celui de CET appareil, la commande est acquittée
-  // sans effet (elle ne reviendra pas chaque handshake). Sur la cible, on pose la
-  // demande en attente — l'employé l'accepte ou la refuse depuis l'écran.
+  // Décision du propriétaire sur une demande de suppression (orchestrateur → caisse).
+  // Envoyée sans doute à tout le groupe, elle n'est CONSENTIE que sur la caisse cible :
+  // si le `device_id` du payload diffère de celui de CET appareil, la commande est
+  // acquittée sans effet (elle ne reviendra pas chaque handshake). Sur la cible, on pose
+  // la demande en attente — l'employé la voit depuis l'écran : `approved` la purge,
+  // `rejected` n'affiche que le refus.
   if (command.action_type === "delete_account_request") {
     const profile = await getShopProfile();
     const target = command.payload.device_id;
@@ -257,7 +266,8 @@ async function applyCommand(command: AdminCommand): Promise<void> {
       await setSetting(SETTING_DELETE_REQUEST, {
         command_id: command.id,
         device_id: profile.deviceId,
-        message: command.payload.message_text?.trim() || undefined,
+        status: command.payload.status === "rejected" ? "rejected" : "approved",
+        message: (command.payload.message ?? command.payload.message_text)?.trim() || undefined,
         requested_at: command.created_at ?? Date.now(),
       } satisfies DeleteAccountRequest);
     }
@@ -392,6 +402,11 @@ export async function handshake(): Promise<HandshakeResult> {
       nextApplied.push(command.id);
     }
     if (nextApplied.length !== applied.length) await setAppliedIds(nextApplied);
+
+    // Une demande de suppression déposée hors ligne est rejouée dès que le serveur
+    // répond — le propriétaire doit la voir dans son tableau quel que soit le moment
+    // où la connexion est revenue.
+    await flushPendingDeleteRequest();
 
     // L'échéance renvoyée par le serveur fait foi (prolongations /extend et renew y
     // sont déjà répercutées) — la caisse s'y cale à chaque handshake.
@@ -551,6 +566,81 @@ export async function deleteShopRemote(
       ok: false,
       error: e instanceof Error ? e.message : "Impossible de contacter le serveur.",
     };
+  }
+}
+
+// ── Demande de suppression soumise par l'EMPLOYÉ (chemin principal) ───────────────
+// Le vendeur cliquait « Supprimer mon compte » : on ne supprime RIEN d'office. Une
+// demande part à l'orchestrateur (`POST /shops/:device_id/delete-request`), que le
+// propriétaire tranche dans son tableau de bord (approuver → la commande
+// `delete_account_request` revient au handshake et l'employé CONSENT ; refuser → la
+// commande affiche juste le refus). Offline-first : si le serveur est injoignable, la
+// demande est persistée et rejouée au prochain handshake réussi (`flushPendingDeleteRequest`).
+export interface ShopDeletionRequestResult {
+  /** La demande est partie (ou sera rejouée) — équivalent d'un succès pour l'employé. */
+  submitted: boolean;
+  /** True quand le serveur était injoignable : la demande attend un prochain handshake. */
+  pending: boolean;
+  error?: string;
+}
+
+export async function requestShopDeletion(reason?: string): Promise<ShopDeletionRequestResult> {
+  const profile = await getShopProfile();
+  if (!profile)
+    return { submitted: false, pending: false, error: "Aucune boutique sur cet appareil." };
+  const url = getOrchestratorUrl();
+  if (!url)
+    return {
+      submitted: false,
+      pending: false,
+      error: "Aucun serveur de synchronisation configuré.",
+    };
+  try {
+    const res = await fetch(
+      `${url}/api/v1/shops/${encodeURIComponent(profile.deviceId)}/delete-request`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          store_name: profile.storeName,
+          reason: reason?.trim() || undefined,
+        }),
+      },
+    );
+    if (res.ok) {
+      await setSetting(SETTING_DELETE_PENDING, null);
+      return { submitted: true, pending: false };
+    }
+    const data = (await res.json().catch(() => null)) as { error?: string } | null;
+    return {
+      submitted: false,
+      pending: false,
+      error: data?.error ?? "Le serveur a refusé la demande.",
+    };
+  } catch {
+    // Réseau HS : la demande survit à l'appareil et part dès que le serveur répond.
+    await setSetting(SETTING_DELETE_PENDING, profile.deviceId);
+    return { submitted: true, pending: true };
+  }
+}
+
+/** Rejoue la demande persistée (`requestShopDeletion` hors ligne) — appelé à chaque
+ *  handshake réussi ; sans effet si rien n'est en attente. */
+export async function flushPendingDeleteRequest(): Promise<void> {
+  const deviceId = await getSetting<string>(SETTING_DELETE_PENDING);
+  if (!deviceId) return;
+  const profile = await getShopProfile();
+  const url = getOrchestratorUrl();
+  if (!profile || !url) return;
+  try {
+    const res = await fetch(`${url}/api/v1/shops/${encodeURIComponent(deviceId)}/delete-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ store_name: profile.storeName }),
+    });
+    if (res.ok) await setSetting(SETTING_DELETE_PENDING, null);
+  } catch {
+    // Toujours hors ligne — on retentera au prochain handshake.
   }
 }
 

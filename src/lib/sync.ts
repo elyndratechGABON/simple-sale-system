@@ -15,7 +15,9 @@
 // Ce module orchestre l'appel périodique et construit le payload d'agrégats. Depuis le moteur
 // P2P, un SECOND canal y est branché : l'échange d'opérations entre appareils du même compte
 // (`syncengine/transport.ts`, relais `/api/v1/ops`) — toujours après un handshake réussi, et
-// sans jamais faire tomber la caisse.
+// sans jamais faire tomber la caisse. L'adresse de ce relais est DÉCOUPLÉE de l'orchestrateur
+// (`getOpsRelayUrl`, via `VITE_OPS_URL`) : le relais peut être hébergé ailleurs et rester
+// allumé indépendamment (ex. Neon + Fonction Vercel).
 import { getSaleItemsForSales, getShopProfile, listSales, markShopSynced } from "@/lib/db";
 import { computePeriodStats, lastDaysRange } from "@/lib/analytics";
 import { handshake, syncData, type HandshakeResult } from "@/lib/gatekeeper";
@@ -27,6 +29,27 @@ import { exchangeOps, relayTransport } from "@/lib/syncengine/transport";
 export function getOrchestratorUrl(): string {
   const override = (import.meta.env.VITE_ORCHESTRATOR_URL as string | undefined)?.trim();
   return override || PROJECT_DOMAIN;
+}
+
+/**
+ * Adresse du RELAIS d'échange d'opérations (canal P2P). Découplée de l'orchestrateur :
+ * le relais peut être hébergé ailleurs (ex. Neon/Fonction Vercel) et rester allumé
+ * indépendamment de la machine. Compilée au build via VITE_OPS_URL ; en l'absence de
+ * cette variable, le canal ops retombe sur l'orchestrateur historique `/api/v1/ops`.
+ */
+export function getOpsRelayUrl(): string {
+  const override = (import.meta.env.VITE_OPS_URL as string | undefined)?.trim();
+  return override || getOrchestratorUrl();
+}
+
+/**
+ * Jeton du relais ops (header `x-ops-token`), compilation embarquée via VITE_OPS_TOKEN.
+ * Vide en l'absence de variable → la caisse parle à un relais ouvert (dev ou orchestrateur
+ * historique qui n'exige rien). En production, le relais Vercel exige ce jeton : sans lui,
+ * push/pull répondent 401 et l'échange reste silencieusement en retrait (jamais bloquant).
+ */
+export function getOpsToken(): string {
+  return (import.meta.env.VITE_OPS_TOKEN as string | undefined)?.trim() || "";
 }
 
 const PROJECT_DOMAIN = typeof window !== "undefined" ? window.location.origin : "";
@@ -50,10 +73,10 @@ const OPS_TTL_MS = 30 * 86400_000;
 async function runOpsExchange(): Promise<void> {
   const identity = await ensureIdentity();
   if (!isSharedGroup(identity.shopId)) return; // caisse jamais inscrite → rien à partager
-  const url = getOrchestratorUrl();
+  const url = getOpsRelayUrl();
   if (!url) return;
   try {
-    await exchangeOps(relayTransport(url));
+    await exchangeOps(relayTransport(url, fetch, getOpsToken()));
     // Le TTL s'applique à chaque rotation réussie — paresseux, donc gratuit.
     await purgeSyncedOps(OPS_TTL_MS);
   } catch {

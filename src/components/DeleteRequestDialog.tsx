@@ -1,16 +1,19 @@
-// Dialog « Demande de suppression » — second chemin de suppression d'un compte
-// employé, côté orchestrateur.
+// Dialog « Demande de suppression » — décision du propriétaire sur une demande que
+// l'employé a soumise depuis Paramètres → « Supprimer mon compte ».
 //
-// Le tableau de bord envoie une commande `delete_account_request` (handshake) ;
-// la caisse ciblée (`payload.device_id` = device_id local) la pose dans IndexedDB —
-// voir `applyCommand` dans gatekeeper.ts. Ce composant, monté dans la mise en page
-// de l'application, la surveille et demande au vendeur de CONSENTIR : accepter purge
-// CET appareil (retour au premier lancement), refuser l'écarte sans rien détruire.
+// Le tableau de bord envoie une commande `delete_account_request` (handshake) ; la caisse
+// ciblée (`payload.device_id` = device_id local) la pose dans IndexedDB — voir
+// `applyCommand` dans gatekeeper.ts. Ce composant, monté dans la mise en page de
+// l'application, la surveille et demande au vendeur de CONSENTIR :
+//   - `approved` → accepter purge CET appareil (retour au premier lancement), refuser
+//     l'écarte sans rien détruire ;
+//   - `rejected` → le propriétaire a refusé la demande : simple affichage, bouton
+//     « Compris », rien n'est effacé et la caisse continue normalement.
 //
-// Message à l'orchestrateur avant la purge locale, comme le panneau QR
-// (`EmployeeAccountPanel`) : `deleteShopRemote` efface la fiche de CET écran — la place
-// qu'il occupait sur le compte se libère. Un employé qui refuse reste simplement une
-// caisse rattachée que le compte continue d'utiliser.
+// Message à l'orchestrateur avant la purge locale (statut approuvé), comme le panneau
+// QR (`EmployeeAccountPanel`) : `deleteShopRemote` efface la fiche de CET écran — la
+// place qu'il occupait sur le compte se libère. Un employé qui refuse reste simplement
+// une caisse rattachée que le compte continue d'utiliser.
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -92,6 +95,40 @@ export function DeleteRequestDialog() {
   // Défense en profondeur : la commande n'est honorée que sur la caisse cible (gatekeeper),
   // et un propriétaire n'a pas à voir ce dialogue — sa suppression passe par DeleteShopCard.
   if (role !== "employee" || !request) return null;
+
+  // Le propriétaire a REFUSÉ la demande : on affiche la décision et on libère l'écran,
+  // sans toucher au serveur ni aux données — la caisse continue normalement.
+  if (request.status === "rejected") {
+    return (
+      <AlertDialog open onOpenChange={() => {}}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-500" /> Suppression refusée par le
+              propriétaire
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Le propriétaire de ce compte a <strong>refusé</strong> votre demande de
+                  suppression. Votre caisse reste rattachée au compte et rien n'est effacé : vous
+                  pouvez continuer à travailler normalement.
+                </p>
+                {request.message && (
+                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-foreground">
+                    {request.message}
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => void refuse()}>Compris</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
 
   return (
     <AlertDialog

@@ -173,10 +173,10 @@ export function EmployeeAccountPanel() {
         size="sm"
         className="w-full text-xs"
         onClick={() => {
-          // Suppression directe (compte partagé — données locales seules)
+          // Suppression directe : éjection du compte du propriétaire + purge locale
           if (
             confirm(
-              "Effacer cet appareil (ventes, produits, historique local) ? Le stock du propriétaire reste intact.",
+              "Éjecter cet appareil du compte du propriétaire (données locales effacées, compte du propriétaire intact) ?",
             )
           ) {
             deleteMut.mutate();

@@ -5,8 +5,14 @@
 //                                                     appareil qui re-pousse les mêmes ops
 //                                                     (échec d'acquittement local) ne fait
 //                                                     pas de doublon.
-//   GET  /api/v1/ops?shop_id=…                      → { ops: SyncOp[] } : TOUTES les ops du
+//   GET  /api/v1/ops?shop_id=…&device_id=…          → { ops: SyncOp[] } : TOUTES les ops du
 //                                                     groupe, y compris celles de l'appelant.
+//                                                     `device_id` = l'appareil QUI TIRE : le
+//                                                     relais trace la fraîcheur par appareil
+//                                                     et ne libère jamais de place tant
+//                                                     qu'un appareil présent n'a pas tiré.
+// En production le relais exige le secret `x-ops-token` (VITE_OPS_TOKEN à l'emploi) ; un
+// relais sans jeton configuré (dev, orchestrateur historique) reste ouvert.
 //
 // Le relais ne connait pas les ops : il les stocke et les rend sans les interpréter, sans
 // les agréger, sans les trier. « Internet sert à se rencontrer, pas à être la base de
@@ -27,8 +33,9 @@ import type { SyncIdentity, SyncOp } from "./types";
 export interface TransportClient {
   /** Pousse les ops locales vers le relais. `true` = le relais les a reçues. */
   push(shopId: string, ops: SyncOp[]): Promise<boolean>;
-  /** Tire toutes les ops du groupe — y compris les siennes. */
-  pull(shopId: string): Promise<SyncOp[]>;
+  /** Tire toutes les ops du groupe — y compris les siennes. `deviceId` identifie
+   *  l'appareil qui tire : le relais suit la fraîcheur par appareil (purge sûre). */
+  pull(shopId: string, deviceId: string): Promise<SyncOp[]>;
 }
 
 /** Bilan d'un cycle d'échange, pour l'UI (indicateur de sync) et les tests. */
@@ -56,7 +63,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     pushed = pending.length;
   }
 
-  const remote = await client.pull(identity.shopId);
+  const remote = await client.pull(identity.shopId, identity.deviceId);
   const foreign: SyncOp[] = [];
   let skipped = 0;
   for (const op of remote) {
@@ -115,7 +122,9 @@ const FETCH_TIMEOUT_MS = 10_000;
 export function relayTransport(
   baseUrl: string,
   fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> = fetch,
+  opsToken = "",
 ): TransportClient {
+  const authHeaders: Record<string, string> = opsToken ? { "x-ops-token": opsToken } : {};
   const timedFetch: typeof fetchImpl = async (input, init) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -138,7 +147,7 @@ export function relayTransport(
       try {
         const res = await timedFetch(`${baseUrl}/api/v1/ops`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({ shop_id: shopId, ops }),
         });
         return res.ok;
@@ -146,9 +155,13 @@ export function relayTransport(
         return false;
       }
     },
-    async pull(shopId: string): Promise<SyncOp[]> {
+    async pull(shopId: string, deviceId: string): Promise<SyncOp[]> {
       try {
-        const res = await timedFetch(`${baseUrl}/api/v1/ops?shop_id=${encodeURIComponent(shopId)}`);
+        const res = await timedFetch(
+          `${baseUrl}/api/v1/ops?shop_id=${encodeURIComponent(shopId)}` +
+            `&device_id=${encodeURIComponent(deviceId)}`,
+          { headers: authHeaders },
+        );
         if (!res.ok) return [];
         const data = (await res.json().catch(() => null)) as { ops?: SyncOp[] } | null;
         return Array.isArray(data?.ops) ? data.ops : [];

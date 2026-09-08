@@ -45,6 +45,15 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
   pour le relais (il les stocke et les rend, ne les agrège jamais), appliqués via
   `applyRemoteOps` et dédupliqués par `processed_ops`. Les deux canaux sont **additifs** :
   le handshake ne porte toujours que les agrégats, jamais les lignes brutes.
+- **Le relais ops est DÉCOUPLÉ de l'orchestrateur.** Son adresse vient de
+  `getOpsRelayUrl()` (`sync.ts`), lue via `VITE_OPS_URL` ; en l'absence, elle retombe sur
+  `getOrchestratorUrl()`. Le relais peut donc être hébergé ailleurs et rester allumé en
+  continu (recommandé : base Neon + fonction serverless — voir `relay/` du dépôt
+  orchestrateur) sans dépendre de la machine ni de `ngrok`. En production il exige le
+  secret partagé `x-ops-token` (`VITE_OPS_TOKEN` à l'emploi, positionné côte relais en
+  `OPS_TOKEN`) ; un relais sans jeton reste ouvert (dev). Toujours modifier `sync.ts` si
+  l'on change l'un des deux, jamais les appels de `gatekeeper.ts`/`pairing.ts` qui, eux,
+  restent sur l'orchestrateur.
 - **`.gitignore` doit rester en UTF-8 sans BOM.** Il a été committé une fois en UTF-16LE :
   git ne parse que l'UTF-8, le fichier devenait un binaire à ses yeux, plus rien n'était
   ignoré et 39 109 fichiers de `node_modules` sont entrés dans le dépôt. Le build Vercel
