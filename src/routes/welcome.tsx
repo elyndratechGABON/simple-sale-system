@@ -24,9 +24,13 @@ import { Button } from "@/components/ui/button";
 import { ClusterTutorial, SetupWizard } from "@/components/Onboarding";
 import { CLUSTER_MAP, getPreferences, savePreferences } from "@/lib/settings";
 import { getEmployeeId, listEmployeeHistory, setShopAccount, type EmployeeHistory } from "@/lib/db";
+import { applyPairingShop } from "@/lib/pairing";
 import { formatDateShort, formatExperienceDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import { parsePairingPayload } from "@/lib/pairing";
+import { enterPairingCode } from "@/lib/syncengine/pairing";
 
 export const Route = createFileRoute("/welcome")({
   // Utilisateur déjà installé → straight to the till : rafraîchissement,
@@ -44,6 +48,7 @@ type Phase = "welcome" | "wizard" | "tutorial" | "experience";
 type EntryMode = "create" | "join";
 
 function WelcomePage() {
+  const { scanning, startScan } = useBarcodeScanner();
   const qc = useQueryClient();
   const navigate = useNavigate();
   // Reprendre AU BON ENDROIT : installé mais tutoriel non vu → tutoriel direct
@@ -57,6 +62,7 @@ function WelcomePage() {
   const [joinPairCode, setJoinPairCode] = useState<string | undefined>();
   const [employeeId, setEmployeeId] = useState<string | null>(() => getEmployeeId());
   const [history, setHistory] = useState<EmployeeHistory[] | null>(null);
+  const [scanningJoin, setScanningJoin] = useState(false);
 
   function startCreate() {
     setJoinCreds(null);
@@ -65,11 +71,39 @@ function WelcomePage() {
     setPhase("wizard");
   }
 
-  function startJoinManual() {
-    setJoinCreds(null);
-    setJoinPairCode(undefined);
-    setMode("join");
-    setPhase("wizard");
+  async function startJoinScan() {
+    setScanningJoin(true);
+    try {
+      const raw = await startScan();
+      if (!raw) return;
+      const parsed = parsePairingPayload(raw);
+      if (!parsed) {
+        toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
+        return;
+      }
+      // Applique la copie de la boutique (nom, secteur, coordonnées, etc.)
+      await applyPairingShop(parsed.shop);
+      // Pose le compte en mode "lien" (pas de mot de passe)
+      await setShopAccount({
+        name: (parsed as any).name || (parsed as any).phone || "",
+        phone: (parsed as any).account_phone ?? (parsed as any).phone ?? "",
+        password: "",
+        ownerName: (parsed as any).shop?.ownerName ?? "",
+      });
+      // Annonce P2P avec le code du QR
+      if (parsed.pair_code) {
+        await enterPairingCode(parsed.pair_code);
+      }
+      toast.success("Boutique récupérée — stock et ventes synchronisés.");
+      const prefs = getPreferences();
+      savePreferences({ onboarded: true, onboardingCompleted: true });
+      qc.invalidateQueries({ queryKey: ["preferences"] });
+      navigate({ to: "/pos" });
+    } catch {
+      toast.error("Caméra indisponible — réessayez.");
+    } finally {
+      setScanningJoin(false);
+    }
   }
 
   function finishTutorial() {
@@ -158,7 +192,7 @@ function WelcomePage() {
                 role="Employé"
                 title="Rejoindre via code QR"
                 description="Scanner le QR du propriétaire — stock, ventes et encaissements prêts."
-                onClick={startJoinManual}
+                onClick={startJoinScan}
               />
               {employeeId && (
                 <WelcomeCard
