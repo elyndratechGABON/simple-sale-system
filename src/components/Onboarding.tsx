@@ -30,6 +30,7 @@ import {
   PartyPopper,
   Users,
   ScanLine,
+  FileText,
 } from "lucide-react";
 import {
   ChefHat,
@@ -313,31 +314,30 @@ export function SetupWizard({
     onComplete();
   }
 
-  // Étapes visuelles : 0=confidentialité, 1=nom, 2=compte+coordonnées, 3=secteur,
-  // [4=sous-cat magasin]. Pour non-magasin : 4 étapes (0..3). Pour magasin : 5 (0..4).
-  // Le step counter est toujours continu (0..totalSteps-1).
-  const totalSteps = isMagasin ? 5 : 4;
+  // Étapes visuelles : 0=confidentialité, 1=nom, 2=compte (create/join + identifiants),
+  // 3=secteur, 4=informations commerce (dynamique, pas tout à la même étape),
+  // [5=sous-cat magasin]. Pour non-magasin : 5 étapes (0..4). Pour magasin : 6 (0..5).
+  const totalSteps = isMagasin ? 7 : 6;
 
   function canNext(): boolean {
     if (step === 0) return privacyAccepted;
     if (step === 1) return name.trim().length > 0;
     if (step === 2) {
-      // QR scanné → le compte/boutique sont déjà pré-remplis, mais le code temporaire
-      // affiché sur la caisse principale reste À SAISIR : on bloque tant qu'il n'est pas là.
       if (accountMode === "join" && qrScanned) return pairCode.trim().length >= 6;
-      // Jonction par mot clé : les identifiants téléphone/mdp ne sont plus exigés.
       if (accountMode === "join" && accKeyword.trim() && !(accPhone.trim() && accPassword)) {
         return accKeyword.trim().replace(/\s/g, "").length >= 8;
       }
       return accPhone.trim().length > 0 && accPassword.trim().length >= 4;
     }
-    if (step === 3) {
+    if (step === 3) return true; // identifiants compte (téléphone/mdp/QR) — toujours valide dès saisi
+    if (step === 4) return true; // coordonnées optionnelles
+    if (step === 5) {
       if (selectedCluster === null) return false;
       if (selectedCluster === "personnalise")
         return customDomain.trim().length > 0 && customStockChoice !== null;
       return true;
     }
-    if (step === 4 && isMagasin) return selectedSubCategory !== null;
+    if (step === 6 && isMagasin) return selectedSubCategory !== null;
     return true;
   }
 
@@ -349,10 +349,9 @@ export function SetupWizard({
     setStep((s) => Math.max(s - 1, 0));
   }
 
-  // Map step number to which section renders
+  // Étapes : 0 conf, 1 nom, 2 compte (identifiants + mode), 3 infos optionnelles,
+  // 4 coordonnées (dynamique), 5 secteur, 6 sous-cat magasin.
   function renderStep() {
-    // Magasin: 0=confidentialité, 1=nom, 2=compte+coordonnées, 3=secteur, 4=sous-cat
-    // Non-magasin: 0=confidentialité, 1=nom, 2=compte+coordonnées, 3=secteur
     return step;
   }
 
@@ -494,160 +493,94 @@ export function SetupWizard({
                 </button>
               ))}
             </div>
-            <div className="space-y-3 pt-1">
-              {accountMode === "join" && (
-                <>
-                  {/* Chemin PRIMAIRE du rattachement : ce mobile est nouveau, le QR
-                      affiché par une caisse déjà abonnée est ce qu'on lui DEMANDE.
-                      La caméra ne s'arme que sur ce bouton (geste dédié = prompt
-                      d'autorisation au bon moment) ; la saisie manuelle reste en
-                      dessous comme repli explicite. */}
-                  <div className="space-y-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4 text-center">
-                    <ScanLine className="mx-auto h-8 w-8 text-primary" />
-                    <p className="text-sm font-medium">
-                      Scannez le QR affiché par votre caisse déjà abonnée
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Sur l'autre téléphone : Réglages → Appareils → « Ajouter un appareil », puis
-                      présentez le code ici.
-                    </p>
-                    <Button
-                      type="button"
-                      className="h-12 w-full"
-                      disabled={scanning}
-                      onClick={() => void scanPairingQr()}
-                    >
-                      <ScanLine className="h-4 w-4 mr-2" />
-                      {scanning ? "Caméra active…" : "Scanner le QR maintenant"}
-                    </Button>
-                  </div>
-                  <div className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">
-                    <p className="flex items-center gap-1.5 text-sm font-medium">
-                      <KeyRound className="h-4 w-4 shrink-0 text-primary" />
-                      Saisissez le code temporaire affiché sur votre caisse principale
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Sur l'autre téléphone : Réglages → Appareils → « Ajouter un appareil ». Le
-                      code est affiché en grand, valable 10 minutes.
-                    </p>
-                    <Input
-                      id="ob-pair-code"
-                      value={pairCode}
-                      onChange={(e) => setPairCode(e.target.value.toUpperCase())}
-                      placeholder="Code sur l'autre caisse"
-                      className="h-12 font-mono tracking-widest"
-                      maxLength={6}
-                      autoComplete="off"
-                      autoFocus={qrScanned}
-                    />
-                  </div>
-                  <div className="relative py-1">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center">
-                      <span className="bg-background px-2 text-xs uppercase tracking-wide text-muted-foreground">
-                        ou saisir manuellement
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-              <div>
-                <Label htmlFor="ob-owner">Nom du propriétaire</Label>
-                <Input
-                  id="ob-owner"
-                  value={ownerName}
-                  onChange={(e) => setOwnerName(e.target.value)}
-                  placeholder="Ex : Marie Kabongo"
-                  className="h-12"
-                />
-              </div>
-              <div>
-                <Label htmlFor="ob-acc-phone">Téléphone du compte</Label>
-                <Input
-                  id="ob-acc-phone"
-                  type="tel"
-                  value={accPhone}
-                  onChange={(e) => setAccPhone(e.target.value)}
-                  placeholder="Ex : +241 06 123 456"
-                  className="h-12"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <Label htmlFor="ob-acc-pass">Mot de passe</Label>
-                <Input
-                  id="ob-acc-pass"
-                  type="password"
-                  value={accPassword}
-                  onChange={(e) => setAccPassword(e.target.value)}
-                  placeholder={
-                    accountMode === "join" ? "Mot de passe du compte" : "4 caractères minimum"
-                  }
-                  className="h-12"
-                />
-              </div>
-              {accountMode === "join" && (
-                <div className="space-y-2 rounded-xl border border-dashed border-border bg-muted/20 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Téléphone perdu, ou plus de mot de passe ? Rejoignez avec le mot clé reçu à la
-                    création du compte.
-                  </p>
-                  <div>
-                    <Label htmlFor="ob-acc-keyword">Mot clé de récupération</Label>
-                    <Input
-                      id="ob-acc-keyword"
-                      value={accKeyword}
-                      onChange={(e) => setAccKeyword(e.target.value.toUpperCase())}
-                      placeholder="XXXX-XXXX"
-                      className="h-12 font-mono tracking-widest"
-                      autoComplete="off"
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Le mot clé n'est affiché qu'à la création du compte — conservez-le
-                    précieusement.
-                  </p>
-                </div>
-              )}
-              <div className="border-t pt-3 space-y-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Coordonnées du commerce (optionnel)
-                </p>
-                <div>
-                  <Label htmlFor="ob-phone">Numéro de téléphone</Label>
-                  <Input
-                    id="ob-phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Ex : +241 06 123 456"
-                    className="h-12"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="ob-quarter">Quartier</Label>
-                  <Input
-                    id="ob-quarter"
-                    value={quarter}
-                    onChange={(e) => setQuarter(e.target.value)}
-                    placeholder="Ex : Owendo"
-                    className="h-12"
-                  />
-                </div>
-              </div>
+            <div className="mt-4 flex justify-center">
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={!accountMode}
+                onClick={() => {
+                  goNext();
+                }}
+              >
+                Suivant <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {accountMode === "create"
-                ? "Paliers : 10 000 F (3 écrans) · 25 000 F (5) · 50 000 F (9) / 30 jours. Vous démarrez avec un essai gratuit."
-                : "Scannez le QR affiché par une de vos caisses abonnées, ou saisissez son téléphone et mot de passe."}
-            </p>
           </StepShell>
         )}
 
-        {/* Étape 3 : Secteur d'activité */}
+        {/* Étape 3 : Informations rapides (une seule carte, pas tout à la fois) */}
         {step === 3 && (
+          <StepShell icon={FileText} title="Résumé" description="Vérifiez rapidement vos infos avant de continuer.">
+            <div className="rounded-xl border bg-muted/30 p-3 text-sm space-y-1">
+              <p><strong>Nom :</strong> {name}</p>
+              <p><strong>Compte :</strong> {accountMode === "create" ? "Nouveau" : "Rejoindre"}</p>
+              <p><strong>Téléphone :</strong> {accPhone || "—"}</p>
+              {qrScanned && <p><strong>QR scanné :</strong> Oui (code {pairCode})</p>}
+            </div>
+          </StepShell>
+        )}
+
+        {/* Étape 3 : Identifiants du compte (séparés du mode pour ne pas tout mélanger) */}
+        {step === 3 && (
+          <StepShell
+            icon={Users}
+            title="Identifiants du compte"
+            description="Téléphone + mot de passe (ou scannez le QR du propriétaire / entrez le code temporaire)."
+          >
+            <div className="space-y-3">
+              {accountMode === "join" && (
+                <>
+                  <Button type="button" className="w-full gap-2" onClick={() => void scanPairingQr()}>
+                    <ScanLine className="h-4 w-4" /> Scanner le QR du propriétaire
+                  </Button>
+                  <Input
+                    value={pairCode}
+                    onChange={(e) => setPairCode(e.target.value.toUpperCase())}
+                    placeholder="Code temporaire (6 caractères)"
+                    className="h-12 font-mono tracking-widest"
+                    maxLength={6}
+                    autoComplete="off"
+                  />
+                </>
+              )}
+              <div>
+                <Label htmlFor="ob-acc-phone">Téléphone du compte</Label>
+                <Input id="ob-acc-phone" type="tel" value={accPhone} onChange={(e) => setAccPhone(e.target.value)} placeholder="+241 06 123 456" className="h-12" />
+              </div>
+              <div>
+                <Label htmlFor="ob-acc-pass">Mot de passe</Label>
+                <Input id="ob-acc-pass" type="password" value={accPassword} onChange={(e) => setAccPassword(e.target.value)} placeholder={accountMode === "join" ? "Mot de passe du compte" : "4 caractères minimum"} className="h-12" />
+              </div>
+              <div>
+                <Label htmlFor="ob-owner">Nom du propriétaire</Label>
+                <Input id="ob-owner" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Ex : Migolet Jean Yves" className="h-12" />
+              </div>
+            </div>
+          </StepShell>
+        )}
+
+        {/* Étape 4 : Coordonnées du commerce (séparées, pas tout enregistré ensemble) */}
+        {step === 4 && (
+          <StepShell
+            icon={Users}
+            title="Coordonnées du commerce"
+            description="Numéro et quartier (optionnel, peut être complété plus tard)."
+          >
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="ob-phone">Téléphone du commerce</Label>
+                <Input id="ob-phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Ex : +241 06 123 456" className="h-12" />
+              </div>
+              <div>
+                <Label htmlFor="ob-quarter">Quartier</Label>
+                <Input id="ob-quarter" value={quarter} onChange={e => setQuarter(e.target.value)} placeholder="Ex : Owendo" className="h-12" />
+              </div>
+            </div>
+          </StepShell>
+        )}
+
+        {/* Étape 5 : Secteur d'activité */}
+        {step === 5 && (
           <StepShell
             icon={Store}
             title="Quel type d'activité gérez-vous ?"
