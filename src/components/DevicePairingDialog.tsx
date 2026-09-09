@@ -329,17 +329,18 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                   <QrCode className="h-8 w-8 animate-pulse text-muted-foreground" />
                 </div>
               )}
-              <p className="text-xs text-muted-foreground text-center">
-                Ce code contient les accès au compte{" "}
-                <span className="font-medium text-foreground">{profile?.accountName}</span> (
-                {profile?.accountPhone}). Ne le montrez qu'à vos propres appareils.
-              </p>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Sans caméra sur l'autre écran ? Saisissez-y manuellement le téléphone du compte et son
-              mot de passe — mêmes champs, même effet.
+<p className="text-xs text-muted-foreground text-center">
+              Ce code donne l'accès à la boutique{" "}
+              <span className="font-medium text-foreground">{profile?.storeName}</span> (
+              {profile?.accountPhone}). L'employé le scanne, entre son nom, et reçoit le stock, les ventes
+              et la caisse via le relais. Ne le montrez qu'à vos propres appareils.
             </p>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            L'employé scanne le QR ou, s'il ne peut pas, entre le code de paire ci-dessous. Aucun mot de
+            passe n'est demandé — le jeton de partage le remplace.
+          </p>
           </div>
         ) : profile?.accountKeyword ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
