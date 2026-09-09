@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { parsePairingPayload } from "@/lib/pairing";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
-import { ensureIdentity, setIdentityEmployeeName } from "@/lib/syncengine/identity";
+import { ensureIdentity, setIdentityEmployeeName, setIdentityRole, refreshShopId } from "@/lib/syncengine/identity";
 
 export const Route = createFileRoute("/welcome")({
   // Utilisateur déjà installé → straight to the till : rafraîchissement,
@@ -84,6 +84,12 @@ function WelcomePage() {
       }
       // Applique la copie de la boutique (nom, secteur, coordonnées, etc.)
       await applyPairingShop(parsed.shop);
+      // Le nom de la boutique (workspaceName) doit être celui du propriétaire, pas "Ma boutique".
+      const storeName = parsed.shop?.storeName || (parsed as any).name || (parsed as any).phone || "";
+      if (storeName) {
+        savePreferences({ workspaceName: storeName });
+        qc.invalidateQueries({ queryKey: ["preferences"] });
+      }
       // Pose le compte en mode "lien" (pas de mot de passe)
       await setShopAccount({
         name: (parsed as any).name || (parsed as any).phone || "",
