@@ -91,6 +91,10 @@ function WelcomePage() {
         password: "",
         ownerName: (parsed as any).shop?.ownerName ?? "",
       });
+      // Force le rôle employé et le groupe P2P au scan
+      await ensureIdentity();
+      await setIdentityRole("employee");
+      await refreshShopId();
       // Annonce P2P avec le code du QR
       if (parsed.pair_code) {
         await enterPairingCode(parsed.pair_code);
@@ -98,7 +102,6 @@ function WelcomePage() {
       // Demande le nom de l'employé (stocké localement + transmis au relais)
       const employeeName = window.prompt("Votre nom (pour l'équipe) :");
       if (employeeName?.trim()) {
-        const identity = await ensureIdentity();
         await setIdentityEmployeeName(employeeName.trim());
       }
       toast.success("Boutique récupérée — stock et ventes synchronisés.");
