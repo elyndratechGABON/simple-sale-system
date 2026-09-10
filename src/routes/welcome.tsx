@@ -18,12 +18,19 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, History, LogIn, ScanLine, Store, WifiOff } from "lucide-react";
-
+import { ArrowRight, History, LogIn, ScanLine, Store, Users, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ClusterTutorial, SetupWizard } from "@/components/Onboarding";
 import { CLUSTER_MAP, getPreferences, savePreferences } from "@/lib/settings";
-import { getEmployeeId, listEmployeeHistory, setShopAccount, type EmployeeHistory } from "@/lib/db";
+import {
+  getEmployeeId,
+  listEmployeeHistory,
+  setShopAccount,
+  saveShopProfile,
+  type EmployeeHistory,
+} from "@/lib/db";
 import { applyPairingShop } from "@/lib/pairing";
 import { formatDateShort, formatExperienceDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -31,7 +38,12 @@ import { toast } from "sonner";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { parsePairingPayload } from "@/lib/pairing";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
-import { ensureIdentity, setIdentityEmployeeName, setIdentityRole, refreshShopId } from "@/lib/syncengine/identity";
+import {
+  ensureIdentity,
+  setIdentityEmployeeName,
+  setIdentityRole,
+  refreshShopId,
+} from "@/lib/syncengine/identity";
 
 export const Route = createFileRoute("/welcome")({
   // Utilisateur déjà installé → straight to the till : rafraîchissement,
@@ -64,6 +76,8 @@ function WelcomePage() {
   const [employeeId, setEmployeeId] = useState<string | null>(() => getEmployeeId());
   const [history, setHistory] = useState<EmployeeHistory[] | null>(null);
   const [scanningJoin, setScanningJoin] = useState(false);
+  const [showEmployeeNameModal, setShowEmployeeNameModal] = useState(false);
+  const [employeeNameInput, setEmployeeNameInput] = useState("");
 
   function startCreate() {
     setJoinCreds(null);
@@ -82,22 +96,44 @@ function WelcomePage() {
         toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
         return;
       }
-      // Applique la copie de la boutique (nom, secteur, coordonnées, etc.)
+      // 1. Applique la copie complète de la boutique du propriétaire
       await applyPairingShop(parsed.shop);
-      // Le nom de la boutique (workspaceName) doit être celui du propriétaire, pas "Ma boutique".
-      const storeName = parsed.shop?.storeName || (parsed as any).name || (parsed as any).phone || "";
-      if (storeName) {
-        savePreferences({ workspaceName: storeName });
+// 2. Force le nom de la boutique dans le profil local (pas "Ma boutique")
+      const storeFromQr = parsed.shop?.storeName || parsed.name || "";
+      if (storeFromQr) {
+        await savePreferences({
+          workspaceName: storeFromQr,
+          onboarded: true,
+          onboardingCompleted: true,
+        });
         qc.invalidateQueries({ queryKey: ["preferences"] });
       }
-      // Pose le compte en mode "lien" (pas de mot de passe)
+      // 2. Pose le compte en mode "lien" — le téléphone du compte est celui du propriétaire (le même groupe P2P)
+      // On copie le téléphone/nom du propriétaire dans le profile EMPLOYÉ pour que deriveShopId donne le même s_...
       await setShopAccount({
-        name: (parsed as any).name || (parsed as any).phone || "",
-        phone: (parsed as any).account_phone ?? (parsed as any).phone ?? "",
+        name: parsed.name || parsed.shop?.ownerName || "",
+        phone: parsed.phone || parsed.shop?.phone || "",
         password: "",
-        ownerName: (parsed as any).shop?.ownerName ?? "",
+        ownerName: "",
       });
-      // Force le rôle employé et le groupe P2P au scan
+      // Force le profil IndexedDB avec le téléphone du propriétaire (critique pour deriveShopId)
+      await saveShopProfile({
+        storeName: parsed.shop?.storeName || parsed.shop?.ownerName || "",
+        ownerName: "",
+        phone: parsed.shop?.phone || parsed.phone || "",
+        location: parsed.shop?.quarter || "",
+        accountName: parsed.name || "",
+        accountPhone: parsed.phone || "",
+      });
+      // Mise à jour des préférences avec le nom de boutique du propriétaire
+      if (storeFromQr) {
+        await savePreferences({
+          workspaceName: storeFromQr,
+          onboarded: true,
+          onboardingCompleted: true,
+        });
+      }
+      // 3. Force le rôle employé et le groupe P2P au scan
       await ensureIdentity();
       await setIdentityRole("employee");
       await refreshShopId();
@@ -105,16 +141,9 @@ function WelcomePage() {
       if (parsed.pair_code) {
         await enterPairingCode(parsed.pair_code);
       }
-      // Demande le nom de l'employé (stocké localement + transmis au relais)
-      const employeeName = window.prompt("Votre nom (pour l'équipe) :");
-      if (employeeName?.trim()) {
-        await setIdentityEmployeeName(employeeName.trim());
-      }
-      toast.success("Boutique récupérée — stock et ventes synchronisés.");
-      const prefs = getPreferences();
-      savePreferences({ onboarded: true, onboardingCompleted: true });
-      qc.invalidateQueries({ queryKey: ["preferences"] });
-      navigate({ to: "/pos" });
+      // Ouvre un modal pour demander le nom de l'employé
+      setEmployeeNameInput("");
+      setShowEmployeeNameModal(true);
     } catch {
       toast.error("Caméra indisponible — réessayez.");
     } finally {
@@ -135,6 +164,16 @@ function WelcomePage() {
     setEmployeeId(id);
     setHistory(await listEmployeeHistory(id));
     setPhase("experience");
+  }
+
+  async function submitEmployeeName() {
+    if (!employeeNameInput.trim()) return;
+    await setIdentityEmployeeName(employeeNameInput.trim());
+    toast.success(`Bienvenue ${employeeNameInput.trim()} — boutique synchronisée.`);
+    savePreferences({ onboarded: true, onboardingCompleted: true });
+    qc.invalidateQueries({ queryKey: ["preferences"] });
+    setShowEmployeeNameModal(false);
+    navigate({ to: "/pos" });
   }
 
   /** Depuis le carnet, repart vers un nouveau business : la machine d'onboarding en
@@ -270,6 +309,62 @@ function WelcomePage() {
               onJoin={() => void joinNewBusiness()}
             />
           </motion.div>
+        )}
+
+        {/* Modal du nom de l'employé — affiché après le scan QR du propriétaire */}
+        {showEmployeeNameModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Nom de l'équipe"
+          >
+            <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-xl text-left space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full bg-primary/10 p-2.5">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">Rejoindre l'équipe</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Le compte employé est connecté au magasin du propriétaire.
+                  </p>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="emp-name">Votre nom (pour l'équipe)</Label>
+                <Input
+                  id="emp-name"
+                  value={employeeNameInput}
+                  onChange={(e) => setEmployeeNameInput(e.target.value)}
+                  placeholder="Ex : Jean Yves"
+                  className="h-12 text-base"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && employeeNameInput.trim()) {
+                      submitEmployeeName();
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowEmployeeNameModal(false)}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={submitEmployeeName}
+                  disabled={!employeeNameInput.trim()}
+                >
+                  Valider
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

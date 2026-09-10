@@ -232,6 +232,7 @@ export async function applyPairingShop(shop?: Partial<PairingShopConfig>): Promi
   if (!shop || !shop.storeName) return false;
   const prefs = getPreferences();
 
+  // Met à jour le PROFIL IndexedDB (le nom affiché dans l'UI)
   await saveShopProfile({
     storeName: shop.storeName,
     ownerName: shop.ownerName ?? "",

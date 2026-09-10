@@ -334,7 +334,7 @@ export function SetupWizard({
     if (step === 3) {
       // Étape réservée aux employés : scanner le QR du propriétaire
       // OU saisir le code temporaire. Si mode=create, on passe directement.
-      return accountMode === "create" ? true : (pairCode.trim().length >= 6 || qrScanned);
+      return accountMode === "create" ? true : pairCode.trim().length >= 6 || qrScanned;
     }
     if (step === 4) return true; // coordonnées optionnelles
     if (step === 5) {
@@ -469,7 +469,10 @@ export function SetupWizard({
                 )}
               >
                 <span className="font-semibold">Créer un compte</span>
-                <span className="text-xs text-muted-foreground">Première boutique — essai gratuit 30 jours, un seul abonnement pour toutes vos caisses.</span>
+                <span className="text-xs text-muted-foreground">
+                  Première boutique — essai gratuit 30 jours, un seul abonnement pour toutes vos
+                  caisses.
+                </span>
               </button>
             </div>
             <div className="mt-4 flex justify-center">
@@ -497,7 +500,11 @@ export function SetupWizard({
             <div className="space-y-3">
               {accountMode === "join" && (
                 <>
-                  <Button type="button" className="w-full gap-2" onClick={() => void scanPairingQr()}>
+                  <Button
+                    type="button"
+                    className="w-full gap-2"
+                    onClick={() => void scanPairingQr()}
+                  >
                     <ScanLine className="h-4 w-4" /> Scanner le QR du propriétaire
                   </Button>
                   <Input
@@ -512,15 +519,37 @@ export function SetupWizard({
               )}
               <div>
                 <Label htmlFor="ob-acc-phone">Téléphone du compte</Label>
-                <Input id="ob-acc-phone" type="tel" value={accPhone} onChange={(e) => setAccPhone(e.target.value)} placeholder="+241 06 123 456" className="h-12" />
+                <Input
+                  id="ob-acc-phone"
+                  type="tel"
+                  value={accPhone}
+                  onChange={(e) => setAccPhone(e.target.value)}
+                  placeholder="+241 06 123 456"
+                  className="h-12"
+                />
               </div>
               <div>
                 <Label htmlFor="ob-acc-pass">Mot de passe</Label>
-                <Input id="ob-acc-pass" type="password" value={accPassword} onChange={(e) => setAccPassword(e.target.value)} placeholder={accountMode === "join" ? "Mot de passe du compte" : "4 caractères minimum"} className="h-12" />
+                <Input
+                  id="ob-acc-pass"
+                  type="password"
+                  value={accPassword}
+                  onChange={(e) => setAccPassword(e.target.value)}
+                  placeholder={
+                    accountMode === "join" ? "Mot de passe du compte" : "4 caractères minimum"
+                  }
+                  className="h-12"
+                />
               </div>
               <div>
                 <Label htmlFor="ob-owner">Nom du propriétaire</Label>
-                <Input id="ob-owner" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Ex : Migolet Jean Yves" className="h-12" />
+                <Input
+                  id="ob-owner"
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
+                  placeholder="Ex : Migolet Jean Yves"
+                  className="h-12"
+                />
               </div>
             </div>
           </StepShell>
@@ -536,11 +565,24 @@ export function SetupWizard({
             <div className="space-y-3">
               <div>
                 <Label htmlFor="ob-phone">Téléphone du commerce</Label>
-                <Input id="ob-phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Ex : +241 06 123 456" className="h-12" />
+                <Input
+                  id="ob-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Ex : +241 06 123 456"
+                  className="h-12"
+                />
               </div>
               <div>
                 <Label htmlFor="ob-quarter">Quartier</Label>
-                <Input id="ob-quarter" value={quarter} onChange={e => setQuarter(e.target.value)} placeholder="Ex : Owendo" className="h-12" />
+                <Input
+                  id="ob-quarter"
+                  value={quarter}
+                  onChange={(e) => setQuarter(e.target.value)}
+                  placeholder="Ex : Owendo"
+                  className="h-12"
+                />
               </div>
             </div>
           </StepShell>
@@ -745,7 +787,7 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const addingProduct = isServiceCluster && serviceMode === "produit";
 
   // Variantes dynamiques — applicable à tout produit (vêtements, régables, etc.).
-  const [variants, setVariants] = useState<{name:string; price:string; stock:string}[]>([]);
+  const [variants, setVariants] = useState<{ name: string; price: string; stock: string }[]>([]);
 
   // Formulaire produit
   const [productName, setProductName] = useState("");
@@ -786,13 +828,15 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
       weightUnit: sellsByWeight ? "kg" : undefined,
       serialNumber: undefined,
       expiryDate: undefined,
-      variants: variants.map((v) => ({
-        id: crypto.randomUUID(),
-        name: v.name.trim(),
-        price: Number(v.price) || 0,
-        cost: 0,
-        stock: Number(v.stock) || 0,
-      })).filter((v) => v.name.trim()),
+      variants: variants
+        .map((v) => ({
+          id: crypto.randomUUID(),
+          name: v.name.trim(),
+          price: Number(v.price) || 0,
+          cost: 0,
+          stock: Number(v.stock) || 0,
+        }))
+        .filter((v) => v.name.trim()),
     });
     setAddedCount((c) => c + 1);
     setProductName("");

@@ -168,8 +168,8 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                     ownerName: profile.ownerName ?? "",
                     phone: profile.phone ?? "",
                     quarter: profile.location ?? "",
-                    cluster: (getPreferences().cluster as any) ?? "retail",
-                    subCategory: (getPreferences().subCategory as any) ?? undefined,
+                    cluster: getPreferences().cluster ?? "retail",
+                    subCategory: getPreferences().subCategory ?? undefined,
                     customDomain: getPreferences().customDomain ?? "",
                     customUnitType: getPreferences().customUnitType ?? "unit",
                     businessType: getPreferences().businessType ?? "retail",
@@ -270,7 +270,8 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             Ajouter un appareil
           </DialogTitle>
           <DialogDescription>
-            L'employé scanne ce code, entre son nom, et reçoit le stock, les ventes et la caisse du propriétaire via le relais.
+            L'employé scanne ce code, entre son nom, et reçoit le stock, les ventes et la caisse du
+            propriétaire via le relais.
           </DialogDescription>
         </DialogHeader>
 
@@ -329,18 +330,18 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                   <QrCode className="h-8 w-8 animate-pulse text-muted-foreground" />
                 </div>
               )}
-<p className="text-xs text-muted-foreground text-center">
-              Ce code donne l'accès à la boutique{" "}
-              <span className="font-medium text-foreground">{profile?.storeName}</span> (
-              {profile?.accountPhone}). L'employé le scanne, entre son nom, et reçoit le stock, les ventes
-              et la caisse via le relais. Ne le montrez qu'à vos propres appareils.
-            </p>
-          </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Ce code donne l'accès à la boutique{" "}
+                <span className="font-medium text-foreground">{profile?.storeName}</span> (
+                {profile?.accountPhone}). L'employé le scanne, entre son nom, et reçoit le stock,
+                les ventes et la caisse via le relais. Ne le montrez qu'à vos propres appareils.
+              </p>
+            </div>
 
-          <p className="text-xs text-muted-foreground">
-            L'employé scanne le QR ou, s'il ne peut pas, entre le code de paire ci-dessous. Aucun mot de
-            passe n'est demandé — le jeton de partage le remplace.
-          </p>
+            <p className="text-xs text-muted-foreground">
+              L'employé scanne le QR ou, s'il ne peut pas, entre le code de paire ci-dessous. Aucun
+              mot de passe n'est demandé — le jeton de partage le remplace.
+            </p>
           </div>
         ) : profile?.accountKeyword ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -357,67 +358,67 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           </p>
         )}
 
-{hasAnyAccount && (
-            <div className="space-y-3 rounded-xl border p-4">
-              {isOwner && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Le code de paire est valable 10 minutes. L'employé scanne le QR, entre son nom,
-                    et il est ajouté à la boutique.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void togglePairCode()}
-                    className="w-full"
-                  >
-                    {pairCode ? "Masquer le code de paire" : "Afficher le code de paire"}
-                  </Button>
-                  {pairCode && (
-                    <div className="mt-2 rounded-lg border border-dashed bg-accent/40 py-3 text-center">
-                      <p className="font-mono text-3xl font-bold tracking-[0.3em]">{pairCode}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        À saisir si l'employé ne peut pas scanner. Valable {minutesLeft} min.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {isOwner && pending.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    En attente d'approbation ({pending.length})
-                  </p>
-                  {pending.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border bg-accent/30 px-3 py-2"
-                    >
-                      <span className="truncate text-sm">
-                        {p.device_name || "Écran inconnu"}
-                        <span className="ml-1 text-xs text-muted-foreground">
-                          · {p.id.slice(0, 6)}…
-                        </span>
-                      </span>
-                      <Button type="button" size="sm" onClick={() => void approve(p.id)}>
-                        Approuver
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {peers && (
-                <p className="text-xs text-muted-foreground">
-                  {pairedCount > 0
-                    ? `${pairedCount} employé${pairedCount > 1 ? "s" : ""} connecté${pairedCount > 1 ? "s" : ""} à cette boutique.`
-                    : "Aucun employé connecté pour l'instant. Partagez le QR ci-dessus."}
+        {hasAnyAccount && (
+          <div className="space-y-3 rounded-xl border p-4">
+            {isOwner && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Le code de paire est valable 10 minutes. L'employé scanne le QR, entre son nom, et
+                  il est ajouté à la boutique.
                 </p>
-              )}
-            </div>
-          )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void togglePairCode()}
+                  className="w-full"
+                >
+                  {pairCode ? "Masquer le code de paire" : "Afficher le code de paire"}
+                </Button>
+                {pairCode && (
+                  <div className="mt-2 rounded-lg border border-dashed bg-accent/40 py-3 text-center">
+                    <p className="font-mono text-3xl font-bold tracking-[0.3em]">{pairCode}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      À saisir si l'employé ne peut pas scanner. Valable {minutesLeft} min.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isOwner && pending.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  En attente d'approbation ({pending.length})
+                </p>
+                {pending.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border bg-accent/30 px-3 py-2"
+                  >
+                    <span className="truncate text-sm">
+                      {p.device_name || "Écran inconnu"}
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        · {p.id.slice(0, 6)}…
+                      </span>
+                    </span>
+                    <Button type="button" size="sm" onClick={() => void approve(p.id)}>
+                      Approuver
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {peers && (
+              <p className="text-xs text-muted-foreground">
+                {pairedCount > 0
+                  ? `${pairedCount} employé${pairedCount > 1 ? "s" : ""} connecté${pairedCount > 1 ? "s" : ""} à cette boutique.`
+                  : "Aucun employé connecté pour l'instant. Partagez le QR ci-dessus."}
+              </p>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

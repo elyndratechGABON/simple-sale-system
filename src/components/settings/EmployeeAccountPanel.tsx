@@ -52,6 +52,7 @@ export function EmployeeAccountPanel() {
   const [error, setError] = useState<string | null>(null);
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [immediateOpen, setImmediateOpen] = useState(false);
 
   // Chemin demande : le propriétaire décide côté serveur, on ne purge rien ici.
   const requestMut = useMutation({
@@ -172,16 +173,7 @@ export function EmployeeAccountPanel() {
         variant="outline"
         size="sm"
         className="w-full text-xs"
-        onClick={() => {
-          // Suppression directe : éjection du compte du propriétaire + purge locale
-          if (
-            confirm(
-              "Éjecter cet appareil du compte du propriétaire (données locales effacées, compte du propriétaire intact) ?",
-            )
-          ) {
-            deleteMut.mutate();
-          }
-        }}
+        onClick={() => setImmediateOpen(true)}
       >
         <Trash2 className="h-3 w-3 mr-1" />
         Supprimer cet appareil immédiatement
@@ -277,6 +269,44 @@ export function EmployeeAccountPanel() {
               {scanning ? "Scan en cours…" : "Via le QR de restitution du propriétaire"}
             </Button>
             <AlertDialogCancel className="w-full mt-0">Annuler</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Suppression immédiate : confirmation directe (aucun serveur requis) */}
+      <AlertDialog open={immediateOpen} onOpenChange={(v) => !v && setImmediateOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-destructive" /> Éjecter cet appareil du compte ?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Les données locales <strong>de cet appareil</strong> seront{" "}
+                  <strong>définitivement effacées</strong> : ventes, produits et historique. Le
+                  compte du propriétaire reste intact.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  L'application repart au premier lancement. Action immédiate, sans validation du
+                  propriétaire.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                setImmediateOpen(false);
+                deleteMut.mutate();
+              }}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? "Suppression…" : "Tout effacer"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
