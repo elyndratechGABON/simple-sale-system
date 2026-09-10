@@ -58,6 +58,7 @@ import {
   addEmployeeHistory,
   ensureEmployeeId,
   setShopAccount,
+  saveShopProfile,
   type Product,
 } from "@/lib/db";
 import { joinByKeyword } from "@/lib/gatekeeper";
@@ -234,6 +235,12 @@ export function SetupWizard({
     const store = name.trim() || "Ma boutique";
     const owner = ownerName.trim();
 
+    // La fiche `shop_profiles` (profil IndexedDB) doit porter le même nom que
+    // l'enseigne validée ici : le QR d'appairage la lit (`prefs` d'abord désormais,
+    // mais la fiche reste la référence longue — exports, edits). Sans cet appel,
+    // `setShopAccount` avait créé la fiche avec le fallback « Ma boutique » et le
+    // nom saisi ne vivait que dans `prefs.workspaceName`.
+
     // Voie « mot clé » (jonction sans téléphone/mot de passe) : la vérification est
     // portée par le serveur. Hors ligne → mode provisoire 48 h (claim + bannière) ;
     // mot clé rejeté → blocage dur, on NE termine PAS l'assistant.
@@ -266,6 +273,15 @@ export function SetupWizard({
         ownerName: owner,
       });
     }
+
+    // Fiche `shop_profiles` = l'enseigne validée (même source que `prefs`). C'est elle
+    // que le QR d'appairage embarque dans `shop.storeName` (ainsi que `profile.storeName`).
+    await saveShopProfile({
+      storeName: store,
+      ownerName: owner,
+      phone: phone.trim(),
+      location: quarter.trim(),
+    });
 
     // Jonction via QR : le compte (téléphone+mot de passe) vient d'être posé → le groupe
     // de partage P2P (`s_`) existe maintenant. On s'annonce avec le code de confirmation

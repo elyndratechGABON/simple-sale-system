@@ -132,11 +132,19 @@ export interface DeviceApprovePayload {
   role: DeviceRole;
 }
 
-/** Instantané du catalogue vivant, envoyé à un appareil qui vient de rejoindre le groupe.
+/**
+ * Instantané du catalogue vivant, envoyé à un appareil qui vient de rejoindre le groupe.
  *  Les produits portent leur stock ABSOLU courant : c'est le point de départ à partir duquel
- *  le nouvel écran rejouera les deltas ultérieurs. Idempotent (mêmes ids écrasés à l'identique). */
+ *  le nouvel écran rejouera les deltas ultérieurs. Idempotent (mêmes ids écrasés à l'identique).
+ *
+ *  `shop` porte l'identité de la boutique émettrice : LE RELAIS est aussi le garant du nom.
+ *  Un QR généré quand l'onboarding n'avait pas encore écrit la fiche embarque « Ma boutique » ;
+ *  le canal par lequel le relais livre déjà les stocks corrige alors le nom du nouvel écran
+ *  (purement complémentaire — un écran déjà nommé localement n'est pas écrasé).
+ */
 export interface CatalogueSnapshotPayload {
   products: import("@/lib/db").Product[];
+  shop?: { storeName: string; ownerName?: string };
 }
 
 /** Clés de persistence de l'appairage P2P — partagées entre `db.ts` et `syncengine/pairing.ts`. */

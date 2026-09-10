@@ -107,7 +107,7 @@ export async function buildPairingPayload(role?: DeviceRole): Promise<string | n
     ...(pairCode ? { pair_code: pairCode } : {}),
     ...(role && role !== "owner" ? { role } : {}),
     shop: {
-      storeName: profile.storeName || prefs.workspaceName,
+      storeName: prefs.workspaceName || profile.storeName,
       ownerName: profile.ownerName || prefs.ownerName,
       phone: profile.phone || prefs.phone,
       quarter: profile.location || prefs.quarter,

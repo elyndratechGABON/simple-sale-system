@@ -14,6 +14,7 @@
 // ops. Application directe sur les stores, sous le seul contrôle de `processed_ops`.
 import { getDB } from "../db";
 import type { PosDatabase } from "../db";
+import { getPreferences, savePreferences } from "../settings";
 import type {
   CatalogueSnapshotPayload,
   ClientCreatedPayload,
@@ -45,6 +46,7 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
       db.processed_ops,
       db.paired_devices,
       db.settings,
+      db.shop_profiles,
     ],
     async () => {
       const seen = new Set<string>();
@@ -289,6 +291,23 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         const existing = await db.products.get(p.id);
         if (existing?.deleted_at) continue;
         await db.products.put({ ...p, ...touch() });
+      }
+      // Le relais est aussi le garant du NOM de la boutique : si ce nouvel écran est
+      // encore sur le placeholder « Ma boutique » (fiche jamais écrite à l'onboarding,
+      // ou QR généré AVANT cette correction), le nom transmis par le membre principal
+      // le remplace. Un nom déjà posé localement n'est PAS écrasé.
+      if (pl?.shop?.storeName) {
+        const profile = await db.shop_profiles.get("me");
+        const prefs = getPreferences();
+        const unset = (v?: string) => !v?.trim() || v.trim() === "Ma boutique";
+        if (unset(prefs.workspaceName) && profile && unset(profile.storeName)) {
+          savePreferences({ workspaceName: pl.shop.storeName });
+          await db.shop_profiles.put({
+            ...profile,
+            storeName: pl.shop.storeName,
+            ...touch(),
+          });
+        }
       }
       break;
     }

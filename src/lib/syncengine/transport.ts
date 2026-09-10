@@ -27,7 +27,8 @@ import { isSharedGroup, getIdentity } from "./identity";
 import { emitOp } from "./ops";
 import { listPendingOps, markOpsSynced } from "./outbox";
 import { getDB, listProducts } from "../db";
-import type { SyncIdentity, SyncOp } from "./types";
+import { getPreferences } from "../settings";
+import type { CatalogueSnapshotPayload, SyncIdentity, SyncOp } from "./types";
 
 /** La bouche d'entrée/sortie d'un canal d'échange. Remplaçable inconditionnellement. */
 export interface TransportClient {
@@ -104,13 +105,32 @@ async function emitCatalogSnapshot(identity: SyncIdentity): Promise<void> {
   // Photo exclue : c'est du binaire dataURL lourd, la doc la garde LOCALE (cf. db.ts) —
   // le relais ne transporte que de la donnée légère.
   const products = (await listProducts()).map(({ photo: _photo, ...p }) => p);
+  const shopName = await snapshotShopName();
+  const payload: CatalogueSnapshotPayload = {
+    products,
+    ...(shopName ? { shop: { storeName: shopName } } : {}),
+  };
   await db.transaction("rw", db.sync_ops, db.settings, async () => {
     await emitOp(db, identity, {
       type: "catalogue.snapshot",
       entity_id: "catalog",
-      payload: { products },
+      payload,
     });
   });
+}
+
+/** Le meilleur nom de boutique disponible : `prefs.workspaceName` (enseigne validée à
+ *  l'onboarding) devant la fiche profil — la fiche a pu rester sur le fallback « Ma boutique »
+ *  si l'onboarding ne l'avait jamais écrite. Une fiche née avec le fallback n'est pas un nom. */
+async function snapshotShopName(): Promise<string | undefined> {
+  const db = getDB();
+  const profile = await db.shop_profiles.get("me");
+  const prefs = getPreferences();
+  for (const name of [prefs.workspaceName, profile?.storeName]) {
+    const trimmed = name?.trim();
+    if (trimmed && trimmed !== "Ma boutique") return trimmed;
+  }
+  return undefined;
 }
 
 /** Adaptateur du relais PC Master en HTTP. `fetchImpl` injectable pour les tests.

@@ -154,10 +154,11 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
         } else if (token && pairCode) {
           // QR du jeton (v2) : pas de password, juste le token + pair_code + role=employee.
           // La copie boutique (shop) part TOUJOURS : l'employé doit recevoir le vrai nom de
-          // la boutique (sinon il reste "Ma boutique"). storeName : profil d'abord, puis les
-          // préférences — le nom saisi à la création vit dans `workspaceName`.
+          // la boutique (sinon il reste "Ma boutique"). storeName : le `workspaceName`
+          // d'abord (le nom saisi à la création y vit), la fiche profil ensuite — la fiche
+          // a pu rester sur le fallback si l'onboarding ne l'avait jamais écrite.
           const prefs = getPreferences();
-          const shopStoreName = profile?.storeName || prefs.workspaceName || "";
+          const shopStoreName = prefs.workspaceName || profile?.storeName || "";
           const payload = {
             v: 2,
             app: "ecaisse" as const,

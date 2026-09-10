@@ -19,6 +19,8 @@ import { listPairedDevices } from "./peers";
 import { listPendingOps, markOpsSynced, purgeSyncedOps } from "./outbox";
 import { exchangeOps, relayTransport } from "./transport";
 import type { SyncOp } from "./types";
+import { getPreferences, savePreferences } from "../settings";
+import { ensureShopProfile } from "../db";
 
 const ACCOUNT = { name: "Boutique Test", phone: "+24100000000", password: "secret" };
 const LINE = (productId: string) => ({
@@ -269,5 +271,34 @@ describe("transport P2P via relais", () => {
     await exchangeOps(relay.client);
     const products = await listProducts();
     expect(products.find((p) => p.id === "p1")?.stock).toBe(15);
+  });
+
+  it("le snapshot porte le nom de la boutique au nouvel écran resté sur « Ma boutique »", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const id = getIdentity();
+    const relay = makeRelay();
+
+    const snapOp: SyncOp = {
+      id: "snap:shop",
+      shop_id: id.shopId,
+      device_id: "un-proprietaire",
+      seq: 1,
+      type: "catalogue.snapshot",
+      entity_id: "catalog",
+      payload: {
+        products: [],
+        shop: { storeName: "Boutique Du Marché" },
+      },
+      created_at: Date.now(),
+      status: "synced",
+    };
+    await relay.client.push(id.shopId, [snapOp]);
+
+    await exchangeOps(relay.client);
+    // L'écran local est encore sur le fallback « Ma boutique » → il adopte le nom du relais.
+    const profile = await ensureShopProfile("");
+    expect(profile.storeName).toBe("Boutique Du Marché");
   });
 });
