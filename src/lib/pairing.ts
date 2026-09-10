@@ -74,6 +74,8 @@ export type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"
   pair_code?: string;
   shop?: Partial<PairingShopConfig>;
   role?: DeviceRole;
+  /** Jeton de partage (QR v2) : réclamé au relais une fois le compte posé. Absent des QR v1. */
+  token?: string;
 };
 
 export interface SharePayload {
@@ -179,7 +181,7 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
               : undefined,
           shop: s.shop,
           token: s.token,
-        } as PairingShopInfo & { token: string };
+        } as PairingShopInfo;
       }
     } catch {
       // JSON invalide → tenter le format texte ci-dessous.

@@ -31,12 +31,11 @@ import {
   saveShopProfile,
   type EmployeeHistory,
 } from "@/lib/db";
-import { applyPairingShop } from "@/lib/pairing";
+import { applyPairingShop, parsePairingPayload, redeemShareToken } from "@/lib/pairing";
 import { formatDateShort, formatExperienceDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
-import { parsePairingPayload } from "@/lib/pairing";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
 import {
   ensureIdentity,
@@ -96,10 +95,26 @@ function WelcomePage() {
         toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
         return;
       }
-      // 1. Applique la copie complète de la boutique du propriétaire
+      // 0. Identité d'appareil d'abord : le deviceId est nécessaire à la rédemption du jeton.
+      const identity = await ensureIdentity();
+      // QR v2 (jeton) : réclame le jeton au relais — il renvoie les identifiants OFFICIELS
+      // du compte (account_phone/account_name) qui fixent le groupe `s_` partagé, ainsi que
+      // le code de paire. QR v1 (mot de passe) : tout est déjà dans le payload.
+      let accountName = parsed.name || "";
+      let accountPhone = parsed.phone || parsed.shop?.phone || "";
+      let pairCode = parsed.pair_code;
+      if (parsed.token) {
+        const redeem = await redeemShareToken(parsed.token, identity.deviceId);
+        if (redeem) {
+          if (redeem.account_name) accountName = redeem.account_name;
+          if (redeem.account_phone) accountPhone = redeem.account_phone;
+          if (redeem.pair_code) pairCode = redeem.pair_code;
+        }
+      }
+      // 1. Applique la copie complète de la boutique du propriétaire.
       await applyPairingShop(parsed.shop);
-// 2. Force le nom de la boutique dans le profil local (pas "Ma boutique")
-      const storeFromQr = parsed.shop?.storeName || parsed.name || "";
+      // 2. Force le nom de la boutique dans le profil local (pas "Ma boutique").
+      const storeFromQr = parsed.shop?.storeName || accountName || "";
       if (storeFromQr) {
         await savePreferences({
           workspaceName: storeFromQr,
@@ -108,40 +123,31 @@ function WelcomePage() {
         });
         qc.invalidateQueries({ queryKey: ["preferences"] });
       }
-      // 2. Pose le compte en mode "lien" — le téléphone du compte est celui du propriétaire (le même groupe P2P)
-      // On copie le téléphone/nom du propriétaire dans le profile EMPLOYÉ pour que deriveShopId donne le même s_...
+      // 3. Pose le compte en mode "lien" — tél/nom du compte PROPRIÉTAIRE (même groupe P2P,
+      //    même `s_...` pour deriveShopId) : c'est ce qui fait converger stock et ventes.
       await setShopAccount({
-        name: parsed.name || parsed.shop?.ownerName || "",
-        phone: parsed.phone || parsed.shop?.phone || "",
+        name: accountName,
+        phone: accountPhone,
         password: "",
         ownerName: "",
       });
-      // Force le profil IndexedDB avec le téléphone du propriétaire (critique pour deriveShopId)
+      // Force le profil IndexedDB avec les identifiants du compte propriétaire.
       await saveShopProfile({
-        storeName: parsed.shop?.storeName || parsed.shop?.ownerName || "",
+        storeName: parsed.shop?.storeName || parsed.shop?.ownerName || accountName || "",
         ownerName: "",
-        phone: parsed.shop?.phone || parsed.phone || "",
+        phone: parsed.shop?.phone || accountPhone || "",
         location: parsed.shop?.quarter || "",
-        accountName: parsed.name || "",
-        accountPhone: parsed.phone || "",
+        accountName,
+        accountPhone,
       });
-      // Mise à jour des préférences avec le nom de boutique du propriétaire
-      if (storeFromQr) {
-        await savePreferences({
-          workspaceName: storeFromQr,
-          onboarded: true,
-          onboardingCompleted: true,
-        });
-      }
-      // 3. Force le rôle employé et le groupe P2P au scan
-      await ensureIdentity();
+      // 4. Force le rôle employé et le groupe P2P au scan.
       await setIdentityRole("employee");
       await refreshShopId();
-      // Annonce P2P avec le code du QR
-      if (parsed.pair_code) {
-        await enterPairingCode(parsed.pair_code);
+      // 5. Annonce P2P avec le code du QR (ou du relais).
+      if (pairCode) {
+        await enterPairingCode(pairCode);
       }
-      // Ouvre un modal pour demander le nom de l'employé
+      // 6. Ouvre un modal pour demander le nom de l'employé.
       setEmployeeNameInput("");
       setShowEmployeeNameModal(true);
     } catch {

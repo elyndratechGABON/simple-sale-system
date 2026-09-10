@@ -152,28 +152,34 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           const legacy = await buildPairingPayload(shareRole);
           if (legacy) text = legacy;
         } else if (token && pairCode) {
-          // QR du jeton (v2) : pas de password, juste le token + pair_code
+          // QR du jeton (v2) : pas de password, juste le token + pair_code + role=employee.
+          // La copie boutique (shop) part TOUJOURS : l'employé doit recevoir le vrai nom de
+          // la boutique (sinon il reste "Ma boutique"). storeName : profil d'abord, puis les
+          // préférences — le nom saisi à la création vit dans `workspaceName`.
+          const prefs = getPreferences();
+          const shopStoreName = profile?.storeName || prefs.workspaceName || "";
           const payload = {
             v: 2,
             app: "ecaisse" as const,
             url: getOrchestratorUrl() ?? "",
             token,
-            name: profile?.accountName ?? profile?.storeName ?? "",
+            name: profile?.accountName ?? profile?.storeName ?? prefs.workspaceName ?? "",
             account_phone: profile?.accountPhone ?? profile?.phone ?? "",
             pair_code: pairCode,
-            ...(profile?.storeName
+            role: "employee" as const,
+            ...(shopStoreName
               ? {
                   shop: {
-                    storeName: profile.storeName,
-                    ownerName: profile.ownerName ?? "",
-                    phone: profile.phone ?? "",
-                    quarter: profile.location ?? "",
-                    cluster: getPreferences().cluster ?? "retail",
-                    subCategory: getPreferences().subCategory ?? undefined,
-                    customDomain: getPreferences().customDomain ?? "",
-                    customUnitType: getPreferences().customUnitType ?? "unit",
-                    businessType: getPreferences().businessType ?? "retail",
-                    tablesEnabled: getPreferences().tablesEnabled ?? false,
+                    storeName: shopStoreName,
+                    ownerName: profile?.ownerName ?? prefs.ownerName ?? "",
+                    phone: profile?.phone ?? prefs.phone ?? "",
+                    quarter: profile?.location ?? prefs.quarter ?? "",
+                    cluster: prefs.cluster ?? "retail",
+                    subCategory: prefs.subCategory ?? undefined,
+                    customDomain: prefs.customDomain ?? "",
+                    customUnitType: prefs.customUnitType ?? "unit",
+                    businessType: prefs.businessType ?? "retail",
+                    tablesEnabled: prefs.tablesEnabled ?? false,
                   },
                 }
               : {}),
@@ -295,19 +301,11 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             )}
 
             {isOwner && (
-              <div className="space-y-1.5">
-                <Label htmlFor="share-role">Rôle du nouvel appareil</Label>
-                <Select value={shareRole} onValueChange={(v) => setShareRole(v as DeviceRole)}>
-                  <SelectTrigger id="share-role" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employee">Employé</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
+                <p className="text-sm font-medium text-foreground">Appareil employé</p>
                 <p className="text-xs text-muted-foreground">
-                  Le rôle est inscrit dans le QR : l'appareil qui le scanne sera automatiquement
-                  configuré avec les droits correspondants.
+                  Le code QR est destiné à un employé — le rôle « employé » est inscrit
+                  automatiquement. Aucune sélection n'est nécessaire.
                 </p>
               </div>
             )}
