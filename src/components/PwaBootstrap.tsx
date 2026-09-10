@@ -9,6 +9,7 @@
 // d'installation vit maintenant sur la landing (`src/routes/index.tsx`) et dans les
 // paramètres, via le hook `usePwaInstall`.
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { registerServiceWorker, requestPersistentStorage } from "@/lib/pwa";
 import { autoCloseDay } from "@/lib/db";
 import { backgroundSync } from "@/lib/sync";
@@ -19,7 +20,20 @@ import { loadLockState } from "@/lib/gatekeeper";
 // après la caisse — l'échec d'une tentative ne condamne pas l'envoi.
 const SYNC_INTERVAL_MS = 60_000;
 
+// Préfixes de requêtes alimentées par la convergence P2P (relais). Quand un tick a
+// appliqué ou poussé des ops, on les invalide pour que les écrans (stock, ventes,
+// appareils) affichent la donnée arriver sans recharger la page.
+const SYNCED_QUERY_KEYS: string[][] = [
+  ["products"],
+  ["sales"],
+  ["open_tables"],
+  ["clients"],
+  ["rentals"],
+  ["paired_devices"],
+];
+
 export function PwaBootstrap() {
+  const queryClient = useQueryClient();
   useEffect(() => {
     registerServiceWorker();
     requestPersistentStorage();
@@ -31,15 +45,23 @@ export function PwaBootstrap() {
     // la caisse reste bloquée même sans réseau), puis synchronise en silence : hors
     // ligne ou serveur éteint, rien ne se passe et on réessaiera — au retour en ligne et
     // toutes les minutes.
-    void loadLockState().then(() => backgroundSync());
-    const onOnline = () => void backgroundSync();
+    const sync = async () => {
+      const changed = await backgroundSync();
+      if (changed) {
+        for (const key of SYNCED_QUERY_KEYS) {
+          await queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
+    };
+    void loadLockState().then(() => sync());
+    const onOnline = () => void sync();
     window.addEventListener("online", onOnline);
-    const interval = window.setInterval(() => void backgroundSync(), SYNC_INTERVAL_MS);
+    const interval = window.setInterval(() => void sync(), SYNC_INTERVAL_MS);
     return () => {
       window.removeEventListener("online", onOnline);
       window.clearInterval(interval);
     };
-  }, []);
+  }, [queryClient]);
 
   return null;
 }

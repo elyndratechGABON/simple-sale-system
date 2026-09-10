@@ -14,8 +14,10 @@
 // Le protocole réel vit dans src/lib/gatekeeper.ts (handshake → commandes → sync-data).
 // Ce module orchestre l'appel périodique et construit le payload d'agrégats. Depuis le moteur
 // P2P, un SECOND canal y est branché : l'échange d'opérations entre appareils du même compte
-// (`syncengine/transport.ts`, relais `/api/v1/ops`) — toujours après un handshake réussi, et
-// sans jamais faire tomber la caisse. L'adresse de ce relais est DÉCOUPLÉE de l'orchestrateur
+// (`syncengine/transport.ts`, relais `/api/v1/ops`). Il est DÉCOUPLÉ du handshake : la
+// convergence stock/ventes se fait même quand l'orchestrateur est injoignable (ex. employé
+// hors du réseau du comptoir) — et sans jamais faire tomber la caisse. L'adresse de ce relais
+// est DÉCOUPLÉE de l'orchestrateur
 // (`getOpsRelayUrl`, via `VITE_OPS_URL`) : le relais peut être hébergé ailleurs et rester
 // allumé indépendamment (ex. Neon + Fonction Vercel).
 import { getSaleItemsForSales, getShopProfile, listSales, markShopSynced } from "@/lib/db";
@@ -23,7 +25,7 @@ import { computePeriodStats, lastDaysRange } from "@/lib/analytics";
 import { handshake, syncData, type HandshakeResult } from "@/lib/gatekeeper";
 import { ensureIdentity, isSharedGroup } from "@/lib/syncengine/identity";
 import { purgeSyncedOps } from "@/lib/syncengine/outbox";
-import { exchangeOps, relayTransport } from "@/lib/syncengine/transport";
+import { exchangeOps, relayTransport, type SyncState } from "@/lib/syncengine/transport";
 
 /** Adresse de l'orchestrateur. Compilée au build via VITE_ORCHESTRATOR_URL, sinon le domaine de l'app. */
 export function getOrchestratorUrl(): string {
@@ -67,20 +69,25 @@ const OPS_TTL_MS = 30 * 86400_000;
 
 /**
  * Échange d'opérations entre appareils du même compte (canal P2P via le relais).
- * Appelé après un handshake réussi. Jamais bloquant : l'échec du relais ne fait pas
- * tomber la rotation — l'outbox reste en attente et repartira au prochain tick.
+ * DÉCOUPLÉ du handshake : il tourne même quand l'orchestrateur est injoignable (employé
+ * hors du Wi-Fi du comptoir) — le relais est public, la « rencontre » se fait par lui.
+ * Jamais bloquant : l'échec du relais ne fait pas tomber la rotation — l'outbox reste en
+ * attente et repartira au prochain tick. Renvoie l'état pour que l'UI sache si des données
+ * ont convergé (rafraîchissement des écrans sans attendre la manœuvre).
  */
-async function runOpsExchange(): Promise<void> {
+async function runOpsExchange(): Promise<SyncState | null> {
   const identity = await ensureIdentity();
-  if (!isSharedGroup(identity.shopId)) return; // caisse jamais inscrite → rien à partager
+  if (!isSharedGroup(identity.shopId)) return null; // caisse jamais inscrite → rien à partager
   const url = getOpsRelayUrl();
-  if (!url) return;
+  if (!url) return null;
   try {
-    await exchangeOps(relayTransport(url, fetch, getOpsToken()));
+    const state = await exchangeOps(relayTransport(url, fetch, getOpsToken()));
     // Le TTL s'applique à chaque rotation réussie — paresseux, donc gratuit.
     await purgeSyncedOps(OPS_TTL_MS);
+    return state;
   } catch {
     // L'échange est un plus, jamais un goulot.
+    return null;
   }
 }
 
@@ -118,24 +125,26 @@ async function buildLightPayload() {
  * Synchronisation d'arrière-plan — appelée au démarrage, au retour en ligne et toutes les
  * minutes tant que l'application est ouverte.
  *
- * 1. Handshake à CHAQUE tick : ordres (suspend/renew/message) appliqués sans délai,
+ * 1. Échange d'opérations P2P d'abord, sur le relais (canal DÉCOUPLÉ de l'orchestrateur) :
+ *    il tourne même si le handshake échoue — un écran employé hors du Wi-Fi du comptoir
+ *    doit quand même recevoir le stock et renvoyer ses ventes. Le relais étant public,
+ *    c'est lui qui garantit la « rencontre » peu importe la distance.
+ * 2. Handshake à CHAQUE tick : ordres (suspend/renew/message) appliqués sans délai,
  *    échéance alignée sur celle que le serveur renvoie.
- * 2. Échange d'opérations P2P entre appareils du même compte, via le relais — chaque
- *    minute aussi : peu coûteux (outbox vide → une lecture), et c'est ce qui fait
- *    arriver une vente d'un autre écran sans attendre la manœuvre.
  * 3. Si le serveur autorise la sync (« active ») et que le dernier envoi date de plus de
  *    cinq minutes, les agrégats partent. Throttlé, et c'est délibéré : inutile de
  *    marteler le serveur.
  */
-export async function backgroundSync(): Promise<void> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+export async function backgroundSync(): Promise<boolean> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
   const profile = await getShopProfile();
-  if (!profile) return;
+  if (!profile) return false;
+
+  const ops = await runOpsExchange();
+  const changed = Boolean(ops && (ops.pushed > 0 || ops.applied > 0));
 
   const result = await handshake();
-  if (!result.ok) return;
-
-  await runOpsExchange();
+  if (!result.ok) return changed;
 
   if (
     result.sync_allowed &&
@@ -144,22 +153,23 @@ export async function backgroundSync(): Promise<void> {
     const payload = await buildLightPayload();
     if (await syncData(payload)) await markShopSynced(Date.now());
   }
+  return changed;
 }
 
 export { SYNC_INTERVAL_MS };
 
 /**
- * Synchronisation MANUELLE (bouton « Synchroniser ») : handshake immédiat puis, si le
- * compte est actif, envoi des agrégats. Sans throttle — l'utilisateur a demandé une
- * vérification, on la fait.
+ * Synchronisation MANUELLE (bouton « Synchroniser ») : échange ops (relais) puis
+ * handshake immédiat ; si le compte est actif, envoi des agrégats. Sans throttle —
+ * l'utilisateur a demandé une vérification, on la fait.
  */
 export async function syncNow(): Promise<HandshakeResult> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return { ok: false, sync_allowed: false, status: "unknown", reason: "network" };
   }
+  await runOpsExchange();
   const result = await handshake();
   if (!result.ok) return result;
-  await runOpsExchange();
   if (result.sync_allowed) {
     const payload = await buildLightPayload();
     if (await syncData(payload)) await markShopSynced(Date.now());
