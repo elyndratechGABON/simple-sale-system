@@ -461,8 +461,8 @@ function BusinessCard() {
 /**
  * Appareils du compte marchand : quota renvoyé par le dernier handshake et QR
  * d'appairage pour rattacher un nouvel écran. Le bouton ouvre toujours le dialogue
- * « Ajouter un appareil » — l'écran n'a besoin que du compte du compte marchand
- * (téléphone + nom) pour émettre le QR, même sans détenir le mot de passe.
+ * « Ajouter un appareil » — l'écran n'a besoin que de l'identité marchande
+ * (téléphone + nom de la boutique) pour émettre le QR, sans détenir le mot de passe.
  */
 function DevicesCard() {
   const qc = useQueryClient();
@@ -641,7 +641,7 @@ function DevicesCard() {
               </ul>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Aucune autre caisse rencontrée pour l'instant : ouvrez « Ajouter un appareil » pour
+                Aucune autre caisse rencontrée pour l'instant : ouvrez le bouton ci-dessous pour
                 afficher un code de paire ou en saisir un.
               </p>
             )}

@@ -85,7 +85,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   });
 
   const hasNamePhone = Boolean(
-    profile?.accountPhone && (profile?.accountName || profile?.storeName),
+    (profile?.accountPhone || profile?.phone) && (profile?.accountName || profile?.storeName),
   );
   // Identifiants complets (téléphone + mot de passe) : seuls ceux qui les détiennent
   // voient la fiche « Compte marchand » avec le mot de passe.
@@ -337,8 +337,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           </p>
         ) : (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Aucun compte marchand sur cet appareil : créez-en un ou rejoignez-le depuis l'assistant
-            de premier lancement avant d'ajouter un écran.
+            Cet appareil n'a pas encore d'identité marchande : renseignez le nom de la{" "}
+            <span className="font-medium text-foreground">boutique</span> et son{" "}
+            <span className="font-medium text-foreground">téléphone</span> (Réglages → Boutique)
+            avant d'afficher un code QR.
           </p>
         )}
 
