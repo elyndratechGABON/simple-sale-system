@@ -233,21 +233,31 @@ export function SetupWizard({
   }, []);
 
   async function finish() {
-    // Le compte est posé en base AVANT la fin de l'assistant : le premier handshake
-    // (au retour en ligne) présentera ces identifiants et créera/rattachera le compte.
     const store = name.trim() || "Ma boutique";
     const owner = ownerName.trim();
 
-    // La fiche `shop_profiles` (profil IndexedDB) doit porter le même nom que
-    // l'enseigne validée ici : le QR d'appairage la lit (`prefs` d'abord désormais,
-    // mais la fiche reste la référence longue — exports, edits). Sans cet appel,
-    // `setShopAccount` avait créé la fiche avec le fallback « Ma boutique » et le
-    // nom saisi ne vivait que dans `prefs.workspaceName`.
+    // PHASE 1: Créer/charger identité AVANT toute autre opération
+    // ──────────────────────────────────────────────────────────
+    // Cela garantit que l'identité existe et peut être modifiée avant d'être
+    // utilisée par setShopAccount() ou ensuite. Sans cet appel précoce, une
+    // vue qui accède à getIdentity() peut déclencher un défaut "owner" avant
+    // qu'on n'ait chance de le forcer à "employee".
+    const identity = await ensureIdentity();
 
-    // Voie « mot clé » (jonction sans téléphone/mot de passe) : la vérification est
-    // portée par le serveur. Hors ligne → mode provisoire 48 h (claim + bannière) ;
-    // mot clé rejeté → blocage dur, on NE termine PAS l'assistant.
+    // PHASE 2: Si mode "join" (employé qui rejoint), forcer rôle employee IMMÉDIATEMENT
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // C'est AVANT setShopAccount(), pas après. Ainsi aucune autre opération ne peut
+    // voir l'identité dans un état intermédiaire invalide.
+    if (accountMode === "join") {
+      await setIdentityRole("employee");
+    }
+
+    // PHASE 3: Valider et appliquer les identifiants du compte
+    // ─────────────────────────────────────────────────────────
     if (accountMode === "join" && accKeyword.trim() && !(accPhone.trim() && accPassword)) {
+      // Voie « mot clé » (jonction sans téléphone/mot de passe) : la vérification est
+      // portée par le serveur. Hors ligne → mode provisoire 48 h (claim + bannière) ;
+      // mot clé rejeté → blocage dur, on NE termine PAS l'assistant.
       await setShopAccount({ name: store, phone: "", password: "", ownerName: owner });
       const result = await joinByKeyword({
         storeName: store,
@@ -286,14 +296,11 @@ export function SetupWizard({
       location: quarter.trim(),
     });
 
-    // Jonction via QR : le compte (téléphone+mot de passe) vient d'être posé → le groupe
-    // de partage P2P (`s_`) existe maintenant. Le rôle DEVAIT être forcé à "employee" dès
-    // l'entrée, mais seule la route directe (welcome) s'en chargeait : le wizard laissait
-    // un appareil neuf sans ligne `role` — ensureIdentity retombait sur "owner" par défaut,
-    // donnant à l'employé tous les accès du propriétaire. On force ici aussi, et on
-    // s'annonce avec le code de confirmation temporaire lu dans le QR : le principal le
+    // PHASE 4: Annoncer au groupe P2P avec le rôle correct (employee)
+    // ──────────────────────────────────────────────────────────────
+    // S'annonce avec le code de confirmation temporaire lu dans le QR : le principal le
     // reconnaît `paired` d'office et les données (produits, ventes, stock) convergent au
-    // prochain échange P2P.
+    // prochain échange P2P. Cet appel ne se fait que si un QR a été scanné avec un code.
     if (pairCode && accPhone.trim() && accPassword) {
       const pairing = await enterPairingCode(pairCode).catch(() => "invalid" as const);
       if (pairing === "invalid") {
@@ -304,18 +311,13 @@ export function SetupWizard({
       }
     }
 
-    // Carnet d'expérience : un mobile qui REJOINT un compte existant (scan du QR d'une
-    // caisse, mot clé, ou téléphone+mot de passe) est une personne qui commence une
-    // expérience dans ce business. L'entrée ouverte vit en local (table
-    // `employee_history` + identité stable en localStorage) : c'est elle que l'écran
-    // « Mon expérience » du welcome affichera, même après la suppression du compte.
+    // PHASE 5: Carnet d'expérience (employé seulement)
+    // ────────────────────────────────────────────────
+    // Un mobile qui REJOINT un compte existant (scan du QR, mot clé, ou téléphone+mot de
+    // passe) est une personne qui commence une expérience dans ce business. L'entrée ouverte
+    // vit en local (table `employee_history` + identité stable en localStorage) : c'est elle
+    // que l'écran « Mon expérience » du welcome affichera, même après la suppression du compte.
     if (accountMode === "join") {
-      const identity = await ensureIdentity();
-      // RASSIS le rôle employé : un écran qui REJOINT un compte existant (scan QR, mot clé,
-      // téléphone+mot de passe) est un EMPLOYÉ — jamais un second propriétaire. Sans cette
-      // ligne, un appareil neuf sans fiche `role` restait "owner" (défaut d'ensureIdentity)
-      // et héritait de tous les accès du propriétaire.
-      await setIdentityRole("employee");
       await addEmployeeHistory({
         employeeId: ensureEmployeeId(),
         deviceId: identity.deviceId,
@@ -325,6 +327,8 @@ export function SetupWizard({
       });
     }
 
+    // PHASE 6: Sauvegarder préférences et invalider caches
+    // ────────────────────────────────────────────────────
     savePreferences({
       workspaceName: store,
       phone: phone.trim(),

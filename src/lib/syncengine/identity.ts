@@ -97,6 +97,15 @@ export async function refreshShopId(): Promise<string | null> {
 
 export async function setIdentityRole(role: DeviceRole): Promise<SyncIdentity> {
   const id = getIdentity();
+
+  // SAFEGUARD: Une fois employee, jamais owner (escalade de privilege interdite)
+  // Un appareil employee qui tenterait de se reassigner owner serait une faille de
+  // securite grave. On refuse silencieusement et loggons pour audit.
+  if (id.role === "employee" && role === "owner") {
+    console.warn(`[Identity Security] Refused employee owner escalation on device ${id.deviceId}`);
+    return id; // Retourne l'identite inchangee, pas d'erreur (fail-safe)
+  }
+
   await getDB().settings.put({ key: IDENTITY_KEYS.role, value: role });
   cache = { ...id, role };
   return cache;
