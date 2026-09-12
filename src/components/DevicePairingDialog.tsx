@@ -136,8 +136,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             },
             body: JSON.stringify({
               shop_id: identity?.shopId ?? "",
-              account_name: profile?.accountName ?? profile?.storeName ?? "",
-              account_phone: profile?.accountPhone ?? profile?.phone ?? "",
+              // Repli TRUTHY (||) : un champ vide ("" mais défini) doit laisser la place
+              // au téléphone/nom de la fiche Boutique — sinon le relais répond 400.
+              account_name: profile?.accountName || profile?.storeName || "",
+              account_phone: profile?.accountPhone || profile?.phone || "",
               pair_code: pairCode ?? generatePairingCode(),
             }),
           });
@@ -162,7 +164,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             app: "ecaisse" as const,
             url: getOrchestratorUrl() ?? "",
             token,
-            name: profile?.accountName ?? profile?.storeName ?? prefs.workspaceName ?? "",
+            name: profile?.accountName || profile?.storeName || prefs.workspaceName || "",
             account_phone: profile?.accountPhone ?? profile?.phone ?? "",
             pair_code: pairCode,
             role: "employee" as const,
