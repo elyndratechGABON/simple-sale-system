@@ -12,11 +12,12 @@
 //   - magasin → "Ajoutez vos produits" (avec sous-cat)
 //
 // Les produits ajoutés pendant le tutoriel sont enregistrés en base.
+import { Check, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Check,
+  Check as CheckIcon,
   ChevronLeft,
   ChevronRight,
   CloudOff,
@@ -28,7 +29,6 @@ import {
   Plus,
   ArrowRight,
   PartyPopper,
-  Users,
   ScanLine,
   FileText,
   X,
@@ -178,26 +178,45 @@ export function SetupWizard({
   const [ownerName, setOwnerName] = useState("");
   const { scanning, startScan } = useBarcodeScanner();
 
+  // États pour l'expérience utilisateur (UX)
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanComplete, setScanComplete] = useState(false);
+  const [showLoading, setShowLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+
   /** Rattache cet écran au compte encodé dans un QR affiché par une caisse abonnée. */
   async function scanPairingQr() {
     try {
+      // Démarrer l'animation de scan
+      setIsScanning(true);
+
       const raw = await startScan();
-      if (raw === null) return;
+
+      if (raw === null) {
+        setIsScanning(false);
+        return;
+      }
+
       const parsed = parsePairingPayload(raw);
+
       if (!parsed) {
+        setIsScanning(false);
         toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
         return;
       }
+
+      // Animation de scan réussie
+      setIsScanning(false);
+      setScanComplete(true);
+
       // Top-level fields: phone, password, name (accountName)
       setAccPhone(parsed.phone ?? "");
       setAccPassword(parsed.password ?? "");
       setAccAccountName(parsed.name ?? "");
       setQrScanned(true);
+
       // Shop config from parsed.shop
       const shop = parsed.shop ?? {};
-      // Copie intégrale de la boutique scannée : fiche (profil+préférences) ET état de
-      // l'assistant (identité + type de boutique). La nouvelle caisse s'ouvre identique ;
-      // l'utilisateur garde la main pour corriger avant de terminer.
       const applied = await applyPairingShop(shop);
       if (shop) {
         setName(shop.storeName ?? "");
@@ -211,12 +230,17 @@ export function SetupWizard({
           setCustomStockChoice(shop.customUnitType ?? null);
         }
       }
+
       toast.success(
         applied
           ? `Compte « ${parsed.name || parsed.phone} » récupéré — copie de la boutique appliquée, continuez.`
           : `Compte « ${parsed.name || parsed.phone} » récupéré — continuez.`,
       );
+
+      // Reset scan complete après 1.5s
+      setTimeout(() => setScanComplete(false), 1500);
     } catch {
+      setIsScanning(false);
       toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");
     }
   }

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -56,6 +57,7 @@ interface DevicePairingDialogProps {
 export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogProps) {
   const qc = useQueryClient();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
   const [qrError, setQrError] = useState(false);
   const [qrErrorDetail, setQrErrorDetail] = useState<string | null>(null);
   const [pairCode, setPairCode] = useState<string | null>(null);
