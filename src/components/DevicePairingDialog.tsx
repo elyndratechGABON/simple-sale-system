@@ -316,9 +316,12 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
               )}
               <p className="text-xs text-muted-foreground text-center">
                 Ce code donne l'accès à la boutique{" "}
-                <span className="font-medium text-foreground">{profile?.storeName}</span> (
-                {profile?.accountPhone}). L'employé le scanne, entre son nom, et reçoit le stock,
-                les ventes et la caisse via le relais. Ne le montrez qu'à vos propres appareils.
+                <span className="font-medium text-foreground">
+                  {profile?.storeName || profile?.accountName}
+                </span>{" "}
+                ({profile?.accountPhone || profile?.phone}). L'employé le scanne, entre son nom, et
+                reçoit le stock, les ventes et la caisse via le relais. Ne le montrez qu'à vos
+                propres appareils.
               </p>
             </div>
 
