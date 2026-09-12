@@ -17,9 +17,11 @@
 // `deleteShopRemote` efface la fiche de CET écran (le serveur d'abord), puis la purge
 // locale repart au premier lancement. Rien de plus — seul l'écran disparaît ; le compte
 // entier du commerce n'est supprimé côté serveur que si aucun autre écran n'en dépendait.
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,12 +34,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAccess } from "@/hooks/use-access";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
-import { ensureIdentity, resetDeviceIdentity } from "@/lib/syncengine/identity";
+import {
+  ensureIdentity,
+  resetDeviceIdentity,
+  setIdentityEmployeeName,
+} from "@/lib/syncengine/identity";
+import { importOwnerCatalog } from "@/lib/sync";
 import { buildClosingPayload, parseRestitutionRequest } from "@/lib/restitution";
 import { closeEmployeeHistory, getShopProfile, purgeAllData } from "@/lib/db";
 import { deleteShopRemote, requestShopDeletion, resetGatekeeper } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
-import { Lock, Send, ShieldAlert, Trash2 } from "lucide-react";
+import { Download, Lock, Send, ShieldAlert, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 const DAY_MS = 86_400_000;
@@ -53,6 +60,39 @@ export function EmployeeAccountPanel() {
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [immediateOpen, setImmediateOpen] = useState(false);
+
+  // Profil : nom affiché de l'employé — chargé depuis l'identité, modifiable.
+  const qc = useQueryClient();
+  const [employeeName, setEmployeeName] = useState("");
+  useEffect(() => {
+    void ensureIdentity().then((id) => setEmployeeName(id.employeeName ?? ""));
+  }, []);
+
+  // Import manuel du catalogue propriétaire (pull des ops du groupe + application).
+  const importMut = useMutation({
+    mutationFn: async () => {
+      const res = await importOwnerCatalog();
+      if (res.ok) await qc.invalidateQueries({ queryKey: ["products"] });
+      return res;
+    },
+    onSuccess: (res) => {
+      if (!res.ok) {
+        toast.error(
+          "Import impossible : le relais est injoignable ou cette caisse n'est rattachée à aucun compte.",
+        );
+        return;
+      }
+      if (res.applied > 0) {
+        toast.success(`Stock importé : ${res.count} produit(s) en caisse.`);
+      } else if (res.count > 0) {
+        toast.success(`Catalogue déjà à jour : ${res.count} produit(s) en caisse.`);
+      } else {
+        toast.info(
+          "Aucun produit reçu — le propriétaire doit avoir synchronisé son catalogue au moins une fois.",
+        );
+      }
+    },
+  });
 
   // Chemin demande : le propriétaire décide côté serveur, on ne purge rien ici.
   const requestMut = useMutation({
@@ -159,6 +199,51 @@ export function EmployeeAccountPanel() {
         suppression n'efface que <strong>cet appareil</strong> (ventes, produits, historique) et
         fait repartir l'application au premier lancement — le compte marchand n'est jamais touché.
       </p>
+
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <h3 className="font-semibold text-sm">Profil et stock</h3>
+        <div className="space-y-1.5">
+          <Label htmlFor="emp-name">Nom de l'employé</Label>
+          <div className="flex gap-2">
+            <Input
+              id="emp-name"
+              value={employeeName}
+              onChange={(e) => setEmployeeName(e.target.value)}
+              placeholder="Votre nom affiché sur la caisse"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!employeeName.trim()}
+              onClick={() => {
+                void setIdentityEmployeeName(employeeName.trim());
+                toast.success("Nom enregistré.");
+              }}
+            >
+              <UserRound className="h-4 w-4 mr-1" />
+              OK
+            </Button>
+          </div>
+        </div>
+        <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
+          <p className="text-sm font-medium text-foreground">Stock du propriétaire</p>
+          <p className="text-xs text-muted-foreground">
+            Rapatrie le catalogue (produits + niveaux de stock) publié par la caisse propriétaire
+            via le relais, sans envoyer de mot de passe. Le propriétaire doit avoir été en ligne au
+            moins une fois pour que ses produits y figurent.
+          </p>
+        </div>
+        <Button
+          size="sm"
+          className="w-full"
+          disabled={importMut.isPending}
+          onClick={() => importMut.mutate()}
+        >
+          <Download className="h-4 w-4 mr-1" />
+          {importMut.isPending ? "Import en cours…" : "Importer le stock du propriétaire"}
+        </Button>
+      </div>
 
       <Button
         variant="destructive"

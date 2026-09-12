@@ -20,7 +20,13 @@
 // est DÉCOUPLÉE de l'orchestrateur
 // (`getOpsRelayUrl`, via `VITE_OPS_URL`) : le relais peut être hébergé ailleurs et rester
 // allumé indépendamment (ex. Neon + Fonction Vercel).
-import { getSaleItemsForSales, getShopProfile, listSales, markShopSynced } from "@/lib/db";
+import {
+  getSaleItemsForSales,
+  getShopProfile,
+  listProducts,
+  listSales,
+  markShopSynced,
+} from "@/lib/db";
 import { computePeriodStats, lastDaysRange } from "@/lib/analytics";
 import { handshake, syncData, type HandshakeResult } from "@/lib/gatekeeper";
 import { ensureIdentity, isSharedGroup } from "@/lib/syncengine/identity";
@@ -175,4 +181,28 @@ export async function syncNow(): Promise<HandshakeResult> {
     if (await syncData(payload)) await markShopSynced(Date.now());
   }
   return result;
+}
+
+/**
+ * Import MANUEL du catalogue propriétaire (bouton « Importer le stock du propriétaire »
+ * sur l'écran employé) : force le cycle d'échange du groupe — pull des ops du relais
+ * (instantané catalogue, créations/MAJ produits) et application — puis compte les
+ * produits présents en caisse. Rien de plus que ce que fait la synchro d'arrière-plan,
+ * mais immédiat et avec un retour pour l'UI.
+ */
+export async function importOwnerCatalog(): Promise<{
+  ok: boolean;
+  applied: number;
+  count: number;
+}> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return { ok: false, applied: 0, count: 0 };
+  }
+  const identity = await ensureIdentity();
+  if (!isSharedGroup(identity.shopId)) {
+    return { ok: false, applied: 0, count: 0 };
+  }
+  const state = await runOpsExchange();
+  const count = (await listProducts()).length;
+  return { ok: state !== null, applied: state?.applied ?? 0, count };
 }
