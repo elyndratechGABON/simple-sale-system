@@ -22,6 +22,7 @@
 // Règle d'or offline-first : RIEN ici ne jette. Push en échec (hors ligne, 5xx, absence de
 // l'endpoint) → outbox conservée, l'appareil réessaiera au prochain tick. Pull en échec →
 // on n'applique rien. Un relais muet n'a aucun effet sur la caisse.
+import { syncSemaphore } from "./semaphore";
 import { applyRemoteOps } from "./apply";
 import { isSharedGroup, getIdentity } from "./identity";
 import { emitOp } from "./ops";
@@ -140,86 +141,91 @@ export interface SyncState {
 /** Cycle complet d'un appareil : pousse son outbox, tire ce que les autres ont laissé,
  *  rejoue les ops étrangères. Jamais bloquant : tout est déjà protégé en amont. */
 export async function exchangeOps(client: TransportClient): Promise<SyncState> {
-  const identity = getIdentity();
-  if (!isSharedGroup(identity.shopId)) return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
+  const release = await syncSemaphore.acquire();
+  try {
+    const identity = getIdentity();
+    if (!isSharedGroup(identity.shopId)) return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
 
-  // Check if this device is paired (not pending) - skip sync if still pending
-  const db = getDB();
-  const self = await db.paired_devices.get(identity.deviceId);
-  if (self?.status === "pending") {
-    console.warn(`[exchangeOps] Device ${identity.deviceId} is pending, skipping exchange`);
-    return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
-  }
-
-  const pending = await listPendingOps(identity.shopId);
-  let pushed = 0;
-  if (pending.length > 0 && (await client.push(identity.shopId, pending))) {
-    await markOpsSynced(pending.map((o) => o.id));
-    pushed = pending.length;
-  }
-
-  const remote = await client.pull(identity.shopId, identity.deviceId);
-  const foreign: SyncOp[] = [];
-  let skipped = 0;
-  let announceApplied = 0;
-
-  // Know which devices are already paired BEFORE processing announces
-  const knownBefore = new Set(
-    (await getDB().paired_devices.where("shop_id").equals(identity.shopId).toArray()).map(
-      (d) => d.id,
-    ),
-  );
-  let newcomerAnnounced = false;
-
-  for (const op of remote) {
-    if (op.device_id === identity.deviceId) {
-      skipped++;
-      continue;
-    }
-    // Une approbation qui NOUS vise ne crée pas de fiche de soi-même : seul le registre
-    // des pairs est concerné par cette décision, et il ne s'y enregistre pas lui-même.
-    if (op.type === "device.approve" && op.entity_id === identity.deviceId) {
-      skipped++;
-      continue;
-    }
-    // NOUVEAU : gérer l'annonce d'un nouvel appareil (employé)
-    if (op.type === "device.announce") {
-      await handleDeviceAnnounce(op.payload as DeviceAnnouncePayload);
-      // Check if this is a new device (not already paired before we started)
-      if (!knownBefore.has(op.entity_id)) {
-        newcomerAnnounced = true;
-      }
-      announceApplied++;
-      continue;
-    }
-    foreign.push(op);
-  }
-
-  // Import « stock du propriétaire » demandé par un écran du groupe : le membre principal
-  // répond en poussant un instantané ABSOLU du catalogue vivant (stock courant). Ne
-  // réagir qu'à une demande PAS ENCORE consommée (`processed_ops`) : `foreign` contient
-  // toutes les ops du relais, y compris celles déjà rejouées aux cycles précédents.
-  const pendingRequests = await Promise.all(
-    foreign
-      .filter((op) => op.type === "catalogue.request")
-      .map((op) => getDB().processed_ops.get(op.id)),
-  );
-  const catalogRequested = pendingRequests.some((row) => !row);
-  const { applied } = await applyRemoteOps(foreign);
-  if (identity.role !== "employee" && (newcomerAnnounced || catalogRequested)) {
+    // Check if this device is paired (not pending) - skip sync if still pending
     const db = getDB();
-    const last = Number((await db.settings.get(KEY_LAST_SNAPSHOT))?.value ?? 0);
-    if (Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
-      await emitCatalogSnapshot(identity);
-      await db.settings.put({ key: KEY_LAST_SNAPSHOT, value: Date.now() });
+    const self = await db.paired_devices.get(identity.deviceId);
+    if (self?.status === "pending") {
+      console.warn(`[exchangeOps] Device ${identity.deviceId} is pending, skipping exchange`);
+      return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
     }
+
+    const pending = await listPendingOps(identity.shopId);
+    let pushed = 0;
+    if (pending.length > 0 && (await client.push(identity.shopId, pending))) {
+      await markOpsSynced(pending.map((o) => o.id));
+      pushed = pending.length;
+    }
+
+    const remote = await client.pull(identity.shopId, identity.deviceId);
+    const foreign: SyncOp[] = [];
+    let skipped = 0;
+    let announceApplied = 0;
+
+    // Know which devices are already paired BEFORE processing announces
+    const knownBefore = new Set(
+      (await getDB().paired_devices.where("shop_id").equals(identity.shopId).toArray()).map(
+        (d) => d.id,
+      ),
+    );
+    let newcomerAnnounced = false;
+
+    for (const op of remote) {
+      if (op.device_id === identity.deviceId) {
+        skipped++;
+        continue;
+      }
+      // Une approbation qui NOUS vise ne crée pas de fiche de soi-même : seul le registre
+      // des pairs est concerné par cette décision, et il ne s'y enregistre pas lui-même.
+      if (op.type === "device.approve" && op.entity_id === identity.deviceId) {
+        skipped++;
+        continue;
+      }
+      // NOUVEAU : gérer l'annonce d'un nouvel appareil (employé)
+      if (op.type === "device.announce") {
+        await handleDeviceAnnounce(op.payload as DeviceAnnouncePayload);
+        // Check if this is a new device (not already paired before we started)
+        if (!knownBefore.has(op.entity_id)) {
+          newcomerAnnounced = true;
+        }
+        announceApplied++;
+        continue;
+      }
+      foreign.push(op);
+    }
+
+    // Import « stock du propriétaire » demandé par un écran du groupe : le membre principal
+    // répond en poussant un instantané ABSOLU du catalogue vivant (stock courant). Ne
+    // réagir qu'à une demande PAS ENCORE consommée (`processed_ops`) : `foreign` contient
+    // toutes les ops du relais, y compris celles déjà rejouées aux cycles précédents.
+    const pendingRequests = await Promise.all(
+      foreign
+        .filter((op) => op.type === "catalogue.request")
+        .map((op) => getDB().processed_ops.get(op.id)),
+    );
+    const catalogRequested = pendingRequests.some((row) => !row);
+    const { applied } = await applyRemoteOps(foreign);
+    if (identity.role !== "employee" && (newcomerAnnounced || catalogRequested)) {
+      const db = getDB();
+      const last = Number((await db.settings.get(KEY_LAST_SNAPSHOT))?.value ?? 0);
+      if (Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
+        await emitCatalogSnapshot(identity);
+        await db.settings.put({ key: KEY_LAST_SNAPSHOT, value: Date.now() });
+      }
+    }
+    // Publication continue (rôle non-employé) : si le catalogue local vient de changer —
+    // le nôtre ou celui que les pairs nous ont fait appliquer ci-dessus — on republie un
+    // instantané ABSOLU au relais, dans la même rotation. L'écran employé qui importera son
+    // stock le tirera directement, même si ce téléphone est déjà éteint.
+    await publishFreshCatalog(client, identity);
+    return { pushed, applied: applied + announceApplied, skipped, remote: foreign.length };
+  } finally {
+    release();
   }
-  // Publication continue (rôle non-employé) : si le catalogue local vient de changer —
-  // le nôtre ou celui que les pairs nous ont fait appliquer ci-dessus — on republie un
-  // instantané ABSOLU au relais, dans la même rotation. L'écran employé qui importera son
-  // stock le tirera directement, même si ce téléphone est déjà éteint.
-  await publishFreshCatalog(client, identity);
-  return { pushed, applied: applied + announceApplied, skipped, remote: foreign.length };
 }
 
 /** Signature stable du catalogue local : les champs qui suffisent à décider « le stock
