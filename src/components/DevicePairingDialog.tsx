@@ -197,7 +197,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             app: "ecaisse" as const,
             url: getOrchestratorUrl() ?? "",
             token,
-            name: profile?.accountName || profile?.storeName || prefs.workspaceName || "",
+            name: prefs.workspaceName || profile?.storeName || profile?.accountName || "",
             // `||` (pas `??`) : accountPhone peut être défini à "" (compte créé sans saisie) —
             // un `??` garderait la chaîne vide et l'écran scanné partirait SANS compte,
             // donc sans groupe partagé (stock jamais reçu, import « n'attachée à aucun compte »).
@@ -369,7 +369,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
               <p className="text-xs text-muted-foreground text-center">
                 Ce code donne l'accès à la boutique{" "}
                 <span className="font-medium text-foreground">
-                  {profile?.storeName || profile?.accountName}
+                  {getPreferences().workspaceName || profile?.storeName || profile?.accountName}
                 </span>{" "}
                 ({profile?.accountPhone || profile?.phone}). L'employé le scanne, entre son nom, et
                 reçoit le stock, les ventes et la caisse via le relais. Ne le montrez qu'à vos

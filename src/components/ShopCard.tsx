@@ -3,7 +3,7 @@
 // (IndexedDB, poussé à l'orchestrateur) ET les préférences (localStorage : en-tête,
 // accueil). La synchronisation est automatique.
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Building2, MapPin, Phone, Save, UserRound } from "lucide-react";
 import { getShopProfile, saveShopProfile } from "@/lib/db";
@@ -18,6 +18,7 @@ export function ShopCard() {
     queryKey: ["shop_profile"],
     queryFn: getShopProfile,
   });
+  const queryClient = useQueryClient();
 
   // Champs d'identité : préremplis depuis le profil, avec repli sur les préférences
   // (installations existantes où « Espace de travail » était la seule source saisie).
@@ -56,6 +57,10 @@ export function ShopCard() {
       phone: trimmedPhone,
       quarter: trimmedLocation,
     });
+    // Rafraîchit les lecteurs de l'identité boutique : l'en-tête (["preferences"],
+    // staleTime Infinity) et les QR de partage / commandes (["shop_profile"]).
+    queryClient.invalidateQueries({ queryKey: ["shop_profile"] });
+    queryClient.invalidateQueries({ queryKey: ["preferences"] });
     toast.success("Établissement enregistré");
   }
 
