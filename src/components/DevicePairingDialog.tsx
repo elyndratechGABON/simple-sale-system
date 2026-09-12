@@ -27,7 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { buildPairingPayload } from "@/lib/pairing";
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import { getPreferences } from "@/lib/settings";
 import { getAccountQuota } from "@/lib/gatekeeper";
@@ -41,7 +40,6 @@ import { listPairedDevices } from "@/lib/syncengine/peers";
 import {
   announceDevice,
   approveDevice,
-  clearPairingCode,
   enterPairingCode,
   generatePairingCode,
   getActivePairingCode,
@@ -64,8 +62,6 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   const [enteredCode, setEnteredCode] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
-  // Rôle assigné par le propriétaire au futur appareil (inscrit dans le QR).
-  const [shareRole, setShareRole] = useState<DeviceRole>("employee");
 
   const { data: profile } = useQuery({
     queryKey: ["shop_profile"],
@@ -88,18 +84,23 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     enabled: open && Boolean(identity),
   });
 
-  const hasAccount = Boolean(profile?.accountPhone && profile.accountPassword);
-  const hasKeywordOnly = Boolean(profile?.accountKeyword) && !hasAccount;
-  const hasAnyAccount = hasAccount || hasKeywordOnly;
+  const hasNamePhone = Boolean(
+    profile?.accountPhone && (profile?.accountName || profile?.storeName),
+  );
+  // Identifiants complets (téléphone + mot de passe) : seuls ceux qui les détiennent
+  // voient la fiche « Compte marchand » avec le mot de passe.
+  const hasCredentials = Boolean(profile?.accountPhone && profile.accountPassword);
+  const hasKeywordOnly = Boolean(profile?.accountKeyword) && !hasCredentials;
+  const hasAnyAccount = hasNamePhone || hasKeywordOnly;
   const atCapacity = quota ? quota.deviceCount >= quota.maxDevices : false;
   const isOwner = identity?.role === "owner";
   const pending = (peers ?? []).filter((p) => p.status === "pending");
   const pairedCount = (peers ?? []).filter((p) => p.status !== "pending").length;
   const minutesLeft = codeExpiry ? Math.max(0, Math.ceil((codeExpiry - Date.now()) / 60_000)) : 0;
 
-  // Génération paresseuse : seulement quand le dialogue s'ouvre avec un compte.
+  // Génération paresseuse : seulement quand le dialogue s'ouvre avec un compte connu.
   useEffect(() => {
-    if (!open || !hasAccount) return;
+    if (!open || !hasNamePhone) return;
     let cancelled = false;
     setQrError(false);
     void (async () => {
@@ -117,7 +118,8 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
         }
         if (cancelled) return;
         // Jeton de partage : frappe au relais (pas de mot de passe dans le QR).
-        // Si le relais est inaccessible, on revient au QR classique (compat).
+        // Si le relais est inaccessible, aucun QR n'est émis : le mot de passe ne
+        // doit JAMAIS se retrouver dans un QR.
         let token = null;
         try {
           const relayUrl = (
@@ -144,14 +146,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             token = mintData.token;
           }
         } catch {
-          /* relay hors ligne → fallback QR classic */
+          /* relay hors ligne → pas de token → aucun QR émis (jamais de mot de passe) */
         }
         let text: string | null = null;
-        if (!token && pairCode) {
-          // fallback : QR ancien (compat) — le mot de passe reste sur cet écran
-          const legacy = await buildPairingPayload(shareRole);
-          if (legacy) text = legacy;
-        } else if (token && pairCode) {
+        if (token && pairCode) {
           // QR du jeton (v2) : pas de password, juste le token + pair_code + role=employee.
           // La copie boutique (shop) part TOUJOURS : l'employé doit recevoir le vrai nom de
           // la boutique (sinon il reste "Ma boutique"). storeName : le `workspaceName`
@@ -187,7 +185,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           };
           text = JSON.stringify(payload);
         }
-        if (!text) throw new Error("no-payload");
+        if (!text) throw new Error("relay-required");
         const { default: QRCode } = await import("qrcode");
         const url = await QRCode.toDataURL(text, {
           width: 512,
@@ -202,7 +200,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     return () => {
       cancelled = true;
     };
-  }, [open, hasAccount, pairCode, shareRole]);
+  }, [open, hasNamePhone, pairCode]);
 
   // Code de paire : recharger le code actif (et son expiration) à chaque ouverture.
   useEffect(() => {
@@ -224,20 +222,6 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   useEffect(() => {
     if (identity) setEmployeeName(identity.employeeName);
   }, [identity]);
-
-  async function togglePairCode() {
-    if (pairCode) {
-      await clearPairingCode();
-      setPairCode(null);
-      setCodeExpiry(null);
-      return;
-    }
-    const code = await generatePairingCode();
-    setPairCode(code);
-    setCodeExpiry(await pairCodeExpiry());
-    await announceDevice().catch(() => {});
-    toast.success("Code de paire affiché — valable 10 minutes.");
-  }
 
   async function submitPairCode() {
     const result = await enterPairingCode(enteredCode);
@@ -282,7 +266,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           </DialogDescription>
         </DialogHeader>
 
-        {hasAccount ? (
+        {hasNamePhone ? (
           <div className="space-y-4">
             {quota && (
               <div className="flex items-center justify-between rounded-lg border bg-accent/50 px-3 py-2">
@@ -321,8 +305,9 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                   className="aspect-square h-56 max-w-full rounded-lg object-contain"
                 />
               ) : qrError ? (
-                <p className="text-sm text-muted-foreground py-16">
-                  Impossible de générer le code QR.
+                <p className="px-2 py-16 text-center text-sm text-muted-foreground">
+                  Relais injoignable : aucun QR ne peut être émis. Le mot de passe n'est jamais
+                  envoyé dans un QR — revenez quand le réseau est disponible.
                 </p>
               ) : (
                 <div className="flex aspect-square h-56 w-full max-w-[224px] items-center justify-center rounded-lg border border-dashed">
@@ -338,17 +323,17 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             </div>
 
             <p className="text-xs text-muted-foreground">
-              L'employé scanne le QR ou, s'il ne peut pas, entre le code de paire ci-dessous. Aucun
-              mot de passe n'est demandé — le jeton de partage le remplace.
+              Ce QR ne contient aucun mot de passe : un jeton de partage + le code temporaire. Sur
+              son écran, l'employé saisit son nom puis le mot de passe temporaire ci-dessous.
             </p>
           </div>
         ) : profile?.accountKeyword ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             Cet écran a rejoint le compte{" "}
             <span className="font-medium text-foreground">par mot clé de récupération</span> : il
-            n'a pas le téléphone ni le mot de passe du compte, que le QR transporte. Pour ajouter
-            une autre caisse, communiquez-le lui le mot clé reçu à la création (Paramètres →
-            Appareils → « Téléphone perdu, ou plus de mot de passe ? »).
+            n'a pas le téléphone ni le nom du compte, que le QR transporte. Depuis un écran qui
+            détient le compte (téléphone + mot de passe), ouvrez ici « Ajouter un appareil » pour
+            partager le code QR.
           </p>
         ) : (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -362,23 +347,15 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             {isOwner && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Le code de paire est valable 10 minutes. L'employé scanne le QR, entre son nom, et
+                  L'employé scanne le QR, entre son nom puis le mot de passe temporaire ci-dessous :
                   il est ajouté à la boutique.
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void togglePairCode()}
-                  className="w-full"
-                >
-                  {pairCode ? "Masquer le code de paire" : "Afficher le code de paire"}
-                </Button>
                 {pairCode && (
-                  <div className="mt-2 rounded-lg border border-dashed bg-accent/40 py-3 text-center">
+                  <div className="rounded-lg border border-dashed bg-accent/40 py-3 text-center">
                     <p className="font-mono text-3xl font-bold tracking-[0.3em]">{pairCode}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      À saisir si l'employé ne peut pas scanner. Valable {minutesLeft} min.
+                      Mot de passe temporaire, valable {minutesLeft} min — à saisir par l'employé
+                      sous son nom.
                     </p>
                   </div>
                 )}

@@ -172,7 +172,13 @@ async function assetHandler(request) {
 
   try {
     const res = await fetch(request);
-    if (res.ok && res.type === "basic") {
+    // Un asset n'est JAMAIS du HTML. Pendant un redéploiement Vercel, une URL d'asset pas
+    // encore en ligne est réécrite vers /index.html → réponse 200 text/html. La cacher sous
+    // la clé de l'asset l'empoisonnerait pour la durée du cache (immutable) : MIME errors à
+    // chaque rechargement. On la laisse passer (le navigateur verra son échec) mais on ne
+    // la stocke PAS.
+    const isAsset = res.ok && res.type === "basic" && !isHtmlResponse(res);
+    if (isAsset) {
       await cache.put(request, res.clone());
     }
     return res;
@@ -181,6 +187,10 @@ async function assetHandler(request) {
     // vide traitée comme un succès.
     return new Response("", { status: 504 });
   }
+}
+
+function isHtmlResponse(res) {
+  return /^text\/html/i.test(res.headers.get("content-type") || "");
 }
 
 // ── Push notifications ────────────────────────────────────────────────────────

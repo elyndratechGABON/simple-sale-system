@@ -36,7 +36,7 @@ import { formatDateShort, formatExperienceDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
-import { enterPairingCode } from "@/lib/syncengine/pairing";
+import { enterPairingCode, normPairCode } from "@/lib/syncengine/pairing";
 import {
   ensureIdentity,
   setIdentityEmployeeName,
@@ -77,6 +77,8 @@ function WelcomePage() {
   const [scanningJoin, setScanningJoin] = useState(false);
   const [showEmployeeNameModal, setShowEmployeeNameModal] = useState(false);
   const [employeeNameInput, setEmployeeNameInput] = useState("");
+  const [pairCodeInput, setPairCodeInput] = useState("");
+  const [scannedPairCode, setScannedPairCode] = useState<string | undefined>();
 
   function startCreate() {
     setJoinCreds(null);
@@ -143,12 +145,11 @@ function WelcomePage() {
       // 4. Force le rôle employé et le groupe P2P au scan.
       await setIdentityRole("employee");
       await refreshShopId();
-      // 5. Annonce P2P avec le code du QR (ou du relais).
-      if (pairCode) {
-        await enterPairingCode(pairCode);
-      }
-      // 6. Ouvre un modal pour demander le nom de l'employé.
+      // 5. Se souvient du code du QR (ou du relais) pour valider la saisie de l'employé.
+      setScannedPairCode(pairCode);
+      // 6. Ouvre un modal : nom + mot de passe temporaire (le code affiché sous le QR).
       setEmployeeNameInput("");
+      setPairCodeInput("");
       setShowEmployeeNameModal(true);
     } catch {
       toast.error("Caméra indisponible — réessayez.");
@@ -173,9 +174,24 @@ function WelcomePage() {
   }
 
   async function submitEmployeeName() {
-    if (!employeeNameInput.trim()) return;
-    await setIdentityEmployeeName(employeeNameInput.trim());
-    toast.success(`Bienvenue ${employeeNameInput.trim()} — boutique synchronisée.`);
+    const name = employeeNameInput.trim();
+    const code = normPairCode(pairCodeInput);
+    if (!name) return;
+    if (code.length !== 6) {
+      toast.error("Saisissez le mot de passe temporaire (6 caractères, sous le QR).");
+      return;
+    }
+    if (scannedPairCode && normPairCode(scannedPairCode) !== code) {
+      toast.error("Ce code ne correspond pas à celui affiché par le propriétaire.");
+      return;
+    }
+    const result = await enterPairingCode(code);
+    if (result === "invalid") {
+      toast.error("Code invalide — vérifiez-le auprès du propriétaire.");
+      return;
+    }
+    await setIdentityEmployeeName(name);
+    toast.success(`Bienvenue ${name} — boutique synchronisée.`);
     savePreferences({ onboarded: true, onboardingCompleted: true });
     qc.invalidateQueries({ queryKey: ["preferences"] });
     setShowEmployeeNameModal(false);
@@ -347,11 +363,31 @@ function WelcomePage() {
                   className="h-12 text-base"
                   autoFocus
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && employeeNameInput.trim()) {
+                    if (e.key === "Enter") {
                       submitEmployeeName();
                     }
                   }}
                 />
+              </div>
+              <div>
+                <Label htmlFor="emp-code">Mot de passe temporaire (sous le QR)</Label>
+                <Input
+                  id="emp-code"
+                  value={pairCodeInput}
+                  onChange={(e) => setPairCodeInput(e.target.value)}
+                  placeholder="6 caractères"
+                  className="h-12 text-base font-mono tracking-widest"
+                  autoComplete="off"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      submitEmployeeName();
+                    }
+                  }}
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Le code de 6 caractères visible sur le téléphone du propriétaire, en dessous de
+                  son code QR.
+                </p>
               </div>
               <div className="flex gap-2">
                 <Button
@@ -364,7 +400,7 @@ function WelcomePage() {
                 <Button
                   className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
                   onClick={submitEmployeeName}
-                  disabled={!employeeNameInput.trim()}
+                  disabled={!employeeNameInput.trim() || normPairCode(pairCodeInput).length !== 6}
                 >
                   Valider
                 </Button>

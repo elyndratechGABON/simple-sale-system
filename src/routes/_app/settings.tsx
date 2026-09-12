@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   BadgeCheck,
   ChefHat,
-  ChevronDown,
   CreditCard,
   CupSoda,
   Download,
@@ -18,8 +17,6 @@ import {
   EyeOff,
   FolderOpen,
   Info,
-  KeyRound,
-  Link2,
   MessageCircle,
   MonitorSmartphone,
   Pencil,
@@ -27,7 +24,6 @@ import {
   QrCode,
   Save,
   Scissors,
-  ScanLine,
   ShoppingBag,
   Shirt,
   Sparkles,
@@ -46,8 +42,6 @@ import { ACTIVE_CLUSTERS, savePreferences, type Preferences } from "@/lib/settin
 import { usePreferences } from "@/hooks/use-preferences";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
-import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
-import { parsePairingPayload, applyPairingShop } from "@/lib/pairing";
 import {
   buildPaymentConfirmedWhatsappUrl,
   clearPaymentConfirmationPending,
@@ -89,8 +83,6 @@ import {
   deleteShopRemote,
   getAccountQuota,
   getSubscriptionRequest,
-  handshake,
-  joinByKeyword,
   resetGatekeeper,
 } from "@/lib/gatekeeper";
 import { DevicePairingDialog } from "@/components/DevicePairingDialog";
@@ -114,7 +106,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -469,8 +460,9 @@ function BusinessCard() {
 
 /**
  * Appareils du compte marchand : quota renvoyé par le dernier handshake et QR
- * d'appairage pour rattacher un nouvel écran. Le bouton n'ouvre le dialogue que
- * lorsque l'appareil connaît un compte (créé ou rejoint à l'onboarding).
+ * d'appairage pour rattacher un nouvel écran. Le bouton ouvre toujours le dialogue
+ * « Ajouter un appareil » — l'écran n'a besoin que du compte du compte marchand
+ * (téléphone + nom) pour émettre le QR, même sans détenir le mot de passe.
  */
 function DevicesCard() {
   const qc = useQueryClient();
@@ -517,129 +509,9 @@ function DevicesCard() {
   }, [request?.status, paymentPending]);
 
   const hasAccount = Boolean(profile?.accountPhone && profile.accountPassword);
-  // Écran « mots clé uniquement » (téléphone perdu) : rattaché au compte sans détenir
-  // téléphone+mot de passe → il ne peut pas fabriquer de QR d'appairage, mais le
-  // dialogue « Ajouter un appareil » doit s'ouvrir pour l'expliquer (chemin mot clé).
-  const hasKeywordOnly = Boolean(profile?.accountKeyword) && !hasAccount;
 
-  // Rattachement manuel : le serveur connaît déjà cet écran (le quota s'affiche) mais
-  // la fiche locale n'a pas d'identifiants de compte — cas des écrans rattachés par
-  // migration ou fusion, dont le mot de passe généré ne connaît qu'eux. Le serveur
-  // accepte la réclamation car ce device_id est déjà membre du compte visé.
-  const [claimPhone, setClaimPhone] = useState("");
-  const [claimPassword, setClaimPassword] = useState("");
-  // Nom du COMPTE du principal (lu dans le QR, `data.name` = `accountName`) — PAS l'enseigne.
-  // Il entre dans le calcul du `shopId` P2P : le réutiliser aligne la nouvelle caisse sur le
-  // groupe du propriétaire, sinon elle dérive un `shopId` différent et ne se rencontre jamais.
-  const [claimName, setClaimName] = useState("");
-  const [claiming, setClaiming] = useState(false);
   // Afficher/masquer le mot de passe du compte dans la fiche « Compte marchand ».
   const [showAccountPassword, setShowAccountPassword] = useState(false);
-
-  // Scan du QR d'appairage : même parcours que l'onboarding « Rejoindre », proposé
-  // ici aux écrans ajoutés APRÈS la création du compte. La caméra ne s'arme que sur
-  // le clic du bouton dédié (geste frais = prompt d'autorisation au bon moment).
-  const { scanning, startScan } = useBarcodeScanner();
-
-  async function scanPairingQr() {
-    try {
-      const raw = await startScan();
-      if (raw === null) return;
-      const parsed = parsePairingPayload(raw);
-      if (!parsed) {
-        toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
-        return;
-      }
-      setClaimPhone(parsed.phone);
-      setClaimPassword(parsed.password);
-      setClaimName(parsed.name);
-      // Copie intégrale de la boutique scannée (identité + type de boutique) : on écrase
-      // la fiche locale — le rattachement qui suit synchronise vers l'orchestrateur.
-      const applied = await applyPairingShop(parsed.shop);
-      // Rafraîchir immédiatement l'en-tête et la fiche : `usePreferences` a un staleTime
-      // infini — sans invalidation, l'ancien nom de boutique resterait affiché.
-      await qc.invalidateQueries({ queryKey: ["preferences"] });
-      await qc.invalidateQueries({ queryKey: ["shop_profile"] });
-      toast.success(
-        applied
-          ? `Compte « ${parsed.name || parsed.phone} » récupéré — copie de la boutique appliquée, vérifiez puis rattachez.`
-          : `Compte « ${parsed.name || parsed.phone} » récupéré — vérifiez puis rattachez.`,
-      );
-    } catch {
-      toast.error("Caméra indisponible — saisissez le téléphone et le mot de passe à la main.");
-    }
-  }
-
-  async function claimAccount() {
-    const phone = claimPhone.trim();
-    const password = claimPassword.trim();
-    if (!phone || !password) {
-      toast.error("Renseignez le téléphone et le mot de passe du compte marchand.");
-      return;
-    }
-    setClaiming(true);
-    try {
-      await setShopAccount({
-        name: claimName.trim() || (profile?.storeName ?? ""),
-        phone,
-        password,
-      });
-      const result = await handshake();
-      if (result.ok) {
-        toast.success("Écran rattaché au compte marchand.");
-        setClaimPassword("");
-        await qc.invalidateQueries({ queryKey: ["preferences"] });
-        await qc.invalidateQueries({ queryKey: ["shop_profile"] });
-        await qc.invalidateQueries({ queryKey: ["account_quota"] });
-        await qc.invalidateQueries({ queryKey: ["subscription_request"] });
-      } else if (result.reason === "account_password") {
-        toast.error("Téléphone ou mot de passe incorrect.");
-      } else {
-        toast.error("Serveur injoignable — réessayez une fois le réseau revenu.");
-      }
-    } finally {
-      setClaiming(false);
-    }
-  }
-
-  // Voie « mot clé de récupération » : téléphone perdu, ou compte visible au tableau de
-  // bord sans identifiants. La validation est portée par le serveur (mot clé) ; hors ligne,
-  // la réclamation reste posée et GatekeeperAlerts l'annonce (bandeau « 48 h »).
-  const [claimKeyword, setClaimKeyword] = useState("");
-  const [claimKeywordOwner, setClaimKeywordOwner] = useState("");
-  const [joiningKeyword, setJoiningKeyword] = useState(false);
-  // Chemin de secours replié par défaut : réservé au téléphone perdu, il n'a rien à faire
-  // en permanence dans le flux principal de rattachement.
-  const [keywordOpen, setKeywordOpen] = useState(false);
-
-  async function joinWithKeyword() {
-    const keyword = claimKeyword.trim().toUpperCase();
-    const storeName = profile?.storeName?.trim() ?? "";
-    const ownerName = claimKeywordOwner.trim() || (profile?.ownerName?.trim() ?? "");
-    if (!keyword) {
-      toast.error("Saisissez le mot clé reçu à la création du compte (format XXXX-XXXX).");
-      return;
-    }
-    setJoiningKeyword(true);
-    try {
-      const result = await joinByKeyword({ storeName, ownerName, keyword });
-      if (result.status === "verified") {
-        toast.success("Compte vérifié — écran rattaché au compte marchand.");
-        setClaimKeyword("");
-        await qc.invalidateQueries({ queryKey: ["shop_profile"] });
-        await qc.invalidateQueries({ queryKey: ["account_quota"] });
-        await qc.invalidateQueries({ queryKey: ["subscription_request"] });
-      } else if (result.status === "blocked") {
-        toast.error("Mot clé invalide : aucun compte ne correspond. Vérifiez vos informations.");
-      } else {
-        toast.info(
-          "Serveur injoignable — la vérification reprendra automatiquement au retour du réseau (48 h max).",
-        );
-      }
-    } finally {
-      setJoiningKeyword(false);
-    }
-  }
 
   return (
     <Card>
@@ -648,9 +520,8 @@ function DevicesCard() {
           <MonitorSmartphone className="h-4 w-4" /> Appareils
         </CardTitle>
         <CardDescription>
-          {hasAccount
-            ? "Rattachez une deuxième ou troisième caisse au même compte : scannez le code QR sur le nouvel écran."
-            : "Rejoignez un compte marchand pour partager votre abonnement entre plusieurs caisses."}
+          Partager votre abonnement entre plusieurs caisses : l'une montre le code QR, les autres le
+          scannent depuis l'écran « Rejoindre via code QR ».
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -721,115 +592,6 @@ function DevicesCard() {
           </div>
         )}
 
-        {!hasAccount && (
-          <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
-            {/* Chemin primaire : scanner le QR d'une caisse abonnée (même parcours
-                que l'onboarding « Rejoindre ») — la saisie manuelle reste en repli. */}
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              disabled={scanning}
-              onClick={() => void scanPairingQr()}
-            >
-              <ScanLine className="h-4 w-4 mr-2" />
-              {scanning ? "Caméra active…" : "Scanner le QR d'une caisse abonnée"}
-            </Button>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="claim-phone">Téléphone du compte</Label>
-                <Input
-                  id="claim-phone"
-                  type="tel"
-                  value={claimPhone}
-                  onChange={(e) => setClaimPhone(e.target.value)}
-                  placeholder="Ex : +241 06 123 456"
-                  autoComplete="tel"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="claim-password">Mot de passe du compte</Label>
-                <Input
-                  id="claim-password"
-                  type="password"
-                  value={claimPassword}
-                  onChange={(e) => setClaimPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
-            <Button variant="outline" disabled={claiming} onClick={() => void claimAccount()}>
-              <Link2 className="h-4 w-4 mr-2" />
-              {claiming ? "Rattachement…" : "Rattacher cet écran au compte"}
-            </Button>
-
-            <Collapsible
-              open={keywordOpen}
-              onOpenChange={setKeywordOpen}
-              className="border-t border-border/60 pt-3"
-            >
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-2 text-sm font-medium"
-                >
-                  <span className="flex items-center gap-2">
-                    <KeyRound className="h-4 w-4" /> Téléphone perdu, ou plus de mot de passe ?
-                  </span>
-                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Rejoignez le compte avec le mot clé reçu à la création (affiché une seule fois).
-                  Saisissez le nom de la boutique, le propriétaire et le mot clé.
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="claim-kw-store">Nom de la boutique</Label>
-                    <Input
-                      id="claim-kw-store"
-                      value={profile?.storeName ?? ""}
-                      readOnly
-                      className="bg-muted/40 text-muted-foreground"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="claim-kw-owner">Nom du propriétaire</Label>
-                    <Input
-                      id="claim-kw-owner"
-                      value={claimKeywordOwner}
-                      onChange={(e) => setClaimKeywordOwner(e.target.value)}
-                      placeholder={profile?.ownerName?.trim() || "Ex : Jean-Marc"}
-                    />
-                  </div>
-                </div>
-                <div className="mt-3 space-y-1.5">
-                  <Label htmlFor="claim-kw">Mot clé de récupération</Label>
-                  <Input
-                    id="claim-kw"
-                    value={claimKeyword}
-                    onChange={(e) => setClaimKeyword(e.target.value.toUpperCase())}
-                    placeholder="XXXX-XXXX"
-                    className="font-mono tracking-widest"
-                    autoComplete="off"
-                  />
-                </div>
-                <Button
-                  variant="outline"
-                  className="mt-3"
-                  disabled={joiningKeyword}
-                  onClick={() => void joinWithKeyword()}
-                >
-                  <KeyRound className="h-4 w-4 mr-2" />
-                  {joiningKeyword ? "Vérification…" : "Rejoindre avec ce mot clé"}
-                </Button>
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-        )}
-
         {identity && (
           <div className="space-y-2 rounded-xl border bg-muted/30 p-4">
             <div className="flex items-center justify-between">
@@ -886,7 +648,7 @@ function DevicesCard() {
           </div>
         )}
 
-        <Button onClick={() => setPairingOpen(true)} disabled={!hasAccount && !hasKeywordOnly}>
+        <Button onClick={() => setPairingOpen(true)}>
           <QrCode className="h-4 w-4 mr-2" />
           {hasAccount ? "Ajouter un appareil" : "Rejoindre un compte"}
         </Button>
