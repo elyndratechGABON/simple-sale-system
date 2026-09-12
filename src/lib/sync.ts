@@ -33,7 +33,12 @@ import { blessEmployeeDevice, handshake, syncData, type HandshakeResult } from "
 import { ensureIdentity, isSharedGroup } from "@/lib/syncengine/identity";
 import { listPairedDevices } from "@/lib/syncengine/peers";
 import { purgeSyncedOps } from "@/lib/syncengine/outbox";
-import { exchangeOps, relayTransport, type SyncState } from "@/lib/syncengine/transport";
+import {
+  exchangeOps,
+  emitCatalogRequest,
+  relayTransport,
+  type SyncState,
+} from "@/lib/syncengine/transport";
 
 /** Adresse de l'orchestrateur. Compilée au build via VITE_ORCHESTRATOR_URL, sinon le domaine de l'app. */
 export function getOrchestratorUrl(): string {
@@ -213,10 +218,12 @@ export async function syncNow(): Promise<HandshakeResult> {
 
 /**
  * Import MANUEL du catalogue propriétaire (bouton « Importer le stock du propriétaire »
- * sur l'écran employé) : force le cycle d'échange du groupe — pull des ops du relais
- * (instantané catalogue, créations/MAJ produits) et application — puis compte les
- * produits présents en caisse. Rien de plus que ce que fait la synchro d'arrière-plan,
- * mais immédiat et avec un retour pour l'UI.
+ * sur l'écran employé). Passe PAR LE RELAIS — jamais l'orchestrateur :
+ *  1. l'écran émet une demande d'instantané FRIS → le principal répond à son prochain
+ *     cycle d'échange (un propriétaire en ligne répond en moins de ~20 s) ;
+ *  2. cycles de réception : si le catalogue est déjà au relais (synchro récente du
+ *     propriétaire), le premier pull suffit — retour immédiat. Sinon, on attend la réponse
+ *     (jusqu'à ~48 s) et on s'arrête dès que des produits arrivent.
  */
 export async function importOwnerCatalog(): Promise<{
   ok: boolean;
@@ -230,7 +237,21 @@ export async function importOwnerCatalog(): Promise<{
   if (!isSharedGroup(identity.shopId)) {
     return { ok: false, applied: 0, count: 0 };
   }
-  const state = await runOpsExchange();
-  const count = (await listProducts()).length;
-  return { ok: state !== null, applied: state?.applied ?? 0, count };
+
+  await emitCatalogRequest(identity);
+
+  let lastApplied = 0;
+  let count = 0;
+  for (let i = 0; i < 13; i++) {
+    const state = await runOpsExchange();
+    if (state) lastApplied = state.applied;
+    count = (await listProducts()).length;
+    if (count > 0) break;
+    if (i > 0) await sleep(4000);
+  }
+  return { ok: count > 0, applied: lastApplied, count };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

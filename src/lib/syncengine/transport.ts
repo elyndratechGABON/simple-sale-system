@@ -28,7 +28,18 @@ import { emitOp } from "./ops";
 import { listPendingOps, markOpsSynced } from "./outbox";
 import { getDB, listProducts } from "../db";
 import { getPreferences } from "../settings";
-import type { CatalogueSnapshotPayload, SyncIdentity, SyncOp } from "./types";
+import type {
+  CatalogueRequestPayload,
+  CatalogueSnapshotPayload,
+  SyncIdentity,
+  SyncOp,
+} from "./types";
+
+/** Une caisse qui importe le stock propriétaire ne doit pas faire répondre le propriétaire
+ *  plus d'une fois par fenêtre : le relais rend la dernière op de toute façon, un rebouclage
+ *  d'instantanés serait du bruit inutile. */
+const SNAPSHOT_THROTTLE_MS = 20_000;
+const KEY_LAST_SNAPSHOT = "syncengine_last_snapshot_at";
 
 /** La bouche d'entrée/sortie d'un canal d'échange. Remplaçable inconditionnellement. */
 export interface TransportClient {
@@ -92,11 +103,43 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
   const newcomerAnnounced = foreign.some(
     (op) => op.type === "device.announce" && !known.has(op.entity_id),
   );
+  // Import « stock du propriétaire » demandé par un écran du groupe : le membre principal
+  // répond en poussant un instantané ABSOLU du catalogue vivant (stock courant). Ne
+  // réagir qu'à une demande PAS ENCORE consommée (`processed_ops`) : `foreign` contient
+  // toutes les ops du relais, y compris celles déjà rejouées aux cycles précédents.
+  const pendingRequests = await Promise.all(
+    foreign
+      .filter((op) => op.type === "catalogue.request")
+      .map((op) => getDB().processed_ops.get(op.id)),
+  );
+  const catalogRequested = pendingRequests.some((row) => !row);
   const { applied } = await applyRemoteOps(foreign);
-  if (newcomerAnnounced && identity.role !== "employee") {
-    await emitCatalogSnapshot(identity);
+  if (identity.role !== "employee" && (newcomerAnnounced || catalogRequested)) {
+    const db = getDB();
+    const last = Number((await db.settings.get(KEY_LAST_SNAPSHOT))?.value ?? 0);
+    if (Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
+      await emitCatalogSnapshot(identity);
+      await db.settings.put({ key: KEY_LAST_SNAPSHOT, value: Date.now() });
+    }
   }
   return { pushed, applied, skipped, remote: foreign.length };
+}
+
+/**
+ * Un écran demande l'instantané FRIS du catalogue du groupe : l'import du stock du
+ *  propriétaire de son côté (« Importer le stock du propriétaire »). Article jetable —
+ *  même `entity_id` (deviceId demandeur) — transporté par le relais, jamais l'orchestrateur ;
+ *  le principal répond à son prochain cycle d'échange (20 s). */
+export async function emitCatalogRequest(identity: SyncIdentity): Promise<void> {
+  const db = getDB();
+  const payload: CatalogueRequestPayload = { requester_id: identity.deviceId };
+  await db.transaction("rw", db.sync_ops, db.settings, async () => {
+    await emitOp(db, identity, {
+      type: "catalogue.request",
+      entity_id: identity.deviceId,
+      payload,
+    });
+  });
 }
 
 /** Instantané du catalogue vivant, émis pour un écran qui vient de rejoindre le groupe. */

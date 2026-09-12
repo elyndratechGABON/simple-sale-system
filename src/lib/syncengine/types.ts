@@ -36,7 +36,8 @@ export type OpType =
   | "category.created"
   | "device.announce"
   | "device.approve"
-  | "catalogue.snapshot";
+  | "catalogue.snapshot"
+  | "catalogue.request";
 
 /** Une opération du journal. Idempotente : rejouée, elle ne doit produire qu'UN effet. */
 export interface SyncOp {
@@ -153,6 +154,13 @@ export interface DeviceApprovePayload {
 export interface CatalogueSnapshotPayload {
   products: import("@/lib/db").Product[];
   shop?: { storeName: string; ownerName?: string };
+}
+
+/** Demande d'un instantané FRIS du catalogue : émise par l'écran qui importe le stock du
+ *  propriétaire (« Importer le stock du propriétaire ») ; le propriétaire répond à son
+ *  prochain cycle d'échange (via relais, sans dépendre de l'orchestrateur). */
+export interface CatalogueRequestPayload {
+  requester_id: string;
 }
 
 /** Clés de persistence de l'appairage P2P — partagées entre `db.ts` et `syncengine/pairing.ts`. */
