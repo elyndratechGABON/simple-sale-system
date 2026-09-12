@@ -111,15 +111,21 @@ export async function announceDevice(pairCode?: string): Promise<void> {
  * Le format est vérifié ici ; la preuve, elle, est administrée chez le principal
  * à l'application de l'annonce (code local, comparé sans jamais être envoyé net).
  */
-export async function enterPairingCode(input: string): Promise<"invalid" | "sent"> {
+export async function enterPairingCode(input: string): Promise<"invalid" | "sent" | "error"> {
   const identity = await ensureIdentity();
   const code = normPairCode(input);
-  // 6 caractères exacts : une saisie plus courte (un « 0/1/I/O » tombé hors du jeu de
+  // 6 caractères exacts : une saisie plus courte (un "0/1/I/O" tombé hors du jeu de
   // caractères) ne peut PAS être une vraie preuve — refuser plutôt que d'annoncer un
   // code tronqué qui laisserait l'appareil `pending` sans erreur.
   if (code.length !== PAIR_CODE_LENGTH || !isSharedGroup(identity.shopId)) return "invalid";
-  await announceDevice(code);
-  return "sent";
+
+  try {
+    await announceDevice(code);
+    return "sent";
+  } catch (err) {
+    console.error("[enterPairingCode] Failed to announce device:", err);
+    return "error";
+  }
 }
 
 /** Normalise une saisie : majuscules, seuls les caractères du jeu restent. */

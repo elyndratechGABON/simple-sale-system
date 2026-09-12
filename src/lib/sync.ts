@@ -257,13 +257,18 @@ export async function importOwnerCatalog(progress?: (phase: ImportPhase) => void
 
   let lastApplied = 0;
   let count = 0;
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 24; i++) {
     const state = await runOpsExchange();
     if (state && state.applied > 0) progress?.("receiving");
     if (state) lastApplied = state.applied;
     count = (await listProducts()).length;
     if (count > 0) break;
     if (i > 0) await sleep(5000);
+  }
+  // Check if we already have products (already synced before)
+  const allProducts = await listProducts();
+  if (allProducts.length > 0) {
+    return { ok: true, applied: lastApplied, count: allProducts.length, cause: undefined };
   }
   return { ok: count > 0, applied: lastApplied, count, cause: count > 0 ? undefined : "timeout" };
 }

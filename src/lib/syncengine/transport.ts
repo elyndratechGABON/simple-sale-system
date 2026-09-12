@@ -55,10 +55,24 @@ async function handleDeviceAnnounce(payload: DeviceAnnouncePayload): Promise<voi
   const db = getDB();
   const now = Date.now();
 
+  // Ensure identity is loaded before accessing shopId
+  let identity;
+  try {
+    identity = await import("./identity").then((m) => m.ensureIdentity());
+  } catch {
+    console.warn("[handleDeviceAnnounce] Identity not loaded, skipping");
+    return;
+  }
+
+  const shopId = identity.shopId;
+
+  if (!shopId || !isSharedGroup(shopId)) {
+    console.warn("[handleDeviceAnnounce] Not in shared group, skipping");
+    return;
+  }
+
   // Récupérer le code de paire actif local (6 caractères, null si expiré/absent)
   const activeCode = await getPairingToken();
-  const identity = getIdentity();
-  const shopId = identity?.shopId ?? "";
 
   // Vérifier si le code reçu est valide et correspond au code actif
   const codeMatches = Boolean(
@@ -128,6 +142,14 @@ export interface SyncState {
 export async function exchangeOps(client: TransportClient): Promise<SyncState> {
   const identity = getIdentity();
   if (!isSharedGroup(identity.shopId)) return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
+
+  // Check if this device is paired (not pending) - skip sync if still pending
+  const db = getDB();
+  const self = await db.paired_devices.get(identity.deviceId);
+  if (self?.status === "pending") {
+    console.warn(`[exchangeOps] Device ${identity.deviceId} is pending, skipping exchange`);
+    return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
+  }
 
   const pending = await listPendingOps(identity.shopId);
   let pushed = 0;
