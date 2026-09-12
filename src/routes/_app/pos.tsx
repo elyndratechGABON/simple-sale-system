@@ -696,7 +696,14 @@ function PosPage() {
     setCart((c) => {
       const cur = c[key];
       const next = (cur?.qty ?? 0) + qty;
-      if (stock !== undefined && next > stock + 1e-9) {
+      if (p.type === "service" || stock === Number.POSITIVE_INFINITY || stock === undefined) {
+        // Service ou stock infini : pas de limite
+        return {
+          ...c,
+          [key]: { qty: next, price, cost, ...(v ? { variant: v.name, variant_id: v.id } : {}) },
+        };
+      }
+      if (next > stock + 1e-9) {
         toast.warning(`Stock insuffisant pour ${p.name}`);
         return c;
       }
