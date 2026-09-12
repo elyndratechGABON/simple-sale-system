@@ -510,6 +510,11 @@ function DevicesCard() {
 
   const hasAccount = Boolean(profile?.accountPhone && profile.accountPassword);
 
+  // Crédit d'écrans LOCAL (offline-first) : 1 = cet écran + les écrans `paired` du groupe.
+  // L'approuvé compte dès qu'il est sur le téléphone du propriétaire ; l'orchestrateur ne
+  // fait que confirmer derrière (rattachement serveur), sans être requis pour le compteur.
+  const localDeviceCount = 1 + (peers ?? []).filter((p) => p.status === "paired").length;
+
   // Afficher/masquer le mot de passe du compte dans la fiche « Compte marchand ».
   const [showAccountPassword, setShowAccountPassword] = useState(false);
 
@@ -525,17 +530,15 @@ function DevicesCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {quota && (
-          <div className="flex items-center justify-between rounded-lg border bg-accent/50 px-3 py-2">
-            <span className="text-sm text-muted-foreground">Places utilisées</span>
-            <Badge
-              variant={quota.deviceCount >= quota.maxDevices ? "destructive" : "secondary"}
-              className="tabular-nums"
-            >
-              {quota.deviceCount} / {quota.maxDevices}
-            </Badge>
-          </div>
-        )}
+        <div className="flex items-center justify-between rounded-lg border bg-accent/50 px-3 py-2">
+          <span className="text-sm text-muted-foreground">Places utilisées</span>
+          <Badge
+            variant={quota && localDeviceCount >= quota.maxDevices ? "destructive" : "secondary"}
+            className="tabular-nums"
+          >
+            {localDeviceCount} / {quota?.maxDevices ?? "—"}
+          </Badge>
+        </div>
 
         {/* Fiche du compte marchand : affichée dès qu'on détient les identifiants
               (créés à l'onboarding ou rattachés). Rend visibles les informations que

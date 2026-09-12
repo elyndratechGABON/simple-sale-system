@@ -43,6 +43,55 @@ export async function getAccountQuota(): Promise<AccountQuota | null> {
 }
 
 /**
+ * Rattache un écran approuvé au compte marchand côté orchestrateur (`/api/v1/account/bless`).
+ * Best-effort : le crédit d'écran vit d'abord localement (`1 + écrans approuvés`) ; cet appel
+ * ne fait que le faire remonter dès que l'orchestrateur répond — il ne bloque jamais l'usage.
+ */
+export async function blessEmployeeDevice(
+  serverDeviceId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!serverDeviceId) {
+    return {
+      ok: false,
+      message: "L'écran ne s'est jamais présenté au serveur (aucune fiche boutique).",
+    };
+  }
+  const profile = await getShopProfile();
+  if (!profile?.accountPhone || !profile?.accountPassword) {
+    return {
+      ok: false,
+      message: "Cet écran n'a pas les identifiants du compte (téléphone + mot de passe).",
+    };
+  }
+  const base = getOrchestratorUrl();
+  if (!base) return { ok: false, message: "Orchestrateur non configuré sur cet écran." };
+  try {
+    const res = await fetch(`${base}/api/v1/account/bless`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        account_phone: profile.accountPhone,
+        account_password: profile.accountPassword,
+        target_device_id: serverDeviceId,
+      }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (res.status === 404) {
+        return {
+          ok: false,
+          message: "L'écran employé doit se connecter au serveur une fois (404 serveur).",
+        };
+      }
+      return { ok: false, message: data?.error ?? `Serveur : ${res.status}.` };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Orchestrateur injoignable — nouvel essai au prochain cycle." };
+  }
+}
+
+/**
  * Dernière demande d'abonnement du compte, telle que le serveur la voit au dernier
  * handshake : « pending » tant que l'admin n'a pas tranché, puis decided_at est posé.
  * Alimente l'indicateur « Demande en attente de validation » des Paramètres.

@@ -21,6 +21,7 @@
 // (`getOpsRelayUrl`, via `VITE_OPS_URL`) : le relais peut être hébergé ailleurs et rester
 // allumé indépendamment (ex. Neon + Fonction Vercel).
 import {
+  getDB,
   getSaleItemsForSales,
   getShopProfile,
   listProducts,
@@ -28,8 +29,9 @@ import {
   markShopSynced,
 } from "@/lib/db";
 import { computePeriodStats, lastDaysRange } from "@/lib/analytics";
-import { handshake, syncData, type HandshakeResult } from "@/lib/gatekeeper";
+import { blessEmployeeDevice, handshake, syncData, type HandshakeResult } from "@/lib/gatekeeper";
 import { ensureIdentity, isSharedGroup } from "@/lib/syncengine/identity";
+import { listPairedDevices } from "@/lib/syncengine/peers";
 import { purgeSyncedOps } from "@/lib/syncengine/outbox";
 import { exchangeOps, relayTransport, type SyncState } from "@/lib/syncengine/transport";
 
@@ -67,6 +69,28 @@ const PROJECT_DOMAIN = typeof window !== "undefined" ? window.location.origin : 
 // plus toutes les cinq minutes une fois la première synchronisation faite.
 const SYNC_INTERVAL_MS = 60_000;
 const SYNC_REFRESH_MS = 5 * 60_000;
+
+/**
+ * Ratissage des écrans approuvés non encore rattachés au compte côté serveur (`/account/bless`).
+ * Best-effort : ne doit JAMAIS échouer la synchro.  L'appel est déclenché par la synchro
+ * d'arrière-plan ET par le « synchroniser » ; il ne tourne que pour le rôle `owner` (seul le
+ * propriétaire possède les identifiants du compte pour authentifier l'appel).
+ */
+async function blessPendingPeers(): Promise<void> {
+  try {
+    const identity = await ensureIdentity();
+    if (identity.role !== "owner") return;
+    const peers = await listPairedDevices(identity.shopId);
+    const db = getDB();
+    for (const peer of peers) {
+      if (peer.status !== "paired" || peer.blessed_at || !peer.server_device_id) continue;
+      const res = await blessEmployeeDevice(peer.server_device_id);
+      if (res.ok) await db.paired_devices.update(peer.id, { blessed_at: Date.now() });
+    }
+  } catch {
+    /* silencieux — prochain cycle */
+  }
+}
 
 // Rétention des ops ACQUITTÉES côté local (outbox `synced`) : 30 jours. Au-delà, si le
 // relais redélivre une op purgée, `processed_ops` la saute — $0 perte. Les pendantes
@@ -152,6 +176,9 @@ export async function backgroundSync(): Promise<boolean> {
   const result = await handshake();
   if (!result.ok) return changed;
 
+  // Rattacher les écrans approuvés au compte marchand dès que l'orchestrateur répond (best-effort).
+  await blessPendingPeers();
+
   if (
     result.sync_allowed &&
     (!profile.lastSyncedAt || Date.now() - profile.lastSyncedAt >= SYNC_REFRESH_MS)
@@ -180,6 +207,7 @@ export async function syncNow(): Promise<HandshakeResult> {
     const payload = await buildLightPayload();
     if (await syncData(payload)) await markShopSynced(Date.now());
   }
+  await blessPendingPeers();
   return result;
 }
 

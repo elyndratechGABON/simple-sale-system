@@ -96,6 +96,7 @@ export async function announceDevice(pairCode?: string): Promise<void> {
   const profile = await getShopProfile();
   const payload = {
     device_id: identity.deviceId,
+    server_device_id: profile?.deviceId ?? "",
     public_key: getDeviceKeys().publicKey,
     employee_name: identity.employeeName || profile?.storeName?.trim() || "",
     role: identity.role,

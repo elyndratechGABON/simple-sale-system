@@ -256,6 +256,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         device_name: pl.employee_name || existing.device_name,
         role: pl.role ?? existing.role,
         public_key: pl.public_key || existing.public_key,
+        server_device_id: pl.server_device_id || existing.server_device_id,
         status: autoPaired ? "paired" : "pending",
         paired_at: autoPaired ? (existing.paired_at ?? now) : existing.paired_at,
         updated_at: now,

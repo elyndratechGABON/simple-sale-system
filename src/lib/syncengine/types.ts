@@ -74,6 +74,11 @@ export interface PairedDevice {
   status?: "pending" | "paired";
   /** Horodatage du moment où l'appareil est devenu `paired`. Stable une fois posé. */
   paired_at?: number;
+  /** `device_id` serveur (fiche boutique) de l'appareil : la cible exacte du `bless` qui
+   *  rattache l'écran au compte marchand. Transporté par l'annonce, pas dérivable. */
+  server_device_id?: string;
+  /** Posé quand l'écran a été rattaché au compte côté orchestrateur (`/account/bless`). */
+  blessed_at?: number;
   updated_at: number;
 }
 
@@ -121,6 +126,9 @@ export interface ClientUpdatedPayload {
  */
 export interface DeviceAnnouncePayload {
   device_id: string;
+  /** `device_id` de la fiche boutique (handshake serveur) : permis au principal
+   *  d'appeler `/account/bless` pour rattacher l'écran au compte. */
+  server_device_id?: string;
   public_key: string;
   employee_name: string;
   role: DeviceRole;

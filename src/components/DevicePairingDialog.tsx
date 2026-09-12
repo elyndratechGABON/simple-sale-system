@@ -29,8 +29,8 @@ import {
 } from "@/components/ui/select";
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import { getPreferences } from "@/lib/settings";
-import { getAccountQuota } from "@/lib/gatekeeper";
-import { getShopProfile } from "@/lib/db";
+import { blessEmployeeDevice, getAccountQuota } from "@/lib/gatekeeper";
+import { getDB, getShopProfile } from "@/lib/db";
 import {
   ensureIdentity,
   setIdentityEmployeeName,
@@ -92,7 +92,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   const hasCredentials = Boolean(profile?.accountPhone && profile.accountPassword);
   const hasKeywordOnly = Boolean(profile?.accountKeyword) && !hasCredentials;
   const hasAnyAccount = hasNamePhone || hasKeywordOnly;
-  const atCapacity = quota ? quota.deviceCount >= quota.maxDevices : false;
+  // Crédit d'écrans LOCAL (offline-first : l'approuvé vit sur le téléphone du propriétaire
+  // avant que l'orchestrateur ne le rattache). 1 = cet écran + les écrans `paired` du groupe.
+  const localDeviceCount = 1 + (peers ?? []).filter((p) => p.status === "paired").length;
+  const atCapacity = quota ? localDeviceCount >= quota.maxDevices : false;
   const isOwner = identity?.role === "owner";
   const pending = (peers ?? []).filter((p) => p.status === "pending");
   const pairedCount = (peers ?? []).filter((p) => p.status !== "pending").length;
@@ -252,6 +255,17 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     await approveDevice(peerId, "employee");
     await qc.invalidateQueries({ queryKey: ["paired_devices"] });
     toast.success("Écran approuvé — rôle employé.");
+    // Rattachement au compte marchand (best-effort, non bloquant) : le crédit d'écran est
+    // déjà local ; ceci n'actualise que le compteur serveur, dès que l'orchestrateur répond.
+    const peer = await getDB().paired_devices.get(peerId);
+    if (peer?.server_device_id) {
+      const res = await blessEmployeeDevice(peer.server_device_id);
+      if (res.ok) {
+        await getDB().paired_devices.update(peerId, { blessed_at: Date.now() });
+      } else {
+        toast.info("Enregistrement serveur en attente.", { description: res.message });
+      }
+    }
   }
 
   return (
@@ -274,7 +288,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
               <div className="flex items-center justify-between rounded-lg border bg-accent/50 px-3 py-2">
                 <span className="text-sm text-muted-foreground">Appareils sur le compte</span>
                 <Badge variant={atCapacity ? "destructive" : "secondary"} className="tabular-nums">
-                  {quota.deviceCount} / {quota.maxDevices}
+                  {localDeviceCount} / {quota.maxDevices}
                 </Badge>
               </div>
             )}
