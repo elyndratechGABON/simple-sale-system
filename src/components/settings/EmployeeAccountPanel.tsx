@@ -77,9 +77,18 @@ export function EmployeeAccountPanel() {
     },
     onSuccess: (res) => {
       if (!res.ok) {
-        toast.error(
-          "Import impossible : le relais est injoignable ou cette caisse n'est rattachée à aucun compte.",
-        );
+        if (res.cause === "offline") {
+          toast.error("Import impossible : hors ligne — reconnectez cet écran au réseau.");
+        } else if (res.cause === "orphan") {
+          toast.error(
+            "Cette caisse n'est rattachée à aucun compte : rescannez le QR du propriétaire pour la relier.",
+          );
+        } else {
+          toast.info(
+            "Demande envoyée : le téléphone du propriétaire doit être en ligne. Les produits apparaîtront automatiquement dès sa réponse.",
+            { duration: 8000 },
+          );
+        }
         return;
       }
       if (res.applied > 0) {

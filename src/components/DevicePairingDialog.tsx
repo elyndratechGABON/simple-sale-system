@@ -168,7 +168,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
             url: getOrchestratorUrl() ?? "",
             token,
             name: profile?.accountName || profile?.storeName || prefs.workspaceName || "",
-            account_phone: profile?.accountPhone ?? profile?.phone ?? "",
+            // `||` (pas `??`) : accountPhone peut être défini à "" (compte créé sans saisie) —
+            // un `??` garderait la chaîne vide et l'écran scanné partirait SANS compte,
+            // donc sans groupe partagé (stock jamais reçu, import « n'attachée à aucun compte »).
+            account_phone: profile?.accountPhone || profile?.phone || "",
             pair_code: pairCode,
             role: "employee" as const,
             ...(shopStoreName
@@ -176,7 +179,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                   shop: {
                     storeName: shopStoreName,
                     ownerName: profile?.ownerName ?? prefs.ownerName ?? "",
-                    phone: profile?.phone ?? prefs.phone ?? "",
+                    phone: profile?.phone || prefs.phone || "",
                     quarter: profile?.location ?? prefs.quarter ?? "",
                     cluster: prefs.cluster ?? "retail",
                     subCategory: prefs.subCategory ?? undefined,

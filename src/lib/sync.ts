@@ -220,36 +220,40 @@ export async function syncNow(): Promise<HandshakeResult> {
  * Import MANUEL du catalogue propriétaire (bouton « Importer le stock du propriétaire »
  * sur l'écran employé). Passe PAR LE RELAIS — jamais l'orchestrateur :
  *  1. l'écran émet une demande d'instantané FRIS → le principal répond à son prochain
- *     cycle d'échange (un propriétaire en ligne répond en moins de ~20 s) ;
+ *     cycle d'échange (le téléphone du propriétaire « sonne » toutes les minutes) ;
  *  2. cycles de réception : si le catalogue est déjà au relais (synchro récente du
  *     propriétaire), le premier pull suffit — retour immédiat. Sinon, on attend la réponse
- *     (jusqu'à ~48 s) et on s'arrête dès que des produits arrivent.
+ *     (jusqu'à ~85 s : la fenêtre doit dépasser le cycle de 60 s du propriétaire) et on
+ *     s'arrête dès que des produits arrivent.
+ *  Le `cause` distingue l'échec pour l'UI (« offline », « orphan » = caisse sans compte,
+ *  « timeout » = demande en route, réponse pas encore reçue).
  */
 export async function importOwnerCatalog(): Promise<{
   ok: boolean;
   applied: number;
   count: number;
+  cause?: "offline" | "orphan" | "timeout";
 }> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return { ok: false, applied: 0, count: 0 };
+    return { ok: false, applied: 0, count: 0, cause: "offline" };
   }
   const identity = await ensureIdentity();
   if (!isSharedGroup(identity.shopId)) {
-    return { ok: false, applied: 0, count: 0 };
+    return { ok: false, applied: 0, count: 0, cause: "orphan" };
   }
 
   await emitCatalogRequest(identity);
 
   let lastApplied = 0;
   let count = 0;
-  for (let i = 0; i < 13; i++) {
+  for (let i = 0; i < 18; i++) {
     const state = await runOpsExchange();
     if (state) lastApplied = state.applied;
     count = (await listProducts()).length;
     if (count > 0) break;
-    if (i > 0) await sleep(4000);
+    if (i > 0) await sleep(5000);
   }
-  return { ok: count > 0, applied: lastApplied, count };
+  return { ok: count > 0, applied: lastApplied, count, cause: count > 0 ? undefined : "timeout" };
 }
 
 function sleep(ms: number): Promise<void> {
