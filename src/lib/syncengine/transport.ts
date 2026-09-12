@@ -41,6 +41,16 @@ import type {
 const SNAPSHOT_THROTTLE_MS = 20_000;
 const KEY_LAST_SNAPSHOT = "syncengine_last_snapshot_at";
 
+/** Publication continue du catalogue : le propriétaire maintient FRIS un instantané ABSOLU
+ *  au relais — à chaque changement de son catalogue (création, vente, réappro, réception de
+ *  la vente d'un employé qui modifie son stock). Ainsi « Importer le stock du propriétaire »
+ *  n'attend plus le propriétaire : l'instantané est déjà au relais, le tir suffit. Deux
+ *  garde-fous : la signature du catalogue (ne re-publier que si quelque chose a changé) et un
+ *  pas minimal (ne pas publier une centaine de fois pendant une fermeture de caisse). */
+const AUTO_SNAPSHOT_MIN_INTERVAL_MS = 30_000;
+export const KEY_LAST_CATALOG_SIG = "syncengine_last_catalog_sig";
+export const KEY_LAST_AUTO_SNAPSHOT = "syncengine_last_auto_snapshot_at";
+
 /** La bouche d'entrée/sortie d'un canal d'échange. Remplaçable inconditionnellement. */
 export interface TransportClient {
   /** Pousse les ops locales vers le relais. `true` = le relais les a reçues. */
@@ -122,7 +132,55 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       await db.settings.put({ key: KEY_LAST_SNAPSHOT, value: Date.now() });
     }
   }
+  // Publication continue (rôle non-employé) : si le catalogue local vient de changer —
+  // le nôtre ou celui que les pairs nous ont fait appliquer ci-dessus — on republie un
+  // instantané ABSOLU au relais, dans la même rotation. L'écran employé qui importera son
+  // stock le tirera directement, même si ce téléphone est déjà éteint.
+  await publishFreshCatalog(client, identity);
   return { pushed, applied, skipped, remote: foreign.length };
+}
+
+/** Signature stable du catalogue local : les champs qui suffisent à décider « le stock
+ *  (et le catalogue) des autres a-t-il changé ? » — pas la photo (binaire, locale). */
+async function catalogSignature(): Promise<string> {
+  const products = (await listProducts())
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      stock: p.stock,
+      price: p.price,
+      category: p.category,
+    }))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return JSON.stringify(products);
+}
+
+/** Republie l'instantané FRIS du catalogue si (1) il a changé depuis la dernière
+ *  publication ET (2) la fenêtre minimale est passée. Pousse l'op sur-le-champ (mini-push
+ *  de fin de rotation) pour que le relais la détienne dès ce cycle — le prochain « importer »
+ *  de l'employé la tirera. La signature n'est mémorisée qu'après un push RÉUSSI : un échec
+ *  n'emprisonne jamais le relais dans un catalogue périmé. */
+async function publishFreshCatalog(client: TransportClient, identity: SyncIdentity): Promise<void> {
+  if (identity.role === "employee") return;
+  const db = getDB();
+  const now = Date.now();
+  const sig = await catalogSignature();
+  // Catalogue vide → rien à redistribuer, et aucune trace : un republier avec zéro produit
+  // n'apporterait que du bruit au relais (et ferait « voir » un appareil sans catalogue).
+  if (!sig || sig === "[]") return;
+  const [lastSig, lastAt] = await Promise.all([
+    db.settings.get(KEY_LAST_CATALOG_SIG),
+    db.settings.get(KEY_LAST_AUTO_SNAPSHOT),
+  ]);
+  if (lastSig?.value === sig) return;
+  if (now - Number(lastAt?.value ?? 0) < AUTO_SNAPSHOT_MIN_INTERVAL_MS) return;
+  await emitCatalogSnapshot(identity);
+  const pending = await listPendingOps(identity.shopId);
+  if (pending.length > 0 && (await client.push(identity.shopId, pending))) {
+    await markOpsSynced(pending.map((o) => o.id));
+    await db.settings.put({ key: KEY_LAST_CATALOG_SIG, value: sig });
+    await db.settings.put({ key: KEY_LAST_AUTO_SNAPSHOT, value: now });
+  }
 }
 
 /**

@@ -78,12 +78,15 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
             });
           }
         } else {
-          await db.paired_devices.put({
+          // Toute autre op prouve qu'on a RENCONTRÉ l'appareil : tampon `last_seen` sur la
+          // fiche. Ne JAMAIS écraser une fiche détaillée posée par une annonce (statut,
+          // rôle, clé publique) : une op ordinaire — un instantané de catalogue, une vente —
+          // ne doit pas révoquer l'appairage ni le rôle déjà établis.
+          const existing = (await db.paired_devices.get(op.device_id)) ?? {
             id: op.device_id,
             shop_id: op.shop_id,
-            last_seen: now,
-            updated_at: now,
-          });
+          };
+          await db.paired_devices.put({ ...existing, last_seen: now, updated_at: now });
         }
         applied++;
       }
