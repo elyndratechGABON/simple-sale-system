@@ -199,6 +199,27 @@ export function lastDaysRange(days: number): { from: number; to: number } {
   };
 }
 
+/**
+ * Restreint un jeu de ventes (et leurs lignes) à celles encaissées par UNE seule caisse de
+ * l'exploitation. La convergence P2P fait vivre sur CHAQUE écran toutes les ventes du groupe —
+ * un employé ENREGISTRE aussi les ventes du propriétaire et des collègues, mais son tableau de
+ * bord ne doit refléter que SES encaissements ; seul le propriétaire voit le CUMUL. Sans
+ * `deviceId` (caisse propriétaire), rien n'est filtré ; une vente sans `seller_device_id`
+ * (tracé antérieur ou caisse qui ne se signait pas) n'est pas imputable à l'employé → exclue.
+ */
+export function scopeByDevice(
+  sales: Sale[],
+  items: SaleItem[],
+  deviceId: string | undefined,
+): { sales: Sale[]; items: SaleItem[] } {
+  if (!deviceId) return { sales, items };
+  const ids = new Set(sales.filter((s) => s.seller_device_id === deviceId).map((s) => s.id));
+  return {
+    sales: sales.filter((s) => ids.has(s.id)),
+    items: items.filter((i) => ids.has(i.sale_id)),
+  };
+}
+
 export function computePeriodStats(
   sales: Sale[],
   items: SaleItem[],

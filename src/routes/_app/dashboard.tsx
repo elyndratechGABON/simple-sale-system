@@ -41,12 +41,15 @@ import {
   computeWeightSales,
   computeRentalStats,
   lastDaysRange,
+  scopeByDevice,
 } from "@/lib/analytics";
 import { buildAlerts, type AppAlert } from "@/lib/alerts";
 import { SaleItemChips } from "@/components/SaleItemChips";
 import { formatFCFA, formatPercent, formatDayShort, formatRelative, formatKg } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
+import { useAccess } from "@/hooks/use-access";
+import { ensureIdentity } from "@/lib/syncengine/identity";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -213,6 +216,15 @@ function roundDuration(d: number): string {
 function DashboardPage() {
   const { workspaceName } = usePreferences();
   const features = useClusterFeatures();
+  const access = useAccess();
+  // L'IDENTITÉ de l'écran (SES ventes) : un employé ne voit que ses encaissements sur
+  // son tableau de bord — jamais le cumul du groupe, qui n'appartient qu'au propriétaire.
+  const { data: identity } = useQuery({
+    queryKey: ["sync_identity"],
+    queryFn: ensureIdentity,
+    staleTime: 60_000,
+  });
+  const deviceId = access.isOwner ? undefined : identity?.deviceId;
   const todayRange = useMemo(() => lastDaysRange(1), []);
   // 14 jours : les 7 derniers = semaine courante, les 7 d'avant = base de comparaison.
   // lastDaysRange(14).to === lastDaysRange(7).to (fin de journée, aujourd'hui inclus).
@@ -239,6 +251,19 @@ function DashboardPage() {
       return { sales, items };
     },
   });
+
+  // Les ventes « dans le périmètre » de l'écran : tout pour le propriétaire, SES ventes
+  // seulement pour un employé. Tout ce qui suit (KPIs, semaine, activité récente) se
+  // calcule sur ce périmètre, jamais sur l'ensemble du groupe.
+  const todayScoped = useMemo(
+    () => (todayData ? scopeByDevice(todayData.sales, todayData.items, deviceId) : null),
+    [todayData, deviceId],
+  );
+  const fortnightScoped = useMemo(
+    () =>
+      fortnightData ? scopeByDevice(fortnightData.sales, fortnightData.items, deviceId) : null,
+    [fortnightData, deviceId],
+  );
 
   const { data: products } = useQuery({ queryKey: ["products"], queryFn: listProducts });
   const { data: openTables } = useQuery({
@@ -283,34 +308,34 @@ function DashboardPage() {
   // produits vendus au kilo. Seules les lignes portant le poids comptent.
   const weightSales = useMemo(
     () =>
-      fortnightData && (fortnightData.items.length > 0 || (products ?? []).length > 0)
-        ? computeWeightSales(fortnightData.items, products ?? [])
+      fortnightScoped && (fortnightScoped.items.length > 0 || (products ?? []).length > 0)
+        ? computeWeightSales(fortnightScoped.items, products ?? [])
         : null,
-    [fortnightData, products],
+    [fortnightScoped, products],
   );
 
   const todayStats = useMemo(() => {
-    if (!todayData) return null;
-    return computePeriodStats(todayData.sales, todayData.items, todayRange.from, todayRange.to);
-  }, [todayData, todayRange]);
+    if (!todayScoped) return null;
+    return computePeriodStats(todayScoped.sales, todayScoped.items, todayRange.from, todayRange.to);
+  }, [todayScoped, todayRange]);
 
   const { weekStats, prevStats } = useMemo(() => {
-    if (!fortnightData) return { weekStats: null, prevStats: null };
+    if (!fortnightScoped) return { weekStats: null, prevStats: null };
     return {
       weekStats: computePeriodStats(
-        fortnightData.sales,
-        fortnightData.items,
+        fortnightScoped.sales,
+        fortnightScoped.items,
         weekRange.from,
         weekRange.to,
       ),
       prevStats: computePeriodStats(
-        fortnightData.sales,
-        fortnightData.items,
+        fortnightScoped.sales,
+        fortnightScoped.items,
         fortnightRange.from,
         weekRange.from,
       ),
     };
-  }, [fortnightData, weekRange, fortnightRange]);
+  }, [fortnightScoped, weekRange, fortnightRange]);
 
   const alerts = useMemo(
     () => buildAlerts(products ?? [], openTables ?? [], activeRentals),
@@ -325,14 +350,14 @@ function DashboardPage() {
       : Number.NaN;
 
   const recentSales = useMemo(() => {
-    if (!fortnightData) return [];
+    if (!fortnightScoped) return [];
     const itemsBySale = new Map<string, { name: string; quantity: number }[]>();
-    for (const item of fortnightData.items) {
+    for (const item of fortnightScoped.items) {
       const lines = itemsBySale.get(item.sale_id);
       if (lines) lines.push({ name: item.name, quantity: item.quantity });
       else itemsBySale.set(item.sale_id, [{ name: item.name, quantity: item.quantity }]);
     }
-    return [...fortnightData.sales]
+    return [...fortnightScoped.sales]
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 3)
       .map((sale) => ({
@@ -341,7 +366,7 @@ function DashboardPage() {
         total: sale.total ?? 0,
         items: itemsBySale.get(sale.id) ?? [],
       }));
-  }, [fortnightData]);
+  }, [fortnightScoped]);
 
   type QuickAction = {
     label: string;
