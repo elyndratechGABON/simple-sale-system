@@ -1,6 +1,7 @@
 # ELYNDRA CAISSE — Résumé de session (simple-sale-system)
 
 ## Objective
+
 - Refonte du calculateur de bénéfices du header (« CA & bénéfices ») : passer du **jour**
   au **mois**, avec un parcours « 3 questions » — CA automatique, valeur du stock
   affichée/estimée, charges fixes (loyer, eau, électricité) saisies globalement — puis
@@ -8,6 +9,7 @@
 - Terminer le jalon sync P2P : committé (mode 1) ; refonte calculateur livrée (mode 2).
 
 ## Important Details
+
 - **Formule figée (décisions utilisateur)** : Bénéfice = **CA du mois − COGS (Σ
   `cost_at_sale` figés dans les lignes de vente du mois) − charges fixes (montant
   global)**. La valeur du stock restant est **affichée comme repère** (auto-estimée =
@@ -31,7 +33,9 @@
   existants + 14 `profit.test.ts`). Node v24.16.0. Dev server http://localhost:8080.
 
 ## Work State
+
 ### Completed
+
 - **Jalon sync P2P committé** : `2070cd57` — `src/lib/syncengine/*` complet + tests,
   `db.ts` v18 (stores `sync_ops`/`processed_ops`/`paired_devices`), `sync.ts`,
   `DevicePairingDialog`, `DevicesCard`, `vitest.config.ts`, ADR
@@ -50,13 +54,13 @@
   - `src/components/ProfitSheet.tsx` refondu : sélecteur de mois `‹ Août 2026 ›`
     (défaut courant, « mois suivant » désactivé) ; bascule segmentée Simple/Détaillé ;
     Résumé rapide (CA du mois, ventes, panier moyen, stock restant repère, badge statut
-    + « calculé/estimé » + marge) ; « La question de l'argent » (stock pré-rempli auto +
-    éditable, liste repliable « Produits & stock » via Collapsible, charges fixes,
-    complément si partiel, aperçu live « Résultat en direct », bouton « Calculer mon
-    bénéfice » → `saveMonthlyOverview` + toast + invalidation) ; « Comprendre mon
-    résultat » (CA − COGS − Charges) ; « Stocks à surveiller » via `buildAlerts`
-    (ruptures + seuils min_stock) ; vue Détaillé = bénéfice par produit (coûts des
-    Rapports) + calculateur manuel conservé.
+    - « calculé/estimé » + marge) ; « La question de l'argent » (stock pré-rempli auto +
+      éditable, liste repliable « Produits & stock » via Collapsible, charges fixes,
+      complément si partiel, aperçu live « Résultat en direct », bouton « Calculer mon
+      bénéfice » → `saveMonthlyOverview` + toast + invalidation) ; « Comprendre mon
+      résultat » (CA − COGS − Charges) ; « Stocks à surveiller » via `buildAlerts`
+      (ruptures + seuils min_stock) ; vue Détaillé = bénéfice par produit (coûts des
+      Rapports) + calculateur manuel conservé.
   - `src/components/Header.tsx` : `aria-label`/`title` « CA du mois et bénéfices » +
     pastille ambre (`needsCycle`) sur clé de cache `["monthly_overview", clé]`.
   - `src/lib/exports/json.ts` : `monthly_overviews` dans le schema zod (optionnel,
@@ -70,18 +74,22 @@
 - Donnée de démonstration persistée en local (dev) : charges 500 F sur août 2026.
 
 ### Active
+
 - (none) — la refonte est livrée et vérifiée.
 
 ### Blocked
+
 - (none)
 
 ## Next Move
+
 1. Commit de la refonte (2e commit du mode 2), après validation utilisateur si besoin.
 2. Éventuelles finitions : plus tard, le « mode détaillé » d'approvisionnement (stock
    initial + achats − stock final) pour remplacer le complément de coût ; vérifier à
    l'œil le rendu de la pastille ambre quand le mois est vide.
 
 ## Relevant Files
+
 - `src/lib/db.ts` : v19 `monthly_overviews` (+ interface `MonthlyOverview`, snapshot,
   purge) ; `cost_at_sale`/`listSales(from,to)`/`listProducts` (filtres `alive`/`paid`).
 - `src/lib/profit.ts` (**nouveau**) + `src/lib/profit.test.ts` (**nouveau**) : tout le

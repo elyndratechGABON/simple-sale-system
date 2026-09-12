@@ -8,15 +8,15 @@ L'orchestrateur (`simple-sale-orchestrator`) est un dépôt séparé, consommé 
 
 ## ÉTAT GLOBAL
 
-| Thème | État | Commentaire court |
-|---|---|---|
-| **CAMÉRA** | ✅ | Scanner complet, gestion d'erreurs exhaustive, homologation dans le geste. |
-| **QR** | ⚠️ | Génération + scan fonctionnels. Mais le QR embarqué est « identifiants + mot de passe en clair », pas un mechanical dédié d'invitation ; **pas de page de diagnostic caméra**. |
-| **PAIRING** | ✅ | Deux mécanismes complémentaires (QR tél+mdp → orchestrateur ; code de paire 6 car./10 min → P2P). Approbation + rôles. |
-| **STOCKAGE LOCAL** | ✅ | IndexedDB `pos-db` (v19, 16 stores), localStorage ciblé, écritures transactionnelles, suppression logique. |
-| **SYNCHRONISATION** | ✅ | Deux canaux additifs (orchestrateur aggégats + relais P2P `/api/v1/ops`), outbox atomique, dedup `processed_ops`, offline-first. |
-| **CAPACITOR** | ⚠️ | Android réel présent ; **`@capacitor/camera` importé par le code mais absent de `capacitor.plugins.json`** ; iOS absent (PWA seulement). |
-| **PWA** | ✅ | SW écrit main (cache-first pages/assets, précache full), manifest correct, persistent storage. |
+| Thème               | État | Commentaire court                                                                                                                                                              |
+| ------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **CAMÉRA**          | ✅   | Scanner complet, gestion d'erreurs exhaustive, homologation dans le geste.                                                                                                     |
+| **QR**              | ⚠️   | Génération + scan fonctionnels. Mais le QR embarqué est « identifiants + mot de passe en clair », pas un mechanical dédié d'invitation ; **pas de page de diagnostic caméra**. |
+| **PAIRING**         | ✅   | Deux mécanismes complémentaires (QR tél+mdp → orchestrateur ; code de paire 6 car./10 min → P2P). Approbation + rôles.                                                         |
+| **STOCKAGE LOCAL**  | ✅   | IndexedDB `pos-db` (v19, 16 stores), localStorage ciblé, écritures transactionnelles, suppression logique.                                                                     |
+| **SYNCHRONISATION** | ✅   | Deux canaux additifs (orchestrateur aggégats + relais P2P `/api/v1/ops`), outbox atomique, dedup `processed_ops`, offline-first.                                               |
+| **CAPACITOR**       | ⚠️   | Android réel présent ; **`@capacitor/camera` importé par le code mais absent de `capacitor.plugins.json`** ; iOS absent (PWA seulement).                                       |
+| **PWA**             | ✅   | SW écrit main (cache-first pages/assets, précache full), manifest correct, persistent storage.                                                                                 |
 
 ---
 
@@ -46,6 +46,7 @@ Deux mécanismes qui coexistent et se complètent :
 **(A) Voie orchestrateur — QR identifiants** : le principal affiche un QR (tél+mdp) ; le nouvel écran le scanne, pose `setShopAccount` (`db.ts:1950-1969`) puis rejoint par `handshake`. Blocage `device_limit` si quota dépassé (`gatekeeper.ts:349-356`).
 
 **(B) Voie P2P — code de paire + approbation** (`src/lib/syncengine/`) :
+
 - `generatePairingCode()` → 6 carac. (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`), TTL 10 min, persisté dans `settings` (`pairing.ts:50-59`).
 - L'appareil qui rejoint : `enterPairingCode()` (`:116-122`) → op `device.announce` one-shot (`announced`, `:91-109`).
 - Chez le principal : `apply.ts:199-228` — code correct → `status:"paired"` d'office ; sinon `pending` → approbation manuelle (`device.approve`, rôle conféré).
@@ -54,6 +55,7 @@ Deux mécanismes qui coexistent et se complètent :
 **⚠️ Limite importante** : le rôle est **cosmétique** — il n'autorise/interdit **aucune** action métier (POS, stocks, rapports). Un employé a les mêmes droits qu'un propriétaire. Pas d'écran de gestion des employés, pas d'audit « qui a vendu » (les ventes n'emportent pas d'identifiant d'appareil/vendeur).
 
 **Identité appareil** : 3 mécanismes distincts non liés entre eux —
+
 1. `ShopProfile.deviceId` (orchestrateur, UUID, `db.ts:1895`);
 2. `SyncIdentity.deviceId` (P2P, `IDENTITY_KEYS.device`, `identity.ts:60-68`);
 3. `deviceFingerprint` SHA-256 (`device-fingerprint.ts:17-72`) → garantit 1 téléphone = 1 boutique (409 `fingerprint_conflict`, `gatekeeper.ts:275-289`).
@@ -70,10 +72,10 @@ Deux mécanismes qui coexistent et se complètent :
 
 Deux canaux **additifs**, jamais bloquants (`sync.ts:9-12`) :
 
-| Canal | Quand / Quoi | Endpoints |
-|---|---|---|
+| Canal             | Quand / Quoi                                                                                                                               | Endpoints                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | **Orchestrateur** | handshake chaque minute (commandes suspend/renew/broadcast, quota, échéance, mot clé) + `sync-data` agrégats 7 j (jamais de lignes brutes) | `POST /api/v1/handshake`, `POST /api/v1/sync-data`, `DELETE /api/v1/shops/:deviceId` (`gatekeeper.ts`) |
-| **Relais P2P** | ops de convergence produits/ventes/stock/clients, relais version aveugle, après handshake réussi | `POST/GET /api/v1/ops?shop_id=` (`syncengine/transport.ts`) |
+| **Relais P2P**    | ops de convergence produits/ventes/stock/clients, relais version aveugle, après handshake réussi                                           | `POST/GET /api/v1/ops?shop_id=` (`syncengine/transport.ts`)                                            |
 
 - Outbox `sync_ops` écrite **dans** la transaction métier (`ops.ts:21-39`), `seq` monotone par appareil.
 - Application : tri global déterministe `(created_at, device_id, seq)` (`apply.ts:8-11`), dedup `processed_ops` transactionnelle (`apply.ts:3-14`), LWW + deltas de stock commutatifs.
@@ -110,22 +112,22 @@ Deux canaux **additifs**, jamais bloquants (`sync.ts:9-12`) :
 
 ## ÉCART PHASE PAR PHASE vs PLAN (ce qu'il reste à faire)
 
-| Phase plan | État actuel | Action à prévoir |
-|---|---|---|
-| P1 Audit | ✅ fait | — |
-| P2 Diagnostic caméra | ❌ inexistant | **Créer** `src/routes/_app/diagnostics-camera.tsx` (ou /settings/…) : Secure Context, mediaDevices, getUserMedia, enumerateDevices, Test 5/6/7, état par ligne. |
-| P3 Erreurs caméra | ✅ déjà classifiées (`toCameraError`) | Etendre à la page diagnostic (lister NotAllowed/NotFound/NotReadable/Overconstrained/Security/Abort + Réessayer). |
-| P4 Scanner QR | ✅ existe (overlay + retry + replis) | Pas de réécriture ; combler : `enumerateDevices`, torch optionnel, message « vidéo noire » déjà couvert par `scan-check.mjs`. |
-| P5 Partage boutique | ⚠️ QR actuel = tél+mdp | Décision produit : conserver le QR identifiants ET/OU ajouter un QR « invitation » (`pairingId`, TTL, signature) + code de paire. Le code 6 carac./10 min existe déjà. |
-| P6 Nouvel appareil | ✅ (scan → setShopAccount + handshake / code + approve) | Aligner l'UX sur le plan (écran « Boutique trouvée → Demander l'accès ») si besoin. |
-| P7 Rôles | ⚠️ owner/manager/employee **cosmétiques** | **Décision** : donner aux rôles une vraie portée (gates métier, audit de vente par vendeur) ou garder cosmétique. |
-| P8 Sync initiale | ✅ (chaque appareil a son DB locale ; produits/ventes convergent via ops) | Pas de dump « maître→nouveau » : la convergence passe par le relais. À documenter/valider. |
-| P9 Sync continue | ✅ (outbox + relais, offline-first) | Backoff exponentiel éventuel, Background Sync si visé. |
-| P10-11 Tests scénarios | ⚠️ 3 fichiers de test P2P, E2E scan-check | **Ajouter** tests Wi-Fi/4G/offline (A-D) + **test de conflit** sur vente simultanée (attendu : 50−3−2=45). |
-| P12 Tests QR | ❌ | Ajouter : QR expiré, replay, autre boutique, double scan (le code de paire gère déjà TTL/replay côté `apply.ts`) ; pour le QR tél+mdp, définir le comportement « autre boutique ». |
-| P13-14 PWA/Capacitor | ⚠️ | **Corriger `capacitor.plugins.json`** (camera) + retester APK. Tests Chrome/Safari/webview. |
-| P15 Paiement | ✅ | Test de non-régression : paiement → handshake → approved → WhatsApp 1× ; partage ne doit pas créer d'états d'abonnement contradictoires (1 device = 1 état via `gatekeeper` partagé par tél+mdp). |
-| P16 Tests automatisés | ⚠️ partiel | Batterie : CameraService, QR, Pairing, Device, Rôle, Sync, Offline, Conflits, Subscription. |
+| Phase plan             | État actuel                                                               | Action à prévoir                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1 Audit               | ✅ fait                                                                   | —                                                                                                                                                                                                 |
+| P2 Diagnostic caméra   | ❌ inexistant                                                             | **Créer** `src/routes/_app/diagnostics-camera.tsx` (ou /settings/…) : Secure Context, mediaDevices, getUserMedia, enumerateDevices, Test 5/6/7, état par ligne.                                   |
+| P3 Erreurs caméra      | ✅ déjà classifiées (`toCameraError`)                                     | Etendre à la page diagnostic (lister NotAllowed/NotFound/NotReadable/Overconstrained/Security/Abort + Réessayer).                                                                                 |
+| P4 Scanner QR          | ✅ existe (overlay + retry + replis)                                      | Pas de réécriture ; combler : `enumerateDevices`, torch optionnel, message « vidéo noire » déjà couvert par `scan-check.mjs`.                                                                     |
+| P5 Partage boutique    | ⚠️ QR actuel = tél+mdp                                                    | Décision produit : conserver le QR identifiants ET/OU ajouter un QR « invitation » (`pairingId`, TTL, signature) + code de paire. Le code 6 carac./10 min existe déjà.                            |
+| P6 Nouvel appareil     | ✅ (scan → setShopAccount + handshake / code + approve)                   | Aligner l'UX sur le plan (écran « Boutique trouvée → Demander l'accès ») si besoin.                                                                                                               |
+| P7 Rôles               | ⚠️ owner/manager/employee **cosmétiques**                                 | **Décision** : donner aux rôles une vraie portée (gates métier, audit de vente par vendeur) ou garder cosmétique.                                                                                 |
+| P8 Sync initiale       | ✅ (chaque appareil a son DB locale ; produits/ventes convergent via ops) | Pas de dump « maître→nouveau » : la convergence passe par le relais. À documenter/valider.                                                                                                        |
+| P9 Sync continue       | ✅ (outbox + relais, offline-first)                                       | Backoff exponentiel éventuel, Background Sync si visé.                                                                                                                                            |
+| P10-11 Tests scénarios | ⚠️ 3 fichiers de test P2P, E2E scan-check                                 | **Ajouter** tests Wi-Fi/4G/offline (A-D) + **test de conflit** sur vente simultanée (attendu : 50−3−2=45).                                                                                        |
+| P12 Tests QR           | ❌                                                                        | Ajouter : QR expiré, replay, autre boutique, double scan (le code de paire gère déjà TTL/replay côté `apply.ts`) ; pour le QR tél+mdp, définir le comportement « autre boutique ».                |
+| P13-14 PWA/Capacitor   | ⚠️                                                                        | **Corriger `capacitor.plugins.json`** (camera) + retester APK. Tests Chrome/Safari/webview.                                                                                                       |
+| P15 Paiement           | ✅                                                                        | Test de non-régression : paiement → handshake → approved → WhatsApp 1× ; partage ne doit pas créer d'états d'abonnement contradictoires (1 device = 1 état via `gatekeeper` partagé par tél+mdp). |
+| P16 Tests automatisés  | ⚠️ partiel                                                                | Batterie : CameraService, QR, Pairing, Device, Rôle, Sync, Offline, Conflits, Subscription.                                                                                                       |
 
 ---
 
@@ -148,7 +150,7 @@ Deux canaux **additifs**, jamais bloquants (`sync.ts:9-12`) :
 
 ## RECOMMANDATIONS PRIORITAIRES (ordre proposé)
 
-1. **P2** Créer la page de diagnostic caméra (retrouve aussi une valeur pour le support) — *prérequis demandé par le plan avant toute correction scanner*.
+1. **P2** Créer la page de diagnostic caméra (retrouve aussi une valeur pour le support) — _prérequis demandé par le plan avant toute correction scanner_.
 2. **P3** Étendre le diagnostic aux 6 erreurs types + boutons Réessayer / Ouvrir les réglages.
 3. **Fix Capacitor** : régénérer `capacitor.plugins.json` avec `@capacitor/camera` (`npx cap sync`) puis retester l'APK (volet caméra : non-régression).
 4. **Décision produit (rôles)** : portée réelle ou cosmétique pour `owner/manager/employee`.

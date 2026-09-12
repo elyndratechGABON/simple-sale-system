@@ -188,24 +188,27 @@ export function SetupWizard({
         toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
         return;
       }
-      setAccPhone(parsed.phone);
-      setAccPassword(parsed.password);
-      setAccAccountName(parsed.name);
+      // Top-level fields: phone, password, name (accountName)
+      setAccPhone(parsed.phone ?? "");
+      setAccPassword(parsed.password ?? "");
+      setAccAccountName(parsed.name ?? "");
       setQrScanned(true);
+      // Shop config from parsed.shop
+      const shop = parsed.shop ?? {};
       // Copie intégrale de la boutique scannée : fiche (profil+préférences) ET état de
       // l'assistant (identité + type de boutique). La nouvelle caisse s'ouvre identique ;
       // l'utilisateur garde la main pour corriger avant de terminer.
-      const applied = await applyPairingShop(parsed.shop);
-      if (parsed.shop) {
-        setName(parsed.shop.storeName ?? "");
-        setOwnerName(parsed.shop.ownerName ?? "");
-        setPhone(parsed.shop.phone ?? "");
-        setQuarter(parsed.shop.quarter ?? "");
-        if (parsed.shop.cluster) {
-          setSelectedCluster(parsed.shop.cluster);
-          setSelectedSubCategory(parsed.shop.subCategory ?? null);
-          setCustomDomain(parsed.shop.customDomain ?? "");
-          setCustomStockChoice(parsed.shop.customUnitType ?? null);
+      const applied = await applyPairingShop(shop);
+      if (shop) {
+        setName(shop.storeName ?? "");
+        setOwnerName(shop.ownerName ?? "");
+        setPhone(shop.phone ?? "");
+        setQuarter(shop.quarter ?? "");
+        if (shop.cluster) {
+          setSelectedCluster(shop.cluster);
+          setSelectedSubCategory(shop.subCategory ?? null);
+          setCustomDomain(shop.customDomain ?? "");
+          setCustomStockChoice(shop.customUnitType ?? null);
         }
       }
       toast.success(

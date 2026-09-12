@@ -10,13 +10,13 @@ Dernière mise à jour : 2026-09-02 — bento asymétrique des fonctionnalités,
 
 ## Palette
 
-| Rôle | Valeur | Usage |
-|---|---|---|
-| Vert principal | `--primary` (oklch 0.55 0.15 155 ≈ #059669) | CTA, liens actifs, chiffres clés, pastilles |
-| Vert accent | `--accent` (fond teinté émeraude) | Fonds d'icônes, lignes de panier |
-| Vert profond | `#03231a → #053f28` (dégradé) | Sections sombres (Confiance) |
-| Or premium | `#d4af37` (fond) ; textes sur clair : titre `#6e5310` (≥ 4.5:1 AA), prix grand corps `#a8842a` (grand texte ≥ 3:1) | **Réservé au Premium** : badge, bordure et prix de l'offre 50 000 F uniquement |
-| Surfaces | blanc / `bg-muted/40` en alternance | La majorité des surfaces reste claire |
+| Rôle           | Valeur                                                                                                             | Usage                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Vert principal | `--primary` (oklch 0.55 0.15 155 ≈ #059669)                                                                        | CTA, liens actifs, chiffres clés, pastilles                                    |
+| Vert accent    | `--accent` (fond teinté émeraude)                                                                                  | Fonds d'icônes, lignes de panier                                               |
+| Vert profond   | `#03231a → #053f28` (dégradé)                                                                                      | Sections sombres (Confiance)                                                   |
+| Or premium     | `#d4af37` (fond) ; textes sur clair : titre `#6e5310` (≥ 4.5:1 AA), prix grand corps `#a8842a` (grand texte ≥ 3:1) | **Réservé au Premium** : badge, bordure et prix de l'offre 50 000 F uniquement |
+| Surfaces       | blanc / `bg-muted/40` en alternance                                                                                | La majorité des surfaces reste claire                                          |
 
 Interdits : or utilisé hors contexte premium ; vert vif en grandes surfaces ; noir/blanc purs non teintés.
 

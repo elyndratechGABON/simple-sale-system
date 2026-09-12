@@ -9,8 +9,8 @@
 > L'utilisateur ne gère pas une base de données. Il gère son activité comme il la vit
 > réellement.
 
-- Pas de transaction bancaire intégrée : la « caisse » signifie *enregistrer ce qui a été
-  vendu/réalisé et son encaissement*, pas effectuer un paiement en ligne.
+- Pas de transaction bancaire intégrée : la « caisse » signifie _enregistrer ce qui a été
+  vendu/réalisé et son encaissement_, pas effectuer un paiement en ligne.
 - Un moteur de workflow configurable, pas une page par métier.
 - Le cycle commun reste : **configurer → sélectionner → encaisser → clôturer → historique → rapports**.
 
@@ -20,17 +20,17 @@ Le moteur est déjà piloté par config : `src/lib/settings.ts:163-379` définit
 actifs, chacun avec `workflowType`, `workflow`, `stock`, `flags`. `pos.tsx` et `stocks.tsx`
 branchent déjà sur ces flags.
 
-| Cluster | `workflowType` | État |
-|---|---|---|
-| `retail` Épicerie | `direct` | ✅ stock, péremption, prix de revient |
-| `restaurant` | `order-prep` | ✅ tables + ordre, `served_at` |
-| `bar` | `open-tab` | ✅ tables optionnelles, addition ouverte, tournées |
-| `service` Coiffeur | `service` | ✅ onglets Prestations/Produits, client facultatif |
-| `clothing` Vêtements | `direct` | ⚠️ flag `hasVariants:true` mais **aucun modèle variante** |
-| `weight` Boucherie | `weight` | ✅ vente au poids, stock kg |
-| `magasin` | `direct` | ✅ `unitType:"mixed"` (pièce/mètre/litre) |
-| `personnalise` | `direct` | ✅ domaine libre + kg/unité |
-| `location` Actifs | `rental` | ✅ actifs + caution + périodes + unités |
+| Cluster              | `workflowType` | État                                                      |
+| -------------------- | -------------- | --------------------------------------------------------- |
+| `retail` Épicerie    | `direct`       | ✅ stock, péremption, prix de revient                     |
+| `restaurant`         | `order-prep`   | ✅ tables + ordre, `served_at`                            |
+| `bar`                | `open-tab`     | ✅ tables optionnelles, addition ouverte, tournées        |
+| `service` Coiffeur   | `service`      | ✅ onglets Prestations/Produits, client facultatif        |
+| `clothing` Vêtements | `direct`       | ⚠️ flag `hasVariants:true` mais **aucun modèle variante** |
+| `weight` Boucherie   | `weight`       | ✅ vente au poids, stock kg                               |
+| `magasin`            | `direct`       | ✅ `unitType:"mixed"` (pièce/mètre/litre)                 |
+| `personnalise`       | `direct`       | ✅ domaine libre + kg/unité                               |
+| `location` Actifs    | `rental`       | ✅ actifs + caution + périodes + unités                   |
 
 Écrans : `dashboard` (accueil), `pos` (caisse = action principale), `stocks`, `reports`,
 `history`, `settings`.
@@ -47,40 +47,48 @@ branchent déjà sur ces flags.
 ## Améliorations UX par secteur
 
 ### 🛒 Épicerie/Alimentation (`retail`)
+
 - **✅** catalogue + recherche, quantité, encaisser, retrait auto de stock, seuil, péremption.
 - **➤** gros boutons photo, quantité rapide (− 1 + 2 +), badge « stock faible » rouge sur la
   vignette, encaissement court (espèces + rendu).
 
-### 👕 Vêtements/Chaussures (`clothing`) — *chantier n°1*
+### 👕 Vêtements/Chaussures (`clothing`) — _chantier n°1_
+
 - **➤ Construire** le modèle variante : `variants[{taille, couleur, pointure, prix, stock}]`
   sur le produit + écran de choix au clic + retrait de **la bonne variante**.
 - **➤** vignette photo, sélecteur modal (taille S/M/L/XL, couleur, pointure), stock par variante.
 
 ### 🍔 Restaurant (`restaurant`)
+
 - **✅** plan de salle, table, commande (`served_at`).
 - **➤** cycle visuel table : `🟠 à préparer → 🟡 en préparation → 🟢 prête → 🟢 servie`,
   boutons « Préparer / Servir » sur la table.
 
 ### 🍹 Bar/Snack (`bar`)
+
 - **✅** table, addition ouverte, tournées.
 - **➤** plan de salle coloré (T1🟢 T2🟠), bouton « Voir l'addition », clôture → table
   disponible (cycle `payRound` existe déjà).
 
 ### 🍹 Bar + restau (composable)
+
 - **✅** `bar.hasTablesOptional`, boissons+nourriture+tables sur la même addition.
 - **➤** UI pour grouper visuellement les consommations.
 
 ### 💇 Coiffure/Salon (`service`)
+
 - **✅** onglets Prestations/Produits, client facultatif, pas de retrait de stock.
 - **➤** cartes `📷 prestation + prix`, **consommables associés optionnels** (mèche/gel) avec
   suivi activable/désactivable.
 
 ### 🚗🏠🪑 Location (`location`)
+
 - **✅** actifs, tarifs par heure/jour/semaine/mois, caution, unités, disponibilité, retour.
 - **➤** saisie dates début/fin avec **calcul auto durée + total**, statut Disponible/Louée,
   **rapport location** (occupation, revenu par actif).
 
 ### 🍗 Boucherie (`weight`)
+
 - **✅** vente au poids, stock kg, saisie poids → prix auto.
 - **➤** clavier de poids direct au clic, total en grand, retrait du poids exact.
 

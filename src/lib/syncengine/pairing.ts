@@ -58,15 +58,13 @@ export async function generatePairingCode(): Promise<string> {
 }
 
 /** Le code encore valide, ou `null` s'il n'y en a pas / est expiré. */
-export async function getActivePairingCode(): Promise<string | null> {
+export async function getPairingToken(): Promise<string | null> {
   const db = getDB();
-  const [code, expiresAt] = await Promise.all([
-    db.settings.get(PAIRING_KEYS.code),
-    db.settings.get(PAIRING_KEYS.codeExpiresAt),
-  ]);
-  const raw = code?.value as string | undefined;
+  const row = await db.settings.get(PAIRING_KEYS.code);
+  const raw = row?.value as string | undefined;
   if (!raw) return null;
-  const exp = typeof expiresAt?.value === "number" ? expiresAt.value : 0;
+  const expRow = await db.settings.get(PAIRING_KEYS.codeExpiresAt);
+  const exp = typeof expRow?.value === "number" ? expRow.value : 0;
   return exp > Date.now() ? raw : null;
 }
 

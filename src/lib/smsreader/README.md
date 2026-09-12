@@ -17,11 +17,11 @@ La seule question restante : **comment l'app obtient le texte du SMS sans le fai
 
 ## Vérité technique (à ne pas survendre)
 
-| Plateforme | Lecture auto du SMS entrant | Verdict |
-| ---------- | --------------------------- | ------- |
-| **Web / PWA** | Impossible — le navigateur n'a aucun accès SMS | ❌ |
-| **iOS** | **Interdit.** Apple ne fournit AUCUNE API de lecture de la boîte de réception SMS à une app tierce. Les SMS Retriever API (OTP) ont été retirées aux apps standards. Aucun contournement respectueux des règles de la plateforme. | ❌ |
-| **Android (Capacitor)** | Possible MAIS fortement contraint (voir ci-dessous) | ⚠️ |
+| Plateforme              | Lecture auto du SMS entrant                                                                                                                                                                                                       | Verdict |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| **Web / PWA**           | Impossible — le navigateur n'a aucun accès SMS                                                                                                                                                                                    | ❌      |
+| **iOS**                 | **Interdit.** Apple ne fournit AUCUNE API de lecture de la boîte de réception SMS à une app tierce. Les SMS Retriever API (OTP) ont été retirées aux apps standards. Aucun contournement respectueux des règles de la plateforme. | ❌      |
+| **Android (Capacitor)** | Possible MAIS fortement contraint (voir ci-dessous)                                                                                                                                                                               | ⚠️      |
 
 ## Android : la voie possible, et ses garde-fous
 
@@ -72,6 +72,7 @@ public final class SmsReader extends Plugin {
 ```
 
 Côté JS, le flux serait :
+
 1. `SmsReader.readRecent()` → dernier SMS.
 2. `parsePaymentSms(body)` (déjà en place).
 3. `unlockFromPaymentSms(body)` (déjà en place) → déverrouillage offline.

@@ -15,7 +15,7 @@
 // jamais par QR : c'est voulu et géré côté UI (DevicePairingDialog).
 import { getShopProfile, saveShopProfile } from "@/lib/db";
 import { getOrchestratorUrl, getOpsRelayUrl } from "@/lib/sync";
-import { getActivePairingCode } from "@/lib/syncengine/pairing";
+import { getPairingToken } from "@/lib/syncengine/pairing";
 import type { DeviceRole } from "@/lib/syncengine/types";
 import {
   getPreferences,
@@ -96,7 +96,7 @@ export async function buildPairingPayload(role?: DeviceRole): Promise<string | n
   const profile = await getShopProfile();
   if (!profile?.accountPhone || !profile.accountPassword) return null;
   const prefs = getPreferences();
-  const pairCode = await getActivePairingCode();
+  const pairCode = await getPairingToken();
   const payload: PairingPayload = {
     v: 1,
     app: "ecaisse",

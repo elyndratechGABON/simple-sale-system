@@ -28,7 +28,7 @@ import {
   clearPairingCode,
   enterPairingCode,
   generatePairingCode,
-  getActivePairingCode,
+  getPairingToken,
   isOwnerIdentity,
   pairCodeExpiry,
 } from "./pairing";
@@ -104,11 +104,11 @@ describe("code de paire", () => {
     await freshDevice();
     const code = await generatePairingCode();
     expect(code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
-    expect(await getActivePairingCode()).toBe(code);
+    expect(await getPairingToken()).toBe(code);
     expect(await pairCodeExpiry()).toBeGreaterThan(Date.now());
 
     await clearPairingCode();
-    expect(await getActivePairingCode()).toBeNull();
+    expect(await getPairingToken()).toBeNull();
     expect(await pairCodeExpiry()).toBeNull();
   });
 

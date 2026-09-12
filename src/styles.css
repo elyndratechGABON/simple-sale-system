@@ -279,9 +279,7 @@
      `--kb-h` (clavier ouvert) vient en plus : les dernières lignes de contenu
      restent défilables au-dessus des touches pendant qu'on tape. */
   .app-main {
-    padding-bottom: calc(
-      var(--bottomnav-h) + var(--kb-h, 0px) + env(safe-area-inset-bottom, 0px)
-    );
+    padding-bottom: calc(var(--bottomnav-h) + var(--kb-h, 0px) + env(safe-area-inset-bottom, 0px));
   }
 
   @media (min-width: 64rem) {

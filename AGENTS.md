@@ -17,20 +17,20 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
 
 ## Structure
 
-| Chemin                        | Contenu                                                   |
-| ----------------------------- | --------------------------------------------------------- |
-| `src/lib/db.ts`               | **seul** module qui touche IndexedDB                      |
-| `src/lib/analytics.ts`        | agrégations, fonctions **pures** (ni DB ni React)         |
-| `src/lib/settings.ts`         | préférences localStorage + thème                          |
-| `src/lib/gatekeeper.ts`       | handshake, verrou suspend, messages — appliqués avant toute sync |
-| `src/lib/sync.ts`             | orchestration `backgroundSync`/`syncNow` (agrégats 7 j)   |
-| `src/components/SuspendedScreen.tsx` | écran blocage dur si suspension                    |
-| `src/lib/exports/`            | CSV, Excel, PDF, sauvegarde JSON                          |
-| `src/routes/index.tsx`        | page publique de présentation (`/`), hors app             |
-| `src/routes/_app.tsx`         | chrome de l'application : en-tête, transition, onboarding |
-| `src/routes/_app/`            | les six écrans de l'application (`/pos`, `/stocks`, …)    |
-| `src/routes/`                 | routes générées par TanStack Router                       |
-| `scripts/inject-precache.mjs` | injecte les assets hashés dans le service worker          |
+| Chemin                               | Contenu                                                          |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| `src/lib/db.ts`                      | **seul** module qui touche IndexedDB                             |
+| `src/lib/analytics.ts`               | agrégations, fonctions **pures** (ni DB ni React)                |
+| `src/lib/settings.ts`                | préférences localStorage + thème                                 |
+| `src/lib/gatekeeper.ts`              | handshake, verrou suspend, messages — appliqués avant toute sync |
+| `src/lib/sync.ts`                    | orchestration `backgroundSync`/`syncNow` (agrégats 7 j)          |
+| `src/components/SuspendedScreen.tsx` | écran blocage dur si suspension                                  |
+| `src/lib/exports/`                   | CSV, Excel, PDF, sauvegarde JSON                                 |
+| `src/routes/index.tsx`               | page publique de présentation (`/`), hors app                    |
+| `src/routes/_app.tsx`                | chrome de l'application : en-tête, transition, onboarding        |
+| `src/routes/_app/`                   | les six écrans de l'application (`/pos`, `/stocks`, …)           |
+| `src/routes/`                        | routes générées par TanStack Router                              |
+| `scripts/inject-precache.mjs`        | injecte les assets hashés dans le service worker                 |
 
 ## Landmines
 

@@ -42,7 +42,7 @@ import {
   approveDevice,
   enterPairingCode,
   generatePairingCode,
-  getActivePairingCode,
+  getPairingToken,
   pairCodeExpiry,
   ROLE_LABELS,
 } from "@/lib/syncengine/pairing";
@@ -245,7 +245,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     if (!open) return;
     let cancelled = false;
     void (async () => {
-      const [code, expiry] = await Promise.all([getActivePairingCode(), pairCodeExpiry()]);
+      const [code, expiry] = await Promise.all([getPairingToken(), pairCodeExpiry()]);
       if (!cancelled) {
         setPairCode(code);
         setCodeExpiry(expiry);

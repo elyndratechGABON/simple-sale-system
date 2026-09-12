@@ -28,17 +28,68 @@ import { emitOp } from "./ops";
 import { listPendingOps, markOpsSynced } from "./outbox";
 import { getDB, listProducts } from "../db";
 import { getPreferences } from "../settings";
+import { getPairingToken } from "./pairing"; // Nouveau jeton pour l'appairage
 import type {
   CatalogueRequestPayload,
   CatalogueSnapshotPayload,
+  DeviceAnnouncePayload,
   SyncIdentity,
   SyncOp,
+  PairedDevice,
 } from "./types";
 
 /** Une caisse qui importe le stock propriétaire ne doit pas faire répondre le propriétaire
  *  plus d'une fois par fenêtre : le relais rend la dernière op de toute façon, un rebouclage
  *  d'instantanés serait du bruit inutile. */
 const SNAPSHOT_THROTTLE_MS = 20_000;
+
+/**
+ * Gère l'annonce d'un nouvel appareil sur le canal P2P.
+ * Si le code de paire reçu correspond au code local affiché par le propriétaire,
+ * l'appareil est marqué comme `paired` avec le rôle fourni (généralement "employee").
+ * Sinon, il reste en `pending` en attente d'approbation manuelle.
+ */
+async function handleDeviceAnnounce(payload: DeviceAnnouncePayload): Promise<void> {
+  if (!payload?.device_id) return;
+
+  const db = getDB();
+  const now = Date.now();
+
+  // Récupérer le code de paire actif local (6 caractères, null si expiré/absent)
+  const activeCode = await getPairingToken();
+  const identity = getIdentity();
+  const shopId = identity?.shopId ?? "";
+
+  // Vérifier si le code reçu est valide et correspond au code actif
+  const codeMatches = Boolean(
+    payload.pair_code && activeCode && payload.pair_code.toUpperCase() === activeCode,
+  );
+
+  // Récupérer la fiche existante ou en créer une nouvelle
+  const existing =
+    (await db.paired_devices.get(payload.device_id)) ??
+    ({
+      id: payload.device_id,
+      shop_id: shopId,
+      updated_at: now,
+    } satisfies PairedDevice);
+
+  // Déterminer le statut : paired si code valide OU si déjà pairé OU si rôle owner (confiance)
+  const wasPaired = existing.status === "paired";
+  const autoPaired = codeMatches || wasPaired || payload.role === "owner";
+
+  // Mettre à jour la fiche avec les données de l'annonce
+  await db.paired_devices.put({
+    ...existing,
+    device_name: payload.employee_name ?? existing.device_name,
+    role: payload.role ?? existing.role,
+    public_key: payload.public_key ?? existing.public_key,
+    server_device_id: payload.server_device_id ?? existing.server_device_id,
+    status: autoPaired ? "paired" : "pending",
+    paired_at: autoPaired ? (existing.paired_at ?? now) : existing.paired_at,
+    updated_at: now,
+  });
+}
 const KEY_LAST_SNAPSHOT = "syncengine_last_snapshot_at";
 
 /** Publication continue du catalogue : le propriétaire maintient FRIS un instantané ABSOLU
@@ -88,6 +139,16 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
   const remote = await client.pull(identity.shopId, identity.deviceId);
   const foreign: SyncOp[] = [];
   let skipped = 0;
+  let announceApplied = 0;
+
+  // Know which devices are already paired BEFORE processing announces
+  const knownBefore = new Set(
+    (await getDB().paired_devices.where("shop_id").equals(identity.shopId).toArray()).map(
+      (d) => d.id,
+    ),
+  );
+  let newcomerAnnounced = false;
+
   for (const op of remote) {
     if (op.device_id === identity.deviceId) {
       skipped++;
@@ -99,20 +160,19 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       skipped++;
       continue;
     }
+    // NOUVEAU : gérer l'annonce d'un nouvel appareil (employé)
+    if (op.type === "device.announce") {
+      await handleDeviceAnnounce(op.payload as DeviceAnnouncePayload);
+      // Check if this is a new device (not already paired before we started)
+      if (!knownBefore.has(op.entity_id)) {
+        newcomerAnnounced = true;
+      }
+      announceApplied++;
+      continue;
+    }
     foreign.push(op);
   }
-  // Une caisse du groupe vient de s'annoncer pour la première fois AVEC NOUS : elle est
-  // neuve et partirait vide (les deltas seuls ne reconstruisent pas le catalogue d'un
-  // écran sans historiques). Un membre non-employé lui renvoie alors l'instantané complet
-  // des produits — stock ABSOLU courant — qu'elle prendra comme point de départ.
-  const known = new Set(
-    (await getDB().paired_devices.where("shop_id").equals(identity.shopId).toArray()).map(
-      (d) => d.id,
-    ),
-  );
-  const newcomerAnnounced = foreign.some(
-    (op) => op.type === "device.announce" && !known.has(op.entity_id),
-  );
+
   // Import « stock du propriétaire » demandé par un écran du groupe : le membre principal
   // répond en poussant un instantané ABSOLU du catalogue vivant (stock courant). Ne
   // réagir qu'à une demande PAS ENCORE consommée (`processed_ops`) : `foreign` contient
@@ -137,7 +197,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
   // instantané ABSOLU au relais, dans la même rotation. L'écran employé qui importera son
   // stock le tirera directement, même si ce téléphone est déjà éteint.
   await publishFreshCatalog(client, identity);
-  return { pushed, applied, skipped, remote: foreign.length };
+  return { pushed, applied: applied + announceApplied, skipped, remote: foreign.length };
 }
 
 /** Signature stable du catalogue local : les champs qui suffisent à décider « le stock

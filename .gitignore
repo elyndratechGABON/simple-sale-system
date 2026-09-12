@@ -35,3 +35,4 @@ bun.lock
 .responsive-shots/
 
 .aider*
+.vercel

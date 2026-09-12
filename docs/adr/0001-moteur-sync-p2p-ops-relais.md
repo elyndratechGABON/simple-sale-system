@@ -21,7 +21,9 @@ Chaque appareil est un nœud autonome : il travaille hors ligne sans bloquer, et
 toute mutation dans un outbox `sync_ops`. Op immuable :
 
 ```ts
-{ id: `${shortDeviceId}:${seq}`, shop_id, device_id, seq, type, entity_id, payload, created_at }
+{
+  id: (`${shortDeviceId}:${seq}`, shop_id, device_id, seq, type, entity_id, payload, created_at);
+}
 ```
 
 `id` est déterministe (appareil + séquence) : le relais est idempotent par `id`, la
