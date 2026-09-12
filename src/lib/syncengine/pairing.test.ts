@@ -354,4 +354,24 @@ describe("groupes", () => {
     await setIdentityRole("employee");
     expect(isOwnerIdentity()).toBe(false);
   });
+
+  // RÈGRESSION : un écran qui REJOINT un compte existant (scan du QR, mot clé,
+  // téléphone+mot de passe) doit terminer EMPLOYÉ — pas un second propriétaire.
+  // Sans le `setIdentityRole("employee")` forcé par l'assistant de jonction, un
+  // appareil neuf (aucune ligne `role`) relisait "owner" après rechargement et
+  // héritait de tous les accès du propriétaire (stock, équipe, abonnements…).
+  it("la jonction à un compte existant ne produit jamais un rôle propriétaire", async () => {
+    await freshDevice();
+    await ensureShopProfile("Boutique");
+    await setShopAccount({ name: "Proprio", phone: "+241060000", password: "" });
+    // Simule EXACTEMENT l'assistant de jonction : identité chargée puis rôle employé forcé.
+    await ensureIdentity();
+    await setIdentityRole("employee");
+
+    // Relit l'identité depuis la base (cache vidé), comme au redémarrage de l'app.
+    resetIdentityForTests();
+    const identity = await ensureIdentity();
+    expect(identity.role).toBe("employee");
+    expect(isOwnerIdentity()).toBe(false);
+  });
 });

@@ -64,7 +64,7 @@ import {
 import { joinByKeyword } from "@/lib/gatekeeper";
 import { parsePairingPayload, applyPairingShop } from "@/lib/pairing";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
-import { ensureIdentity } from "@/lib/syncengine/identity";
+import { ensureIdentity, setIdentityRole } from "@/lib/syncengine/identity";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { loadDemoData } from "@/lib/demo-data";
 import { toast } from "sonner";
@@ -284,9 +284,13 @@ export function SetupWizard({
     });
 
     // Jonction via QR : le compte (téléphone+mot de passe) vient d'être posé → le groupe
-    // de partage P2P (`s_`) existe maintenant. On s'annonce avec le code de confirmation
-    // temporaire lu dans le QR : le principal le reconnaît `paired` d'office et les
-    // données (produits, ventes, stock) convergent au prochain échange P2P.
+    // de partage P2P (`s_`) existe maintenant. Le rôle DEVAIT être forcé à "employee" dès
+    // l'entrée, mais seule la route directe (welcome) s'en chargeait : le wizard laissait
+    // un appareil neuf sans ligne `role` — ensureIdentity retombait sur "owner" par défaut,
+    // donnant à l'employé tous les accès du propriétaire. On force ici aussi, et on
+    // s'annonce avec le code de confirmation temporaire lu dans le QR : le principal le
+    // reconnaît `paired` d'office et les données (produits, ventes, stock) convergent au
+    // prochain échange P2P.
     if (pairCode && accPhone.trim() && accPassword) {
       const pairing = await enterPairingCode(pairCode).catch(() => "invalid" as const);
       if (pairing === "invalid") {
@@ -304,6 +308,11 @@ export function SetupWizard({
     // « Mon expérience » du welcome affichera, même après la suppression du compte.
     if (accountMode === "join") {
       const identity = await ensureIdentity();
+      // RASSIS le rôle employé : un écran qui REJOINT un compte existant (scan QR, mot clé,
+      // téléphone+mot de passe) est un EMPLOYÉ — jamais un second propriétaire. Sans cette
+      // ligne, un appareil neuf sans fiche `role` restait "owner" (défaut d'ensureIdentity)
+      // et héritait de tous les accès du propriétaire.
+      await setIdentityRole("employee");
       await addEmployeeHistory({
         employeeId: ensureEmployeeId(),
         deviceId: identity.deviceId,
