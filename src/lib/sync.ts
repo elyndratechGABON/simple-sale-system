@@ -217,6 +217,14 @@ export async function syncNow(): Promise<HandshakeResult> {
 }
 
 /**
+ * Phases d'un import du stock propriétaire, pour l'animation de transfert côté UI :
+ * - "relay"     → connexion au relais + émission de la demande ;
+ * - "waiting"   → demande envoyée, attente de l'instantané du propriétaire ;
+ * - "receiving" → des opérations arrivent (instantané en cours d'application).
+ */
+export type ImportPhase = "relay" | "waiting" | "receiving";
+
+/**
  * Import MANUEL du catalogue propriétaire (bouton « Importer le stock du propriétaire »
  * sur l'écran employé). Passe PAR LE RELAIS — jamais l'orchestrateur :
  *  1. l'écran émet une demande d'instantané FRIS → le principal répond à son prochain
@@ -226,14 +234,16 @@ export async function syncNow(): Promise<HandshakeResult> {
  *     (jusqu'à ~85 s : la fenêtre doit dépasser le cycle de 60 s du propriétaire) et on
  *     s'arrête dès que des produits arrivent.
  *  Le `cause` distingue l'échec pour l'UI (« offline », « orphan » = caisse sans compte,
- *  « timeout » = demande en route, réponse pas encore reçue).
+ *  « timeout » = demande en route, réponse pas encore reçue). `progress` pilote
+ *  l'animation de transfert affichée pendant l'import.
  */
-export async function importOwnerCatalog(): Promise<{
+export async function importOwnerCatalog(progress?: (phase: ImportPhase) => void): Promise<{
   ok: boolean;
   applied: number;
   count: number;
   cause?: "offline" | "orphan" | "timeout";
 }> {
+  progress?.("relay");
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return { ok: false, applied: 0, count: 0, cause: "offline" };
   }
@@ -243,11 +253,13 @@ export async function importOwnerCatalog(): Promise<{
   }
 
   await emitCatalogRequest(identity);
+  progress?.("waiting");
 
   let lastApplied = 0;
   let count = 0;
   for (let i = 0; i < 18; i++) {
     const state = await runOpsExchange();
+    if (state && state.applied > 0) progress?.("receiving");
     if (state) lastApplied = state.applied;
     count = (await listProducts()).length;
     if (count > 0) break;

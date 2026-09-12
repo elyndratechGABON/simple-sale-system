@@ -34,17 +34,28 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAccess } from "@/hooks/use-access";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import { cn } from "@/lib/utils";
 import {
   ensureIdentity,
   resetDeviceIdentity,
   setIdentityEmployeeName,
 } from "@/lib/syncengine/identity";
-import { importOwnerCatalog } from "@/lib/sync";
+import { importOwnerCatalog, type ImportPhase } from "@/lib/sync";
 import { buildClosingPayload, parseRestitutionRequest } from "@/lib/restitution";
 import { closeEmployeeHistory, getShopProfile, purgeAllData } from "@/lib/db";
 import { deleteShopRemote, requestShopDeletion, resetGatekeeper } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
-import { Download, Lock, Send, ShieldAlert, Trash2, UserRound } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Download,
+  Loader2,
+  Lock,
+  Send,
+  ShieldAlert,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const DAY_MS = 86_400_000;
@@ -69,14 +80,23 @@ export function EmployeeAccountPanel() {
   }, []);
 
   // Import manuel du catalogue propriétaire (pull des ops du groupe + application).
+  const [importPhase, setImportPhase] = useState<ImportPhase | "done" | null>(null);
+  const [importResult, setImportResult] = useState<{ applied: number; count: number } | null>(null);
   const importMut = useMutation({
     mutationFn: async () => {
-      const res = await importOwnerCatalog();
-      if (res.ok) await qc.invalidateQueries({ queryKey: ["products"] });
+      setImportPhase("relay");
+      setImportResult(null);
+      const res = await importOwnerCatalog(setImportPhase);
+      if (res.ok) {
+        await qc.invalidateQueries({ queryKey: ["products"] });
+        setImportResult({ applied: res.applied, count: res.count });
+        setImportPhase("done");
+      }
       return res;
     },
     onSuccess: (res) => {
       if (!res.ok) {
+        setImportPhase(null);
         if (res.cause === "offline") {
           toast.error("Import impossible : hors ligne — reconnectez cet écran au réseau.");
         } else if (res.cause === "orphan") {
@@ -100,6 +120,10 @@ export function EmployeeAccountPanel() {
           "Aucun produit reçu — le propriétaire doit avoir synchronisé son catalogue au moins une fois.",
         );
       }
+    },
+    onError: (error) => {
+      setImportPhase(null);
+      toast.error(error instanceof Error ? error.message : "Import impossible.");
     },
   });
 
@@ -243,14 +267,72 @@ export function EmployeeAccountPanel() {
             moins une fois pour que ses produits y figurent.
           </p>
         </div>
+
+        {importPhase !== null && (
+          <div className="rounded-lg border bg-card p-3 space-y-2" aria-live="polite">
+            {importPhase === "done" ? (
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="font-medium">
+                  Stock transféré — {importResult?.count ?? 0} produit(s) en caisse
+                </span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-1 text-[11px] font-medium text-muted-foreground">
+                  <span
+                    className={
+                      importPhase === "relay" || importPhase === "receiving"
+                        ? "text-foreground"
+                        : ""
+                    }
+                  >
+                    {importPhase === "relay" ? "Connexion au relais…" : "Propriétaire"}
+                  </span>
+                  <span className={importPhase === "receiving" ? "text-foreground" : ""}>
+                    {importPhase === "waiting" ? "En attente de réponse…" : "Réception"}
+                  </span>
+                </div>
+                {/* Barre de transfert animée : le point parcourt le fil Propriétaire → relais → caisse. */}
+                <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-border">
+                  <div
+                    className={cn(
+                      "absolute h-full w-1/3 rounded-full bg-primary transition-all duration-700 ease-in-out",
+                      importPhase === "relay" && "left-0 animate-pulse",
+                      importPhase === "waiting" && "left-1/3",
+                      importPhase === "receiving" && "left-2/3",
+                    )}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>Propriétaire</span>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Relais</span>
+                  <ArrowRight className="h-3 w-3" />
+                  <span>Cet écran</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <Button
           size="sm"
           className="w-full"
           disabled={importMut.isPending}
           onClick={() => importMut.mutate()}
         >
-          <Download className="h-4 w-4 mr-1" />
-          {importMut.isPending ? "Import en cours…" : "Importer le stock du propriétaire"}
+          {importMut.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              Transfert du stock en cours…
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4 mr-1" />
+              Importer le stock du propriétaire
+            </>
+          )}
         </Button>
       </div>
 

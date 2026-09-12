@@ -57,6 +57,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   const qc = useQueryClient();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState(false);
+  const [qrErrorDetail, setQrErrorDetail] = useState<string | null>(null);
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [codeExpiry, setCodeExpiry] = useState<number | null>(null);
   const [enteredCode, setEnteredCode] = useState("");
@@ -106,6 +107,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     if (!open || !hasNamePhone) return;
     let cancelled = false;
     setQrError(false);
+    setQrErrorDetail(null);
     void (async () => {
       try {
         // Le QR transporte désormais un code de confirmation TEMPORAIRE (code de paire
@@ -128,27 +130,55 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           const relayUrl = (
             getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? "")
           ).replace(/\/$/, "");
-          const mintRes = await fetch(relayUrl + "/api/v1/share/mint", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-ops-token":
-                typeof import.meta.env?.VITE_OPS_TOKEN === "string"
-                  ? import.meta.env.VITE_OPS_TOKEN
-                  : "",
-            },
-            body: JSON.stringify({
-              shop_id: identity?.shopId ?? "",
-              // Repli TRUTHY (||) : un champ vide ("" mais défini) doit laisser la place
-              // au téléphone/nom de la fiche Boutique — sinon le relais répond 400.
-              account_name: profile?.accountName || profile?.storeName || "",
-              account_phone: profile?.accountPhone || profile?.phone || "",
-              pair_code: pairCode ?? generatePairingCode(),
-            }),
-          });
-          if (mintRes.ok) {
-            const mintData = await mintRes.json();
-            token = mintData.token;
+          // Un cold start du relais (serverless) peut jeter la première requête :
+          // on réessaie une fois avant de déclarer l'émission impossible.
+          for (let attempt = 0; attempt < 2 && token === null; attempt++) {
+            const mintRes = await fetch(relayUrl + "/api/v1/share/mint", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-ops-token":
+                  typeof import.meta.env?.VITE_OPS_TOKEN === "string"
+                    ? import.meta.env.VITE_OPS_TOKEN
+                    : "",
+              },
+              body: JSON.stringify({
+                shop_id: identity?.shopId ?? "",
+                // Repli TRUTHY (||) : un champ vide ("" mais défini) doit laisser la place
+                // au téléphone/nom de la fiche Boutique — sinon le relais répond 400.
+                account_name: profile?.accountName || profile?.storeName || "",
+                account_phone: profile?.accountPhone || profile?.phone || "",
+                pair_code: pairCode ?? generatePairingCode(),
+              }),
+            });
+            if (mintRes.ok) {
+              const mintData = await mintRes.json();
+              token = mintData.token;
+            } else {
+              // Distinguer un rejet du relais d'un simple problème de réseau : un 401/400
+              // trahit presque toujours une VERSION ANCIENNE de l'app (bundle périmé en cache)
+              // qui ne parle plus le contrat actuel — la solution est de recharger l'app.
+              let serverError = "";
+              try {
+                const data = await mintRes.json();
+                serverError = typeof data?.error === "string" ? data.error : "";
+              } catch {
+                /* réponse non JSON */
+              }
+              if (mintRes.status === 401) {
+                setQrErrorDetail(
+                  "Le serveur a refusé l'identifiant de cette caisse (401). Ouvrez les réglages →" +
+                    " «À propos» ou rechargez l'application complètement : une version ancienne" +
+                    " gardée en mémoire ne sait plus émettre de QR.",
+                );
+              } else {
+                setQrErrorDetail(
+                  `Le serveur a refusé la demande (${mintRes.status})${serverError ? ` : ${serverError}` : ""}.` +
+                    " Rechargez l'application complètement pour la dernière version.",
+                );
+              }
+              if (attempt === 0) await new Promise((r) => setTimeout(r, 1200));
+            }
           }
         } catch {
           /* relay hors ligne → pas de token → aucun QR émis (jamais de mot de passe) */
@@ -324,10 +354,13 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                   className="aspect-square h-56 max-w-full rounded-lg object-contain"
                 />
               ) : qrError ? (
-                <p className="px-2 py-16 text-center text-sm text-muted-foreground">
-                  Relais injoignable : aucun QR ne peut être émis. Le mot de passe n'est jamais
-                  envoyé dans un QR — revenez quand le réseau est disponible.
-                </p>
+                <div className="px-2 py-14 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Relais injoignable : aucun QR ne peut être émis. Le mot de passe n'est jamais
+                    envoyé dans un QR — revenez quand le réseau est disponible.
+                  </p>
+                  {qrErrorDetail && <p className="mt-2 text-xs text-amber-600">{qrErrorDetail}</p>}
+                </div>
               ) : (
                 <div className="flex aspect-square h-56 w-full max-w-[224px] items-center justify-center rounded-lg border border-dashed">
                   <QrCode className="h-8 w-8 animate-pulse text-muted-foreground" />
