@@ -243,26 +243,33 @@ function StatCard({
   icon: typeof Wallet;
   label: string;
   value: string;
-  tone?: "neutral" | "warning" | "danger";
+  tone?: "neutral" | "warning" | "danger" | "emerald";
 }) {
   // Couleur uniquement quand elle porte une information : neutre sinon.
   const iconClass =
     tone === "danger"
-      ? "bg-destructive/10 text-destructive"
+      ? "bg-destructive/10 text-destructive border-destructive/20"
       : tone === "warning"
-        ? "bg-amber-500/10 text-amber-600"
-        : "bg-muted text-muted-foreground";
+        ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+        : tone === "emerald"
+          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+          : "bg-slate-100 text-slate-600 border-slate-200/60";
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-3.5">
+    <Card className="border border-slate-200/80 bg-white shadow-sm transition-all hover:border-slate-300">
+      <CardContent className="flex items-center gap-3.5 p-4">
         <span
-          className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", iconClass)}
+          className={cn(
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
+            iconClass,
+          )}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">{label}</p>
-          <p className="text-base font-bold leading-tight tabular-nums">{value}</p>
+          <p className="truncate text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {label}
+          </p>
+          <p className="text-lg font-black tracking-tight text-slate-900 tabular-nums">{value}</p>
         </div>
       </CardContent>
     </Card>
