@@ -292,6 +292,7 @@ function PosPage() {
   const { data: salesToday = [] } = useQuery({
     queryKey: ["sales", "today"],
     queryFn: listSalesToday,
+    refetchInterval: 10_000, // Auto-refresh toutes les 10s
   });
   const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 

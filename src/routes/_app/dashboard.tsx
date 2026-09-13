@@ -241,6 +241,7 @@ function DashboardPage() {
       const items = await getSaleItemsForSales(sales.map((s) => s.id));
       return { sales, items };
     },
+    refetchInterval: 10_000,
   });
 
   const { data: fortnightData } = useQuery({
@@ -250,6 +251,7 @@ function DashboardPage() {
       const items = await getSaleItemsForSales(sales.map((s) => s.id));
       return { sales, items };
     },
+    refetchInterval: 10_000,
   });
 
   // Les ventes « dans le périmètre » de l'écran : tout pour le propriétaire, SES ventes
@@ -265,22 +267,29 @@ function DashboardPage() {
     [fortnightData, deviceId],
   );
 
-  const { data: products } = useQuery({ queryKey: ["products"], queryFn: listProducts });
+  const { data: products } = useQuery({
+    queryKey: ["products"],
+    queryFn: listProducts,
+    refetchInterval: 10_000,
+  });
   const { data: openTables } = useQuery({
     queryKey: ["open_tables"],
     queryFn: listOpenTables,
     staleTime: 30_000,
+    refetchInterval: 10_000,
   });
   const { data: activeRentals } = useQuery({
     queryKey: ["rentals", "active"],
     queryFn: listActiveRentals,
     staleTime: 30_000,
+    refetchInterval: 10_000,
   });
   // Locations COMMENCÉES dans les 14 derniers jours : c'est le « revenu par actif » du
   // cluster location, absent du canal des ventes (une location n'est jamais une vente).
   const { data: fortnightRentals } = useQuery({
     queryKey: ["rentals", "range", fortnightRange.from, fortnightRange.to],
     queryFn: () => listRentals(fortnightRange.from, fortnightRange.to),
+    refetchInterval: 10_000,
   });
 
   const rentalStats = useMemo(
