@@ -14,10 +14,12 @@ import { registerServiceWorker, requestPersistentStorage } from "@/lib/pwa";
 import { autoCloseDay } from "@/lib/db";
 import { backgroundSync } from "@/lib/sync";
 import { loadLockState } from "@/lib/gatekeeper";
+import { withRetry } from "@/lib/syncengine/retry";
 
 // Relance de la synchronisation d'arrière-plan : toutes les minutes tant que l'app est
 // ouverte. C'est elle qui fait arriver les données quand le PC du commerçant s'allume
 // après la caisse — l'échec d'une tentative ne condamne pas l'envoi.
+// Surchargé : retry avec backoff pour résister au load.
 const SYNC_INTERVAL_MS = 60_000;
 
 // Préfixes de requêtes alimentées par la convergence P2P (relais). Quand un tick a
@@ -46,12 +48,15 @@ export function PwaBootstrap() {
     // ligne ou serveur éteint, rien ne se passe et on réessaiera — au retour en ligne et
     // toutes les minutes.
     const sync = async () => {
-      const changed = await backgroundSync();
-      if (changed) {
-        for (const key of SYNCED_QUERY_KEYS) {
-          await queryClient.invalidateQueries({ queryKey: key });
+      // Retry avec backoff exponentiel pour résister au load surchargé
+      await withRetry(async () => {
+        const changed = await backgroundSync();
+        if (changed) {
+          for (const key of SYNCED_QUERY_KEYS) {
+            await queryClient.invalidateQueries({ queryKey: key });
+          }
         }
-      }
+      });
     };
     void loadLockState().then(() => sync());
     const onOnline = () => void sync();
