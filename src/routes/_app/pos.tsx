@@ -54,6 +54,7 @@ import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { savePreferences } from "@/lib/settings";
 import { verifyPin } from "@/lib/pin";
 import { playSuccessChime } from "@/lib/success-sound";
+import { useSaleTrigger } from "@/hooks/use-sale-trigger";
 import { LOW_STOCK_THRESHOLD } from "@/lib/alerts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -270,6 +271,7 @@ type Target = { kind: "direct" } | { kind: "table"; saleId: string };
 type Cashing = null | { kind: "table" } | { kind: "round"; orderedAt: number };
 
 function PosPage() {
+  const { notifyOwner } = useSaleTrigger();
   const qc = useQueryClient();
   const { tables: tableLabels } = usePreferences();
   const features = useClusterFeatures();
@@ -622,6 +624,7 @@ function PosPage() {
     onSuccess: (sale) => {
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["sale_items", activeTable?.id] });
+      notifyOwner(); // Trigger temps réel propriétaire + son
       toast.success(`Tournée encaissée sur la table ${sale.table}`, {
         description: `Total ${formatFCFA(sale.total)} · Rendu ${formatFCFA(sale.change_due)}`,
       });

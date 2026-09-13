@@ -215,7 +215,6 @@ function roundDuration(d: number): string {
 }
 
 function DashboardPage() {
-  // DONNÉES CONSERVÉES — logique métier inchangée (scopeByDevice, today/fortnight)
   const { notifyOwner } = useSaleTrigger();
   const { workspaceName } = usePreferences();
   const features = useClusterFeatures();
