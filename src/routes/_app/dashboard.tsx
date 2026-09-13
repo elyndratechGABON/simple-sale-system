@@ -198,8 +198,23 @@ function AlertsSection({ alerts }: { alerts: AppAlert[] }) {
               {expanded ? "Réduire" : `Tout voir (${alerts.length})`}
             </Button>
           )}
-        </div>
-      </Card>
+              </div>
+            </Card>
+            <Card variant="primary" className="mb-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-bold">Compte bancaire virtuel</h2>
+                  <p className="text-sm opacity-90">Chiffre d'affaires du jour</p>
+                  <div className="mt-2 text-3xl font-extrabold tracking-tight">{formatFCFA(todayRev)}</div>
+                </div>
+                <div className="text-2xl opacity-70">👁</div>
+              </div>
+              <div className="mt-4 flex items-center gap-4 text-sm opacity-90 border-t border-white/20 pt-3">
+                <span><strong>Ventes</strong> {todaySalesCount}</span>
+                <span><strong>Clients</strong> {todayCustomers}</span>
+                <span><strong>Panier</strong> {formatFCFA(avgPanier)}</span>
+              </div>
+            </Card>
     </motion.div>
   );
 }
