@@ -12,7 +12,7 @@
 //
 // Ne JAMAIS passer par les fonctions publiques de db.ts ici : elles re-émettraient des
 // ops. Application directe sur les stores, sous le seul contrôle de `processed_ops`.
-import { getDB } from "../db";
+import { getDB, isClosed } from "../db";
 import type { PosDatabase } from "../db";
 import { getPreferences, savePreferences } from "../settings";
 import type {
@@ -182,6 +182,11 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       if (!pl?.sale_id) break;
       const sale = await db.sales.get(pl.sale_id);
       if (!sale || sale.deleted_at) break;
+      // Miroir de la garde locale `cancelSale` : une vente verrouillée — clôturée à la
+      // main ou écoulée depuis 24 h — n'est pas annulable, même quand l'op arrive d'un
+      // pair. L'émetteur a déjà refusé de l'annuler sur sa machine ; un décalage
+      // d'horloge ne doit pas pouvoir réécrire un historique clôturé ici non plus.
+      if (isClosed(sale)) break;
       const deleted_at = Date.now();
       const items = await db.sale_items.where("sale_id").equals(sale.id).toArray();
       for (const item of items) {

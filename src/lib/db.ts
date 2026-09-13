@@ -1338,6 +1338,10 @@ export async function createSale(input: {
   // Hors espèces, le montant débité est exact : rien ne rentre physiquement dans le
   // tiroir-caisse, il n'y a donc rien à rendre.
   const cashGiven = method === "cash" ? input.cash_given : total;
+  // Garde défensive, miroir de `payTable`/`payRound` : un encaissement doit couvrir le
+  // total. L'interface désactive déjà le bouton dans ce cas, mais une caisse offline ne
+  // dépend pas que de l'interface — un `change_due` négatif serait un rendu impossible.
+  if (cashGiven < total) throw new Error("Montant insuffisant.");
   // Qui encaisse : le rôle (employé) et le nom de l'appareil, pour le suivi
   // d'activité du propriétaire. Sur une caisse propriétaire, la vente reste à lui.
   const identity = getIdentity();
@@ -1465,13 +1469,18 @@ export async function cancelSale(saleId: string): Promise<void> {
         await db.sale_items.put({ ...item, ...touch(), deleted_at });
       }
       await db.sales.put({ ...sale, ...touch(), deleted_at });
-      // Les pairs restaurent LEUR stock au rejeu de cette op ; l'émetteur l'a déjà fait
-      // juste au-dessus.
-      await emitOp(db, getIdentity(), {
-        type: "sale.cancelled",
-        entity_id: saleId,
-        payload: { sale_id: saleId },
-      });
+      // Seules les ventes RÉGLÉES ont rejoint les pairs (via `sale.created` de
+      // `createSale`, `payTable` et `payRound`) : leur annulation restaure leur stock à
+      // distance. Une addition encore ouverte — `status: "open"` — n'a jamais quitté
+      // l'appareil (les tournées ne propagent rien), la propager créerait une
+      // restauration fantôme chez des pairs qui n'ont jamais décrémenté.
+      if (sale.status !== "open") {
+        await emitOp(db, getIdentity(), {
+          type: "sale.cancelled",
+          entity_id: saleId,
+          payload: { sale_id: saleId },
+        });
+      }
     },
   );
 }
@@ -1701,8 +1710,9 @@ export async function addRound(saleId: string, lines: CartLine[]): Promise<Sale>
 
 /** Encaisse une addition : elle devient une vente ordinaire, datée de cet instant. */
 export async function payTable(saleId: string, cashGiven: number): Promise<Sale> {
+  await ensureIdentity();
   const db = getDB();
-  return db.transaction("rw", db.sales, db.sale_items, async () => {
+  return db.transaction("rw", db.sales, db.sale_items, db.sync_ops, db.settings, async () => {
     const sale = await db.sales.get(saleId);
     if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
     if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
@@ -1725,6 +1735,16 @@ export async function payTable(saleId: string, cashGiven: number): Promise<Sale>
       ...touch(),
     };
     await db.sales.put(settled);
+    // L'encaissement d'une table, c'est du chiffre d'affaires : la vente réglée et ses
+    // lignes partent dans une `sale.created` comme n'importe quelle vente au comptoir.
+    // Le stock, sorti à la COMMANDE sur la caisse émettrice (`addRound`), est décrémenté
+    // au rejeu chez les pairs (miroir de `sale.created`) : les deux machines convergent
+    // sur le même stock final. Annulée ensuite, `cancelSale` restaure des deux côtés.
+    await emitOp(db, getIdentity(), {
+      type: "sale.created",
+      entity_id: settled.id,
+      payload: { sale: settled, items },
+    });
     return settled;
   });
 }
@@ -1749,8 +1769,9 @@ export async function payRound(
   orderedAt: number,
   cashGiven: number,
 ): Promise<Sale> {
+  await ensureIdentity();
   const db = getDB();
-  return db.transaction("rw", db.sales, db.sale_items, async () => {
+  return db.transaction("rw", db.sales, db.sale_items, db.sync_ops, db.settings, async () => {
     const sale = await db.sales.get(saleId);
     if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
     if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
@@ -1783,6 +1804,16 @@ export async function payRound(
     for (const item of roundItems) {
       await db.sale_items.put({ ...item, sale_id: settled.id, ...touch() });
     }
+
+    // Vente réglée, lignes déplacées : la tournée part dans une `sale.created`. Le stock
+    // sorti à la commande sur l'émetteur est décrémenté au rejeu chez les pairs, qui
+    // convergent ainsi sur le même stock — annuler la tournée plus tard (`cancelSale`)
+    // restaure des deux côtés.
+    await emitOp(db, getIdentity(), {
+      type: "sale.created",
+      entity_id: settled.id,
+      payload: { sale: settled, items: roundItems },
+    });
 
     // Le total de la table se recalcule sur ce qui n'a pas encore été encaissé : une
     // tournée payée sort de l'addition, la suite du service repart de ce qui reste dû.

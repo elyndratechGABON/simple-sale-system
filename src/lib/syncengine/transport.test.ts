@@ -363,7 +363,7 @@ describe("transport P2P via relais", () => {
       category: "Boulangerie",
       stock: 6,
     });
-    await createSale({ lines: [LINE(product.id)], cash_given: 200 });
+    await createSale({ lines: [LINE(product.id)], cash_given: 1200 });
     await exchangeOps(relay.client); // l'employé pousse ses ops (un employé ne publie pas d'instantané)
 
     // Le propriétaire (base neuve, même groupe) tire et applique la vente.
