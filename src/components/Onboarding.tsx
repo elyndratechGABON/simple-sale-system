@@ -46,7 +46,6 @@ import {
 import {
   CLUSTER_MAP,
   getPreferences,
-  ACTIVE_CLUSTERS,
   savePreferences,
   SUB_CATEGORY_LABELS,
   WORKFLOW_DESCRIPTIONS,
@@ -651,10 +650,59 @@ export function SetupWizard({
             title="Quel type d'activité gérez-vous ?"
             description="Choisissez votre secteur. L'application s'adaptera automatiquement."
           >
+            {/* Candidats regroupés par affinité : alimentation à gauche de la
+                restauration, bar à gauche des coiffeurs, boutique à gauche du magasin,
+                boucherie à gauche de la location d'actifs. Personnalisé occupe TOUTE la
+                largeur en bas — une vraie carte pleine, pas une case isolée. */}
             <div className="grid grid-cols-2 gap-2">
-              {ACTIVE_CLUSTERS.map((c) => {
+              {[
+                "retail",
+                "restaurant",
+                "bar",
+                "service",
+                "clothing",
+                "magasin",
+                "weight",
+                "location",
+                "personnalise",
+              ].map((id) => {
+                const c = CLUSTER_MAP[id as ClusterId];
                 const Icon = resolveIcon(c.icon);
                 const active = selectedCluster === c.id;
+                const base = cn(
+                  "rounded-xl border text-left transition-all",
+                  active
+                    ? "border-primary bg-accent ring-1 ring-primary"
+                    : "bg-card hover:border-primary/50",
+                );
+                if (c.id === "personnalise") {
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setSelectedCluster(c.id)}
+                      aria-pressed={active}
+                      className={cn(base, "col-span-2 flex items-center gap-3 p-4")}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                          active
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium leading-tight">{c.label}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {c.description}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                }
                 return (
                   <button
                     key={c.id}
@@ -662,10 +710,8 @@ export function SetupWizard({
                     onClick={() => setSelectedCluster(c.id)}
                     aria-pressed={active}
                     className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-sm transition-all",
-                      active
-                        ? "border-primary bg-accent ring-1 ring-primary"
-                        : "bg-card hover:border-primary/50",
+                      base,
+                      "flex flex-col items-center gap-1.5 p-3 text-center text-sm",
                     )}
                   >
                     <span

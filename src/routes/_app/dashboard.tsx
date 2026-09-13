@@ -199,23 +199,8 @@ function AlertsSection({ alerts }: { alerts: AppAlert[] }) {
               {expanded ? "Réduire" : `Tout voir (${alerts.length})`}
             </Button>
           )}
-              </div>
-            </Card>
-            <Card variant="primary" className="mb-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-lg font-bold">Compte bancaire virtuel</h2>
-                  <p className="text-sm opacity-90">Chiffre d'affaires du jour</p>
-                  <div className="mt-2 text-3xl font-extrabold tracking-tight">{formatFCFA(todayRev)}</div>
-                </div>
-                <div className="text-2xl opacity-70">👁</div>
-              </div>
-              <div className="mt-4 flex items-center gap-4 text-sm opacity-90 border-t border-white/20 pt-3">
-                <span><strong>Ventes</strong> {todaySalesCount}</span>
-                <span><strong>Clients</strong> {todayCustomers || 0}</span>
-                <span><strong>Panier</strong> {formatFCFA(avgPanier || 0)}</span>
-              </div>
-            </Card>
+        </div>
+      </Card>
     </motion.div>
   );
 }
@@ -288,7 +273,8 @@ function DashboardPage() {
   const todayRev = todayScoped ? todayScoped.sales.reduce((s, x) => s + x.total, 0) : 0;
   const todaySalesCount = todayScoped ? todayScoped.sales.length : 0;
   const todayCustomers = todayScoped ? todayScoped.items.length : 0;
-  const avgPanier = todayRev > 0 && todaySalesCount > 0 ? Math.round(todayRev / todaySalesCount) : 0;
+  const avgPanier =
+    todayRev > 0 && todaySalesCount > 0 ? Math.round(todayRev / todaySalesCount) : 0;
 
   const { data: products } = useQuery({
     queryKey: ["products"],
@@ -435,6 +421,35 @@ function DashboardPage() {
         </h1>
         <p className="text-sm text-muted-foreground">Vue d'ensemble de votre activité</p>
       </motion.div>
+
+      {/* Compte bancaire virtuel — LE bloc financier principal : CA du jour dominant,
+          ventes / clients / panier intégrés. Remplace les 4 KPI séparées. */}
+      <Card variant="primary">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium opacity-90">Compte bancaire virtuel</p>
+            <div className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
+              {formatFCFA(todayRev)}
+            </div>
+            <p className="mt-1 text-xs opacity-80">Chiffre d'affaires du jour</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-white/15 p-2 text-lg leading-none">👁</span>
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/20 pt-3 text-sm">
+          <span className="min-w-0">
+            <span className="block text-[11px] uppercase tracking-wide opacity-80">Ventes</span>
+            <span className="block font-bold tabular-nums">{todaySalesCount}</span>
+          </span>
+          <span className="min-w-0 border-l border-white/20 pl-3">
+            <span className="block text-[11px] uppercase tracking-wide opacity-80">Clients</span>
+            <span className="block font-bold tabular-nums">{todayCustomers ?? 0}</span>
+          </span>
+          <span className="min-w-0 border-l border-white/20 pl-3 text-right">
+            <span className="block text-[11px] uppercase tracking-wide opacity-80">Panier</span>
+            <span className="block font-bold tabular-nums">{formatFCFA(avgPanier ?? 0)}</span>
+          </span>
+        </div>
+      </Card>
 
       {catalogueEmpty && (
         <motion.div

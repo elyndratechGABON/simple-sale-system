@@ -18,7 +18,13 @@ export type CardProps = {
   onClick?: () => void;
 };
 
-export function Card({ variant = "default", children, className, onClick, ...rest }: CardProps & ComponentPropsWithoutRef<"div">) {
+export function Card({
+  variant = "default",
+  children,
+  className,
+  onClick,
+  ...rest
+}: CardProps & ComponentPropsWithoutRef<"div">) {
   const isInteractive = variant === "interactive" || Boolean(onClick);
   return (
     <div
@@ -36,7 +42,8 @@ export function Card({ variant = "default", children, className, onClick, ...res
         variant === "primary" && "bg-[#009B63] text-white shadow-none",
         variant === "soft" && "bg-[#E7F5EF]",
         variant === "outlined" && "bg-white border border-[#E5E8E7] shadow-none",
-        isInteractive && "hover:-translate-y-px active:translate-y-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#009B63]/50",
+        isInteractive &&
+          "hover:-translate-y-px active:translate-y-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#009B63]/50",
         className,
       )}
       style={{
@@ -51,11 +58,7 @@ export function Card({ variant = "default", children, className, onClick, ...res
 }
 
 export function CardHeader({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={cn("mb-3 flex items-center justify-between", className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("mb-3 flex items-center justify-between", className)}>{children}</div>;
 }
 
 export function CardContent({ children, className }: { children: ReactNode; className?: string }) {
