@@ -89,15 +89,20 @@ async function handleDeviceAnnounce(payload: DeviceAnnouncePayload): Promise<voi
       updated_at: now,
     } satisfies PairedDevice);
 
-  // Déterminer le statut : paired si code valide OU si déjà pairé OU si rôle owner (confiance)
+  // Déterminer le statut : paired si code valide OU si déjà pairé OU si rôle owner (confiance).
+  // Le rôle d'une annonce n'est reconnu qu'au premier contact ou avec un code juste : un
+  // appareil déjà au registre (même pending) ne se promouvoit pas propriétaire en
+  // re-annonçant sans code — miroir de la décision d'application (`apply.ts`).
   const wasPaired = existing.status === "paired";
-  const autoPaired = codeMatches || wasPaired || payload.role === "owner";
+  const firstSighting = !existing.role && !existing.status;
+  const role = payload.role && (codeMatches || firstSighting) ? payload.role : existing.role;
+  const autoPaired = codeMatches || wasPaired || (payload.role === "owner" && firstSighting);
 
   // Mettre à jour la fiche avec les données de l'annonce
   await db.paired_devices.put({
     ...existing,
     device_name: payload.employee_name ?? existing.device_name,
-    role: payload.role ?? existing.role,
+    role,
     public_key: payload.public_key ?? existing.public_key,
     server_device_id: payload.server_device_id ?? existing.server_device_id,
     status: autoPaired ? "paired" : "pending",

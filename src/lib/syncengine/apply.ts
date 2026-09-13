@@ -258,11 +258,18 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         pl.pair_code && activeCode?.value === pl.pair_code && Number(expiresAt?.value ?? 0) > now,
       );
       const wasPaired = existing.status === "paired";
-      const autoPaired = codeOk || wasPaired || pl.role === "owner";
+      // Le rôle d'une annonce n'est reconnu qu'au premier contact (aucune fiche) ou avec
+      // un code de paire juste : une fois l'appareil au registre — même `pending` —, seul
+      // le principal peut le changer (`device.approve`). Un employé pairé qui re-annoncerait
+      // `role: "owner"` ne se promouvoit donc pas : même règle que l'assistant de jonction,
+      // qui n'a jamais créé de second propriétaire.
+      const firstSighting = !existing.role && !existing.status;
+      const role = pl.role && (codeOk || firstSighting) ? pl.role : existing.role;
+      const autoPaired = codeOk || wasPaired || (pl.role === "owner" && firstSighting);
       await db.paired_devices.put({
         ...existing,
         device_name: pl.employee_name || existing.device_name,
-        role: pl.role ?? existing.role,
+        role,
         public_key: pl.public_key || existing.public_key,
         server_device_id: pl.server_device_id || existing.server_device_id,
         status: autoPaired ? "paired" : "pending",
@@ -291,14 +298,17 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       break;
     }
     case "catalogue.snapshot": {
-      // Un appareil qui rejoint reçoit l'instantané du catalogue du membre qui l'a vu
-      // s'annoncer. Stock ABSOLU : c'est le point de départ de ses deltas. Idempotent —
-      // un produit déjà présent est simplement écrasé à la même valeur.
+      // L'instantané sert de BOOTSTRAP à un écran qui rejoint : les produits qu'il ne
+      // connaît pas encore sont créés à la valeur ABSOLUE portée par l'op (point de
+      // départ de ses deltas). Un produit DÉJÀ présent n'est en revanche ni écrasé ni
+      // ajusté : son stock est arrivé par deltas (commutatifs), et un instantané pris
+      // AVANT une vente que le pair compte déjà « ressusciterait » des unités vendues.
+      // Toute correction de stock passe par `stock.adjusted`, jamais par l'instantané.
       const pl = op.payload as CatalogueSnapshotPayload;
       for (const p of pl?.products ?? []) {
         if (!p?.id || p.deleted_at) continue;
         const existing = await db.products.get(p.id);
-        if (existing?.deleted_at) continue;
+        if (existing) continue;
         await db.products.put({ ...p, ...touch() });
       }
       // Le relais est aussi le garant du NOM de la boutique : si ce nouvel écran est

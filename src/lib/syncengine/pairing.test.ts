@@ -202,6 +202,44 @@ describe("décision d'application du code (côté principal)", () => {
     expect(peers.find((p) => p.id === "device-boss")?.status).toBe("paired");
     expect(peers.find((p) => p.id === "device-inconnu")?.status).toBe("pending");
   });
+
+  it("un employé pairé ne se promeut pas propriétaire en re-annonçant", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const shopId = getIdentity().shopId;
+
+    // L'écran s'est présenté avec un mauvais code (pending), le principal l'a approuvé employé.
+    await applyRemoteOps([
+      announceOp(shopId, "device-e8", 1, { employee_name: "Vendeuse", pair_code: "ZZZZZZ" }),
+    ]);
+    await approveDevice("device-e8", "employee");
+
+    // Il RE-annonce en se prétendant propriétaire, sans aucun code.
+    await applyRemoteOps([
+      announceOp(shopId, "device-e8", 2, { role: "owner", pair_code: undefined }),
+    ]);
+    const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-e8");
+    expect(peer?.status).toBe("paired"); // déjà pairé : le statut ne bouge pas
+    expect(peer?.role).toBe("employee"); // mais le rôle n'a PAS été promu
+  });
+
+  it("un écran resté pending ne passe pas pairé en se prétendant propriétaire", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const shopId = getIdentity().shopId;
+
+    await applyRemoteOps([
+      announceOp(shopId, "device-p", 1, { employee_name: "Intrus", pair_code: "ZZZZZZ" }),
+    ]);
+    await applyRemoteOps([
+      announceOp(shopId, "device-p", 2, { role: "owner", pair_code: undefined }),
+    ]);
+    const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-p");
+    expect(peer?.status).toBe("pending");
+    expect(peer?.paired_at).toBeUndefined();
+  });
 });
 
 describe("rencontre par relais", () => {

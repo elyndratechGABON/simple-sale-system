@@ -15,6 +15,7 @@ import {
   setShopAccount,
 } from "../db";
 import { ensureIdentity, getIdentity, resetIdentityForTests, setIdentityRole } from "./identity";
+import { applyRemoteOps } from "./apply";
 import { listPairedDevices } from "./peers";
 import { listPendingOps, markOpsSynced, purgeSyncedOps } from "./outbox";
 import { exchangeOps, relayTransport, KEY_LAST_AUTO_SNAPSHOT } from "./transport";
@@ -274,6 +275,78 @@ describe("transport P2P via relais", () => {
     await exchangeOps(relay.client);
     const products = await listProducts();
     expect(products.find((p) => p.id === "p1")?.stock).toBe(15);
+  });
+
+  it("un snapshot n'écrase jamais un produit déjà présent (bootstrap + deltas seuls)", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const id = getIdentity();
+
+    // Le pair a déjà son catalogue : un produit créé, deux unités déjà vendues.
+    const product = await addProduct({
+      name: "Pain",
+      price: 100,
+      cost: 40,
+      category: "Boulangerie",
+      stock: 6,
+    });
+    await createSale({
+      lines: [
+        {
+          product_id: product.id,
+          name: "Pain",
+          price: 100,
+          cost: 40,
+          category: "Boulangerie",
+          quantity: 2,
+        },
+      ],
+      cash_given: 200,
+    });
+    expect((await listProducts()).find((p) => p.id === product.id)?.stock).toBe(4);
+
+    // Un instantané STALE (pris avant la vente) + un produit inconnu arrivent du principal.
+    const snapOp: SyncOp = {
+      id: "snap:2",
+      shop_id: id.shopId,
+      device_id: "un-proprietaire",
+      seq: 1,
+      type: "catalogue.snapshot",
+      entity_id: "catalog",
+      payload: {
+        products: [
+          {
+            id: product.id,
+            name: "Pain",
+            price: 100,
+            cost: 40,
+            category: "Boulangerie",
+            stock: 6,
+            updated_at: 0,
+            sync_status: "local",
+          },
+          {
+            id: "p2",
+            name: "Lait",
+            price: 500,
+            cost: 250,
+            category: "Boisson",
+            stock: 3,
+            updated_at: 0,
+            sync_status: "local",
+          },
+        ],
+      },
+      created_at: Date.now(),
+      status: "synced",
+    };
+    await applyRemoteOps([snapOp]);
+
+    // Le produit connu GARDE son stock (4) : la vente du pair n'est pas « ressuscitée ».
+    expect((await listProducts()).find((p) => p.id === product.id)?.stock).toBe(4);
+    // Le produit inconnu, lui, est bootstrappé à l'absolu.
+    expect((await listProducts()).find((p) => p.id === "p2")?.stock).toBe(3);
   });
 
   it("le snapshot porte le nom de la boutique au nouvel écran resté sur « Ma boutique »", async () => {
