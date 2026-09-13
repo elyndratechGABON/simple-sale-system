@@ -435,15 +435,15 @@ function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* Compte bancaire virtuel — LE bloc financier principal */}
+      {/* Synthèse de l'activité — LE bloc financier principal */}
       <Card variant="primary" className="p-8 shadow-xl shadow-emerald-900/10">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-100/80">
-              Compte bancaire virtuel
+              Synthèse de l'activité
             </p>
             <div className="text-4xl font-black tracking-tighter text-white sm:text-5xl tabular-nums">
-              {formatFCFA(todayRev)}
+              <AnimatedCounter value={todayRev} format={formatFCFA} />
             </div>
             <p className="text-[10px] font-medium text-emerald-200/70">
               SOLDE AUJOURD'HUI • ENCAISSÉ
@@ -459,7 +459,7 @@ function DashboardPage() {
               Ventes
             </span>
             <span className="mt-1 block text-lg font-black text-white tabular-nums">
-              {todaySalesCount}
+              <AnimatedCounter value={todaySalesCount} format={(n) => String(n)} />
             </span>
           </div>
           <div className="px-6">
@@ -467,7 +467,7 @@ function DashboardPage() {
               Clients
             </span>
             <span className="mt-1 block text-lg font-black text-white tabular-nums">
-              {todayCustomers ?? 0}
+              <AnimatedCounter value={todayCustomers ?? 0} format={(n) => String(n)} />
             </span>
           </div>
           <div className="pl-6 text-right">
@@ -475,7 +475,7 @@ function DashboardPage() {
               Panier
             </span>
             <span className="mt-1 block text-lg font-black text-white tabular-nums">
-              {formatFCFA(avgPanier ?? 0)}
+              <AnimatedCounter value={avgPanier ?? 0} format={formatFCFA} />
             </span>
           </div>
         </div>
@@ -512,38 +512,6 @@ function DashboardPage() {
           </Card>
         </motion.div>
       )}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard
-          icon={Wallet}
-          label="CA du jour"
-          value={todayStats?.revenue ?? 0}
-          format={formatFCFA}
-          delay={0}
-          accent
-        />
-        <KpiCard
-          icon={ShoppingCart}
-          label="Ventes"
-          value={todayStats?.salesCount ?? 0}
-          format={(n) => String(n)}
-          delay={0.1}
-        />
-        <KpiCard
-          icon={Users}
-          label="Clients servis"
-          value={todayStats?.customersCount ?? 0}
-          format={(n) => String(n)}
-          delay={0.2}
-        />
-        <KpiCard
-          icon={TrendingUp}
-          label="Panier moyen"
-          value={todayStats?.averageBasket ?? 0}
-          format={formatFCFA}
-          delay={0.3}
-        />
-      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 12 }}
