@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import type { ReactNode, ComponentPropsWithoutRef } from "react";
 
 export const VARIANT = {
   DEFAULT: "default",
@@ -11,17 +11,18 @@ export const VARIANT = {
 
 export type Variant = (typeof VARIANT)[keyof typeof VARIANT];
 
-type CardProps = {
+export type CardProps = {
   variant?: Variant;
   children: ReactNode;
   className?: string;
   onClick?: () => void;
 };
 
-export function Card({ variant = "default", children, className, onClick }: CardProps) {
+export function Card({ variant = "default", children, className, onClick, ...rest }: CardProps & ComponentPropsWithoutRef<"div">) {
   const isInteractive = variant === "interactive" || Boolean(onClick);
   return (
     <div
+      {...rest}
       role={isInteractive ? "button" : undefined}
       tabIndex={isInteractive ? 0 : undefined}
       onClick={onClick}

@@ -47,11 +47,12 @@ import { buildAlerts, type AppAlert } from "@/lib/alerts";
 import { SaleItemChips } from "@/components/SaleItemChips";
 import { formatFCFA, formatPercent, formatDayShort, formatRelative, formatKg } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
+import { Card } from "@/components/Card";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { useAccess } from "@/hooks/use-access";
 import { ensureIdentity } from "@/lib/syncengine/identity";
 import { useSaleTrigger } from "@/hooks/use-sale-trigger";
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
@@ -211,8 +212,8 @@ function AlertsSection({ alerts }: { alerts: AppAlert[] }) {
               </div>
               <div className="mt-4 flex items-center gap-4 text-sm opacity-90 border-t border-white/20 pt-3">
                 <span><strong>Ventes</strong> {todaySalesCount}</span>
-                <span><strong>Clients</strong> {todayCustomers}</span>
-                <span><strong>Panier</strong> {formatFCFA(avgPanier)}</span>
+                <span><strong>Clients</strong> {todayCustomers || 0}</span>
+                <span><strong>Panier</strong> {formatFCFA(avgPanier || 0)}</span>
               </div>
             </Card>
     </motion.div>
@@ -284,12 +285,17 @@ function DashboardPage() {
       fortnightData ? scopeByDevice(fortnightData.sales, fortnightData.items, deviceId) : null,
     [fortnightData, deviceId],
   );
+  const todayRev = todayScoped ? todayScoped.sales.reduce((s, x) => s + x.total, 0) : 0;
+  const todaySalesCount = todayScoped ? todayScoped.sales.length : 0;
+  const todayCustomers = todayScoped ? todayScoped.items.length : 0;
+  const avgPanier = todayRev > 0 && todaySalesCount > 0 ? Math.round(todayRev / todaySalesCount) : 0;
 
   const { data: products } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
     refetchInterval: 10_000,
   });
+
   const { data: openTables } = useQuery({
     queryKey: ["open_tables"],
     queryFn: listOpenTables,
