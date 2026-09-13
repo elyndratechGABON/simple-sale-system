@@ -39,9 +39,9 @@ export function Card({
         "rounded-[24px] overflow-hidden transition-all duration-200",
         "shadow-[0_2px_12px_rgba(0,0,0,0.05)]",
         "p-[20px] w-full",
-        variant === "primary" && "bg-[#009B63] text-white shadow-none",
-        variant === "soft" && "bg-[#E7F5EF]",
-        variant === "outlined" && "bg-white border border-[#E5E8E7] shadow-none",
+        variant === "primary" && "bg-primary text-white shadow-none",
+        variant === "soft" && "bg-emerald-50 text-emerald-900 border border-emerald-200/50",
+        variant === "outlined" && "bg-white border border-border shadow-none",
         isInteractive &&
           "hover:-translate-y-px active:translate-y-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#009B63]/50",
         className,

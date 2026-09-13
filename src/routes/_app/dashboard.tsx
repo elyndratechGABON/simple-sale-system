@@ -112,29 +112,36 @@ function KpiCard({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay }}
+      transition={{ duration: 0.3, delay }}
     >
-      <Card className={accent ? "border-primary/30 bg-primary/5" : ""}>
-        <CardContent className="p-4 flex items-center gap-3">
+      <Card
+        className={`border p-5 transition-shadow hover:shadow-md ${
+          accent
+            ? "border-emerald-200 bg-emerald-50/40 text-emerald-950"
+            : "border-slate-200/80 bg-white"
+        }`}
+      >
+        <div className="flex items-center gap-3.5">
           <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-              accent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${
+              accent
+                ? "border-emerald-200 bg-emerald-100/80 text-emerald-700"
+                : "border-slate-100 bg-slate-50 text-slate-600"
             }`}
           >
             <Icon className="h-5 w-5" />
           </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground truncate">{label}</p>
-            {/* `truncate` obligatoire : formatFCFA produit des montants à espaces
-                insécables — sans plafond, un gros CA pousse la carte KPI hors
-                de sa demi-colonne (320–375px, grille `grid-cols-2`). */}
-            <p className="truncate text-base font-bold leading-tight sm:text-lg">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {label}
+            </p>
+            <p className="mt-0.5 truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl tabular-nums">
               <AnimatedCounter value={value} format={format} />
             </p>
           </div>
-        </CardContent>
+        </div>
       </Card>
     </motion.div>
   );
@@ -410,44 +417,67 @@ function DashboardPage() {
     })) ?? [];
 
   return (
-    <div className="app-container space-y-6 py-6">
+    <div className="app-container space-y-10 py-8">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
+        className="flex items-center justify-between"
       >
-        <h1 className="text-page-title font-bold">
-          Bonjour{workspaceName ? `, ${workspaceName}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground">Vue d'ensemble de votre activité</p>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Bonjour{workspaceName ? `, ${workspaceName}` : ""}
+          </h1>
+          <p className="text-sm font-medium text-slate-500">Vue d'ensemble de votre activité</p>
+        </div>
+        <div className="hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm sm:flex">
+          <Users className="h-5 w-5 text-slate-600" />
+        </div>
       </motion.div>
 
-      {/* Compte bancaire virtuel — LE bloc financier principal : CA du jour dominant,
-          ventes / clients / panier intégrés. Remplace les 4 KPI séparées. */}
-      <Card variant="primary">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium opacity-90">Compte bancaire virtuel</p>
-            <div className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
+      {/* Compte bancaire virtuel — LE bloc financier principal */}
+      <Card variant="primary" className="p-8 shadow-xl shadow-emerald-900/10">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-100/80">
+              Compte bancaire virtuel
+            </p>
+            <div className="text-4xl font-black tracking-tighter text-white sm:text-5xl tabular-nums">
               {formatFCFA(todayRev)}
             </div>
-            <p className="mt-1 text-xs opacity-80">Chiffre d'affaires du jour</p>
+            <p className="text-[10px] font-medium text-emerald-200/70">
+              SOLDE AUJOURD'HUI • ENCAISSÉ
+            </p>
           </div>
-          <span className="shrink-0 rounded-full bg-white/15 p-2 text-lg leading-none">👁</span>
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md">
+            <Wallet className="h-6 w-6 text-white" />
+          </div>
         </div>
-        <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/20 pt-3 text-sm">
-          <span className="min-w-0">
-            <span className="block text-[11px] uppercase tracking-wide opacity-80">Ventes</span>
-            <span className="block font-bold tabular-nums">{todaySalesCount}</span>
-          </span>
-          <span className="min-w-0 border-l border-white/20 pl-3">
-            <span className="block text-[11px] uppercase tracking-wide opacity-80">Clients</span>
-            <span className="block font-bold tabular-nums">{todayCustomers ?? 0}</span>
-          </span>
-          <span className="min-w-0 border-l border-white/20 pl-3 text-right">
-            <span className="block text-[11px] uppercase tracking-wide opacity-80">Panier</span>
-            <span className="block font-bold tabular-nums">{formatFCFA(avgPanier ?? 0)}</span>
-          </span>
+        <div className="mt-8 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-6">
+          <div className="pr-4">
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-200/60">
+              Ventes
+            </span>
+            <span className="mt-1 block text-lg font-black text-white tabular-nums">
+              {todaySalesCount}
+            </span>
+          </div>
+          <div className="px-6">
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-200/60">
+              Clients
+            </span>
+            <span className="mt-1 block text-lg font-black text-white tabular-nums">
+              {todayCustomers ?? 0}
+            </span>
+          </div>
+          <div className="pl-6 text-right">
+            <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-200/60">
+              Panier
+            </span>
+            <span className="mt-1 block text-lg font-black text-white tabular-nums">
+              {formatFCFA(avgPanier ?? 0)}
+            </span>
+          </div>
         </div>
       </Card>
 
