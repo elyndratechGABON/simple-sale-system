@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Calculator, Users, QrCode } from "lucide-react";
+import { Activity, Calculator, Users, QrCode, Sun, Moon } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getMonthlyOverview, getSetting } from "@/lib/db";
 import { currentMonthKey } from "@/lib/profit";
@@ -37,6 +37,29 @@ export function Header() {
   const { workspaceName, ownerName, ownerPhoto } = usePreferences();
   const { role } = useAccess();
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() =>
+    typeof document !== "undefined" ? document.documentElement.classList.contains("dark") : false,
+  );
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark" || (!saved && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+      document.documentElement.classList.add("dark");
+      setIsDark(true);
+    }
+  }, []);
+
+  function toggleDarkMode() {
+    const next = !isDark;
+    setIsDark(next);
+    if (next) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }
   const [profitOpen, setProfitOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -119,6 +142,19 @@ export function Header() {
             )}
           </Button>
           <NotificationBell />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Basculer le mode nuit"
+            title={isDark ? "Passer au mode clair" : "Passer au mode nuit"}
+            onClick={toggleDarkMode}
+          >
+            {isDark ? (
+              <Sun className="h-5 w-5 text-amber-400" />
+            ) : (
+              <Moon className="h-5 w-5 text-slate-600" />
+            )}
+          </Button>
           {isOwner && (
             <Button
               variant="ghost"
@@ -130,26 +166,36 @@ export function Header() {
               <Activity className="h-5 w-5" />
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Basculer le mode sombre"
+            title="Basculer le mode sombre"
+            onClick={toggleDarkMode}
+          >
+            {isDark ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+          </Button>
           {isOwner && (
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Équipe"
-              title="Équipe — appareils connectés"
-              onClick={() => setTeamOpen(true)}
-            >
-              <Users className="h-5 w-5" />
-            </Button>
-          )}
-          {isOwner && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Employés — importer clôture"
+              aria-label="Employés — scanner QR de clôture"
               title="Employés — scanner QR de clôture"
               onClick={() => setEmployeesOpen(true)}
             >
               <QrCode className="h-5 w-5" />
+            </Button>
+          )}
+
+          {isOwner && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Basculer le mode sombre"
+              title="Basculer le mode sombre"
+              onClick={toggleDarkMode}
+            >
+              {isDark ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
             </Button>
           )}
           {isOwner && (
