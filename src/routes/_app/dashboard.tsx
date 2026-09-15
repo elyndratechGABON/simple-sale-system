@@ -459,28 +459,28 @@ function DashboardPage() {
             <Wallet className="h-6 w-6 text-white" />
           </div>
         </div>
-        <div className="mt-5 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4 sm:mt-8 sm:pt-6">
-          <div className="pr-4">
+        <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 sm:mt-8 sm:gap-4 sm:pt-6">
+          <div className="rounded-2xl bg-white/10 px-2 py-3 text-center sm:px-4 sm:py-5">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-200/60">
               Ventes
             </span>
-            <span className="mt-1 block text-lg font-black text-white tabular-nums">
+            <span className="mt-1 block text-xl font-black text-white tabular-nums sm:mt-2 sm:text-2xl">
               <AnimatedCounter value={todaySalesCount} format={(n) => String(n)} />
             </span>
           </div>
-          <div className="px-6">
+          <div className="rounded-2xl bg-white/10 px-2 py-3 text-center sm:px-4 sm:py-5">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-200/60">
               Clients
             </span>
-            <span className="mt-1 block text-lg font-black text-white tabular-nums">
+            <span className="mt-1 block text-xl font-black text-white tabular-nums sm:mt-2 sm:text-2xl">
               <AnimatedCounter value={todayCustomers ?? 0} format={(n) => String(n)} />
             </span>
           </div>
-          <div className="pl-6 text-right">
+          <div className="rounded-2xl bg-white/10 px-2 py-3 text-center sm:px-4 sm:py-5">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-200/60">
               Panier
             </span>
-            <span className="mt-1 block text-lg font-black text-white tabular-nums">
+            <span className="mt-1 block text-xl font-black text-white tabular-nums sm:mt-2 sm:text-2xl">
               <AnimatedCounter value={avgPanier ?? 0} format={formatFCFA} />
             </span>
           </div>
@@ -523,7 +523,7 @@ function DashboardPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.25 }}
-        className="grid grid-cols-4 gap-2 sm:max-w-2xl sm:gap-3"
+        className="grid grid-cols-4 gap-2 sm:gap-3"
       >
         {quickActions.map(({ label, icon: Icon, to }) => (
           <Link
