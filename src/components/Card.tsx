@@ -40,7 +40,8 @@ export function Card({
         "shadow-[0_2px_12px_rgba(0,0,0,0.05)]",
         "p-[20px] w-full",
         variant === "primary" && "bg-primary text-white shadow-none",
-        variant === "soft" && "bg-emerald-50 text-emerald-900 border border-emerald-200/50",
+        variant === "soft" &&
+          "bg-emerald-50 text-emerald-900 border border-emerald-200/50 dark:bg-emerald-950/40 dark:text-emerald-100 dark:border-emerald-800/40",
         variant === "outlined" && "bg-card border border-border shadow-none",
         isInteractive &&
           "hover:-translate-y-px active:translate-y-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-primary/50",

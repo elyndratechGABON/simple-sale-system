@@ -15,7 +15,7 @@ export function MasterSyncBadge({
         <button
           type="button"
           aria-label="Voir les appareils synchronisés"
-          className="flex items-center gap-1.5 rounded-full border bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 transition-colors hover:bg-emerald-100 border-emerald-200"
+          className="flex items-center gap-1.5 rounded-full border bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 transition-colors hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/40 dark:border-emerald-800/40"
         >
           <Wifi className="h-3 w-3" />
           <span>Sync</span>
@@ -29,7 +29,7 @@ export function MasterSyncBadge({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-3 text-sm">
         <div className="flex items-center gap-2 mb-2">
-          <Wifi className="h-4 w-4 text-emerald-600" />
+          <Wifi className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           <span className="font-medium">Appareils synchronisés</span>
         </div>
         {peers.length === 0 ? (

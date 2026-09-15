@@ -1536,7 +1536,7 @@ function PosPage() {
                 <Button
                   variant="outline"
                   size="lg"
-                  className="w-full h-12 gap-2 border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                  className="w-full h-12 gap-2 border-orange-400 text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-400/50 dark:hover:bg-orange-950/30"
                   disabled={serveMut.isPending}
                   onClick={() => serveMut.mutate(activeTable.id)}
                 >
@@ -1729,7 +1729,7 @@ function PosPage() {
                         className={cn(
                           "flex items-center justify-between gap-3 rounded-lg border p-3",
                           stage === "to-prepare" &&
-                            "border-orange-400/40 bg-orange-50/50 dark:bg-orange-950/10",
+                            "border-orange-400/40 bg-orange-50/50 dark:border-orange-400/40 dark:bg-orange-950/10",
                           stage === "preparing" && "border-warning/40 bg-warning/5",
                           stage === "ready" &&
                             "border-green-500/40 bg-green-50/50 dark:bg-green-950/10",

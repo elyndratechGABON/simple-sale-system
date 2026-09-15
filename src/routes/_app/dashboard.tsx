@@ -563,7 +563,7 @@ function DashboardPage() {
                 <span
                   className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ${
                     revenueDelta >= 0
-                      ? "bg-emerald-500/10 text-emerald-600"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                       : "bg-destructive/10 text-destructive"
                   }`}
                 >

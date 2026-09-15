@@ -175,7 +175,7 @@ function FilterCard({
             : tone === "danger"
               ? "border-destructive/15 bg-destructive/5 text-destructive/80"
               : tone === "warning"
-                ? "border-amber-500/20 bg-amber-500/10 text-amber-600"
+                ? "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400"
                 : "bg-muted text-muted-foreground",
         )}
       >
@@ -191,7 +191,7 @@ function FilterCard({
               : tone === "danger"
                 ? "text-destructive"
                 : tone === "warning"
-                  ? "text-amber-600"
+                  ? "text-amber-600 dark:text-amber-400"
                   : "text-muted-foreground",
           )}
         >
@@ -250,9 +250,9 @@ function StatCard({
     tone === "danger"
       ? "bg-destructive/10 text-destructive border-destructive/20"
       : tone === "warning"
-        ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
+        ? "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400"
         : tone === "emerald"
-          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
           : "bg-muted text-muted-foreground border-border";
   return (
     <Card className="border border-border bg-card shadow-sm transition-all hover:border-foreground/20">
@@ -884,7 +884,7 @@ function StocksPage() {
         <Card className="border-amber-500/40 bg-amber-500/5">
           <CardContent className="space-y-3 p-4">
             <div className="flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600" />
+              <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
               <p className="text-sm font-semibold">Attention au stock</p>
               <span className="text-xs text-muted-foreground">
                 {attention.length} produit{attention.length > 1 ? "s" : ""} nécessite
@@ -898,7 +898,9 @@ function StocksPage() {
                   <span
                     className={cn(
                       "shrink-0 tabular-nums",
-                      stateOf(p) === "out" ? "text-destructive" : "text-amber-600",
+                      stateOf(p) === "out"
+                        ? "text-destructive"
+                        : "text-amber-600 dark:text-amber-400",
                     )}
                   >
                     {stateOf(p) === "out"
@@ -993,7 +995,7 @@ function StocksPage() {
                                 vs === "out"
                                   ? "border-destructive/30 bg-destructive/5 text-destructive"
                                   : vs === "low"
-                                    ? "border-amber-500/30 bg-amber-500/5 text-amber-600"
+                                    ? "border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400"
                                     : "border-border text-muted-foreground",
                               )}
                             >
@@ -1029,7 +1031,7 @@ function StocksPage() {
                                 state === "out"
                                   ? "font-medium text-destructive"
                                   : state === "low"
-                                    ? "font-medium text-amber-600"
+                                    ? "font-medium text-amber-600 dark:text-amber-400"
                                     : "text-muted-foreground",
                               )}
                             >
@@ -1291,7 +1293,9 @@ function MovementRow({ movement }: { movement: StockMovement }) {
         <span
           className={cn(
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-            positive ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive",
+            positive
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              : "bg-destructive/10 text-destructive",
           )}
         >
           {positive ? "+" : "−"}

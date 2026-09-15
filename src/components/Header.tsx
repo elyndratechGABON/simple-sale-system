@@ -169,35 +169,12 @@ export function Header() {
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Basculer le mode sombre"
-            title="Basculer le mode sombre"
-            onClick={toggleDarkMode}
+            aria-label="Employés — scanner QR de clôture"
+            title="Employés — scanner QR de clôture"
+            onClick={() => setEmployeesOpen(true)}
           >
-            {isDark ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+            <QrCode className="h-5 w-5" />
           </Button>
-          {isOwner && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Employés — scanner QR de clôture"
-              title="Employés — scanner QR de clôture"
-              onClick={() => setEmployeesOpen(true)}
-            >
-              <QrCode className="h-5 w-5" />
-            </Button>
-          )}
-
-          {isOwner && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Basculer le mode sombre"
-              title="Basculer le mode sombre"
-              onClick={toggleDarkMode}
-            >
-              {isDark ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </Button>
-          )}
           {isOwner && (
             <Link
               to="/settings"

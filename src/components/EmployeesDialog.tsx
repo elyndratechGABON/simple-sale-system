@@ -67,7 +67,11 @@ export function EmployeesDialog({ open, onOpenChange }: EmployeesDialogProps) {
             {scanning ? "Scan en cours…" : "Importer une clôture (scanner QR)"}
           </Button>
           {message && <div className="p-3 rounded bg-primary/10 text-primary">{message}</div>}
-          {error && <div className="p-3 rounded bg-red-50 text-red-700">{error}</div>}
+          {error && (
+            <div className="p-3 rounded bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400">
+              {error}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
