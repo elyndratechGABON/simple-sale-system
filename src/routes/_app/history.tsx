@@ -194,7 +194,7 @@ function HistoryPage() {
   }, [filtered, period, active]);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 space-y-4">
+    <div className="mx-auto max-w-4xl px-[var(--page-gutter)] py-4 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-page-title flex items-center gap-2 font-bold">

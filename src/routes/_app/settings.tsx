@@ -168,7 +168,7 @@ function SettingsPage() {
 
   if (role === "employee") {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6 space-y-2">
+      <div className="mx-auto max-w-3xl px-[var(--page-gutter)] py-4 space-y-3">
         <div className="mb-5">
           <div className="flex items-center gap-2">
             <h1 className="text-page-title font-bold">Paramètres</h1>
@@ -184,7 +184,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 space-y-2">
+    <div className="mx-auto max-w-3xl px-[var(--page-gutter)] py-4 space-y-3">
       <div className="mb-5">
         <div className="flex items-center gap-2">
           <h1 className="text-page-title font-bold">Paramètres</h1>

@@ -123,7 +123,7 @@ function ReportsPage() {
         : formatDay(focusedDay);
 
   return (
-    <div className="app-container space-y-6 py-6">
+    <div className="app-container space-y-4 py-4">
       <div>
         <h1 className="text-page-title flex items-center gap-2 font-bold">
           <CalendarDays className="h-6 w-6 shrink-0" /> Rapports

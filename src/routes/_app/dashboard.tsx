@@ -119,25 +119,25 @@ function KpiCard({
       <Card
         className={`border p-5 transition-shadow hover:shadow-md ${
           accent
-            ? "border-emerald-200 bg-emerald-50/40 text-emerald-950"
-            : "border-slate-200/80 bg-white"
+            ? "border-emerald-200 bg-emerald-50/40 text-emerald-950 dark:border-emerald-800/40 dark:bg-emerald-900/20 dark:text-emerald-100"
+            : "border-border bg-card"
         }`}
       >
         <div className="flex items-center gap-3.5">
           <div
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${
               accent
-                ? "border-emerald-200 bg-emerald-100/80 text-emerald-700"
-                : "border-slate-100 bg-slate-50 text-slate-600"
+                ? "border-emerald-200 bg-emerald-100/80 text-emerald-700 dark:border-emerald-700/40 dark:bg-emerald-900/30 dark:text-emerald-300"
+                : "border-border bg-muted text-muted-foreground"
             }`}
           >
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <p className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {label}
             </p>
-            <p className="mt-0.5 truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl tabular-nums">
+            <p className="mt-0.5 truncate text-lg font-black tracking-tight text-foreground sm:text-xl tabular-nums">
               <AnimatedCounter value={value} format={format} />
             </p>
           </div>
@@ -417,7 +417,7 @@ function DashboardPage() {
     })) ?? [];
 
   return (
-    <div className="app-container space-y-10 py-8">
+    <div className="app-container space-y-4 py-4">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -425,13 +425,15 @@ function DashboardPage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Bonjour{workspaceName ? `, ${workspaceName}` : ""}
           </h1>
-          <p className="text-sm font-medium text-slate-500">Vue d'ensemble de votre activité</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            Vue d'ensemble de votre activité
+          </p>
         </div>
-        <div className="hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm sm:flex">
-          <Users className="h-5 w-5 text-slate-600" />
+        <div className="hidden h-10 w-10 items-center justify-center rounded-full border border-border bg-card shadow-sm sm:flex">
+          <Users className="h-5 w-5 text-muted-foreground" />
         </div>
       </motion.div>
 

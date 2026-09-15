@@ -41,9 +41,9 @@ export function Card({
         "p-[20px] w-full",
         variant === "primary" && "bg-primary text-white shadow-none",
         variant === "soft" && "bg-emerald-50 text-emerald-900 border border-emerald-200/50",
-        variant === "outlined" && "bg-white border border-border shadow-none",
+        variant === "outlined" && "bg-card border border-border shadow-none",
         isInteractive &&
-          "hover:-translate-y-px active:translate-y-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#009B63]/50",
+          "hover:-translate-y-px active:translate-y-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-primary/50",
         className,
       )}
       style={{

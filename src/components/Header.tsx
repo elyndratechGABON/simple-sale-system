@@ -152,7 +152,7 @@ export function Header() {
             {isDark ? (
               <Sun className="h-5 w-5 text-amber-400" />
             ) : (
-              <Moon className="h-5 w-5 text-slate-600" />
+              <Moon className="h-5 w-5 text-foreground" />
             )}
           </Button>
           {isOwner && (

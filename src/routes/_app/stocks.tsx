@@ -253,9 +253,9 @@ function StatCard({
         ? "bg-amber-500/10 text-amber-600 border-amber-500/20"
         : tone === "emerald"
           ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-          : "bg-slate-100 text-slate-600 border-slate-200/60";
+          : "bg-muted text-muted-foreground border-border";
   return (
-    <Card className="border border-slate-200/80 bg-white shadow-sm transition-all hover:border-slate-300">
+    <Card className="border border-border bg-card shadow-sm transition-all hover:border-foreground/20">
       <CardContent className="flex items-center gap-3.5 p-4">
         <span
           className={cn(
@@ -266,10 +266,10 @@ function StatCard({
           <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <p className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {label}
           </p>
-          <p className="text-lg font-black tracking-tight text-slate-900 tabular-nums">{value}</p>
+          <p className="text-lg font-black tracking-tight text-foreground tabular-nums">{value}</p>
         </div>
       </CardContent>
     </Card>
@@ -530,7 +530,7 @@ function StocksPage() {
   };
 
   return (
-    <div className="app-container space-y-5 py-6">
+    <div className="app-container space-y-4 py-4">
       {/* ── En-tête ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 xs:flex-row xs:items-end xs:justify-between">
         <div className="min-w-0">

@@ -4,7 +4,7 @@ interface LoadingScreenProps {
 
 export function LoadingScreen({ progress }: LoadingScreenProps) {
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary/30 border-t-primary"></div>
         <div className="w-64">
