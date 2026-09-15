@@ -230,6 +230,18 @@ body {
        la mise en page, pas le navigateur, décide des tailles. */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    overflow-x: clip;
+  }
+
+  /* Aucune barre de défilement visible nulle part : l'application est une motion
+     d'app native, pas une page web. Le défilement reste fonctionnel (doigt,
+     molette, clavier) — seule l'indication visuelle disparaît. */
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
   }
 
   body {

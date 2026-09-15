@@ -162,7 +162,7 @@ const SEVERITY_CLASS: Record<AppAlert["severity"], string> = {
 function AlertsSection({ alerts }: { alerts: AppAlert[] }) {
   const [expanded, setExpanded] = useState(false);
   if (alerts.length === 0) return null;
-  const visible = expanded ? alerts : alerts.slice(0, 3);
+  const visible = expanded ? alerts : alerts.slice(0, 2);
 
   return (
     <motion.div
@@ -171,18 +171,18 @@ function AlertsSection({ alerts }: { alerts: AppAlert[] }) {
       transition={{ duration: 0.35, delay: 0.35 }}
     >
       <Card>
-        <div className="border-b px-4 py-3">
+        <div className="border-b px-4 py-2.5">
           <p className="text-base font-semibold">Nouvelles alertes</p>
           <p className="text-xs text-muted-foreground">Ce qui attend une action de votre part.</p>
         </div>
-        <div className="space-y-1.5 p-4">
+        <div className="space-y-1.5 p-3">
           {visible.map((alert) => {
             const Icon = SEVERITY_ICON[alert.severity];
             return (
               <Link
                 key={alert.id}
                 to={alert.to}
-                className="flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors hover:bg-accent"
+                className="flex items-start gap-3 rounded-lg border px-3 py-2 transition-colors hover:bg-accent"
               >
                 <span className={`mt-0.5 shrink-0 ${SEVERITY_CLASS[alert.severity]}`}>
                   <Icon className="h-4 w-4" />
@@ -429,7 +429,7 @@ function DashboardPage() {
         className="flex items-center justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
             Bonjour{greetingName ? `, ${greetingName}` : ""}
           </h1>
           <p className="text-sm font-medium text-muted-foreground">
@@ -442,13 +442,13 @@ function DashboardPage() {
       </motion.div>
 
       {/* Synthèse de l'activité — LE bloc financier principal */}
-      <Card variant="primary" className="p-8 shadow-xl shadow-emerald-900/10">
+      <Card variant="primary" className="p-5 shadow-xl shadow-emerald-900/10 sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-100/80">
               Synthèse de l'activité
             </p>
-            <div className="text-4xl font-black tracking-tighter text-white sm:text-5xl tabular-nums">
+            <div className="text-3xl font-black tracking-tighter text-white sm:text-5xl tabular-nums">
               <AnimatedCounter value={todayRev} format={formatFCFA} />
             </div>
             <p className="text-[10px] font-medium text-emerald-200/70">
@@ -459,7 +459,7 @@ function DashboardPage() {
             <Wallet className="h-6 w-6 text-white" />
           </div>
         </div>
-        <div className="mt-8 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-6">
+        <div className="mt-5 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-4 sm:mt-8 sm:pt-6">
           <div className="pr-4">
             <span className="block text-[10px] font-bold uppercase tracking-widest text-emerald-200/60">
               Ventes
@@ -523,13 +523,13 @@ function DashboardPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.25 }}
-        className="grid grid-cols-2 gap-3 sm:max-w-2xl sm:grid-cols-4"
+        className="grid grid-cols-4 gap-2 sm:max-w-2xl sm:gap-3"
       >
         {quickActions.map(({ label, icon: Icon, to }) => (
           <Link
             key={label}
             to={to}
-            className="flex flex-col items-center gap-2 rounded-xl border bg-card px-3 py-4 text-center transition-colors hover:bg-accent"
+            className="flex flex-col items-center gap-2 rounded-xl border bg-card px-2 py-3 text-center transition-colors hover:bg-accent sm:px-3 sm:py-4"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Icon className="h-4.5 w-4.5" />
@@ -541,80 +541,123 @@ function DashboardPage() {
 
       <AlertsSection alerts={alerts} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.45 }}
-        >
-          <Card>
-            <div className="border-b px-4 py-3">
-              <p className="text-base font-semibold">Performance de la semaine</p>
-              <p className="text-xs text-muted-foreground">Comparée à la semaine précédente</p>
-            </div>
-            <div className="space-y-4 p-4">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
-                  <p className="text-2xl font-bold leading-tight">
-                    {weekStats ? (
-                      <AnimatedCounter value={weekStats.revenue} format={formatFCFA} />
-                    ) : (
-                      "—"
-                    )}
+      {/* Détail — perf, top produits, locations, boucherie, activité récente.
+          Réservé aux écrans moyens et grands (>= md) : sur mobile l'accueil doit
+          tenir à l'écran sans scroll, motion d'app native. La « détection
+          d'écran » est assurée par les breakpoints CSS (pas de JavaScript). */}
+      <div className="hidden md:block">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.45 }}
+          >
+            <Card>
+              <div className="border-b px-4 py-3">
+                <p className="text-base font-semibold">Performance de la semaine</p>
+                <p className="text-xs text-muted-foreground">Comparée à la semaine précédente</p>
+              </div>
+              <div className="space-y-4 p-4">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
+                    <p className="text-2xl font-bold leading-tight">
+                      {weekStats ? (
+                        <AnimatedCounter value={weekStats.revenue} format={formatFCFA} />
+                      ) : (
+                        "—"
+                      )}
+                    </p>
+                  </div>
+                  {Number.isFinite(revenueDelta) && weekStats && weekStats.revenue > 0 && (
+                    <span
+                      className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ${
+                        revenueDelta >= 0
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-destructive/10 text-destructive"
+                      }`}
+                    >
+                      {revenueDelta >= 0 ? (
+                        <TrendingUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <TrendingDown className="h-3.5 w-3.5" />
+                      )}
+                      {formatPercent(revenueDelta, true)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-6 text-sm">
+                  <span className="text-muted-foreground">
+                    Ventes&nbsp;
+                    <span className="font-semibold text-foreground">
+                      {weekStats?.salesCount ?? 0}
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground">
+                    Panier moyen&nbsp;
+                    <span className="font-semibold text-foreground">
+                      {formatFCFA(weekStats?.averageBasket ?? 0)}
+                    </span>
+                  </span>
+                </div>
+                <ChartContainer config={weekChartConfig} className="h-20 w-full">
+                  <BarChart data={weekChartData} margin={{ left: 0, right: 0 }}>
+                    <XAxis
+                      dataKey="day"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={4}
+                      fontSize={11}
+                    />
+                    <ChartTooltip
+                      content={<ChartTooltipContent formatter={(v) => formatFCFA(Number(v))} />}
+                    />
+                    <Bar dataKey="revenue" fill="var(--color-revenue)" radius={3} />
+                  </BarChart>
+                </ChartContainer>
+              </div>
+            </Card>
+          </motion.div>
+
+          {topProducts.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.55 }}
+            >
+              <Card>
+                <div className="border-b px-4 py-3">
+                  <p className="text-base font-semibold">
+                    Top {features.isService ? "prestations" : "produits"} — 7 jours
                   </p>
                 </div>
-                {Number.isFinite(revenueDelta) && weekStats && weekStats.revenue > 0 && (
-                  <span
-                    className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ${
-                      revenueDelta >= 0
-                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                        : "bg-destructive/10 text-destructive"
-                    }`}
-                  >
-                    {revenueDelta >= 0 ? (
-                      <TrendingUp className="h-3.5 w-3.5" />
-                    ) : (
-                      <TrendingDown className="h-3.5 w-3.5" />
-                    )}
-                    {formatPercent(revenueDelta, true)}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-6 text-sm">
-                <span className="text-muted-foreground">
-                  Ventes&nbsp;
-                  <span className="font-semibold text-foreground">
-                    {weekStats?.salesCount ?? 0}
-                  </span>
-                </span>
-                <span className="text-muted-foreground">
-                  Panier moyen&nbsp;
-                  <span className="font-semibold text-foreground">
-                    {formatFCFA(weekStats?.averageBasket ?? 0)}
-                  </span>
-                </span>
-              </div>
-              <ChartContainer config={weekChartConfig} className="h-20 w-full">
-                <BarChart data={weekChartData} margin={{ left: 0, right: 0 }}>
-                  <XAxis
-                    dataKey="day"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={4}
-                    fontSize={11}
-                  />
-                  <ChartTooltip
-                    content={<ChartTooltipContent formatter={(v) => formatFCFA(Number(v))} />}
-                  />
-                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={3} />
-                </BarChart>
-              </ChartContainer>
-            </div>
-          </Card>
-        </motion.div>
+                <div className="space-y-1 p-2">
+                  {topProducts.map((product, index) => (
+                    <div
+                      key={`${product.name}-${index}`}
+                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {product.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {product.quantity} {features.isService ? "prestations" : "ventes"}
+                      </span>
+                      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                        {formatFCFA(product.revenue)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </div>
 
-        {topProducts.length > 0 && (
+        {features.isLocation && rentalStats && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -622,208 +665,171 @@ function DashboardPage() {
           >
             <Card>
               <div className="border-b px-4 py-3">
-                <p className="text-base font-semibold">
-                  Top {features.isService ? "prestations" : "produits"} — 7 jours
-                </p>
+                <p className="text-base font-semibold">Location — 14 jours</p>
               </div>
-              <div className="space-y-1 p-2">
-                {topProducts.map((product, index) => (
-                  <div
-                    key={`${product.name}-${index}`}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
-                  >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
-                      {index + 1}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {product.name}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                      {product.quantity} {features.isService ? "prestations" : "ventes"}
-                    </span>
-                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                      {formatFCFA(product.revenue)}
-                    </span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 border-b p-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Revenu locations</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatFCFA(rentalStats.revenue)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Locations</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {rentalStats.rentalsCount}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Durée moyenne</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {roundDuration(rentalStats.avgDuration)}{" "}
+                    {rentalStats.avgDurationUnit === "heure" ? "h" : "j"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Occupation</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatPercent(rentalOccupancy?.rate ?? Number.NaN)}
+                  </p>
+                </div>
               </div>
+              {rentalStats.byAsset.length > 0 && (
+                <div className="space-y-1 p-2">
+                  {rentalStats.byAsset.slice(0, 3).map((asset, index) => {
+                    const occ = rentalOccupancy?.byAsset.find((o) => o.asset_id === asset.asset_id);
+                    return (
+                      <div
+                        key={asset.asset_id}
+                        className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {asset.name}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                          {asset.rentalsCount} location{asset.rentalsCount > 1 ? "s" : ""}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                          {formatPercent(occ?.rate ?? Number.NaN)}
+                        </span>
+                        <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                          {formatFCFA(asset.revenue)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </Card>
           </motion.div>
         )}
-      </div>
 
-      {features.isLocation && rentalStats && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.55 }}
-        >
-          <Card>
-            <div className="border-b px-4 py-3">
-              <p className="text-base font-semibold">Location — 14 jours</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 border-b p-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Revenu locations</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                  {formatFCFA(rentalStats.revenue)}
-                </p>
+        {features.hasWeightInput && weightSales && weightSales.weightKg > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.65 }}
+          >
+            <Card>
+              <div className="border-b px-4 py-3">
+                <p className="text-base font-semibold">Boucherie — 14 jours</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Locations</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                  {rentalStats.rentalsCount}
-                </p>
+              <div className="grid grid-cols-3 gap-3 border-b p-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Vendu au poids</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatKg(weightSales.weightKg)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Poids moyen / pesée</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatKg(weightSales.avgWeightKg)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
+                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                    {formatFCFA(weightSales.revenue)}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Durée moyenne</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                  {roundDuration(rentalStats.avgDuration)}{" "}
-                  {rentalStats.avgDurationUnit === "heure" ? "h" : "j"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Occupation</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                  {formatPercent(rentalOccupancy?.rate ?? Number.NaN)}
-                </p>
-              </div>
-            </div>
-            {rentalStats.byAsset.length > 0 && (
-              <div className="space-y-1 p-2">
-                {rentalStats.byAsset.slice(0, 3).map((asset, index) => {
-                  const occ = rentalOccupancy?.byAsset.find((o) => o.asset_id === asset.asset_id);
-                  return (
+              {weightSales.byProduct.length > 0 && (
+                <div className="space-y-1 p-2">
+                  {weightSales.byProduct.slice(0, 3).map((product, index) => (
                     <div
-                      key={asset.asset_id}
+                      key={product.product_id}
                       className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
                     >
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
                         {index + 1}
                       </span>
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {asset.name}
+                        {product.name}
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {asset.rentalsCount} location{asset.rentalsCount > 1 ? "s" : ""}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {formatPercent(occ?.rate ?? Number.NaN)}
+                        {formatKg(product.weightKg)} vendus
                       </span>
                       <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                        {formatFCFA(asset.revenue)}
+                        {formatFCFA(product.revenue)}
                       </span>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </motion.div>
-      )}
+                  ))}
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        )}
 
-      {features.hasWeightInput && weightSales && weightSales.weightKg > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.65 }}
-        >
-          <Card>
-            <div className="border-b px-4 py-3">
-              <p className="text-base font-semibold">Boucherie — 14 jours</p>
-            </div>
-            <div className="grid grid-cols-3 gap-3 border-b p-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Vendu au poids</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                  {formatKg(weightSales.weightKg)}
-                </p>
+        {recentSales.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.65 }}
+          >
+            <Card>
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <p className="text-base font-semibold">Activité récente</p>
+                <span className="text-xs text-muted-foreground">
+                  {recentSales.length} vente{recentSales.length > 1 ? "s" : ""}
+                </span>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Poids moyen / pesée</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                  {formatKg(weightSales.avgWeightKg)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                  {formatFCFA(weightSales.revenue)}
-                </p>
-              </div>
-            </div>
-            {weightSales.byProduct.length > 0 && (
-              <div className="space-y-1 p-2">
-                {weightSales.byProduct.slice(0, 3).map((product, index) => (
+              <div className="space-y-0.5 p-2">
+                {recentSales.map((sale) => (
                   <div
-                    key={product.product_id}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                    key={sale.id}
+                    className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
-                      {index + 1}
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                      <ShoppingCart className="h-4 w-4" />
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {product.name}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                      {formatKg(product.weightKg)} vendus
-                    </span>
-                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                      {formatFCFA(product.revenue)}
+                    <div className="min-w-0 flex-1">
+                      <SaleItemChips items={sale.items} className="min-w-0" />
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatRelative(sale.timestamp)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums">
+                      {formatFCFA(sale.total)}
                     </span>
                   </div>
                 ))}
               </div>
-            )}
-          </Card>
-        </motion.div>
-      )}
-
-      {recentSales.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.65 }}
-        >
-          <Card>
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <p className="text-base font-semibold">Activité récente</p>
-              <span className="text-xs text-muted-foreground">
-                {recentSales.length} vente{recentSales.length > 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="space-y-0.5 p-2">
-              {recentSales.map((sale) => (
-                <div
-                  key={sale.id}
-                  className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                    <ShoppingCart className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <SaleItemChips items={sale.items} className="min-w-0" />
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {formatRelative(sale.timestamp)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums">
-                    {formatFCFA(sale.total)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="border-t p-2">
-              <Button asChild variant="ghost" size="sm" className="w-full">
-                <Link to="/history">
-                  Voir tout l'historique
-                  <ArrowRight className="h-4 w-4 ml-1.5" />
-                </Link>
-              </Button>
-            </div>
-          </Card>
-        </motion.div>
-      )}
+              <div className="border-t p-2">
+                <Button asChild variant="ghost" size="sm" className="w-full">
+                  <Link to="/history">
+                    Voir tout l'historique
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 }
