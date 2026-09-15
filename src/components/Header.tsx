@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Calculator, Users, QrCode, Sun, Moon } from "lucide-react";
+import { Activity, QrCode, Sun, Moon } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
-import { getMonthlyOverview, getSetting } from "@/lib/db";
-import { currentMonthKey } from "@/lib/profit";
+import { getSetting } from "@/lib/db";
 import { TopNav } from "@/components/Nav";
-import { ProfitSheet } from "@/components/ProfitSheet";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 import { NotificationBell } from "@/components/NotificationBell";
 import { TeamDialog } from "@/components/TeamDialog";
@@ -60,7 +58,6 @@ export function Header() {
       localStorage.setItem("theme", "light");
     }
   }
-  const [profitOpen, setProfitOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [employeesOpen, setEmployeesOpen] = useState(false);
@@ -73,18 +70,6 @@ export function Header() {
     queryFn: () => getSetting<string>("shop_logo") ?? null,
     staleTime: 60_000,
   });
-
-  // Pastille du mois : tant que le mois courant n'a ni charges ni complément renseignés,
-  // le calculateur mérite un coup d'œil. Même clé de cache que ProfitSheet — l'invalidation
-  // après « Calculer mon bénéfice » retire la pastille sans recharger la page.
-  const monthKey = currentMonthKey();
-  const { data: monthOverview } = useQuery({
-    queryKey: ["monthly_overview", monthKey],
-    queryFn: () => getMonthlyOverview(monthKey),
-    staleTime: 30_000,
-  });
-  const needsCycle =
-    (monthOverview?.charges ?? 0) === 0 && (monthOverview?.cost_complement ?? 0) === 0;
 
   // Icône Équipe et Activité : visibles pour le propriétaire uniquement.
   const isOwner = role === "owner";
@@ -125,23 +110,7 @@ export function Header() {
         {/* Sous `lg`, la navigation vit dans `BottomNav` — cf. src/components/Nav.tsx. */}
         <div className="flex shrink-0 items-center gap-1">
           <TopNav />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
-            aria-label="CA du mois et bénéfices"
-            title="CA du mois et bénéfices"
-            onClick={() => setProfitOpen(true)}
-          >
-            <Calculator className="h-5 w-5" />
-            {needsCycle && (
-              <span
-                className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-background"
-                aria-hidden
-              />
-            )}
-          </Button>
-          <NotificationBell />
+          {isOwner && <NotificationBell />}
           <Button
             variant="ghost"
             size="icon"
@@ -166,15 +135,17 @@ export function Header() {
               <Activity className="h-5 w-5" />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Employés — scanner QR de clôture"
-            title="Employés — scanner QR de clôture"
-            onClick={() => setEmployeesOpen(true)}
-          >
-            <QrCode className="h-5 w-5" />
-          </Button>
+          {isOwner && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Employés — scanner QR de clôture"
+              title="Employés — scanner QR de clôture"
+              onClick={() => setEmployeesOpen(true)}
+            >
+              <QrCode className="h-5 w-5" />
+            </Button>
+          )}
           {isOwner && (
             <Link
               to="/settings"
@@ -191,7 +162,6 @@ export function Header() {
         </div>
       </div>
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />
-      <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
       <TeamDialog open={teamOpen} onOpenChange={setTeamOpen} />
       <EmployeesDialog open={employeesOpen} onOpenChange={setEmployeesOpen} />
       <ActivityDialog open={activityOpen} onOpenChange={setActivityOpen} />
