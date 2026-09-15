@@ -11,7 +11,6 @@ import {
   X,
   Store,
   Utensils,
-  Lock,
   Scissors,
   Package,
   Camera,
@@ -289,8 +288,8 @@ function PosPage() {
     queryFn: listOpenTables,
   });
 
-  // Ventes réglées du jour : la barre « Aujourd'hui » donne au serveur le total courant
-  // sans quitter la caisse, et porte la clôture de fin de service.
+  // Ventes réglées du jour : alimentent les raccourcis « produits du jour », le mini-historique
+  // et le dialogue de clôture de fin de service (déclenché depuis leurs écrans dédiés).
   const { data: salesToday = [] } = useQuery({
     queryKey: ["sales", "today"],
     queryFn: listSalesToday,
@@ -830,30 +829,6 @@ function PosPage() {
         compact && (activeTable !== null || lines.length > 0) && "pb-20",
       )}
     >
-      {/* Barre du jour. Absente tant qu'aucune vente n'est encaissée : rien à clôturer.
-          Ensuite elle tient le total courant sous les yeux du serveur et porte la clôture
-          de fin de service — finir la journée ne demande plus de changer d'écran. */}
-      {salesToday.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-2.5">
-          <span className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Aujourd'hui</span>
-            <span className="font-bold tabular-nums">{formatFCFA(todayTotal)}</span>
-            <span className="text-muted-foreground">
-              · {salesToday.length} vente{salesToday.length > 1 ? "s" : ""}
-            </span>
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {}}
-            className="opacity-0 pointer-events-none"
-            aria-hidden="true"
-          >
-            <Lock className="h-4 w-4 mr-1" /> Clôturer la journée
-          </Button>
-        </div>
-      )}
-
       {/* Plan de salle. Toutes les tables sont là, occupées ou non, TOUJOURS à la même
           place : c'est ce qui permet de lire l'état du service d'un coup d'œil au lieu de
           chercher un nom dans une liste qui bouge. Un tap sur une table libre l'ouvre
@@ -1001,7 +976,7 @@ function PosPage() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Rechercher un article…"
               aria-label="Rechercher un article"
-              className="h-11 rounded-xl pl-9"
+              className="h-12 rounded-xl pl-9"
             />
           </div>
           {/* Catégories : grille responsive de cartes (2 colonnes téléphone, 3-4
@@ -1089,16 +1064,18 @@ function PosPage() {
                 .reduce((s, [, e]) => s + e.qty, 0);
               const out = Number.isFinite(p.stock) && p.stock - inCart <= 0;
               return (
-                // Le bouton photo est un FRÈRE de la carte, pas un enfant : deux
-                // <button> imbriqués sont du HTML invalide, et la fiche produit doit
-                // rester ouvrable même quand la carte est désactivée (rupture).
-                <div key={p.id} className="relative">
+                // La carte reste UNE cible : un tap ajoute au panier, où que ce soit sur la
+                // fiche. ✏️ et 📷 restent des FRÈRES (du HTML invalide sinon) et la fiche
+                // produit reste ouvrable même en rupture — seul le geste principal est bloqué.
+                <div
+                  key={p.id}
+                  className="relative flex h-full flex-col rounded-xl border bg-card p-3 text-left transition-all hover:border-primary hover:shadow-md sm:p-4"
+                >
                   <button
                     onClick={() => onProductClick(p)}
                     disabled={out}
                     className={cn(
-                      "relative w-full h-full rounded-xl border bg-card p-3 text-left min-h-[100px] transition-all sm:p-4",
-                      "hover:border-primary hover:shadow-md active:scale-[0.98]",
+                      "flex flex-1 flex-col rounded-lg text-left active:scale-[0.98] transition-transform",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       out && "opacity-50 cursor-not-allowed",
                     )}
@@ -1130,45 +1107,58 @@ function PosPage() {
                           ? `Stock : ${p.stock - inCart}`
                           : "Illimité"}
                     </div>
-                    {inCart > 0 && (
-                      <span className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shadow">
-                        {inCart}
-                      </span>
-                    )}
                   </button>
-                  {/* Deux gestes distincts, FRÈRES de la carte (du HTML invalide sinon) :
-                       l'appareil ouvre la fenêtre PHOTO seule, le crayon la modification
-                       rapide nom/prix/stock. Rupture ou non, les deux restent cliquables.
-                       Diamètre compact (28px) à dessein : gestes d'appoint du service, ils
-                       ne doivent pas recouvrir la fiche — les vraies cibles restent les
-                       cartes de la grille. Pose en BAS-DROIT, dans le coin vide des cartes
-                       (le badge de quantité, lui, occupe le haut-droit). */}
-                  <button
-                    type="button"
-                    aria-label={`Photo de ${p.name}`}
-                    title="Changer la photo"
-                    onClick={() => setPhotoTarget(p)}
-                    className={cn(
-                      "absolute bottom-1 right-1 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
-                      "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    )}
-                  >
-                    <Camera className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Modifier ${p.name}`}
-                    title="Modifier nom, prix, stock"
-                    onClick={() => setQuickEditTarget(p)}
-                    className={cn(
-                      "absolute bottom-1 right-9 z-10 flex h-7 w-7 items-center justify-center rounded-full border bg-card shadow-sm",
-                      "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    )}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
+                  {inCart > 0 && (
+                    <span className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shadow">
+                      {inCart}
+                    </span>
+                  )}
+                  {/* Rangée d'actions : l'appareil ouvre la fenêtre PHOTO seule, le crayon la
+                       modification rapide nom/prix/stock — parfaitement alignés en bas de
+                       carte au lieu d'une pose en coin, gestes d'appoint qui restent
+                       cliquables même en rupture. Le reste de la ligne est le bouton
+                       « + Ajouter », la cible du pouce alignée partout sur la grille. */}
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={`Modifier ${p.name}`}
+                      title="Modifier nom, prix, stock"
+                      onClick={() => setQuickEditTarget(p)}
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-card shadow-sm",
+                        "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      )}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Photo de ${p.name}`}
+                      title="Changer la photo"
+                      onClick={() => setPhotoTarget(p)}
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-card shadow-sm",
+                        "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      )}
+                    >
+                      <Camera className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onProductClick(p)}
+                      disabled={out}
+                      className={cn(
+                        "flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary text-sm font-semibold text-primary-foreground",
+                        "shadow-sm active:scale-[0.98] transition-transform",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        out && "opacity-50 cursor-not-allowed",
+                      )}
+                    >
+                      <Plus className="h-4 w-4" /> Ajouter
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -1688,28 +1678,6 @@ function PosPage() {
                     if (features.isLocation) {
                       return (
                         <div className="app-container space-y-4 py-4">
-                          {salesToday.length > 0 && (
-                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-2.5">
-                              <span className="flex items-center gap-2 text-sm">
-                                <span className="text-muted-foreground">Aujourd'hui</span>
-                                <span className="font-bold tabular-nums">
-                                  {formatFCFA(todayTotal)}
-                                </span>
-                                <span className="text-muted-foreground">
-                                  · {salesToday.length} location{salesToday.length > 1 ? "s" : ""}
-                                </span>
-                              </span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {}}
-                                className="opacity-0 pointer-events-none"
-                                aria-hidden="true"
-                              >
-                                <Lock className="h-4 w-4 mr-1" /> Clôturer la journée
-                              </Button>
-                            </div>
-                          )}
                           <RentalView />
                           <CloseDayDialog
                             open={closeOpen}
