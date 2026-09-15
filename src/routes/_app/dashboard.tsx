@@ -225,7 +225,7 @@ function roundDuration(d: number): string {
 function DashboardPage() {
   // DONNÉES CONSERVÉES — logique métier inchangée (scopeByDevice, today/fortnight)
   const { notifyOwner } = useSaleTrigger();
-  const { workspaceName } = usePreferences();
+  const { workspaceName, ownerName } = usePreferences();
   const features = useClusterFeatures();
   const access = useAccess();
   // L'IDENTITÉ de l'écran (SES ventes) : un employé ne voit que ses encaissements sur
@@ -236,6 +236,10 @@ function DashboardPage() {
     staleTime: 60_000,
   });
   const deviceId = access.isOwner ? undefined : identity?.deviceId;
+  // « Bonjour » : celui qui tient la caisse — l'employé sur une caisse employé, le
+  // propriétaire sur sa caisse. Repli sur l'enseigne tant qu'aucun nom n'est renseigné.
+  const greetingName =
+    (identity?.role === "employee" ? identity.employeeName.trim() : ownerName) || workspaceName;
   const todayRange = useMemo(() => lastDaysRange(1), []);
   // 14 jours : les 7 derniers = semaine courante, les 7 d'avant = base de comparaison.
   // lastDaysRange(14).to === lastDaysRange(7).to (fin de journée, aujourd'hui inclus).
@@ -426,7 +430,7 @@ function DashboardPage() {
       >
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Bonjour{workspaceName ? `, ${workspaceName}` : ""}
+            Bonjour{greetingName ? `, ${greetingName}` : ""}
           </h1>
           <p className="text-sm font-medium text-muted-foreground">
             Vue d'ensemble de votre activité
