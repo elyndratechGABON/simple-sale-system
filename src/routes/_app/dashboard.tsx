@@ -519,7 +519,7 @@ function DashboardPage() {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, delay: 0.25 }}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-3 sm:max-w-2xl sm:grid-cols-4"
       >
         {quickActions.map(({ label, icon: Icon, to }) => (
           <Link
@@ -537,112 +537,116 @@ function DashboardPage() {
 
       <AlertsSection alerts={alerts} />
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.45 }}
-      >
-        <Card>
-          <div className="border-b px-4 py-3">
-            <p className="text-base font-semibold">Performance de la semaine</p>
-            <p className="text-xs text-muted-foreground">Comparée à la semaine précédente</p>
-          </div>
-          <div className="space-y-4 p-4">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
-                <p className="text-2xl font-bold leading-tight">
-                  {weekStats ? (
-                    <AnimatedCounter value={weekStats.revenue} format={formatFCFA} />
-                  ) : (
-                    "—"
-                  )}
-                </p>
-              </div>
-              {Number.isFinite(revenueDelta) && weekStats && weekStats.revenue > 0 && (
-                <span
-                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ${
-                    revenueDelta >= 0
-                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "bg-destructive/10 text-destructive"
-                  }`}
-                >
-                  {revenueDelta >= 0 ? (
-                    <TrendingUp className="h-3.5 w-3.5" />
-                  ) : (
-                    <TrendingDown className="h-3.5 w-3.5" />
-                  )}
-                  {formatPercent(revenueDelta, true)}
-                </span>
-              )}
-            </div>
-            <div className="flex gap-6 text-sm">
-              <span className="text-muted-foreground">
-                Ventes&nbsp;
-                <span className="font-semibold text-foreground">{weekStats?.salesCount ?? 0}</span>
-              </span>
-              <span className="text-muted-foreground">
-                Panier moyen&nbsp;
-                <span className="font-semibold text-foreground">
-                  {formatFCFA(weekStats?.averageBasket ?? 0)}
-                </span>
-              </span>
-            </div>
-            <ChartContainer config={weekChartConfig} className="h-20 w-full">
-              <BarChart data={weekChartData} margin={{ left: 0, right: 0 }}>
-                <XAxis
-                  dataKey="day"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={4}
-                  fontSize={11}
-                />
-                <ChartTooltip
-                  content={<ChartTooltipContent formatter={(v) => formatFCFA(Number(v))} />}
-                />
-                <Bar dataKey="revenue" fill="var(--color-revenue)" radius={3} />
-              </BarChart>
-            </ChartContainer>
-          </div>
-        </Card>
-      </motion.div>
-
-      {topProducts.length > 0 && (
+      <div className="grid gap-4 lg:grid-cols-2">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: 0.55 }}
+          transition={{ duration: 0.35, delay: 0.45 }}
         >
           <Card>
             <div className="border-b px-4 py-3">
-              <p className="text-base font-semibold">
-                Top {features.isService ? "prestations" : "produits"} — 7 jours
-              </p>
+              <p className="text-base font-semibold">Performance de la semaine</p>
+              <p className="text-xs text-muted-foreground">Comparée à la semaine précédente</p>
             </div>
-            <div className="space-y-1 p-2">
-              {topProducts.map((product, index) => (
-                <div
-                  key={`${product.name}-${index}`}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
-                >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
-                    {index + 1}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                    {product.name}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {product.quantity} {features.isService ? "prestations" : "ventes"}
-                  </span>
-                  <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                    {formatFCFA(product.revenue)}
-                  </span>
+            <div className="space-y-4 p-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
+                  <p className="text-2xl font-bold leading-tight">
+                    {weekStats ? (
+                      <AnimatedCounter value={weekStats.revenue} format={formatFCFA} />
+                    ) : (
+                      "—"
+                    )}
+                  </p>
                 </div>
-              ))}
+                {Number.isFinite(revenueDelta) && weekStats && weekStats.revenue > 0 && (
+                  <span
+                    className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ${
+                      revenueDelta >= 0
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {revenueDelta >= 0 ? (
+                      <TrendingUp className="h-3.5 w-3.5" />
+                    ) : (
+                      <TrendingDown className="h-3.5 w-3.5" />
+                    )}
+                    {formatPercent(revenueDelta, true)}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-6 text-sm">
+                <span className="text-muted-foreground">
+                  Ventes&nbsp;
+                  <span className="font-semibold text-foreground">
+                    {weekStats?.salesCount ?? 0}
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  Panier moyen&nbsp;
+                  <span className="font-semibold text-foreground">
+                    {formatFCFA(weekStats?.averageBasket ?? 0)}
+                  </span>
+                </span>
+              </div>
+              <ChartContainer config={weekChartConfig} className="h-20 w-full">
+                <BarChart data={weekChartData} margin={{ left: 0, right: 0 }}>
+                  <XAxis
+                    dataKey="day"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={4}
+                    fontSize={11}
+                  />
+                  <ChartTooltip
+                    content={<ChartTooltipContent formatter={(v) => formatFCFA(Number(v))} />}
+                  />
+                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={3} />
+                </BarChart>
+              </ChartContainer>
             </div>
           </Card>
         </motion.div>
-      )}
+
+        {topProducts.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.55 }}
+          >
+            <Card>
+              <div className="border-b px-4 py-3">
+                <p className="text-base font-semibold">
+                  Top {features.isService ? "prestations" : "produits"} — 7 jours
+                </p>
+              </div>
+              <div className="space-y-1 p-2">
+                {topProducts.map((product, index) => (
+                  <div
+                    key={`${product.name}-${index}`}
+                    className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {product.name}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {product.quantity} {features.isService ? "prestations" : "ventes"}
+                    </span>
+                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                      {formatFCFA(product.revenue)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </div>
 
       {features.isLocation && rentalStats && (
         <motion.div

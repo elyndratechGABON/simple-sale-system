@@ -961,7 +961,7 @@ function PosPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_400px] xl:grid-cols-[minmax(0,1fr)_440px]">
         {/* Products */}
         <div className="flex min-w-0 flex-col">
           {/* Titre seul sur sa ligne en mobile ; les catégories passent dans
