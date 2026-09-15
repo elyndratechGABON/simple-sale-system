@@ -296,9 +296,10 @@ export async function emitCatalogRequest(identity: SyncIdentity): Promise<void> 
 /** Instantané du catalogue vivant, émis pour un écran qui vient de rejoindre le groupe. */
 async function emitCatalogSnapshot(identity: SyncIdentity): Promise<void> {
   const db = getDB();
-  // Photo exclue : c'est du binaire dataURL lourd, la doc la garde LOCALE (cf. db.ts) —
-  // le relais ne transporte que de la donnée légère.
-  const products = (await listProducts()).map(({ photo: _photo, ...p }) => p);
+  // La photo voyage : réduite en webp ~256 px (~5-30 Ko par produit), un bootstrap
+  // complet reste léger pour le relais — et un écran neuf doit VOIR les photos du
+  // catalogue, pas des cases vides en attendant une future édition.
+  const products = await listProducts();
   const shopName = await snapshotShopName();
   const payload: CatalogueSnapshotPayload = {
     products,

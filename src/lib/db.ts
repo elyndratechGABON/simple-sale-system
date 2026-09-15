@@ -950,14 +950,14 @@ const paid = (rows: Sale[]): Sale[] => rows.filter((s) => s.status !== "open");
 
 // ---------- Patchs de synchronisation ----------
 // Les champs propagés par `product.updated` / `client.updated`. Jamais `id`, `stock`
-// (qui passe par les deltas), `photo` (restée locale en v1), ni les champs de sync
-// eux-mêmes (`updated_at`, `deleted_at`, `sync_status`) — ils sont réécrits localement
-// par chaque appareil au moment où il applique l'op.
+// (qui passe par les deltas), ni les champs de sync eux-mêmes (`updated_at`,
+// `deleted_at`, `sync_status`) — ils sont réécrits localement par chaque appareil au
+// moment où il applique l'op. `photo` est propagé : image déjà réduite en webp ~256 px
+// (~5-30 Ko), assez légère pour passer par le relais sans surcharge.
 
 const SYNC_EXCLUDED = new Set([
   "id",
   "stock",
-  "photo",
   "updated_at",
   "deleted_at",
   "sync_status",

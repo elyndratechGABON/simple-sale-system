@@ -207,6 +207,7 @@ describe("transport P2P via relais", () => {
       cost: 300,
       category: "Boisson",
       stock: 10,
+      photo: "data:image/webp;base64,test",
     });
     await addStock(product.id, 5);
 
@@ -231,12 +232,13 @@ describe("transport P2P via relais", () => {
     const remote = await relay.client.pull(id.shopId, id.deviceId);
     const snap = remote.find((o) => o.type === "catalogue.snapshot");
     expect(snap).toBeTruthy();
-    // Le snapshot porte le stock ABSOLU courant (15) et exclut les photos (binaire local).
+    // Le snapshot porte le stock ABSOLU courant (15) et la photo (webp ~256 px), pour
+    // qu'un écran neuf voie tout de suite le catalogue tel qu'il est.
     const snapPayload = (snap?.payload ?? { products: [] }) as {
       products: Array<{ id: string; stock: number; photo?: unknown }>;
     };
     expect(snapPayload.products.find((p) => p.id === product.id)?.stock).toBe(15);
-    expect(snapPayload.products[0]).not.toHaveProperty("photo");
+    expect(snapPayload.products.find((p) => p.id === product.id)?.photo).toBe(product.photo);
   });
 
   it("applique un snapshot du catalogue sur un écran neuf (stock absolu)", async () => {

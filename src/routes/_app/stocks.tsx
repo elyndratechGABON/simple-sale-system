@@ -126,12 +126,6 @@ function variantState(stock: number | undefined): Exclude<StockState, "service">
   return "ok";
 }
 
-const STATE_LABEL: Record<Exclude<StockState, "service">, string> = {
-  out: "Rupture",
-  low: "Stock faible",
-  ok: "Disponible",
-};
-
 type FilterTone = "default" | "warning" | "danger";
 
 /** Carte-filtre « Trier par » : vrai bouton (aria-pressed), état actif en vert de
@@ -213,26 +207,6 @@ const REASON_LABEL: Record<StockMovement["reason"], string> = {
   correction: "Correction",
   creation: "Création",
 };
-
-/** Jauge 10 segments : pleine à 4× le seuil (seuil 5 → pleine à 20), bornée. */
-function StockBar({ product }: { product: Product }) {
-  const threshold = thresholdOf(product);
-  const pct = Math.max(0.04, Math.min(1, product.stock / (threshold * 4)));
-  const filled = Math.round(pct * 10);
-  const color =
-    product.stock <= 0
-      ? "bg-destructive"
-      : product.stock <= threshold
-        ? "bg-amber-500"
-        : "bg-emerald-500";
-  return (
-    <div className="flex items-center gap-[3px]" aria-hidden>
-      {Array.from({ length: 10 }, (_, i) => (
-        <span key={i} className={cn("h-1.5 w-2 rounded-sm", i < filled ? color : "bg-muted")} />
-      ))}
-    </div>
-  );
-}
 
 function StatCard({
   icon: Icon,
@@ -992,27 +966,27 @@ function StocksPage() {
                   className="cursor-pointer py-0 transition-colors hover:border-primary/40 hover:bg-accent/30"
                   onClick={() => setDetailId(p.id)}
                 >
-                  <CardContent className="flex items-start gap-3 p-3.5">
+                  <CardContent className="flex items-center gap-3.5 p-3.5">
                     {p.photo ? (
                       <img
                         src={p.photo}
                         alt=""
-                        className="h-11 w-11 shrink-0 rounded-lg border object-cover"
+                        className="h-20 w-20 shrink-0 rounded-xl border object-cover shadow-sm"
                         loading="lazy"
                       />
                     ) : (
                       <span
                         className={cn(
-                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-muted/40",
+                          "flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border bg-muted/50",
                           isServiceItem ? "text-primary" : "text-muted-foreground",
                         )}
                       >
-                        <Package className="h-5 w-5" />
+                        <Package className="h-7 w-7" />
                       </span>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{p.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{p.category}</p>
+                    <div className="flex min-w-0 flex-1 flex-col self-stretch">
+                      <p className="truncate text-sm font-medium">{p.name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{p.category}</p>
                       {/* Dernière fois que le produit est passé en vente : « il y a 1 j »
                         donne un ordre de grandeur sans ouvrir la fiche. */}
                       {!isServiceItem && lastSoldAt !== undefined && (
@@ -1043,38 +1017,35 @@ function StocksPage() {
                           })}
                         </div>
                       )}
-                      <div className="mt-1.5 flex items-end justify-between gap-2">
+                      <div className="mt-auto flex items-center justify-between gap-2 pt-1.5">
                         <span className="text-sm font-semibold tabular-nums">
                           {formatFCFA(p.price)}
                         </span>
                         {!isServiceItem ? (
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground tabular-nums">
-                              Stock :{" "}
-                              <span
-                                className={cn(
-                                  "font-semibold",
-                                  state === "out" ? "text-destructive" : "text-foreground",
-                                )}
-                              >
-                                {p.stock}
-                              </span>
-                            </p>
-                            <div className="mt-1 flex items-center gap-1.5">
-                              <StockBar product={p} />
-                              <span
-                                className={cn(
-                                  "w-[86px] text-left text-[11px] leading-none",
-                                  state === "out"
-                                    ? "font-medium text-destructive"
-                                    : state === "low"
-                                      ? "font-medium text-amber-600 dark:text-amber-400"
-                                      : "text-muted-foreground",
-                                )}
-                              >
-                                {STATE_LABEL[state]}
-                              </span>
-                            </div>
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "h-1.5 w-1.5 shrink-0 rounded-full",
+                                state === "out"
+                                  ? "bg-destructive"
+                                  : state === "low"
+                                    ? "bg-amber-500"
+                                    : "bg-emerald-500",
+                              )}
+                              aria-hidden
+                            />
+                            <span
+                              className={cn(
+                                "text-[11px] leading-none tabular-nums",
+                                state === "out"
+                                  ? "font-medium text-destructive"
+                                  : state === "low"
+                                    ? "font-medium text-amber-600 dark:text-amber-400"
+                                    : "text-muted-foreground",
+                              )}
+                            >
+                              {state === "out" ? "Rupture" : `${p.stock} en stock`}
+                            </span>
                           </div>
                         ) : (
                           <Badge variant="secondary">Actif</Badge>
