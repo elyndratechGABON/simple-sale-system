@@ -31,7 +31,7 @@ import { SuspendedScreen } from "../components/SuspendedScreen";
 import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
 import { DeleteRequestDialog } from "../components/DeleteRequestDialog";
 import { ensureShopProfile } from "../lib/db";
-import { getPreferences } from "../lib/settings";
+import { getPreferences, savePreferences } from "../lib/settings";
 import { backgroundSync } from "../lib/sync";
 import { useAccess } from "../hooks/use-access";
 
@@ -94,11 +94,16 @@ function AppLayout() {
     void profileReady.then(() => backgroundSync());
   }, [onboarded, router]);
 
+  const prefs = getPreferences();
+  const gradientBg = prefs.use_gradient_bg
+    ? "bg-gradient-to-br from-emerald-900 via-teal-900 to-amber-900"
+    : "bg-background";
+
   if (loading) return <LoadingScreen progress={progress} />;
 
   return (
     <>
-      <div className="flex min-h-screen flex-col">
+      <div className={`flex min-h-screen flex-col ${gradientBg}`}>
         <Header />
         <RenewalBanner />
         {/* `.app-main` (styles.css) réserve exactement `--bottomnav-h` + marge système :
@@ -106,7 +111,7 @@ function AppLayout() {
             réserve elle recouvrirait la fin de chaque page (le bouton « Valider la
             vente », le dernier produit, le dernier réglage). À partir de `lg`, la barre
             disparaît et la réserve avec elle. */}
-        <main className="app-main flex-1">
+        <main className={`app-main flex-1 ${gradientBg}`}>
           <RouteTransition />
         </main>
       </div>

@@ -119,6 +119,10 @@ export interface Preferences {
    * chaque vente (`Sale.table`), comme les prix le sont sur chaque ligne.
    */
   tables: string[];
+  /** Préférence de fond d'écran (gradient personnalisé). Absent = défaut émeraude. */
+  wallpaper?: string;
+  /** Module de fond d'écran dégradé (option). */
+  use_gradient_bg?: boolean;
   /** Numéro de téléphone du commerce. */
   phone: string;
   /** Quartier / quartier où se situe le commerce. */

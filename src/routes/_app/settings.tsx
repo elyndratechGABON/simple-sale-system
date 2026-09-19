@@ -1518,8 +1518,10 @@ function DeleteShopCard() {
     },
   });
 
+  const prefs = usePreferences();
+
   return (
-    <Card className="border-destructive/40">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <Trash2 className="h-4 w-4 text-destructive" /> Supprimer la boutique
@@ -1578,6 +1580,7 @@ function DeleteShopCard() {
 }
 
 function AboutCard() {
+  const prefs = usePreferences();
   return (
     <Card>
       <CardHeader>
@@ -1635,6 +1638,16 @@ function AboutCard() {
         <p className="text-xs">
           © {new Date().getFullYear()} {LEGAL_COMPANY}
         </p>
+        <div className="border-t pt-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => savePreferences({ use_gradient_bg: !prefs.use_gradient_bg })}
+          >
+            {prefs.use_gradient_bg ? "Fond classique" : "Fond dégradé"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
