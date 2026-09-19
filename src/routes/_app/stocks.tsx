@@ -31,6 +31,8 @@ import {
   Sparkles,
   Tag,
   TrendingDown,
+  CalendarDays,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -45,6 +47,7 @@ import {
   type SaleItem,
   type StockMovement,
 } from "@/lib/db";
+import { RentalReminderBanner } from "@/components/RentalReminderBanner";
 import { lastDaysRange } from "@/lib/analytics";
 import { formatFCFA, formatRelative, formatTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -256,6 +259,16 @@ type StatusFilter = "all" | "service" | "low" | "out";
 type SortKey = "name" | "stock" | "price" | "updated" | "bestsellers";
 
 function StocksPage() {
+  return (
+    <>
+      <RentalReminderBanner />
+      <RentalCalendarIndicators />
+      <StocksPageContent />
+    </>
+  );
+}
+
+function StocksPageContent() {
   const qc = useQueryClient();
   const { isService } = useClusterFeatures();
 
@@ -1421,5 +1434,35 @@ function MovementsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">{content}</DialogContent>
     </Dialog>
+  );
+}
+
+function RentalCalendarIndicators() {
+  const { data: products } = useQuery({ queryKey: ["products"], queryFn: listProducts });
+  const reminders =
+    products?.filter((p) => p.is_asset && p.return_date && p.return_date > Date.now()) ?? [];
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-2">
+      {reminders.map((r) => {
+        const d = new Date(r.return_date!);
+        const soon = r.return_date! - Date.now() < 3 * 86400000;
+        return (
+          <button
+            key={r.id}
+            className={cn(
+              "flex shrink-0 items-center gap-2 rounded-xl border bg-card px-3 py-2 text-xs transition-all",
+              soon ? "border-amber-400 bg-amber-50 dark:bg-amber-950/40" : "border-border",
+            )}
+            title={r.name + " — retour le " + d.toLocaleDateString("fr-FR")}
+          >
+            <CalendarDays className={cn("h-4 w-4", soon ? "text-amber-600" : "text-primary")} />
+            <span className="font-medium truncate max-w-[8rem]">{r.name}</span>
+            <span className="text-muted-foreground whitespace-nowrap">
+              {d.toLocaleDateString("fr-FR")}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

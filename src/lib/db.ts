@@ -120,6 +120,8 @@ export interface Product extends SyncFields {
   deposit_amount?: number;
   /** Nombre total d'unités physiques de cet actif. */
   total_units?: number;
+  /** Date de retour prévue (timestamp) pour l'actif loué. Absent = pas de suivi. */
+  return_date?: number;
 }
 
 /**
