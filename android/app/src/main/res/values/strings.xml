@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Caisse</string>
+    <string name="title_activity_main">Caisse</string>
+    <string name="package_name">ga.elyndra.caisse</string>
+    <string name="custom_url_scheme">ga.elyndra.caisse</string>
+</resources>
