@@ -80,9 +80,6 @@ export function ProductForm({
   const [totalUnits, setTotalUnits] = useState<string>(
     editing?.total_units != null ? String(editing.total_units) : "",
   );
-  const [returnDate, setReturnDate] = useState<string>(
-    editing?.return_date ? new Date(editing.return_date).toISOString().split("T")[0] : "",
-  );
 
   // Variantes (vêtements) : liste éditable, câblée à `productVariant`.
   const [variants, setVariants] = useState<VariantDraft[]>(
@@ -157,8 +154,6 @@ export function ProductForm({
         expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
         photo,
         ...(variantsOut ? { variants: variantsOut } : {}),
-        // Date de retour prévue pour l'actif de location
-        return_date: isAsset && returnDate ? new Date(returnDate).getTime() : undefined,
         // Champs location
         is_asset: isAsset || undefined,
         deposit_amount: isAsset && depositAmount ? Number(depositAmount) : undefined,
@@ -460,16 +455,6 @@ export function ProductForm({
                   <Plus className="h-4 w-4 mr-1.5" /> Ajouter une variante
                 </Button>
               </div>
-            </div>
-            <div>
-              <Label htmlFor="return_date">Date de retour prévue</Label>
-              <Input
-                id="return_date"
-                type="date"
-                value={returnDate}
-                onChange={(e) => setReturnDate(e.target.value)}
-                placeholder="Ex : 2026-10-15"
-              />
             </div>
             <div>
               <Label htmlFor="deposit">Caution par défaut (FCFA)</Label>
