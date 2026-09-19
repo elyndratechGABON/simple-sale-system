@@ -12,12 +12,17 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as WelcomeRouteImport } from './routes/welcome'
+import { Route as Char91Char91DotAllChar93Char93RouteImport } from './routes/[[...all]]'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppPosRouteImport } from './routes/_app/pos'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppStocksRouteImport } from './routes/_app/stocks'
+import { Route as LegalIndexRouteImport } from './routes/legal/index'
+import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
+import { Route as LegalRefundRouteImport } from './routes/legal/refund'
+import { Route as LegalTermsRouteImport } from './routes/legal/terms'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -33,6 +38,12 @@ const WelcomeRoute = WelcomeRouteImport.update({
   path: '/welcome',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char91Char91DotAllChar93Char93Route =
+  Char91Char91DotAllChar93Char93RouteImport.update({
+    id: '/[[./all]]',
+    path: '/[[./all]]',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -63,77 +74,132 @@ const AppStocksRoute = AppStocksRouteImport.update({
   path: '/stocks',
   getParentRoute: () => AppRoute,
 } as any)
+const LegalIndexRoute = LegalIndexRouteImport.update({
+  id: '/legal/',
+  path: '/legal/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
+  id: '/legal/privacy',
+  path: '/legal/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalRefundRoute = LegalRefundRouteImport.update({
+  id: '/legal/refund',
+  path: '/legal/refund',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalTermsRoute = LegalTermsRouteImport.update({
+  id: '/legal/terms',
+  path: '/legal/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/welcome': typeof WelcomeRoute
+  '/[[./all]]': typeof Char91Char91DotAllChar93Char93Route
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
   '/pos': typeof AppPosRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
   '/stocks': typeof AppStocksRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/refund': typeof LegalRefundRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/legal/': typeof LegalIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/welcome': typeof WelcomeRoute
+  '/[[./all]]': typeof Char91Char91DotAllChar93Char93Route
   '/dashboard': typeof AppDashboardRoute
   '/history': typeof AppHistoryRoute
   '/pos': typeof AppPosRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
   '/stocks': typeof AppStocksRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/refund': typeof LegalRefundRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/legal': typeof LegalIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/welcome': typeof WelcomeRoute
+  '/[[./all]]': typeof Char91Char91DotAllChar93Char93Route
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/pos': typeof AppPosRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/stocks': typeof AppStocksRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/refund': typeof LegalRefundRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/legal/': typeof LegalIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/welcome'
+    | '/[[./all]]'
     | '/dashboard'
     | '/history'
     | '/pos'
     | '/reports'
     | '/settings'
     | '/stocks'
+    | '/legal/privacy'
+    | '/legal/refund'
+    | '/legal/terms'
+    | '/legal/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/welcome'
+    | '/[[./all]]'
     | '/dashboard'
     | '/history'
     | '/pos'
     | '/reports'
     | '/settings'
     | '/stocks'
+    | '/legal/privacy'
+    | '/legal/refund'
+    | '/legal/terms'
+    | '/legal'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/welcome'
+    | '/[[./all]]'
     | '/_app/dashboard'
     | '/_app/history'
     | '/_app/pos'
     | '/_app/reports'
     | '/_app/settings'
     | '/_app/stocks'
+    | '/legal/privacy'
+    | '/legal/refund'
+    | '/legal/terms'
+    | '/legal/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   WelcomeRoute: typeof WelcomeRoute
+  Char91Char91DotAllChar93Char93Route: typeof Char91Char91DotAllChar93Char93Route
+  LegalPrivacyRoute: typeof LegalPrivacyRoute
+  LegalRefundRoute: typeof LegalRefundRoute
+  LegalTermsRoute: typeof LegalTermsRoute
+  LegalIndexRoute: typeof LegalIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -157,6 +223,13 @@ declare module '@tanstack/react-router' {
       path: '/welcome'
       fullPath: '/welcome'
       preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/[[./all]]': {
+      id: '/[[./all]]'
+      path: '/[[./all]]'
+      fullPath: '/[[./all]]'
+      preLoaderRoute: typeof Char91Char91DotAllChar93Char93RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/dashboard': {
@@ -201,6 +274,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppStocksRouteImport
       parentRoute: typeof AppRoute
     }
+    '/legal/': {
+      id: '/legal/'
+      path: '/legal'
+      fullPath: '/legal/'
+      preLoaderRoute: typeof LegalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/privacy': {
+      id: '/legal/privacy'
+      path: '/legal/privacy'
+      fullPath: '/legal/privacy'
+      preLoaderRoute: typeof LegalPrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/refund': {
+      id: '/legal/refund'
+      path: '/legal/refund'
+      fullPath: '/legal/refund'
+      preLoaderRoute: typeof LegalRefundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/terms': {
+      id: '/legal/terms'
+      path: '/legal/terms'
+      fullPath: '/legal/terms'
+      preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -228,6 +329,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   WelcomeRoute: WelcomeRoute,
+  Char91Char91DotAllChar93Char93Route: Char91Char91DotAllChar93Char93Route,
+  LegalPrivacyRoute: LegalPrivacyRoute,
+  LegalRefundRoute: LegalRefundRoute,
+  LegalTermsRoute: LegalTermsRoute,
+  LegalIndexRoute: LegalIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

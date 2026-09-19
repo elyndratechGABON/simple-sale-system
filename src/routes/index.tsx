@@ -122,7 +122,7 @@ function AnchorLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <a
       href={href}
-      className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+      className="inline-flex min-h-[32px] items-center text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
     >
       {children}
     </a>
@@ -188,7 +188,7 @@ function Hero() {
         >
           <div className="relative w-full max-w-[330px] lg:w-[78%] lg:max-w-[430px]">
             <img
-              src="/logo-body.png"
+              src="/logo-body.webp"
               alt="ELYNDRA CAISSE — gérez votre boutique simplement"
               className="w-full select-none object-contain"
               draggable={false}
@@ -457,13 +457,41 @@ function Footer() {
             </p>
           </div>
         </div>
-        <nav aria-label="Liens du site" className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <a href="#fonctionnalites" className="text-muted-foreground hover:text-primary">
-            Fonctionnalités
-          </a>
-          <a href="#tarifs" className="text-muted-foreground hover:text-primary">
-            Tarifs
-          </a>
+        <nav aria-label="Liens du site" className="flex flex-col gap-y-2 text-sm">
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <a
+              href="#fonctionnalites"
+              className="inline-flex min-h-[32px] items-center text-muted-foreground hover:text-primary"
+            >
+              Fonctionnalités
+            </a>
+            <a
+              href="#tarifs"
+              className="inline-flex min-h-[32px] items-center text-muted-foreground hover:text-primary"
+            >
+              Tarifs
+            </a>
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+            <Link
+              to="/legal/privacy"
+              className="inline-flex min-h-[28px] items-center text-muted-foreground hover:text-primary"
+            >
+              Confidentialité
+            </Link>
+            <Link
+              to="/legal/terms"
+              className="inline-flex min-h-[28px] items-center text-muted-foreground hover:text-primary"
+            >
+              Conditions
+            </Link>
+            <Link
+              to="/legal/refund"
+              className="inline-flex min-h-[28px] items-center text-muted-foreground hover:text-primary"
+            >
+              Remboursements
+            </Link>
+          </div>
         </nav>
         <p className="text-xs text-muted-foreground">
           © {new Date().getFullYear()} ELYNDRA TECH Gabon

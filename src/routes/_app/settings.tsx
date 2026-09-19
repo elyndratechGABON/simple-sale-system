@@ -39,6 +39,7 @@ import {
   X,
 } from "lucide-react";
 import { ACTIVE_CLUSTERS, savePreferences, type Preferences } from "@/lib/settings";
+import { LEGAL_COMPANY } from "@/components/legal/LegalPage";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
@@ -1584,7 +1585,7 @@ function AboutCard() {
           <Info className="h-4 w-4" /> À propos
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 text-sm text-muted-foreground">
+      <CardContent className="space-y-3 text-sm text-muted-foreground">
         <div className="flex items-center gap-3">
           <img src="/icon-192.png" alt="ECAISSE" className="h-10 w-10" />
           <div>
@@ -1592,10 +1593,47 @@ function AboutCard() {
             <p>La caisse qui marche sans réseau.</p>
           </div>
         </div>
-        <p>Développé par ELYNDRA TECH.</p>
+        <p>Développé par {LEGAL_COMPANY}.</p>
         <p>
           Vos données sont stockées localement sur cet appareil. Aucune donnée n'est envoyée sans
           votre accord.
+        </p>
+        <div className="flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-xs">
+          <a
+            href="https://wa.me/241076505254"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-primary hover:underline"
+          >
+            <MessageCircle className="h-3.5 w-3.5" /> Support WhatsApp
+          </a>
+          <a
+            href="/legal/privacy"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            Confidentialité
+          </a>
+          <a
+            href="/legal/terms"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            Conditions
+          </a>
+          <a
+            href="/legal/refund"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            Remboursements
+          </a>
+        </div>
+        <p className="text-xs">
+          © {new Date().getFullYear()} {LEGAL_COMPANY}
         </p>
       </CardContent>
     </Card>

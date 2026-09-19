@@ -216,11 +216,7 @@ const QUICK_AMOUNTS = [500, 1000, 2000, 5000, 10000];
 
 // Moyens de paiement proposés au comptoir. Les tables restent en espèces : c'est le
 // serveur qui encaisse et rend la monnaie, pas un terminal.
-const PAYMENT_METHODS: { id: PaymentMethod; label: string }[] = [
-  { id: "cash", label: "Espèces" },
-  { id: "card", label: "Carte" },
-  { id: "mobile_money", label: "Mobile Money" },
-];
+const PAYMENT_METHODS: { id: PaymentMethod; label: string }[] = [{ id: "cash", label: "Espèces" }];
 
 function paymentLabel(m: PaymentMethod): string {
   return PAYMENT_METHODS.find((x) => x.id === m)?.label ?? "Espèces";

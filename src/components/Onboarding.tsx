@@ -12,36 +12,41 @@
 //   - magasin → "Ajoutez vos produits" (avec sous-cat)
 //
 // Les produits ajoutés pendant le tutoriel sont enregistrés en base.
-import { Check, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowRight,
+  Beer,
+  Check,
   Check as CheckIcon,
+  ChefHat,
   ChevronLeft,
   ChevronRight,
   CloudOff,
-  EyeOff,
-  HardDrive,
-  Package,
-  Shield,
-  Store,
-  Plus,
-  ArrowRight,
-  PartyPopper,
-  ScanLine,
-  FileText,
-  X,
-} from "lucide-react";
-import {
-  ChefHat,
   Coffee,
+  EyeOff,
+  FileText,
+  HardDrive,
+  Key,
   KeyRound,
+  Package,
+  Palette,
+  PartyPopper,
+  Plus,
+  Scale,
+  ScanLine,
   Scissors,
-  ShoppingBag,
+  Shield,
   Shirt,
-  Weight,
+  ShoppingBag,
+  ShoppingBasket,
   Sparkles,
+  Store,
+  Users,
+  UtensilsCrossed,
+  Wand2,
+  X,
 } from "lucide-react";
 import {
   CLUSTER_MAP,
@@ -78,15 +83,15 @@ import { cn } from "@/lib/utils";
 /* ── Icon map ────────────────────────────────────────────────────────────── */
 
 const ICON_MAP: Record<string, typeof Store> = {
-  ShoppingBag,
-  ChefHat,
-  Coffee,
-  Scissors,
-  Shirt,
-  Weight,
-  Store,
-  Sparkles,
-  KeyRound,
+  ShoppingBag: ShoppingBasket,
+  ChefHat: UtensilsCrossed,
+  Coffee: Beer,
+  Scissors: Palette,
+  Shirt: Shirt,
+  Weight: Scale,
+  Store: Store,
+  Sparkles: Wand2,
+  KeyRound: Key,
 };
 
 function resolveIcon(name: string): typeof Store {
@@ -372,33 +377,30 @@ export function SetupWizard({
   }
 
   // Étapes visuelles : 0=confidentialité, 1=nom, 2=compte (create/join + identifiants),
-  // 3=secteur, 4=informations commerce (dynamique, pas tout à la même étape),
-  // [5=sous-cat magasin]. Pour non-magasin : 5 étapes (0..4). Pour magasin : 6 (0..5).
-  const totalSteps = isMagasin ? 7 : 6;
+  // 3=coordonnées commerce, 4=secteur, 5=sous-cat magasin (si besoin).
+  const totalSteps = isMagasin ? 6 : 5;
 
   function canNext(): boolean {
     if (step === 0) return privacyAccepted;
     if (step === 1) return name.trim().length > 0;
     if (step === 2) {
-      if (accountMode === "join" && qrScanned) return pairCode.trim().length >= 6;
-      if (accountMode === "join" && accKeyword.trim() && !(accPhone.trim() && accPassword)) {
-        return accKeyword.trim().replace(/\s/g, "").length >= 8;
-      }
-      return accPhone.trim().length > 0 && accPassword.trim().length >= 4;
+      if (accountMode === "create")
+        return accPhone.trim().length > 0 && accPassword.trim().length >= 4;
+      // Pour les employés (join), on vérifie le code de paire OU le qr scanné
+      return (
+        (pairCode.trim().length >= 6 || qrScanned) &&
+        accPhone.trim().length > 0 &&
+        accPassword.trim().length >= 4
+      );
     }
-    if (step === 3) {
-      // Étape réservée aux employés : scanner le QR du propriétaire
-      // OU saisir le code temporaire. Si mode=create, on passe directement.
-      return accountMode === "create" ? true : pairCode.trim().length >= 6 || qrScanned;
-    }
-    if (step === 4) return true; // coordonnées optionnelles
-    if (step === 5) {
+    if (step === 3) return true; // coordonnées optionnelles
+    if (step === 4) {
       if (selectedCluster === null) return false;
       if (selectedCluster === "personnalise")
         return customDomain.trim().length > 0 && customStockChoice !== null;
       return true;
     }
-    if (step === 6 && isMagasin) return selectedSubCategory !== null;
+    if (step === 5 && isMagasin) return selectedSubCategory !== null;
     return true;
   }
 
@@ -481,7 +483,16 @@ export function SetupWizard({
                 onCheckedChange={(v) => setPrivacyAccepted(Boolean(v))}
               />
               <Label htmlFor="privacy-accept" className="cursor-pointer text-sm">
-                J'accepte que mes données soient utilisées pour améliorer l'application.
+                J'ai lu la{" "}
+                <a
+                  href="/legal/privacy"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  politique de confidentialité
+                </a>
+                .
               </Label>
             </div>
           </StepShell>
@@ -507,50 +518,16 @@ export function SetupWizard({
           </StepShell>
         )}
 
-        {/* Étape 2 : Compte marchand */}
+        {/* Étape 2 : Identifiants du compte (consolidée) */}
         {step === 2 && (
           <StepShell
             icon={Users}
-            title="Compte marchand"
-            description="Un seul compte pour toutes vos caisses, un seul abonnement."
-          >
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                key="create"
-                type="button"
-                aria-pressed={true}
-                className={cn(
-                  "flex flex-col items-start gap-1 rounded-2xl border p-4 text-left shadow-sm transition-all bg-card border-primary ring-1 ring-primary",
-                )}
-              >
-                <span className="font-semibold">Créer un compte</span>
-                <span className="text-xs text-muted-foreground">
-                  Première boutique — essai gratuit 30 jours, un seul abonnement pour toutes vos
-                  caisses.
-                </span>
-              </button>
-            </div>
-            <div className="mt-4 flex justify-center">
-              <Button
-                size="lg"
-                className="w-full"
-                disabled={!accountMode}
-                onClick={() => {
-                  goNext();
-                }}
-              >
-                Suivant <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </StepShell>
-        )}
-
-        {/* Étape 3 : Identifiants du compte (séparés du mode pour ne pas tout mélanger) — réservée aux employé qui scannent le QR du propriétaire */}
-        {step === 3 && (
-          <StepShell
-            icon={Users}
-            title="Identifiants du compte"
-            description="Téléphone + mot de passe (ou scannez le QR du propriétaire / entrez le code temporaire)."
+            title={accountMode === "create" ? "Créer un compte" : "Identifiants du compte"}
+            description={
+              accountMode === "create"
+                ? "Dernière étape : sécurisez votre boutique avec un téléphone et un mot de passe."
+                : "Téléphone + mot de passe (ou scannez le QR du propriétaire / entrez le code temporaire)."
+            }
           >
             <div className="space-y-3">
               {accountMode === "join" && (
@@ -610,8 +587,8 @@ export function SetupWizard({
           </StepShell>
         )}
 
-        {/* Étape 4 : Coordonnées du commerce (séparées, pas tout enregistré ensemble) */}
-        {step === 4 && (
+        {/* Étape 3 : Coordonnées du commerce */}
+        {step === 3 && (
           <StepShell
             icon={Users}
             title="Coordonnées du commerce"
@@ -643,8 +620,8 @@ export function SetupWizard({
           </StepShell>
         )}
 
-        {/* Étape 5 : Secteur d'activité */}
-        {step === 5 && (
+        {/* Étape 4 : Secteur d'activité */}
+        {step === 4 && (
           <StepShell
             icon={Store}
             title="Quel type d'activité gérez-vous ?"
@@ -802,10 +779,10 @@ export function SetupWizard({
           </StepShell>
         )}
 
-        {/* Étape 4 : Sous-catégorie magasin (conditionnel) */}
-        {step === 4 && isMagasin && (
+        {/* Étape 5 : Sous-catégorie magasin (conditionnel) */}
+        {step === 5 && isMagasin && (
           <StepShell
-            icon={Store}
+            icon={ShoppingBasket}
             title="Type de magasin"
             description="Précisez votre activité pour adapter les champs."
           >

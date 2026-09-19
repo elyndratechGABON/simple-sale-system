@@ -225,6 +225,12 @@ function WelcomePage() {
       </div>
 
       <main className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col items-center justify-center gap-6 px-5 py-10 text-center">
+        {scanningJoin && (
+          <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm gap-4">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+            <p className="text-sm font-medium text-foreground">Connexion à la boutique en cours…</p>
+          </div>
+        )}
         {phase === "welcome" && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
