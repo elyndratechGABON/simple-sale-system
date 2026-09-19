@@ -184,7 +184,13 @@ export function ProductForm({
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>{editing ? "Modifier le produit" : "Nouveau produit"}</DialogTitle>
+        <DialogTitle>
+          {editing
+            ? "Modifier le produit"
+            : isLocation
+              ? "Nouvel actif de location"
+              : "Nouveau produit"}
+        </DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
         <div>
