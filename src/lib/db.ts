@@ -67,6 +67,8 @@ export interface ProductVariant {
   color?: string;
   /** Pointure (chaussures), ex « 39 ». */
   pointure?: string;
+  /** Période de location (hour/day/week/month/year). */
+  period?: "hour" | "day" | "week" | "month" | "year";
 }
 
 export interface Product extends SyncFields {

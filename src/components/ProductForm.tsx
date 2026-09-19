@@ -19,11 +19,13 @@ import { useClusterFeatures } from "@/hooks/use-cluster-features";
 
 // Brouillon de variante dans le formulaire : prix/stock gardés en texte pour la saisie,
 // convertis en `price?`/`stock?` (productVariant) à l'enregistrement.
+// Pour les actifs en location, chaque variante porte aussi une `period`.
 type VariantDraft = {
   id: string;
   name: string;
   price: string;
   stock: string;
+  period?: "hour" | "day" | "week" | "month" | "year";
 };
 
 function draftId(): string {
@@ -72,21 +74,6 @@ export function ProductForm({
   // Champs location (cluster 'location') : dans ce cluster tout produit est un actif
   // de location, donc `isAsset` est dérivé et non toggleable.
   const isAsset = isLocation || editing?.is_asset === true;
-  const [rentalHour, setRentalHour] = useState<string>(
-    editing?.rental_pricing?.hour != null ? String(editing.rental_pricing.hour) : "",
-  );
-  const [rentalDay, setRentalDay] = useState<string>(
-    editing?.rental_pricing?.day != null ? String(editing.rental_pricing.day) : "",
-  );
-  const [rentalWeek, setRentalWeek] = useState<string>(
-    editing?.rental_pricing?.week != null ? String(editing.rental_pricing.week) : "",
-  );
-  const [rentalMonth, setRentalMonth] = useState<string>(
-    editing?.rental_pricing?.month != null ? String(editing.rental_pricing.month) : "",
-  );
-  const [rentalYear, setRentalYear] = useState<string>(
-    editing?.rental_pricing?.year != null ? String(editing.rental_pricing.year) : "",
-  );
   const [depositAmount, setDepositAmount] = useState<string>(
     editing?.deposit_amount != null ? String(editing.deposit_amount) : "",
   );
@@ -102,11 +89,15 @@ export function ProductForm({
         name: v.name,
         price: v.price !== undefined ? String(v.price) : "",
         stock: v.stock !== undefined ? String(v.stock) : "",
+        period: v.period ?? (isLocation ? "day" : undefined),
       })) ?? [],
   );
 
   function addVariant() {
-    setVariants((vs) => [...vs, { id: draftId(), name: "", price: "", stock: "" }]);
+    setVariants((vs) => [
+      ...vs,
+      { id: draftId(), name: "", price: "", stock: "", period: isLocation ? "day" : undefined },
+    ]);
   }
   function updateVariant(id: string, patch: Partial<VariantDraft>) {
     setVariants((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)));
@@ -137,6 +128,7 @@ export function ProductForm({
           ? variants.map((v) => ({
               id: v.id,
               name: v.name,
+              period: v.period ?? (isLocation ? "day" : undefined),
               ...(v.price ? { price: Number(v.price) } : {}),
               ...(v.stock ? { stock: Number(v.stock) } : {}),
             }))
@@ -144,7 +136,11 @@ export function ProductForm({
       const p = {
         name: name.trim(),
         cost: 0,
-        price: isAsset ? Number(rentalDay) || 0 : Number(price) || 0,
+        price: isAsset
+          ? variantsOut && variantsOut.length > 0
+            ? (variantsOut[0].price ?? 0)
+            : 0
+          : Number(price) || 0,
         stock: isAsset
           ? Number(totalUnits) || 0
           : unlimited
@@ -160,15 +156,6 @@ export function ProductForm({
         ...(variantsOut ? { variants: variantsOut } : {}),
         // Champs location
         is_asset: isAsset || undefined,
-        rental_pricing: isAsset
-          ? {
-              hour: rentalHour !== "" ? Number(rentalHour) : undefined,
-              day: rentalDay !== "" ? Number(rentalDay) : undefined,
-              week: rentalWeek !== "" ? Number(rentalWeek) : undefined,
-              month: rentalMonth !== "" ? Number(rentalMonth) : undefined,
-              year: rentalYear !== "" ? Number(rentalYear) : undefined,
-            }
-          : undefined,
         deposit_amount: isAsset && depositAmount ? Number(depositAmount) : undefined,
         total_units: isAsset && totalUnits ? Number(totalUnits) : undefined,
       };
@@ -397,7 +384,7 @@ export function ProductForm({
             />
           </div>
         )}
-        {/* Champs location : tout produit est un actif de location, formulaire dédié */}
+        {/* Champs location : tout produit est un actif de location, formulaire à variantes */}
         {isLocation && (
           <>
             <div>
@@ -411,72 +398,56 @@ export function ProductForm({
               />
             </div>
             <div>
-              <Label>Tarifs de location (FCFA) — prix unitaire par période</Label>
+              <Label>Tarifs de location (FCFA)</Label>
               <div className="text-xs text-muted-foreground mb-2">
-                Le prix saisi est le tarif unitaire (ex: 35 000/jour). Le total se calcule
-                automatiquement selon la période choisie.
+                Chaque variante = un prix pour une période choisie (par jour, semaine, mois…).
               </div>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <div>
-                  <Label htmlFor="rental_hour" className="text-xs text-muted-foreground">
-                    Par heure
-                  </Label>
-                  <Input
-                    id="rental_hour"
-                    inputMode="numeric"
-                    value={rentalHour}
-                    onChange={(e) => setRentalHour(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Optionnel"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="rental_day" className="text-xs text-muted-foreground">
-                    Par jour
-                  </Label>
-                  <Input
-                    id="rental_day"
-                    inputMode="numeric"
-                    value={rentalDay}
-                    onChange={(e) => setRentalDay(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Ex : 5000"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="rental_week" className="text-xs text-muted-foreground">
-                    Par semaine
-                  </Label>
-                  <Input
-                    id="rental_week"
-                    inputMode="numeric"
-                    value={rentalWeek}
-                    onChange={(e) => setRentalWeek(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Optionnel"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="rental_month" className="text-xs text-muted-foreground">
-                    Par mois
-                  </Label>
-                  <Input
-                    id="rental_month"
-                    inputMode="numeric"
-                    value={rentalMonth}
-                    onChange={(e) => setRentalMonth(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Optionnel"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="rental_year" className="text-xs text-muted-foreground">
-                    Par an
-                  </Label>
-                  <Input
-                    id="rental_year"
-                    inputMode="numeric"
-                    value={rentalYear}
-                    onChange={(e) => setRentalYear(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Optionnel"
-                  />
-                </div>
+              <div className="mt-1.5 space-y-2">
+                {variants.map((v) => (
+                  <div key={v.id} className="flex items-center gap-2 rounded-xl border bg-card p-2">
+                    <Input
+                      className="h-9 flex-1"
+                      placeholder="Nom (ex : Chaise standard)"
+                      value={v.name}
+                      onChange={(e) => updateVariant(v.id, { name: e.target.value })}
+                    />
+                    <Input
+                      className="h-9 w-24"
+                      inputMode="numeric"
+                      placeholder="Prix"
+                      value={v.price}
+                      onChange={(e) =>
+                        updateVariant(v.id, { price: e.target.value.replace(/\D/g, "") })
+                      }
+                    />
+                    <select
+                      className="h-9 rounded-lg border bg-input px-2 text-sm"
+                      value={v.period ?? "day"}
+                      onChange={(e) =>
+                        updateVariant(v.id, { period: e.target.value as VariantDraft["period"] })
+                      }
+                    >
+                      <option value="hour">Par heure</option>
+                      <option value="day">Par jour</option>
+                      <option value="week">Par semaine</option>
+                      <option value="month">Par mois</option>
+                      <option value="year">Par an</option>
+                    </select>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => removeVariant(v.id)}
+                      aria-label={`Retirer la variante ${v.name || "sans nom"}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addVariant}>
+                  <Plus className="h-4 w-4 mr-1.5" /> Ajouter une variante
+                </Button>
               </div>
             </div>
             <div>
