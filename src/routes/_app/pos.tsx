@@ -327,6 +327,10 @@ function PosPage() {
   // Étape d'encaissement ouverte (comptoir uniquement) : le total est figé, on saisit
   // l'argent donné avant de confirmer.
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [rentalPeriod, setRentalPeriod] = useState<"hour" | "day" | "week" | "month" | "year">(
+    "day",
+  );
+  const [returnDate, setReturnDate] = useState<string>("");
   // Voile « Vente validée » : son + animation, auto-effacé. `null` = caché.
   const [saleFlash, setSaleFlash] = useState<{
     total: number;
@@ -443,9 +447,23 @@ function PosPage() {
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [tableItems]);
 
-  // Total du panier en cours de saisie. Sur une table c'est le montant de la TOURNÉE, pas
-  // celui de l'addition : `activeTable.total` porte l'addition, tenue à jour par addRound.
-  const total = lines.reduce((s, l) => s + l.price * l.quantity, 0);
+  // Total du panier : si location, multiplie par la période choisie (jour=1, semaine=7, etc.)
+  const total = lines.reduce((s, l) => {
+    const prod = products.find((p) => p.id === l.product_id);
+    const isRental = Boolean(prod?.is_asset);
+    const mult = isRental
+      ? rentalPeriod === "hour"
+        ? 1
+        : rentalPeriod === "day"
+          ? 1
+          : rentalPeriod === "week"
+            ? 7
+            : rentalPeriod === "month"
+              ? 30
+              : 365
+      : 1;
+    return s + l.price * l.quantity * mult;
+  }, 0);
   // Ce qu'on encaisse : le panier au comptoir, la tournée visée par le panneau ouvert,
   // ou l'addition complète sur une table.
   const cashingRound =
@@ -497,6 +515,12 @@ function PosPage() {
         payment_method: payMethod,
         ...(clientName.trim() ? { client_name: clientName.trim() } : {}),
         ...(clientId ? { client_id: clientId } : {}),
+        ...(lines.some((l) => {
+          const prod = products.find((p) => p.id === l.product_id);
+          return prod?.is_asset;
+        }) && returnDate
+          ? { expected_return_date: new Date(returnDate).getTime() }
+          : {}),
       }),
     onSuccess: (sale) => {
       qc.invalidateQueries({ queryKey: ["products"] });
@@ -1808,6 +1832,65 @@ function PosPage() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Total à payer</p>
               <p className="text-4xl font-bold text-primary tabular-nums">{formatFCFA(total)}</p>
             </div>
+
+            {/* Sélecteur de période pour location d'actifs */}
+            {lines.some((l) => {
+              const prod = products.find((p) => p.id === l.product_id);
+              return prod?.is_asset;
+            }) && (
+              <div className="rounded-lg border p-3 space-y-3 bg-card">
+                <div>
+                  <Label className="text-sm font-medium">Durée de location</Label>
+                  <div className="grid grid-cols-5 gap-1 mt-1">
+                    {(
+                      [
+                        { key: "hour" as const, label: "Heure" },
+                        { key: "day" as const, label: "Jour" },
+                        { key: "week" as const, label: "Semaine" },
+                        { key: "month" as const, label: "Mois" },
+                        { key: "year" as const, label: "Année" },
+                      ] as const
+                    ).map((opt) => (
+                      <Button
+                        key={opt.key}
+                        type="button"
+                        size="sm"
+                        variant={rentalPeriod === opt.key ? "default" : "outline"}
+                        onClick={() => setRentalPeriod(opt.key)}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="checkout-return" className="text-xs text-muted-foreground">
+                    Date de reprise
+                  </Label>
+                  <Input
+                    id="checkout-return"
+                    type="date"
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    className="h-10"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Période :{" "}
+                  <span className="font-semibold text-foreground">
+                    {rentalPeriod === "hour"
+                      ? "par heure"
+                      : rentalPeriod === "day"
+                        ? "par jour"
+                        : rentalPeriod === "week"
+                          ? "par semaine"
+                          : rentalPeriod === "month"
+                            ? "par mois"
+                            : "par an"}
+                  </span>
+                </p>
+              </div>
+            )}
 
             {/* Empilés sur petit écran : « Mobile Money » en 3 colonnes de
                 ~74px débordait de sa cellule ; côte à côte dès que la modale

@@ -122,6 +122,8 @@ export interface Product extends SyncFields {
   total_units?: number;
   /** Date de retour prévue (timestamp) pour l'actif loué. Absent = pas de suivi. */
   return_date?: number;
+  /** Date de reprise prévue pour l'actif loué (retour du client). */
+  expected_return_date?: number;
 }
 
 /**
@@ -1329,6 +1331,7 @@ export async function createSale(input: {
   customers_count?: number;
   client_name?: string;
   client_id?: string;
+  expected_return_date?: number;
   payment_method?: PaymentMethod;
   /** Réduction en FCFA, bornée au sous-total. */
   discount?: number;
@@ -1365,6 +1368,7 @@ export async function createSale(input: {
     payment_method: method,
     ...(input.client_name ? { client_name: input.client_name } : {}),
     ...(input.client_id ? { client_id: input.client_id } : {}),
+    ...(input.expected_return_date ? { expected_return_date: input.expected_return_date } : {}),
     ...(sellerLabel ? { seller_name: sellerLabel, seller_device_id: identity.deviceId } : {}),
     ...touch(),
   };
