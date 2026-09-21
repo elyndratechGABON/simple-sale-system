@@ -343,6 +343,10 @@ function PosPage() {
   const [quickEditTarget, setQuickEditTarget] = useState<Product | null>(null);
   // Sélecteur de variante : quand un produit a plusieurs variantes, le clic
   // ouvre ce panneau au lieu d'ajouter directement.
+  const [manualQtyOpen, setManualQtyOpen] = useState(false);
+  const [manualQtyProduct, setManualQtyProduct] = useState<Product | null>(null);
+  const [manualQtyValue, setManualQtyValue] = useState<string>("");
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [variantPicker, setVariantPicker] = useState<{ product: Product } | null>(null);
 
   // Table DÉRIVÉE de la liste des additions ouvertes, jamais copiée dans l'état local :
@@ -1092,7 +1096,41 @@ function PosPage() {
                   className="relative flex h-full flex-col rounded-xl border bg-card p-3 text-left transition-all hover:border-primary hover:shadow-md sm:p-4"
                 >
                   <button
-                    onClick={() => onProductClick(p)}
+                    onClick={() => {
+                      // Clic rapide → augmenter de 1
+                      onProductClick(p);
+                      // Si maintenu > 500ms → fenêtre manuelle
+                      longPressTimer.current = setTimeout(() => {
+                        setManualQtyProduct(p);
+                        setManualQtyValue(String(cart[p.id]?.qty ?? 1));
+                        setManualQtyOpen(true);
+                      }, 500);
+                    }}
+                    onMouseDown={() => {
+                      longPressTimer.current = setTimeout(() => {
+                        setManualQtyProduct(p);
+                        setManualQtyValue(String(cart[p.id]?.qty ?? 1));
+                        setManualQtyOpen(true);
+                      }, 500);
+                    }}
+                    onMouseUp={() => {
+                      if (longPressTimer.current) {
+                        clearTimeout(longPressTimer.current);
+                        longPressTimer.current = null;
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (longPressTimer.current) {
+                        clearTimeout(longPressTimer.current);
+                        longPressTimer.current = null;
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setManualQtyProduct(p);
+                      setManualQtyValue(String(cart[p.id]?.qty ?? 1));
+                      setManualQtyOpen(true);
+                    }}
                     disabled={out}
                     className={cn(
                       "flex flex-1 flex-col rounded-lg text-left active:scale-[0.98] transition-transform",
@@ -1970,6 +2008,60 @@ function PosPage() {
                   {formatFCFA(total)}
                 </span>
               </div>
+            )}
+
+            {manualQtyOpen && manualQtyProduct && (
+              <Dialog open={manualQtyOpen} onOpenChange={setManualQtyOpen}>
+                <DialogContent className="sm:max-w-xs">
+                  <DialogHeader>
+                    <DialogTitle>Quantité — {manualQtyProduct.name}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 py-2">
+                    <Label>Nombre</Label>
+                    <Input
+                      type="number"
+                      value={manualQtyValue}
+                      onChange={(e) => setManualQtyValue(e.target.value.replace(/\D/g, ""))}
+                      placeholder="1"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setManualQtyOpen(false);
+                          onProductClick(manualQtyProduct); // +1 par défaut si vide
+                        }}
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        variant="default"
+                        className="flex-1"
+                        onClick={() => {
+                          const qty = Math.max(1, Number(manualQtyValue) || 1);
+                          // Mettre à jour le panier avec la quantité exacte
+                          const key = manualQtyProduct.id;
+                          setCart((prev) => ({
+                            ...prev,
+                            [key]: {
+                              ...prev[key],
+                              qty,
+                              price: manualQtyProduct.price,
+                              cost: manualQtyProduct.cost,
+                              name: manualQtyProduct.name,
+                            },
+                          }));
+                          setManualQtyOpen(false);
+                        }}
+                      >
+                        Valider ({manualQtyValue || 1})
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
 
             <Button
