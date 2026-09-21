@@ -1,29 +1,69 @@
 import { useState } from "react";
-import { usePreferences, savePreferences } from "@/lib/settings";
+import { savePreferences } from "@/lib/settings";
+import { usePreferences } from "@/hooks/use-preferences";
 import { getShopProfile } from "@/lib/db";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Crown, Smartphone, Store, Database, Zap, Bell, Megaphone, Newspaper } from "lucide-react";
+import {
+  ChevronRight,
+  Crown,
+  Smartphone,
+  Store,
+  Database,
+  Zap,
+  Bell,
+  Megaphone,
+  Newspaper,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) => void }) {
   const { ownerName, ownerPhoto, workspaceName } = usePreferences();
   const { data: profile } = useQuery({ queryKey: ["shop_profile"], queryFn: getShopProfile });
-  const displayName = ownerName || profile?.ownerName || profile?.storeName || workspaceName || "Propriétaire";
+  const displayName =
+    ownerName || profile?.ownerName || profile?.storeName || workspaceName || "Propriétaire";
 
   const [bgType, setBgType] = useState<"classic" | "gradient">("gradient");
 
   const items = [
-    { icon: Crown, label: "Abonnement", desc: "Gérez votre abonnement et vos services", to: "/settings#sub" },
-    { icon: Smartphone, label: "Appareil connecté", desc: "Gérez les appareils connectés", to: "/settings#devices" },
-    { icon: Store, label: "Boutique", desc: "Gérez votre boutique et ses paramètres", to: "/settings#shop" },
-    { icon: Database, label: "Donnée", desc: "Sauvegardez et gérez vos données", to: "/settings#data" },
+    {
+      icon: Crown,
+      label: "Abonnement",
+      desc: "Gérez votre abonnement et vos services",
+      to: "/settings#sub",
+    },
+    {
+      icon: Smartphone,
+      label: "Appareil connecté",
+      desc: "Gérez les appareils connectés",
+      to: "/settings#devices",
+    },
+    {
+      icon: Store,
+      label: "Boutique",
+      desc: "Gérez votre boutique et ses paramètres",
+      to: "/settings#shop",
+    },
+    {
+      icon: Database,
+      label: "Donnée",
+      desc: "Sauvegardez et gérez vos données",
+      to: "/settings#data",
+    },
   ];
 
   return (
-    <div className={`min-h-screen ${bgType === "gradient" ? "bg-gradient-to-br from-emerald-950 via-teal-950 to-amber-950" : "bg-[#0B1114]"} text-[#F1F3F4]`}>
+    <div
+      className={`min-h-screen ${bgType === "gradient" ? "bg-gradient-to-br from-emerald-950 via-teal-950 to-amber-950" : "bg-[#0B1114]"} text-[#F1F3F4]`}
+    >
       <div className="relative bg-[#0D1215]/80 backdrop-blur-md px-4 pt-6 pb-8 text-center">
         <div className="flex items-center justify-between mb-4">
-          <Button type="button" variant="ghost" size="icon" onClick={() => onNavigate("/")} aria-label="Retour">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => onNavigate("/")}
+            aria-label="Retour"
+          >
             <ChevronRight className="h-5 w-5 rotate-180 text-white/70" />
           </Button>
           <Button type="button" variant="ghost" size="icon" aria-label="Rechercher">
@@ -71,11 +111,26 @@ export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) =
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-white/10 bg-[#0B1114]/95 backdrop-blur-md px-2 py-2 text-xs text-[#9AA4B2]">
-        <a href="/pos" className="flex flex-col items-center gap-0.5 hover:text-white"><Zap className="h-5 w-5" />Accueil</a>
-        <a href="/pos" className="flex flex-col items-center gap-0.5 hover:text-white"><Zap className="h-5 w-5" />Caisse</a>
-        <a href="/stocks" className="flex flex-col items-center gap-0.5 hover:text-white"><Zap className="h-5 w-5" />Stocks</a>
-        <a href="/reports" className="flex flex-col items-center gap-0.5 hover:text-white"><Zap className="h-5 w-5" />Rapports</a>
-        <a href="/_app/settings" className="flex flex-col items-center gap-0.5 text-emerald-400"><Zap className="h-5 w-5" />Réglages</a>
+        <a href="/pos" className="flex flex-col items-center gap-0.5 hover:text-white">
+          <Zap className="h-5 w-5" />
+          Accueil
+        </a>
+        <a href="/pos" className="flex flex-col items-center gap-0.5 hover:text-white">
+          <Zap className="h-5 w-5" />
+          Caisse
+        </a>
+        <a href="/stocks" className="flex flex-col items-center gap-0.5 hover:text-white">
+          <Zap className="h-5 w-5" />
+          Stocks
+        </a>
+        <a href="/reports" className="flex flex-col items-center gap-0.5 hover:text-white">
+          <Zap className="h-5 w-5" />
+          Rapports
+        </a>
+        <a href="/_app/settings" className="flex flex-col items-center gap-0.5 text-emerald-400">
+          <Zap className="h-5 w-5" />
+          Réglages
+        </a>
       </nav>
     </div>
   );

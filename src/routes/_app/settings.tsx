@@ -147,22 +147,17 @@ export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
 });
 
+import { WhatsAppProfilePage } from "@/components/WhatsAppProfilePage";
+import { useNavigate } from "@tanstack/react-router";
+
 function SettingsPage() {
-  // La carte « Tables » est hors service tant que le système de tables est coupé : le
-  // mode se réactive depuis la carte « Type de commerce », où vit l'interrupteur.
+  const navigate = useNavigate();
   const { tablesEnabled } = usePreferences();
   const isMobile = useIsMobile(1024);
   const [openSections, setOpenSections] = useState<string[]>(["shop"]);
-  // Un employé n'a RIEN à modifier ici : la page se réduit à sa demande de suppression
-  // de compte (dernier QR de clôture avant effacement). Toutes les cartes ci-dessous
-  // relèvent du compte marchand — hors de portée d'un écran employé.
   const { role } = useAccess();
-  // Étiquette du compte dans l'en-tête : qui voit la page ?
   const accountLabel = `Compte ${ROLE_LABELS[role]}`;
 
-  // Sur téléphone, une seule section dépliée à la fois évite le mur de 11 cartes qui se
-  // regardait une à une au défilement. Au-delà de `lg`, tout est déplié d'office ; l'util-
-  // isateur reste libre de replier une section (« accordéon ») même au bureau.
   useEffect(() => {
     setOpenSections(isMobile ? ["shop"] : ["shop", "clients", "compte", "donnees"]);
   }, [isMobile]);
@@ -184,119 +179,8 @@ function SettingsPage() {
     );
   }
 
-  return (
-    <div className="mx-auto max-w-3xl px-[var(--page-gutter)] py-4 space-y-3">
-      <div className="mb-5">
-        <div className="flex items-center gap-2">
-          <h1 className="text-page-title font-bold">Paramètres</h1>
-          <Badge variant="secondary">{accountLabel}</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Tout ce qui a été demandé au premier lancement se modifie ici.
-        </p>
-        {/* Au bureau, saut direct vers une section — repliée d'office, elle s'ouvre avant
-            le défilement. Invisible sous `lg`, la navigation y vit déjà dans l'accordéon. */}
-        <nav className="mt-4 hidden gap-2 lg:flex" aria-label="Sections des réglages">
-          {[
-            ["boutique", "Boutique"],
-            ["clients", "Clients"],
-            ["compte", "Compte et appareils"],
-            ["donnees", "Données"],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className="rounded-full border bg-card px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              onClick={() => {
-                setOpenSections((sections) =>
-                  sections.includes(id) ? sections : [...sections, id],
-                );
-                // Laisser l'accordéon se déplier avant de viser l'ancre.
-                requestAnimationFrame(() =>
-                  document
-                    .getElementById(id)
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                );
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <Accordion
-        type="multiple"
-        value={openSections}
-        onValueChange={setOpenSections}
-        className="space-y-1 lg:gap-2"
-      >
-        <AccordionItem id="boutique" value="shop" className="scroll-mt-24 border-0">
-          <AccordionTrigger className="gap-3 rounded-xl px-2 py-3 hover:no-underline hover:bg-accent/40 data-[state=open]:bg-accent/40">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Store className="h-4 w-4 text-primary" />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col items-start text-left">
-              <span className="text-sm font-semibold text-foreground">Boutique</span>
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 px-1 pb-4 pt-1">
-            <ShopCard />
-            <AppearanceCard />
-            <BusinessCard />
-            {tablesEnabled && <TablesCard />}
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="clients" className="border-0">
-          <AccordionTrigger className="gap-3 rounded-xl px-2 py-3 hover:no-underline hover:bg-accent/40 data-[state=open]:bg-accent/40">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Users className="h-4 w-4 text-primary" />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col items-start text-left">
-              <span className="text-sm font-semibold text-foreground">Clients</span>
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 px-1 pb-4 pt-1">
-            <ClientsCard />
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="compte" className="border-0">
-          <AccordionTrigger className="gap-3 rounded-xl px-2 py-3 hover:no-underline hover:bg-accent/40 data-[state=open]:bg-accent/40">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <MonitorSmartphone className="h-4 w-4 text-primary" />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col items-start text-left">
-              <span className="text-sm font-semibold text-foreground">Compte et appareils</span>
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 px-1 pb-4 pt-1">
-            <SubscriptionCard />
-            <DevicesCard />
-            <InstallCard />
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="donnees" className="border-0">
-          <AccordionTrigger className="gap-3 rounded-xl px-2 py-3 hover:no-underline hover:bg-accent/40 data-[state=open]:bg-accent/40">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <FolderOpen className="h-4 w-4 text-primary" />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col items-start text-left">
-              <span className="text-sm font-semibold text-foreground">Données</span>
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="space-y-3 px-1 pb-4 pt-1">
-            <DirectoryCard />
-            <BackupCard />
-            <DeleteShopCard />
-            <AboutCard />
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-    </div>
-  );
+  // Option B : WhatsAppProfilePage comme page principale
+  return <WhatsAppProfilePage onNavigate={(to) => void navigate({ to })} />;
 }
 
 /**
