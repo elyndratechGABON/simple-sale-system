@@ -3,17 +3,7 @@ import { savePreferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getShopProfile } from "@/lib/db";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ChevronRight,
-  Crown,
-  Smartphone,
-  Store,
-  Database,
-  Zap,
-  Bell,
-  Megaphone,
-  Newspaper,
-} from "lucide-react";
+import { ChevronRight, Crown, Smartphone, Store, Database, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) => void }) {
@@ -109,29 +99,6 @@ export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) =
           </a>
         ))}
       </div>
-
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-white/10 bg-[#0B1114]/95 backdrop-blur-md px-2 py-2 text-xs text-[#9AA4B2]">
-        <a href="/pos" className="flex flex-col items-center gap-0.5 hover:text-white">
-          <Zap className="h-5 w-5" />
-          <span className="text-[10px]">Accueil</span>
-        </a>
-        <a href="/pos" className="flex flex-col items-center gap-0.5 hover:text-white">
-          <Zap className="h-5 w-5" />
-          <span className="text-[10px]">Caisse</span>
-        </a>
-        <a href="/stocks" className="flex flex-col items-center gap-0.5 hover:text-white">
-          <Zap className="h-5 w-5" />
-          <span className="text-[10px]">Stocks</span>
-        </a>
-        <a href="/reports" className="flex flex-col items-center gap-0.5 hover:text-white">
-          <Zap className="h-5 w-5" />
-          <span className="text-[10px]">Rapports</span>
-        </a>
-        <a href="/_app/settings" className="flex flex-col items-center gap-0.5 text-emerald-400">
-          <Zap className="h-5 w-5" />
-          <span className="text-[10px]">Réglages</span>
-        </a>
-      </nav>
     </div>
   );
 }
