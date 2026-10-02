@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+﻿import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
@@ -965,7 +965,45 @@ function PosPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_400px] xl:grid-cols-[minmax(0,1fr)_440px]">
+{/* Largeurs par palier (§21, §22) :
+          - ≥1024 : produits ~70 %, panier 30 % (360 px) — la tablette a peu de place,
+            un panier de 400 px y mange un tiers de l'écran.
+          - ≥1280 : 3 colonnes Catégories | Produits | Panier (20 / 52 / 28).
+          - ≥1536 : la grille de produits gagne de la place, le panier ne grossit pas
+            au-delà de 360 px — un panier trop large n'aide pas à lire des lignes.
+          `minmax(0,1fr)` sur le centre empêche la grille de déborder quand une carte
+          porte un nom long. */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
+        {/* Colonne 1/3 — CATÉGORIES. Masquée sous 1280 px, où la grille de cartes
+            prend sa place dans la colonne produits : à cette largeur, une colonne de
+            200 px volerait trop de place aux produits.
+            `sticky` + `max-h` + défilement interne : la colonne suit le défilement de la
+            page et la liste reste lisible sans faire défiler toute la fenêtre. */}
+        <aside className="hidden xl:block">
+          {!features.isService && categories.length > 0 && (
+            <section className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Catégories
+              </p>
+              <div className="space-y-1">
+                <CategoryRail
+                  label="Tous"
+                  active={filter === "Tous"}
+                  onClick={() => setFilter("Tous")}
+                />
+                {categories.map((c) => (
+                  <CategoryRail
+                    key={c}
+                    label={c}
+                    active={filter === c}
+                    onClick={() => setFilter(c)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </aside>
+
         {/* Products */}
         <div className="flex min-w-0 flex-col">
           {/* Titre seul sur sa ligne en mobile ; les catégories passent dans
@@ -1007,12 +1045,12 @@ function PosPage() {
               aria-label="Rechercher un article"
               className="h-12 rounded-xl pl-9"
             />
-          </div>
-          {/* Catégories : grille responsive de cartes (2 colonnes téléphone, 3-4
-              tablette, 5-6 desktop) à la place de la longue rangée de pills qui
-              débordait. Mêmes `filter`, catégories et handlers — strictement visuel. */}
+</div>
+          {/* Catégories : grille de cartes sous 1280 px. Au-dessus, elles vivent dans la
+              colonne de gauche (xl:block) — sinon ce sont deux fois les mêmes boutons à
+              l'écran. Mêmes `filter`, mêmes catégories, mêmes handlers : visuel seul. */}
           {!features.isService && categories.length > 0 && (
-            <section className="mt-4">
+            <section className="mt-4 xl:hidden">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Catégories
               </p>
@@ -1082,9 +1120,13 @@ function PosPage() {
           <div
             className={cn(
               "mt-5 grid gap-2.5 xs:gap-3",
+              // Sous 1280, la grille occupe toute la largeur (mode tables ou non) comme
+              // avant. Au-dessus, elle vit dans la colonne centrale entre Catégories et
+              // Panier — donc elle perd une colonne de largeur réelle, et il faut la
+              // décompter sinon les cartes tombent sous 150 px.
               features.hasTables
-                ? "grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
-                : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6",
+                ? "grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4"
+                : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5",
             )}
           >
             {filtered.map((p) => {
@@ -2576,6 +2618,56 @@ const CATEGORY_ICON: Record<string, LucideIcon> = {
   Boisson: CupSoda,
   Desserts: CakeSlice,
 } as const;
+
+/**
+ * Catégorie en colonne verticale (desktop 3 colonnes).
+ *
+ * Même état et mêmes handlers que `CategoryCard` — celle-ci reste utilisée sous 1024 px,
+ * où une grille tient mieux qu'une colonne de 200 px. Ici la largeur est FIXE et la
+ * hauteur doit rester faible : une catégorie = une rangée, pas une carte. Un vendedor
+ * qui vend par catégorie doit voir la liste entière sans défiler.
+ */
+function CategoryRail({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const Icon = CATEGORY_ICON[label] ?? Tag;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        // h-9 : 36 px suffisent ici parce que la cible est large (colonne de 200 px),
+        // donc la surface tactile reste bien au-dessus du minimum de 44 px.
+        "flex min-h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-left text-[13px] font-medium transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-transparent bg-card/60 text-foreground hover:border-primary/40 hover:bg-accent",
+      )}
+    >
+      <span
+        className={cn(
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors",
+          active ? "bg-primary-foreground/15 text-primary-foreground" : "bg-muted text-muted-foreground",
+        )}
+      >
+        <Icon className="h-3 w-3" strokeWidth={2.2} />
+      </span>
+      <span className="min-w-0 flex-1 truncate leading-tight">{label}</span>
+      <Check
+        className={cn("h-3.5 w-3.5 shrink-0 transition-opacity", active ? "opacity-100" : "opacity-0")}
+        strokeWidth={3}
+      />
+    </button>
+  );
+}
 
 function CategoryCard({
   label,
