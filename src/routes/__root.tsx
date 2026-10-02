@@ -6,6 +6,7 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { MotionConfig } from "framer-motion";
 import { type ReactNode, useEffect } from "react";
@@ -36,7 +37,13 @@ export function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+/**
+ * Le type vient du routeur, pas d'une forme redéclarée ici : `error` y est typé
+ * `unknown` (une erreur de chargement peut être n'importe quoi, y compris une
+ * chaîne), donc l'annotation `{ error: Error }` était fausse et le build le
+ * refusait. `ErrorComponentProps` suit le routeur d'une version à l'autre.
+ */
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
 
