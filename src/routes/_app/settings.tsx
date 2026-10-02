@@ -104,6 +104,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProductCardSettings } from "@/components/ProductCardSettings";
+import { RestoreShopCard } from "@/components/RestoreShopCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Accordion,
@@ -203,6 +204,9 @@ function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="donnees" className="mt-3 space-y-3">
+          {/* Récupération AVANT la sauvegarde manuelle : c'est le chemin qui rend le
+              téléphone perdu, l'export ne le fait pas. En tête, pas en fin. */}
+          <RestoreShopCard />
           <DirectoryCard />
           <BackupCard />
           <DeleteShopCard />
