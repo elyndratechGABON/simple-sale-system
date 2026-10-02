@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { savePreferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getShopProfile } from "@/lib/db";
@@ -13,31 +13,52 @@ export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) =
     ownerName || profile?.ownerName || profile?.storeName || workspaceName || "Propriétaire";
 
   const [bgType, setBgType] = useState<"classic" | "gradient">("gradient");
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    // Référence nommée : sans elle le removeEventListener ne retrouverait pas la même
+    // fonction et l'écouteur `appinstalled` survivrait au démontage.
+    const onInstalled = () => {
+      setInstalled(true);
+      setInstallPrompt(null);
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
 
   const items = [
     {
       icon: Crown,
       label: "Abonnement",
       desc: "Plan, renouvellement, quota d'appareils",
-      to: "/_app/settings",
+      to: "/settings",
     },
     {
       icon: Smartphone,
       label: "Appareil connecté",
       desc: "Écrans jumelés, synchronisation, mode employé",
-      to: "/_app/settings",
+      to: "/settings",
     },
     {
       icon: Store,
       label: "Boutique",
       desc: "Nom, quartier, logo, type de commerce",
-      to: "/_app/settings",
+      to: "/settings",
     },
     {
       icon: Database,
       label: "Donnée",
       desc: "Export JSON, sauvegarde, restauration, suppression",
-      to: "/_app/settings",
+      to: "/settings",
     },
   ];
 
@@ -98,6 +119,29 @@ export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) =
             <ChevronRight className="h-4 w-4 text-[#9AA4B2] shrink-0" />
           </a>
         ))}
+
+        {/* Installation PWA : le bouton doit être visible et fonctionner selon le navigateur.
+         * Safari iOS exige de naviguer vers /pos AVANT d'appeler prompt(). On garde un
+         * bouton explicite aussi pour les navigateurs sans déclencheur natif. */}
+        <div className="mt-6 flex items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3">
+          <Button
+            type="button"
+            onClick={() => {
+              if (installPrompt) {
+                (installPrompt as any).prompt?.();
+              } else {
+                window.location.href = "/pos";
+              }
+            }}
+            aria-label="Installer l'application"
+          >
+            <Smartphone className="h-4 w-4 mr-1.5" />
+            {installed ? "Installé" : installPrompt ? "Installer" : "Installer (naviguer vers /pos)"}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {installed ? "L'application est installée sur cet appareil." : "Ajoutez sur l'écran d'accueil pour un accès rapide."}
+          </span>
+        </div>
       </div>
     </div>
   );

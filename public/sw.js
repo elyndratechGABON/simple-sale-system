@@ -33,6 +33,7 @@ const PRECACHE_PAGES = [
   "/legal/privacy",
   "/legal/terms",
   "/legal/refund",
+  "/welcome",
   "/manifest.webmanifest",
   "/apple-touch-icon.png",
   "/icon-192.png",
