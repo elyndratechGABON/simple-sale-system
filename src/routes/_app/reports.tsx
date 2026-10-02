@@ -1,20 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, Scissors, Weight } from "lucide-react";
-import { fr } from "react-day-picker/locale";
-import { endOfMonth, startOfDay, startOfMonth } from "date-fns";
+import {
+  BarChart3,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Scissors,
+  SlidersHorizontal,
+  Weight,
+} from "lucide-react";
+import { addDays, addMonths, addYears, endOfYear, startOfDay, startOfMonth, startOfYear } from "date-fns";
 import type { PaymentMethod } from "@/lib/db";
 import { listProducts } from "@/lib/db";
+import type { DayBucket } from "@/lib/analytics";
 import { computeDayDetail, computePeriodStats, computeWeightSales } from "@/lib/analytics";
 import { usePeriodData } from "@/hooks/use-period-data";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { formatDay, formatDayShort, formatFCFA, formatFCFACompact, formatKg } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -31,6 +39,41 @@ const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   mobile_money: "Mobile Money",
 };
 
+/** Granularités de la page. `focusedDay` sert à la fois d'ancre de période et de
+ *  jour sélectionné : naviguer change les deux, donc le détail suit toujours la vue. */
+type CalendarView = "month" | "week" | "day" | "year";
+
+const VIEWS: { value: CalendarView; label: string }[] = [
+  { value: "month", label: "Mois" },
+  { value: "week", label: "Semaine" },
+  { value: "day", label: "Jour" },
+  { value: "year", label: "Année" },
+];
+
+const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const MONTHS = [
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
+];
+
+/** Libellé du premier KPI : dépend de la granularité, le reste est identique partout. */
+const REVENUE_LABEL: Record<CalendarView, string> = {
+  month: "CA du mois",
+  week: "CA semaine",
+  day: "CA du jour",
+  year: "CA annuel",
+};
+
 /** Minuit du lundi de la semaine (lundi) qui contient `ts`. */
 function startOfWeekMonday(ts: number): number {
   const d = new Date(ts);
@@ -39,40 +82,39 @@ function startOfWeekMonday(ts: number): number {
   return d.getTime();
 }
 
-/** Vue du calendrier des ventes : grille du mois, bande de la semaine, ou jour seul. */
-type CalendarView = "month" | "week" | "day";
+/** Décale l'ancre d'une période, sans jamais coder une date en dur. */
+function stepDay(ts: number, view: CalendarView, dir: 1 | -1): number {
+  if (view === "month") return addMonths(ts, dir).getTime();
+  if (view === "year") return addYears(ts, dir).getTime();
+  if (view === "week") return addDays(ts, dir * 7).getTime();
+  return addDays(ts, dir).getTime();
+}
+
+function periodTitle(ts: number, view: CalendarView): string {
+  if (view === "year") return String(new Date(ts).getFullYear());
+  if (view === "week") {
+    const mon = startOfWeekMonday(ts);
+    return `${formatDayShort(mon)} – ${formatDayShort(mon + 6 * 86400000)}`;
+  }
+  if (view === "day") return formatDay(ts);
+  const label = new Date(ts).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+const NAV_LABEL: Record<CalendarView, string> = {
+  month: "Mois",
+  week: "Semaine",
+  day: "Jour",
+  year: "Année",
+};
 
 function ReportsPage() {
-  // Calendrier des ventes : vue (mois/semaine/jour), jour en focus, jour ouvert en détail.
-  const [calendarView, setCalendarView] = useState<CalendarView>("month");
+  const [view, setView] = useState<CalendarView>("month");
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
-  const [detailDay, setDetailDay] = useState<number | null>(null);
-  // Sélection de période personnalisée (range picker)
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeFrom, setRangeFrom] = useState<number | null>(null);
   const [rangeTo, setRangeTo] = useState<number | null>(null);
-
-  // Montant par jour du mois affiché — indépendant de toute période choisie, pour que
-  // chaque cellule porte son revenu.
-  const calendarMonthStart = useMemo(() => startOfMonth(focusedDay).getTime(), [focusedDay]);
-  const calendarMonthEnd = useMemo(() => endOfMonth(focusedDay).getTime() + 86400000, [focusedDay]);
-  const { data: calendarMonthData } = usePeriodData(calendarMonthStart, calendarMonthEnd);
-  const calendarAmounts = useMemo(() => {
-    const s = computePeriodStats(
-      calendarMonthData?.sales ?? [],
-      calendarMonthData?.items ?? [],
-      calendarMonthStart,
-      calendarMonthEnd,
-      [],
-    );
-    // Zéro vente = pas de pastille : le calendrier ne montre que l'activité réelle.
-    return new Map(s.days.filter((d) => d.revenue > 0).map((d) => [d.day, d.revenue]));
-  }, [calendarMonthData, calendarMonthStart, calendarMonthEnd]);
-
-  // Les 7 jours (lundi→dimanche) de la semaine qui contient le jour en focus.
-  const weekDays = useMemo(() => {
-    const monday = startOfWeekMonday(focusedDay);
-    return Array.from({ length: 7 }, (_, i) => monday + i * 86400000);
-  }, [focusedDay]);
 
   const { isService, hasWeightInput } = useClusterFeatures();
   const { data: products } = useQuery({
@@ -81,218 +123,268 @@ function ReportsPage() {
     staleTime: 30_000,
   });
 
-  // Période du rapport sectorisé : celle que montre le calendrier (mois entier, bande
-  // de la semaine, ou seul jour en focus). On la re-questionne une seule fois, indexée,
-  // pour que boucherie et service partagent les mêmes ventes que le calendrier.
-  const sectorRange = useMemo(() => {
-    if (calendarView === "week") return { from: weekDays[0], to: weekDays[6] + 86400000 };
-    if (calendarView === "day") {
+  // Une seule requête, indexée sur la période affichée. `computePeriodStats` renvoie
+  // TOUS les jours de l'intervalle, à zéro quand il n'y a pas eu de vente : c'est cette
+  // série qui alimente le calendrier, la semaine et l'année, donc pas de doublon.
+  const range = useMemo(() => {
+    if (view === "year") {
+      const y = startOfYear(focusedDay).getTime();
+      return { from: y, to: endOfYear(focusedDay).getTime() + 86400000 };
+    }
+    if (view === "week") {
+      const mon = startOfWeekMonday(focusedDay);
+      return { from: mon, to: mon + 7 * 86400000 };
+    }
+    if (view === "day") {
       const from = startOfDay(focusedDay).getTime();
       return { from, to: from + 86400000 };
     }
-    return { from: calendarMonthStart, to: calendarMonthEnd };
-  }, [calendarView, focusedDay, weekDays, calendarMonthStart, calendarMonthEnd]);
-  const { data: sectorData } = usePeriodData(sectorRange.from, sectorRange.to);
+    const from = startOfMonth(focusedDay).getTime();
+    return { from, to: addMonths(from, 1).getTime() };
+  }, [view, focusedDay]);
 
-  const sectorStats = useMemo(
-    () =>
-      sectorData
-        ? computePeriodStats(
-            sectorData.sales,
-            sectorData.items,
-            sectorRange.from,
-            sectorRange.to,
-            [],
-          )
-        : null,
-    [sectorData, sectorRange],
+  const { data } = usePeriodData(range.from, range.to);
+  const stats = useMemo(
+    () => (data ? computePeriodStats(data.sales, data.items, range.from, range.to) : null),
+    [data, range.from, range.to],
   );
+
+  const days = useMemo(() => new Map((stats?.days ?? []).map((d) => [d.day, d])), [stats]);
+
+  // Année : agrégation mensuelle de la même série, réutilisée telle quelle.
+  const months = useMemo(() => {
+    if (view !== "year" || !stats) return [];
+    const acc = new Map<number, { revenue: number; salesCount: number }>();
+    for (const d of stats.days) {
+      const m = new Date(d.day).getMonth();
+      const cur = acc.get(m) ?? { revenue: 0, salesCount: 0 };
+      cur.revenue += d.revenue;
+      cur.salesCount += d.salesCount;
+      acc.set(m, cur);
+    }
+    return MONTHS.map((label, month) => {
+      const hit = acc.get(month);
+      return { label, month, revenue: hit?.revenue ?? 0, salesCount: hit?.salesCount ?? 0 };
+    });
+  }, [view, stats]);
+
   const weightSales = useMemo(
     () =>
-      sectorData && (sectorData.items.length > 0 || (products ?? []).length > 0)
-        ? computeWeightSales(sectorData.items, products ?? [])
+      data && (data.items.length > 0 || (products ?? []).length > 0)
+        ? computeWeightSales(data.items, products ?? [])
         : null,
-    [sectorData, products],
+    [data, products],
   );
 
-  const periodLabel =
-    calendarView === "month"
-      ? new Date(sectorRange.from).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })
-      : calendarView === "week"
-        ? `${formatDayShort(weekDays[0])} – ${formatDayShort(weekDays[6])}`
-        : formatDay(focusedDay);
+  // « Meilleur » dépend de la granularité : un jour en mois/semaine/jour, un mois en année.
+  const bestLabel = (() => {
+    if (view === "year") {
+      let best: (typeof months)[number] | null = null;
+      for (const m of months) if (!best || m.revenue > best.revenue) best = m;
+      return best && best.revenue > 0 ? best.label : "—";
+    }
+    return stats?.bestDay
+      ? new Date(stats.bestDay.day).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+      : "—";
+  })();
+
+  const showSector = (isService ? (stats?.salesCount ?? 0) > 0 : hasWeightInput ? (weightSales?.weightKg ?? 0) > 0 : false);
 
   return (
     <div className="app-container space-y-4 py-4">
-      <div>
+      <header>
         <h1 className="text-page-title flex items-center gap-2 font-bold">
-          <CalendarDays className="h-6 w-6 shrink-0" /> Rapports
+          <BarChart3 className="h-6 w-6 shrink-0 text-primary" /> Rapports
         </h1>
         <p className="text-sm text-muted-foreground">
-          Montants par jour — touchez une date pour ouvrir le détail.
+          Montants par période — touchez une date pour ouvrir le détail.
         </p>
+      </header>
+
+      {/* Granularité : quatre choix, l'actif au vert principal. */}
+      <Tabs value={view} onValueChange={(v) => setView(v as CalendarView)}>
+        <TabsList className="grid w-full grid-cols-4">
+          {VIEWS.map((v) => (
+            <TabsTrigger key={v.value} value={v.value} className="text-xs sm:text-sm">
+              {v.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {/* ── Tête de période + KPI ─────────────────────────────── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`${NAV_LABEL[view]} précédent`}
+            onClick={() => setFocusedDay(stepDay(focusedDay, view, -1))}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <h2 className="text-base font-semibold tabular-nums sm:text-lg">
+            {periodTitle(focusedDay, view)}
+          </h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`${NAV_LABEL[view]} suivant`}
+            onClick={() => setFocusedDay(stepDay(focusedDay, view, 1))}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {/* Un seul bloc, quatre zones. Deux lignes sur mobile, une sur grand écran. */}
+        <Card>
+          <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3 p-3 sm:grid-cols-4 sm:p-4">
+            <Kpi label={REVENUE_LABEL[view]} value={formatFCFA(stats?.revenue ?? 0)} accent />
+            <Kpi label="Ventes" value={String(stats?.salesCount ?? 0)} />
+            <Kpi
+              label="Panier moyen"
+              value={stats && stats.salesCount > 0 ? formatFCFA(stats.averageBasket) : "—"}
+            />
+            <Kpi
+              label={view === "year" ? "Meilleur mois" : "Meilleur jour"}
+              value={bestLabel}
+              hint={
+                view === "year"
+                  ? undefined
+                  : stats?.bestDay
+                    ? formatFCFA(stats.bestDay.revenue)
+                    : undefined
+              }
+            />
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2 space-y-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" /> Calendrier des ventes
-          </CardTitle>
-          {/* Trois vues : la grille du mois (montant sous chaque jour), la bande des
-              7 jours de la semaine en cours, ou la journée seule. */}
-          <Tabs value={calendarView} onValueChange={(v) => setCalendarView(v as CalendarView)}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="month">Mois</TabsTrigger>
-              <TabsTrigger value="week">Semaine</TabsTrigger>
-              <TabsTrigger value="day">Jour</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </CardHeader>
-        <CardContent>
-          {calendarView === "month" && (
-            <Calendar
-              locale={fr}
-              mode="single"
-              selected={new Date(focusedDay)}
-              onSelect={(day) => {
-                if (!day) return;
-                const ts = startOfDay(day).getTime();
-                setFocusedDay(ts);
-                setDetailDay(ts);
-              }}
-              weekStartsOn={1}
-              components={{
-                // Pas de composant `DayContent` dans cette version de react-day-picker :
-                // le montant du jour s'ajoute par-dessus la case (`Day` = la cellule <td>)
-                // pour ne pas réécrire le bouton du calendrier.
-                Day: ({ day, children, ...tdProps }) => {
-                  const amount = day.outside
-                    ? undefined
-                    : calendarAmounts.get(startOfDay(day.date).getTime());
-                  return (
-                    <td
-                      {...tdProps}
-                      className={
-                        (tdProps.className ? String(tdProps.className) + " " : "") + "relative"
-                      }
-                    >
-                      {children}
-                      {amount !== undefined && (
-                        <span className="pointer-events-none absolute inset-x-0 bottom-0.5 flex justify-center rounded-full bg-primary/10 px-1.5 text-[8px] leading-none lowercase tabular-nums text-primary">
-                          {formatFCFACompact(amount)}
-                        </span>
-                      )}
-                    </td>
-                  );
-                },
-              }}
-              className="w-full rounded-md border shadow-sm"
+      {/* ── Corps : calendrier / bande de semaine / journée / année ── */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <div className="space-y-3">
+          {view === "month" && (
+            <MonthGrid
+              month={startOfMonth(focusedDay).getTime()}
+              days={days}
+              selected={focusedDay}
+              onSelect={setFocusedDay}
             />
           )}
-
-          {calendarView === "week" && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Semaine précédente"
-                  onClick={() => setFocusedDay(weekDays[0] - 86400000)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-medium tabular-nums">
-                  {formatDayShort(weekDays[0])} – {formatDayShort(weekDays[6])}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Semaine suivante"
-                  onClick={() => setFocusedDay(weekDays[6] + 86400000)}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {weekDays.map((d) => {
-                  const selected = d === focusedDay;
-                  const amount = calendarAmounts.get(d);
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => {
-                        setFocusedDay(d);
-                        setDetailDay(d);
-                      }}
-                      aria-pressed={selected}
-                      className={
-                        "flex flex-col items-center gap-0.5 rounded-lg border px-1 py-1.5 text-center " +
-                        (selected
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "bg-card hover:bg-accent")
-                      }
-                    >
-                      <span className="text-[10px] leading-none opacity-70 uppercase">
-                        {new Date(d)
-                          .toLocaleDateString("fr-FR", { weekday: "short" })
-                          .replace(".", "")}
-                      </span>
-                      <span className="text-sm font-semibold leading-none">
-                        {new Date(d).getDate()}
-                      </span>
-                      <span className="text-[9px] leading-none opacity-70 tabular-nums lowercase">
-                        {amount !== undefined ? formatFCFACompact(amount) : "\u00A0"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-center text-xs text-muted-foreground">
-                Touchez un jour pour ouvrir son détail.
-              </p>
-            </div>
+          {view === "week" && (
+            <WeekStrip
+              weekStart={startOfWeekMonday(focusedDay)}
+              days={days}
+              selected={focusedDay}
+              onSelect={setFocusedDay}
+            />
           )}
-
-          {calendarView === "day" && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Jour précédent"
-                  onClick={() => setFocusedDay(focusedDay - 86400000)}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-semibold">{formatDay(focusedDay)}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Jour suivant"
-                  onClick={() => setFocusedDay(focusedDay + 86400000)}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <DayDetailContent
-                day={focusedDay}
-                isService={isService}
-                hasWeightInput={hasWeightInput}
-              />
-            </div>
+          {view === "day" && (
+            <DayDetailContent
+              day={focusedDay}
+              isService={isService}
+              hasWeightInput={hasWeightInput}
+            />
           )}
-        </CardContent>
-      </Card>
+          {view === "year" && (
+            <YearGrid
+              months={months}
+              selectedMonth={new Date(focusedDay).getMonth()}
+              onSelect={(m) => {
+                setFocusedDay(new Date(new Date(focusedDay).getFullYear(), m, 1).getTime());
+                setView("month");
+              }}
+            />
+          )}
+        </div>
 
-      {/* ── Période personnalisée ────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" /> Période personnalisée
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Détail de la journée : sous le calendrier sur mobile, à sa droite dès que
+            la largeur le permet (§18/§19 — une seule interface, pas deux). */}
+        {view !== "day" && (
+          <SelectedDayCard
+            day={focusedDay}
+            onOpenDetail={() => setDetailOpen(true)}
+            showHint={view === "month" || view === "week"}
+          />
+        )}
+      </div>
+
+      {showSector && (
+        <Card>
+          <CardContent className="space-y-3 p-3 sm:p-4">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              {isService ? <Scissors className="h-4 w-4" /> : <Weight className="h-4 w-4" />}
+              {isService ? "Service" : "Boucherie"} — {periodTitle(focusedDay, view)}
+            </p>
+            {isService && stats && (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <Kpi label="Chiffre d'affaires" value={formatFCFA(stats.revenue)} accent small />
+                  <Kpi label="Prestations" value={String(stats.salesCount)} small />
+                  <Kpi label="Clients" value={String(stats.customersCount)} small />
+                </div>
+                {stats.topProducts.slice(0, 3).map((p, i) => (
+                  <RankRow
+                    key={p.product_id}
+                    index={i + 1}
+                    name={p.name}
+                    meta={`${p.quantity} prestation${p.quantity > 1 ? "s" : ""}`}
+                    value={formatFCFA(p.revenue)}
+                  />
+                ))}
+              </>
+            )}
+            {!isService && hasWeightInput && weightSales && (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <Kpi label="Vendu au poids" value={formatKg(weightSales.weightKg)} accent small />
+                  <Kpi label="Poids moyen" value={formatKg(weightSales.avgWeightKg)} small />
+                  <Kpi label="Chiffre d'affaires" value={formatFCFA(weightSales.revenue)} small />
+                </div>
+                {weightSales.byProduct.slice(0, 3).map((p, i) => (
+                  <RankRow
+                    key={p.product_id}
+                    index={i + 1}
+                    name={p.name}
+                    meta={`${formatKg(p.weightKg)} vendus`}
+                    value={formatFCFA(p.revenue)}
+                  />
+                ))}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Période personnalisée : repliée derrière un bouton (§20) ── */}
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={() => setRangeOpen(true)}
+      >
+        <SlidersHorizontal className="mr-2 h-4 w-4" /> Période personnalisée
+      </Button>
+
+      {/* Détail complet : mécanisme existant, réutilisé tel quel. */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ventes du {formatDay(focusedDay)}</DialogTitle>
+          </DialogHeader>
+          <DayDetailContent
+            day={focusedDay}
+            isService={isService}
+            hasWeightInput={hasWeightInput}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Période personnalisée</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
             <div>
               <Label htmlFor="range-start" className="text-xs">
                 Début
@@ -326,149 +418,390 @@ function ReportsPage() {
                 min={rangeFrom ? new Date(rangeFrom).toISOString().split("T")[0] : undefined}
               />
             </div>
-          </div>
-          {rangeFrom != null && rangeTo != null && rangeTo > rangeFrom && (
-            <div className="rounded-lg border p-3 text-sm bg-muted/30">
-              <div className="flex justify-between font-medium">
-                <span>Plage sélectionnée</span>
-                <span>
-                  {new Date(rangeFrom).toLocaleDateString("fr-FR")} →{" "}
-                  {new Date(rangeTo - 86400000).toLocaleDateString("fr-FR")}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                L'agrégat de cette période s'affiche dans le panneau de statistiques ci-dessus
-                (calendrier actuel).
+            {rangeFrom != null && rangeTo != null && rangeTo > rangeFrom && (
+              <p className="rounded-lg border bg-muted/30 p-3 text-sm">
+                Du {new Date(rangeFrom).toLocaleDateString("fr-FR")} au{" "}
+                {new Date(rangeTo - 86400000).toLocaleDateString("fr-FR")}
               </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {(isService
-        ? sectorStats && (sectorStats.salesCount > 0 || sectorStats.customersCount > 0)
-        : hasWeightInput
-          ? weightSales && weightSales.weightKg > 0
-          : false) && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              {isService ? <Scissors className="h-4 w-4" /> : <Weight className="h-4 w-4" />}
-              {isService ? "Service" : "Boucherie"} — {periodLabel}
-            </CardTitle>
-          </CardHeader>
-          {isService && sectorStats && (
-            <>
-              <div className="grid grid-cols-3 gap-3 border-b p-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {formatFCFA(sectorStats.revenue)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Prestations</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {sectorStats.salesCount}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Clients</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {sectorStats.customersCount}
-                  </p>
-                </div>
-              </div>
-              {sectorStats.topProducts.length > 0 && (
-                <div className="space-y-1 p-2">
-                  {sectorStats.topProducts.slice(0, 3).map((p, index) => (
-                    <div
-                      key={p.product_id}
-                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
-                        {index + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {p.quantity} prestation{p.quantity > 1 ? "s" : ""}
-                      </span>
-                      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                        {formatFCFA(p.revenue)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-          {!isService && hasWeightInput && weightSales && (
-            <>
-              <div className="grid grid-cols-3 gap-3 border-b p-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Vendu au poids</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {formatKg(weightSales.weightKg)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Poids moyen / pesée</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {formatKg(weightSales.avgWeightKg)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {formatFCFA(weightSales.revenue)}
-                  </p>
-                </div>
-              </div>
-              {weightSales.byProduct.length > 0 && (
-                <div className="space-y-1 p-2">
-                  {weightSales.byProduct.slice(0, 3).map((product, index) => (
-                    <div
-                      key={product.product_id}
-                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
-                        {index + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {product.name}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {formatKg(product.weightKg)} vendus
-                      </span>
-                      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                        {formatFCFA(product.revenue)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </Card>
-      )}
-
-      <Dialog open={detailDay !== null} onOpenChange={(v) => !v && setDetailDay(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
-          {detailDay !== null && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Ventes du {formatDay(detailDay)}</DialogTitle>
-              </DialogHeader>
-              <DayDetailContent
-                day={detailDay}
-                isService={isService}
-                hasWeightInput={hasWeightInput}
-              />
-            </>
-          )}
+            )}
+            <p className="text-xs text-muted-foreground">
+              Navigation rapide ci-dessus : Mois, Semaine, Jour et Année couvrent l'usage
+              courant ; la plage libre reste pour un export ponctuel.
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Une zone du bloc KPI. `accent` met la valeur en vert principal et en gras. */
+function Kpi({
+  label,
+  value,
+  hint,
+  accent,
+  small,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: boolean;
+  small?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-0.5 truncate font-semibold tabular-nums",
+          small ? "text-sm" : "text-base sm:text-lg",
+          accent ? "text-primary" : "",
+        )}
+      >
+        {value}
+      </p>
+      {hint && <p className="truncate text-[11px] text-muted-foreground tabular-nums">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * Grille du mois. Chaque cellule porte le montant RÉEL du jour (`days` vient de
+ * `computePeriodStats`), une barre proportionnelle au meilleur jour du mois et un
+ * point d'activité. Les jours voisins du mois sont des Cases vides et non cliquables :
+ * leur montant n'est pas dans la requête, donc on ne l'invente pas (§22).
+ */
+function MonthGrid({
+  month,
+  days,
+  selected,
+  onSelect,
+}: {
+  month: number;
+  days: Map<number, DayBucket>;
+  selected: number;
+  onSelect: (ts: number) => void;
+}) {
+  const first = new Date(month);
+  const total = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const lead = (first.getDay() + 6) % 7;
+  const max = useMemo(() => {
+    let m = 0;
+    for (const d of days.values()) if (d.revenue > m) m = d.revenue;
+    return m;
+  }, [days]);
+
+  const cells: (number | null)[] = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from({ length: total }, (_, i) => startOfDay(new Date(month + i * 86400000)).getTime()),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <Card>
+      <CardContent className="p-2 sm:p-3">
+        <div className="mb-1 grid grid-cols-7 gap-1">
+          {WEEKDAYS.map((w) => (
+            <div key={w} className="pb-1 text-center text-[10px] font-medium text-muted-foreground">
+              {w}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((ts, i) => {
+            if (ts === null) return <div key={`e${i}`} aria-hidden className="h-[58px] sm:h-16" />;
+            const bucket = days.get(ts);
+            const revenue = bucket?.revenue ?? 0;
+            const isSel = ts === selected;
+            const ratio = max > 0 ? revenue / max : 0;
+            const hot = ratio > 0.75;
+            return (
+              <button
+                key={ts}
+                onClick={() => onSelect(ts)}
+                aria-pressed={isSel}
+                aria-label={`${formatDay(ts)} — ${revenue > 0 ? formatFCFA(revenue) : "aucune vente"}`}
+                className={cn(
+                  "flex h-[58px] flex-col justify-between rounded-xl border p-1 text-left transition-colors sm:h-16 sm:p-1.5",
+                  isSel
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : revenue > 0
+                      ? "border-border bg-card hover:border-primary/50 hover:bg-accent/50"
+                      : "border-transparent bg-muted/40",
+                  hot && !isSel && "ring-1 ring-primary/25",
+                )}
+              >
+                <div className="flex items-start justify-between">
+                  <span className="text-[11px] font-medium leading-none tabular-nums">
+                    {new Date(ts).getDate()}
+                  </span>
+                  {revenue > 0 && (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        isSel ? "bg-primary-foreground" : "bg-primary",
+                      )}
+                    />
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    "truncate text-[10px] leading-none tabular-nums sm:text-[11px]",
+                    isSel
+                      ? "text-primary-foreground/90"
+                      : revenue > 0
+                        ? "font-semibold text-primary"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {revenue > 0 ? formatFCFACompact(revenue) : "—"}
+                </span>
+                {/* Barre d'intensité : verte, proportionnelle au CA réel. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "h-0.5 w-full overflow-hidden rounded-full",
+                    isSel ? "bg-primary-foreground/30" : "bg-muted",
+                  )}
+                >
+                  <span
+                    className={cn("block h-full rounded-full", isSel ? "bg-primary-foreground" : "bg-primary")}
+                    style={{ width: `${Math.round(ratio * 100)}%`, opacity: 0.4 + ratio * 0.6 }}
+                  />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          Touchez un jour pour voir son détail.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Les 7 jours de la semaine, une colonne chacun, CA réel sous la date. */
+function WeekStrip({
+  weekStart,
+  days,
+  selected,
+  onSelect,
+}: {
+  weekStart: number;
+  days: Map<number, DayBucket>;
+  selected: number;
+  onSelect: (ts: number) => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-2 sm:p-3">
+        <div className="grid grid-cols-7 gap-1">
+          {WEEKDAYS.map((w, i) => {
+            const ts = startOfDay(weekStart + i * 86400000).getTime();
+            const bucket = days.get(ts);
+            const revenue = bucket?.revenue ?? 0;
+            const isSel = ts === selected;
+            return (
+              <button
+                key={ts}
+                onClick={() => onSelect(ts)}
+                aria-pressed={isSel}
+                className={cn(
+                  "flex min-h-[86px] flex-col items-center gap-1 rounded-xl border p-1.5 transition-colors",
+                  isSel
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : revenue > 0
+                      ? "border-border bg-card hover:border-primary/50 hover:bg-accent/50"
+                      : "border-transparent bg-muted/40",
+                )}
+              >
+                <span className="text-[10px] uppercase leading-none opacity-70">{w}</span>
+                <span className="text-sm font-semibold leading-none tabular-nums">
+                  {new Date(ts).getDate()}
+                </span>
+                <span
+                  className={cn(
+                    "mt-auto truncate text-[10px] leading-none tabular-nums",
+                    isSel ? "text-primary-foreground" : revenue > 0 ? "font-semibold text-primary" : "text-muted-foreground",
+                  )}
+                >
+                  {revenue > 0 ? formatFCFACompact(revenue) : "—"}
+                </span>
+                <span
+                  className={cn(
+                    "text-[9px] leading-none tabular-nums",
+                    isSel ? "text-primary-foreground/80" : "text-muted-foreground",
+                  )}
+                >
+                  {bucket && bucket.salesCount > 0 ? `${bucket.salesCount} v.` : " "}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Les 12 mois de l'année, chacun cliquable vers la vue Mois correspondante. */
+function YearGrid({
+  months,
+  selectedMonth,
+  onSelect,
+}: {
+  months: { label: string; month: number; revenue: number; salesCount: number }[];
+  selectedMonth: number;
+  onSelect: (month: number) => void;
+}) {
+  const max = months.reduce((m, x) => Math.max(m, x.revenue), 0);
+  return (
+    <Card>
+      <CardContent className="p-2 sm:p-3">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+          {months.map((m) => {
+            const ratio = max > 0 ? m.revenue / max : 0;
+            return (
+              <button
+                key={m.label}
+                onClick={() => onSelect(m.month)}
+                className={cn(
+                  "flex flex-col gap-1 rounded-xl border p-2 text-left transition-colors",
+                  m.month === selectedMonth
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card hover:border-primary/50 hover:bg-accent/50",
+                )}
+              >
+                <span className="flex items-baseline justify-between gap-1">
+                  <span className="truncate text-xs font-medium">{m.label}</span>
+                  <span
+                    className={cn(
+                      "shrink-0 text-[11px] font-semibold tabular-nums",
+                      m.month === selectedMonth ? "text-primary-foreground" : "text-primary",
+                    )}
+                  >
+                    {m.revenue > 0 ? formatFCFACompact(m.revenue) : "—"}
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className={cn(
+                    "h-0.5 w-full overflow-hidden rounded-full",
+                    m.month === selectedMonth ? "bg-primary-foreground/30" : "bg-muted",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "block h-full rounded-full",
+                      m.month === selectedMonth ? "bg-primary-foreground" : "bg-primary",
+                    )}
+                    style={{ width: `${Math.round(ratio * 100)}%`, opacity: 0.4 + ratio * 0.6 }}
+                  />
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] tabular-nums",
+                    m.month === selectedMonth ? "text-primary-foreground/80" : "text-muted-foreground",
+                  )}
+                >
+                  {m.salesCount > 0 ? `${m.salesCount} ventes` : "aucune vente"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          Touchez un mois pour ouvrir son calendrier détaillé.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Résumé de la journée sélectionnée : CA, volume, panier moyen et répartition réelle.
+ *  Renvoie vers le détail complet existant plutôt que de le dupliquer. */
+function SelectedDayCard({
+  day,
+  onOpenDetail,
+  showHint,
+}: {
+  day: number;
+  onOpenDetail: () => void;
+  showHint?: boolean;
+}) {
+  const from = startOfDay(day).getTime();
+  const { data, isPending } = usePeriodData(from, from + 86400000);
+  const detail = useMemo(() => computeDayDetail(data?.sales ?? [], data?.items ?? []), [data]);
+
+  const basket = detail.salesCount > 0 ? detail.revenue / detail.salesCount : null;
+  const top = detail.products.slice(0, 5);
+  const maxProduct = top.reduce((m, p) => Math.max(m, p.revenue), 0);
+
+  return (
+    <Card className="lg:sticky lg:top-4">
+      <CardContent className="space-y-3 p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <CalendarDays className="h-4 w-4 text-primary" />
+            {formatDay(day)}
+          </p>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+            {isPending ? "…" : "Jour choisi"}
+          </span>
+        </div>
+
+        <div>
+          <p className="text-2xl font-bold tabular-nums text-primary">
+            {formatFCFA(detail.revenue)}
+          </p>
+          <p className="text-xs text-muted-foreground">CA du jour</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 border-t pt-3">
+          <Kpi label="Ventes" value={String(detail.salesCount)} small />
+          <Kpi label="Panier moyen" value={basket !== null ? formatFCFA(basket) : "—"} small />
+        </div>
+
+        {detail.salesCount > 0 && (
+          <div className="space-y-1.5 border-t pt-3">
+            <p className="text-xs font-medium text-muted-foreground">Répartition des ventes</p>
+            {top.map((p) => (
+              <div key={p.product_id} className="space-y-1">
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="truncate">{p.name}</span>
+                  <span className="shrink-0 tabular-nums">{formatFCFA(p.revenue)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span aria-hidden className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                    <span
+                      className="block h-full rounded-full bg-primary"
+                      style={{
+                        width: `${maxProduct > 0 ? Math.round((p.revenue / maxProduct) * 100) : 0}%`,
+                      }}
+                    />
+                  </span>
+                  <span className="w-9 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
+                    {Math.round(detail.revenue > 0 ? (p.revenue / detail.revenue) * 100 : 0)}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Button variant="outline" className="w-full" onClick={onOpenDetail}>
+          Voir le détail des ventes
+        </Button>
+        {showHint && (
+          <p className="text-[11px] text-muted-foreground">
+            La barre verte d'une journée du calendrier mesure son CA face au meilleur jour.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -569,6 +902,30 @@ function DayDetailContent({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Ligne de classement du panneau sectorisé (service / boucherie). */
+function RankRow({
+  index,
+  name,
+  meta,
+  value,
+}: {
+  index: number;
+  name: string;
+  meta: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg px-1 py-1.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
+        {index}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{meta}</span>
+      <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">{value}</span>
     </div>
   );
 }

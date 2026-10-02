@@ -1,4 +1,4 @@
-// Stocks & Produits — centre de pilotage du stock, pas une simple liste.
+﻿// Stocks & Produits — centre de pilotage du stock, pas une simple liste.
 //
 // Résumé chiffré en tête (valeur, volumes, alertes), recherche/filtres/tri, bloc
 // d'attention, puis fiche produit compacte avec jauge de stock et actions rapides
@@ -20,7 +20,6 @@ import {
   MoreVertical,
   History,
   TriangleAlert,
-  Wallet,
   ArrowRight,
   CircleAlert,
   ArrowDownUp,
@@ -90,6 +89,8 @@ import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ProductForm } from "@/components/ProductForm";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
+import { usePreferences } from "@/hooks/use-preferences";
+import { ProductCard } from "@/components/ProductCard";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -129,12 +130,19 @@ function variantState(stock: number | undefined): Exclude<StockState, "service">
   return "ok";
 }
 
-type FilterTone = "default" | "warning" | "danger";
+type ChipTone = "default" | "warning" | "danger";
 
-/** Carte-filtre « Trier par » : vrai bouton (aria-pressed), état actif en vert de
- *  marque avec coche, compteur secondaire. Le ton warning/danger ne se voit que
- *  sur les fiches INACTIVES — l'actif passe toujours au vert. */
-function FilterCard({
+/**
+ * Chip de filtre dans un rangée scrollable horizontalement.
+ *
+ * Remplace les anciennes cards de 64 px de haut qui prenaient quatre hauteurs de
+ * grille avant même d'atteindre les produits. Ici une ligne de 44 px, balayable au
+ * doigt, avec le chip suivant dépasser du bord pour signaler qu'il y en a d'autres.
+ *
+ * Le ton (avertissement / danger) ne s'applique qu'aux chips INACTIFS : l'actif passe
+ * toujours au vert de marque, sinon on ne sait plus jamais lequel est sélectionné.
+ */
+function FilterChip({
   label,
   count,
   active,
@@ -143,62 +151,70 @@ function FilterCard({
   onClick,
 }: {
   label: string;
-  count: number;
+  count?: number;
   active: boolean;
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  tone?: ChipTone;
   onClick: () => void;
-  tone?: FilterTone;
 }) {
-  const unit = count > 1 ? "produits" : "produit";
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "group relative flex min-h-16 items-start gap-3 rounded-2xl border bg-card p-4 text-left transition-all duration-200",
-        "shadow-[0_1px_2px_rgba(16,24,40,0.06)]",
-        "hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_6px_16px_rgba(16,24,40,0.08)]",
-        "active:scale-[0.98]",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-        active ? "border-primary/70 bg-primary/[0.06]" : "border-border",
+        "flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors duration-150",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:scale-[0.97]",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : tone === "danger"
+            ? "border-destructive/25 bg-destructive/5 text-destructive hover:bg-destructive/10"
+            : tone === "warning"
+              ? "border-amber-500/25 bg-amber-500/5 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+              : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-accent",
       )}
     >
-      <span
-        className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors",
-          active
-            ? "border-primary/20 bg-primary/10 text-primary"
-            : tone === "danger"
-              ? "border-destructive/15 bg-destructive/5 text-destructive/80"
-              : tone === "warning"
-                ? "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                : "bg-muted text-muted-foreground",
-        )}
-      >
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 flex-1 pt-0.5">
-        <span className="block truncate text-[15px] font-semibold leading-snug">{label}</span>
+      {Icon && (
+        <Icon
+          className={cn("h-4 w-4 shrink-0", active && "text-primary-foreground")}
+          aria-hidden
+        />
+      )}
+      <span className="whitespace-nowrap">{label}</span>
+      {count !== undefined && (
         <span
           className={cn(
-            "mt-0.5 block truncate text-xs font-medium tabular-nums sm:text-sm",
+            "shrink-0 rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
             active
-              ? "text-primary/75"
-              : tone === "danger"
-                ? "text-destructive"
-                : tone === "warning"
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-muted-foreground",
+              ? "bg-primary-foreground/20 text-primary-foreground"
+              : "bg-muted text-muted-foreground",
           )}
         >
-          {count} {unit}
+          {count}
         </span>
-      </span>
-      {active && (
-        <Check className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.5} aria-hidden="true" />
       )}
     </button>
+  );
+}
+
+/** Titre de section + rangée de chips. Le rangée défile seule : la page, elle, ne défile
+ *  jamais horizontalement — un `overflow-x-auto` sur la rangée suffit. */
+function ChipRow({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </p>
+      <div className="-mx-[var(--page-gutter)] flex gap-1.5 overflow-x-auto px-[var(--page-gutter)] pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -211,47 +227,38 @@ const REASON_LABEL: Record<StockMovement["reason"], string> = {
   creation: "Création",
 };
 
-function StatCard({
-  icon: Icon,
+/**
+ * Zone du bandeau de synthèse. La couleur ne teinte QUE le chiffre en état
+ * d'alerte : un fond rouge sur toute la zone transformerait un compteur en
+ * alarme, alors qu'il n'y a rien d'alarmant dans le nombre lui-même.
+ */
+function KpiCell({
   label,
   value,
   tone = "neutral",
+  primary,
 }: {
-  icon: typeof Wallet;
   label: string;
   value: string;
-  tone?: "neutral" | "warning" | "danger" | "emerald";
+  tone?: "neutral" | "warning" | "danger";
+  primary?: boolean;
 }) {
-  // Couleur uniquement quand elle porte une information : neutre sinon.
-  const iconClass =
-    tone === "danger"
-      ? "bg-destructive/10 text-destructive border-destructive/20"
-      : tone === "warning"
-        ? "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400"
-        : tone === "emerald"
-          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
-          : "bg-muted text-muted-foreground border-border";
   return (
-    <Card className="border border-border bg-card shadow-sm transition-all hover:border-foreground/20">
-      <CardContent className="flex h-full flex-col justify-between gap-3 p-4">
-        <div className="flex items-center gap-2.5">
-          <span
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-              iconClass,
-            )}
-          >
-            <Icon className="h-5 w-5" />
-          </span>
-          <p className="min-w-0 text-xs font-semibold uppercase leading-snug tracking-wide text-muted-foreground">
-            {label}
-          </p>
-        </div>
-        <p className="text-2xl font-black leading-none tabular-nums tracking-tight text-foreground">
-          {value}
-        </p>
-      </CardContent>
-    </Card>
+    <div className="min-w-0 px-3 py-2.5">
+      <p
+        className={cn(
+          "truncate font-semibold leading-tight tabular-nums",
+          primary ? "text-lg font-bold sm:text-xl" : "text-sm",
+          tone === "warning" && "text-amber-600 dark:text-amber-400",
+          tone === "danger" && "text-destructive",
+        )}
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-[10px] uppercase leading-none tracking-wide text-muted-foreground">
+        {label}
+      </p>
+    </div>
   );
 }
 
@@ -271,6 +278,10 @@ function StocksPage() {
 function StocksPageContent() {
   const qc = useQueryClient();
   const { isService } = useClusterFeatures();
+  // Champs visibles sur les cards (§10). La liste est ordonnée : l'ordre du tableau
+  // est l'ordre d'affichage. Relue de localStorage via les préférences, donc le
+  // réglage survit à un redémarrage (§29).
+  const { stockCardFields: cardFields } = usePreferences();
 
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
@@ -417,8 +428,10 @@ function StocksPageContent() {
   const [removeProductId, setRemoveProductId] = useState("");
   const [removeQty, setRemoveQty] = useState("");
 
-  // Journal global.
+  // Journal global. `movementsProduct` le restreint à une fiche quand on y entre
+  // depuis le menu d'une card produit ; `null` = tous les mouvements confondus.
   const [movementsOpen, setMovementsOpen] = useState(false);
+  const [movementsProductId, setMovementsProductId] = useState<string | null>(null);
 
   const detailProduct = products.find((p) => p.id === detailId) ?? null;
   const detailLastSoldAt = detailProduct ? lastSoldAtByProduct.get(detailProduct.id) : undefined;
@@ -744,59 +757,67 @@ function StocksPageContent() {
         )}
 
         {/* ── Résumé du stock ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard icon={Wallet} label="Valeur du stock" value={formatFCFA(stats.value)} />
-          <StatCard icon={Package} label="Produits" value={String(products.length)} />
-          <StatCard
-            icon={TriangleAlert}
-            label="Stock faible"
-            value={String(stats.low)}
-            tone="warning"
-          />
-          <StatCard icon={CircleAlert} label="Ruptures" value={String(stats.out)} tone="danger" />
-        </div>
+        {/* Un seul bandeau à 4 zones au lieu de 4 cards. Les données sont
+            identiques — `stats` n'a pas changé — seul l'encombrement disparaît :
+            ces 4 cards prenaient ~370 px avant d'atteindre les actions. La
+            couleur ne teinte QUE le chiffre en état d'alerte, jamais le bloc
+            entier : quatre pastilles rouges alignées font plus de bruit que
+            d'information. */}
+        <Card>
+          <CardContent className="grid grid-cols-[1.5fr_1fr_1fr_1fr] divide-x p-0">
+            <KpiCell label="Stock" value={formatFCFA(stats.value)} primary />
+            <KpiCell label="Produits" value={String(products.length)} />
+            <KpiCell label="Faible" value={String(stats.low)} tone="warning" />
+            <KpiCell label="Rupture" value={String(stats.out)} tone="danger" />
+          </CardContent>
+        </Card>
 
         {/* ── Actions : un seul CTA principal, une action secondaire ─────────── */}
-        <div className="grid gap-3 md:grid-cols-2">
+        {/* 68 px au lieu de 76–84 : le CTA reste le plus visible de la page
+            (fond plein, icône pleine) mais ne mange plus une ligne et demie. */}
+        <div className="grid gap-2 md:grid-cols-2">
           <button
             type="button"
             onClick={() => {
               setEditing(null);
               setEditOpen(true);
             }}
-            className="group flex min-h-[76px] min-w-0 w-full items-center gap-3 rounded-2xl bg-primary p-4 text-left text-primary-foreground shadow-sm transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.99] md:min-h-[84px]"
+            className="group flex h-[68px] min-w-0 w-full items-center gap-3 rounded-xl bg-primary px-3 text-left text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.99]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/15">
               <Plus className="h-5 w-5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-base font-semibold leading-tight">Ajouter du stock</span>
-              <span className="mt-0.5 block truncate text-sm text-primary-foreground/75">
+              <span className="block text-sm font-semibold leading-tight">Ajouter du stock</span>
+              <span className="mt-0.5 block truncate text-xs text-primary-foreground/75">
                 Enregistrer un nouveau produit
               </span>
             </span>
             <ChevronRight
-              className="h-5 w-5 shrink-0 text-primary-foreground/70 transition-transform group-hover:translate-x-0.5"
+              className="h-4 w-4 shrink-0 text-primary-foreground/70 transition-transform group-hover:translate-x-0.5"
               aria-hidden
             />
           </button>
 
           <button
             type="button"
-            onClick={() => setMovementsOpen(true)}
-            className="group flex min-h-[76px] min-w-0 w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.99] md:min-h-[84px]"
+            onClick={() => {
+              setMovementsProductId(null);
+              setMovementsOpen(true);
+            }}
+            className="group flex h-[68px] min-w-0 w-full items-center gap-3 rounded-xl border border-border bg-card px-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.99]"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground">
-              <History className="h-5 w-5" />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+              <History className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-base font-semibold leading-tight">Journal</span>
-              <span className="mt-0.5 block truncate text-sm text-muted-foreground">
+              <span className="block text-sm font-semibold leading-tight">Journal</span>
+              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                 Voir l'historique des mouvements
               </span>
             </span>
             <ChevronRight
-              className="h-5 w-5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5"
+              className="h-4 w-4 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5"
               aria-hidden
             />
           </button>
@@ -825,14 +846,14 @@ function StocksPageContent() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Rechercher un produit…"
             aria-label="Rechercher un produit"
-            className="h-12 rounded-xl bg-card pl-11 shadow-sm md:text-base"
+            className="h-14 rounded-xl bg-card pl-11 md:text-base"
           />
         </div>
 
         {/* ── Tri ────────────────────────────────────────────────────────────── */}
         <div>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-            <SelectTrigger className="h-12 w-full rounded-xl shadow-sm">
+            <SelectTrigger className="h-14 w-full rounded-xl">
               <ArrowDownUp className="h-4 w-4 mr-1.5 shrink-0 text-muted-foreground" />
               <SelectValue />
             </SelectTrigger>
@@ -846,106 +867,68 @@ function StocksPageContent() {
           </Select>
         </div>
 
-        {/* ── Filtres : statut puis catégories, en cartes ─────────────────────── */}
-        {/* Cartes au lieu des pills horizontaux : l'état actif (coche + vert), le
-          compteur et le groupe sont lisibles d'un coup d'œil. Les handlers, les
-          valeurs et le filtrage sous-jacent restent strictement identiques. */}
-        <section>
-          <h2 className="text-sm font-semibold">Filtres</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Affinez la liste par état du stock ou par catégorie.
-          </p>
-
-          <div className="mt-5">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Stock
-            </p>
-            <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {statusChips.map(({ key, label, count }) => (
-                <FilterCard
-                  key={key}
-                  label={label}
-                  count={count}
-                  active={statusFilter === key}
-                  icon={STATUS_ICON[key]}
-                  tone={key === "out" ? "danger" : key === "low" ? "warning" : "default"}
-                  onClick={() => setStatusFilter(key)}
-                />
-              ))}
-            </div>
-          </div>
+        {/* ── Filtres : deux rangées balayables, indépendantes mais combinables ── */}
+        {/* Le filtrage, les compteurs et les handlers sont ceux d'avant : seuls la
+            présentation change. Les deux rangées sont distinctes, donc « stock faible »
+            + « Chaussures » se cumulent comme avant. */}
+        <div className="space-y-4">
+          <ChipRow title="État du stock">
+            {statusChips.map(({ key, label, count }) => (
+              <FilterChip
+                key={key}
+                label={label}
+                count={count}
+                active={statusFilter === key}
+                icon={STATUS_ICON[key]}
+                tone={key === "out" ? "danger" : key === "low" ? "warning" : "default"}
+                onClick={() => setStatusFilter(key)}
+              />
+            ))}
+          </ChipRow>
 
           {categories.length > 1 && (
-            <div className="mt-7">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Catégories
-              </p>
-              <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                <FilterCard
-                  label="Toutes catégories"
-                  count={products.length}
-                  active={categoryFilter === null}
-                  icon={Layers}
-                  onClick={() => setCategoryFilter(null)}
+            <ChipRow title="Catégories">
+              <FilterChip
+                label="Toutes"
+                count={products.length}
+                active={categoryFilter === null}
+                icon={Layers}
+                onClick={() => setCategoryFilter(null)}
+              />
+              {categories.map(([cat, count]) => (
+                <FilterChip
+                  key={cat}
+                  label={cat}
+                  count={count}
+                  active={categoryFilter === cat}
+                  icon={Tag}
+                  onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
                 />
-                {categories.map(([cat, count]) => (
-                  <FilterCard
-                    key={cat}
-                    label={cat}
-                    count={count}
-                    active={categoryFilter === cat}
-                    icon={Tag}
-                    onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
-                  />
-                ))}
-              </div>
-            </div>
+              ))}
+            </ChipRow>
           )}
-        </section>
+        </div>
 
         {/* ── Bloc attention ─────────────────────────────────────────────────── */}
+        {/* Replié sur une ligne. Il y Occupait ~370 px pour répéter les compteurs que
+            les chips « Stock faible » et « Rupture » affichent déjà juste au-dessus ;
+            la liste détaillée est accessible d'un tap, elle n'a pas besoin d'être
+            dépliée en permanence au-dessus des produits. */}
         {attention.length > 0 && statusFilter === "all" && (
-          <Card className="border-amber-500/40 bg-amber-500/5">
-            <CardContent className="space-y-3 p-4">
-              <div className="flex items-center gap-2">
-                <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                <p className="text-sm font-semibold">Attention au stock</p>
-                <span className="text-xs text-muted-foreground">
-                  {attention.length} produit{attention.length > 1 ? "s" : ""} nécessite
-                  {attention.length > 1 ? "nt" : ""} votre attention.
-                </span>
-              </div>
-              <ul className="space-y-1">
-                {attention.slice(0, 3).map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="truncate font-medium">{p.name}</span>
-                    <span
-                      className={cn(
-                        "shrink-0 tabular-nums",
-                        stateOf(p) === "out"
-                          ? "text-destructive"
-                          : "text-amber-600 dark:text-amber-400",
-                      )}
-                    >
-                      {stateOf(p) === "out"
-                        ? "Rupture"
-                        : `${p.stock} unité${p.stock > 1 ? "s" : ""} restante${p.stock > 1 ? "s" : ""}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setStatusFilter(attention.some((p) => stateOf(p) === "low") ? "low" : "out")
-                }
-              >
-                Voir les produits concernés
-                <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
-              </Button>
-            </CardContent>
-          </Card>
+          <button
+            type="button"
+            onClick={() =>
+              setStatusFilter(attention.some((p) => stateOf(p) === "low") ? "low" : "out")
+            }
+            className="flex w-full items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-left transition-colors hover:bg-amber-500/10"
+          >
+            <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="min-w-0 flex-1 truncate text-xs">
+              <span className="font-semibold">Attention au stock</span> ·{" "}
+              {attention.length} produit{attention.length > 1 ? "s" : ""} à surveiller
+            </span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          </button>
         )}
 
         {/* ── Liste des produits ─────────────────────────────────────────────── */}
@@ -965,118 +948,47 @@ function StocksPageContent() {
             Aucun produit ne correspond à la recherche ou aux filtres.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4">
-            {/* Une colonne sur téléphone, deux dès qu'elles tiennent, trois puis
-              quatre sur les grands écrans : les cartes ne s'étirent jamais en
-              bandes de 700px sur un 1920. */}
+          <>
+            {/* Le compte affiche la file réellement rendue APRÈS filtres et recherche,
+                pas le total du catalogue : « 2 » quand deux articles correspondent
+                évite de faire défiler pour le découvrir. */}
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Produits
+              </p>
+              <p className="text-[11px] tabular-nums text-muted-foreground">
+                {visible.length}
+                {visible.length < products.length && ` sur ${products.length}`}
+              </p>
+            </div>
+            {/* Deux colonnes dès 360 px (§24), jusqu'à cinq sur grand écran. Les
+                dimensions des cards ne dépendent PAS des champs cochés : la grille ne
+                bouge jamais quand on change l'affichage. */}
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {visible.map((p) => {
               const state = stateOf(p);
               const isServiceItem = state === "service";
-              const lastSoldAt = lastSoldAtByProduct.get(p.id);
               return (
-                <Card
+                <ProductCard
                   key={p.id}
-                  className="cursor-pointer py-0 transition-colors hover:border-primary/40 hover:bg-accent/30"
-                  onClick={() => setDetailId(p.id)}
-                >
-                  <CardContent className="flex items-center gap-3.5 p-3.5">
-                    {p.photo ? (
-                      <img
-                        src={p.photo}
-                        alt=""
-                        className="h-20 w-20 shrink-0 rounded-xl border object-cover shadow-sm"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span
-                        className={cn(
-                          "flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border bg-muted/50",
-                          isServiceItem ? "text-primary" : "text-muted-foreground",
-                        )}
-                      >
-                        <Package className="h-7 w-7" />
-                      </span>
-                    )}
-                    <div className="flex min-w-0 flex-1 flex-col self-stretch">
-                      <p className="truncate text-sm font-medium">{p.name}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">{p.category}</p>
-                      {/* Dernière fois que le produit est passé en vente : « il y a 1 j »
-                        donne un ordre de grandeur sans ouvrir la fiche. */}
-                      {!isServiceItem && lastSoldAt !== undefined && (
-                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                          Vendu {formatRelative(lastSoldAt)}
-                        </p>
-                      )}
-                      {p.variants && p.variants.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {p.variants.map((v) => {
-                            const vs = variantState(v.stock);
-                            return (
-                              <span
-                                key={v.id}
-                                className={cn(
-                                  "rounded-md border px-1.5 py-0.5 text-[10px] leading-none tabular-nums",
-                                  vs === "out"
-                                    ? "border-destructive/30 bg-destructive/5 text-destructive"
-                                    : vs === "low"
-                                      ? "border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400"
-                                      : "border-border text-muted-foreground",
-                                )}
-                              >
-                                {v.size || v.color || v.pointure || v.name} ·{" "}
-                                {Number.isFinite(v.stock) ? v.stock : "∞"}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                      <div className="mt-auto flex items-center justify-between gap-2 pt-1.5">
-                        <span className="text-sm font-semibold tabular-nums">
-                          {formatFCFA(p.price)}
-                        </span>
-                        {!isServiceItem ? (
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 shrink-0 rounded-full",
-                                state === "out"
-                                  ? "bg-destructive"
-                                  : state === "low"
-                                    ? "bg-amber-500"
-                                    : "bg-emerald-500",
-                              )}
-                              aria-hidden
-                            />
-                            <span
-                              className={cn(
-                                "text-[11px] leading-none tabular-nums",
-                                state === "out"
-                                  ? "font-medium text-destructive"
-                                  : state === "low"
-                                    ? "font-medium text-amber-600 dark:text-amber-400"
-                                    : "text-muted-foreground",
-                              )}
-                            >
-                              {state === "out" ? "Rupture" : `${p.stock} en stock`}
-                            </span>
-                          </div>
-                        ) : (
-                          <Badge variant="secondary">Actif</Badge>
-                        )}
-                      </div>
-                    </div>
+                  product={p}
+                  fields={cardFields}
+                  state={state}
+                  lastSoldAt={lastSoldAtByProduct.get(p.id)}
+                  onOpen={() => setDetailId(p.id)}
+                  actions={
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuTrigger asChild>
                         <Button
-                          variant="ghost"
+                          variant="secondary"
                           size="icon"
-                          className="-mr-1 -mt-1 h-8 w-8 shrink-0"
+                          className="h-7 w-7"
                           aria-label={`Actions sur ${p.name}`}
                         >
-                          <MoreVertical className="h-4 w-4" />
+                          <MoreVertical className="h-3.5 w-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuContent align="end">
                         {!isServiceItem && Number.isFinite(p.stock) && (
                           <>
                             <DropdownMenuItem onClick={() => openAddStock(p)}>
@@ -1102,6 +1014,17 @@ function StocksPageContent() {
                         >
                           <Pencil className="h-4 w-4 mr-2" /> Modifier
                         </DropdownMenuItem>
+                        {/* Journal du produit : la page affiche déjà l'historique
+                            global, mais depuis une fiche on veut les mouvements de
+                            CET article. Même source, filtre par produit. */}
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setMovementsProductId(p.id);
+                            setMovementsOpen(true);
+                          }}
+                        >
+                          <History className="h-4 w-4 mr-2" /> Voir le journal
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
                           onClick={() => setDeleteTarget(p)}
@@ -1110,11 +1033,12 @@ function StocksPageContent() {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </CardContent>
-                </Card>
+                  }
+                />
               );
             })}
-          </div>
+            </div>
+          </>
         )}
 
         {/* ── Fiche produit ──────────────────────────────────────────────────── */}
@@ -1258,7 +1182,16 @@ function StocksPageContent() {
         </Dialog>
 
         {/* ── Journal global des mouvements ──────────────────────────────────── */}
-        <MovementsDialog open={movementsOpen} onOpenChange={setMovementsOpen} />
+        <MovementsDialog
+          open={movementsOpen}
+          onOpenChange={(v) => {
+            setMovementsOpen(v);
+            // Refermé : on oublie le filtre produit pour que la prochaine ouverture
+            // depuis le bandeau « Journal » reparte sur l'historique complet.
+            if (!v) setMovementsProductId(null);
+          }}
+          productId={movementsProductId}
+        />
 
         {/* ── Confirmation de suppression : une seule étape après la demande ── */}
         <AlertDialog
@@ -1383,14 +1316,19 @@ function MovementList({
 function MovementsDialog({
   open,
   onOpenChange,
+  productId = null,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Restreint l'historique à une fiche. `null` = tous les mouvements. */
+  productId?: string | null;
 }) {
   const isMobile = useIsMobile(768);
+  // Le `productId` entre dans la clé de cache : changer de fiche recharge, alors
+  // qu'ouvrir le dialogue deux fois sur la même ne requête pas.
   const { data: movements = [] } = useQuery({
-    queryKey: ["movements", "all"],
-    queryFn: () => listStockMovements({ limit: 50 }),
+    queryKey: ["movements", productId ?? "all"],
+    queryFn: () => listStockMovements({ limit: 50, ...(productId ? { productId } : {}) }),
     enabled: open,
   });
 

@@ -1,4 +1,4 @@
-// Préférences utilisateur : nom de l'espace de travail, couleur principale, drapeau
+﻿// Préférences utilisateur : nom de l'espace de travail, couleur principale, drapeau
 // d'onboarding. Elles vivent dans localStorage et NON dans IndexedDB.
 //
 // Pourquoi cette séparation : IndexedDB est la base métier (ventes, produits, lignes),
@@ -9,6 +9,12 @@
 // L'exception assumée est le dossier de documents : un `FileSystemDirectoryHandle` n'est
 // pas sérialisable en JSON, il ne peut PAS tenir dans localStorage. Il reste donc dans
 // IndexedDB via src/lib/files.ts. Ne pas tenter de « ranger » les deux au même endroit.
+
+import {
+  CARD_PRESETS,
+  normalizeCardFields,
+  type ProductCardField,
+} from "@/lib/card-display";
 
 const KEY = "pos_preferences";
 
@@ -135,6 +141,17 @@ export interface Preferences {
   onboardingCompleted: boolean;
   /** L'utilisateur a accepté la politique de confidentialité. */
   privacyAccepted: boolean;
+  /**
+   * Champs visibles ET leur ordre sur les cards produit de /stocks. Liste ordonnée :
+   * l'ordre du tableau EST l'ordre d'affichage (§12).
+   */
+  stockCardFields: ProductCardField[];
+  /**
+   * Même chose pour les cards de la caisse. Réglage SÉPARÉ (§22) : au comptoir on veut
+   * le prix et le nom, pas le prix d'achat ni la référence — les deux pages n'ont pas
+   * les mêmes contraintes de place ni les mêmes necessités.
+   */
+  caisseCardFields: ProductCardField[];
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -153,6 +170,11 @@ export const DEFAULT_PREFERENCES: Preferences = {
   ownerPhoto: "",
   onboardingCompleted: false,
   privacyAccepted: false,
+  // l'ordre d'affichage sur la card. Le standard est
+  // « image, nom, prix, stock » : le minimum pour comparer deux articles d'un coup
+  // d'œil sans laisser le prix absent.
+  stockCardFields: [...CARD_PRESETS.standard],
+  caisseCardFields: [...CARD_PRESETS.compact],
 };
 
 /**
@@ -409,6 +431,10 @@ export function getPreferences(): Preferences {
       ownerPhoto: typeof parsed.ownerPhoto === "string" ? parsed.ownerPhoto : "",
       onboardingCompleted: parsed.onboardingCompleted === true,
       privacyAccepted: parsed.privacyAccepted === true,
+      // Champs de card : nettoyés comme le reste. Un enregistrement tronqué ou écrit
+      // par une version antérieure ne doit pas pouvoir rendre une card illisible.
+      stockCardFields: normalizeCardFields(parsed.stockCardFields, CARD_PRESETS.standard),
+      caisseCardFields: normalizeCardFields(parsed.caisseCardFields, CARD_PRESETS.compact),
     };
   } catch {
     // JSON corrompu ou localStorage inaccessible (mode privé strict) : les défauts

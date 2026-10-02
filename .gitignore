@@ -26,6 +26,8 @@ bun.lock
 
 # Journaux (dev-server.log, etc.) : jamais versionnés.
 *.log
+# Captures d'erreur de build (npm run build 2> build.err) : ce sont des logs.
+*.err
 
 # Cache npm local (installs hors sandbox) et profils Chrome des outils de test.
 .npm-cache/

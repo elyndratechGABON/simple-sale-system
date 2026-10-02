@@ -1,4 +1,4 @@
-// Paramètres — point unique de modification de tout ce que l'onboarding a demandé,
+﻿// Paramètres — point unique de modification de tout ce que l'onboarding a demandé,
 // plus le PIN et la sauvegarde/restauration.
 //
 // Le dossier de documents et le PIN vivaient auparavant dans /reports. Ils ont migré
@@ -17,6 +17,7 @@ import {
   EyeOff,
   FolderOpen,
   Info,
+  KeyRound,
   MessageCircle,
   MonitorSmartphone,
   Pencil,
@@ -38,10 +39,9 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { ACTIVE_CLUSTERS, savePreferences, type Preferences } from "@/lib/settings";
+import { ACTIVE_CLUSTERS, savePreferences, type ClusterId, type Preferences } from "@/lib/settings";
 import { LEGAL_COMPANY } from "@/components/legal/LegalPage";
 import { usePreferences } from "@/hooks/use-preferences";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import {
   buildPaymentConfirmedWhatsappUrl,
@@ -87,6 +87,8 @@ import {
   resetGatekeeper,
 } from "@/lib/gatekeeper";
 import { DevicePairingDialog } from "@/components/DevicePairingDialog";
+import { PinSetupDialog } from "@/components/settings/PinSetupDialog";
+import { isPinSet } from "@/lib/pin";
 import { MasterSyncBadge } from "@/components/MasterSyncBadge";
 import { EmployeeAccountPanel } from "@/components/settings/EmployeeAccountPanel";
 import { useAccess } from "@/hooks/use-access";
@@ -101,6 +103,8 @@ import type { PlanInfo } from "@/lib/pricing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProductCardSettings } from "@/components/ProductCardSettings";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Accordion,
   AccordionContent,
@@ -148,39 +152,77 @@ export const Route = createFileRoute("/_app/settings")({
 });
 
 import { WhatsAppProfilePage } from "@/components/WhatsAppProfilePage";
-import { useNavigate } from "@tanstack/react-router";
 
 function SettingsPage() {
-  const navigate = useNavigate();
-  const { tablesEnabled } = usePreferences();
-  const isMobile = useIsMobile(1024);
-  const [openSections, setOpenSections] = useState<string[]>(["shop"]);
+  const { cluster } = usePreferences();
   const { role } = useAccess();
   const accountLabel = `Compte ${ROLE_LABELS[role]}`;
 
-  useEffect(() => {
-    setOpenSections(isMobile ? ["shop"] : ["shop", "clients", "compte", "donnees"]);
-  }, [isMobile]);
-
-  if (role === "employee") {
-    return (
-      <div className="mx-auto max-w-3xl px-[var(--page-gutter)] py-4 space-y-3">
-        <div className="mb-5">
-          <div className="flex items-center gap-2">
-            <h1 className="text-page-title font-bold">Paramètres</h1>
-            <Badge variant="secondary">{accountLabel}</Badge>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Partagez vos derniers chiffres et supprimez cette caisse.
-          </p>
+  return (
+    <div className="mx-auto max-w-3xl px-[var(--page-gutter)] py-4 space-y-3">
+      <div className="mb-5">
+        <div className="flex items-center gap-2">
+          <h1 className="text-page-title font-bold">Paramètres</h1>
+          <Badge variant="secondary">{accountLabel}</Badge>
         </div>
-        <EmployeeAccountPanel />
+        <p className="text-sm text-muted-foreground">
+          Type de commerce, caisse, données et sécurité — tout ce que l'onboarding a demandé.
+        </p>
       </div>
-    );
-  }
 
-  // Option B : WhatsAppProfilePage comme page principale
-  return <WhatsAppProfilePage onNavigate={(to) => void navigate({ to })} />;
+      {/* Les 12 cartes de ce fichier sont réparties par grandeur. Chacune était écrite
+          mais jamais montée : ce panneau est ce qui les rend accessibles. Un onglet par
+          domaine, comme les réglages d'une application — pas une page unique de 3 cartes. */}
+      <Tabs defaultValue="boutique">
+        <TabsList className="w-full justify-start overflow-x-auto">
+          <TabsTrigger value="boutique">Boutique</TabsTrigger>
+          <TabsTrigger value="affichage">Affichage</TabsTrigger>
+          <TabsTrigger value="caisse">Caisse</TabsTrigger>
+          <TabsTrigger value="donnees">Données</TabsTrigger>
+          <TabsTrigger value="securite">Sécurité</TabsTrigger>
+          <TabsTrigger value="abonnement">Abonnement</TabsTrigger>
+          <TabsTrigger value="apropos">À propos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="boutique" className="mt-3 space-y-3">
+          <BusinessCard cluster={cluster ?? "retail"} />
+          <AppearanceCard />
+          <ClientsCard />
+          <TablesCard />
+        </TabsContent>
+
+        {/* Affichage des cards produit : réglage séparé du thème (§22). */}
+        <TabsContent value="affichage" className="mt-3 space-y-3">
+          <ProductCardSettings context="stocks" />
+          <ProductCardSettings context="caisse" />
+        </TabsContent>
+
+        <TabsContent value="caisse" className="mt-3 space-y-3">
+          <DevicesCard />
+          <InstallCard />
+        </TabsContent>
+
+        <TabsContent value="donnees" className="mt-3 space-y-3">
+          <DirectoryCard />
+          <BackupCard />
+          <DeleteShopCard />
+        </TabsContent>
+
+        <TabsContent value="securite" className="mt-3 space-y-3">
+          <PinCard />
+          <EmployeeAccountPanel />
+        </TabsContent>
+
+        <TabsContent value="abonnement" className="mt-3 space-y-3">
+          <SubscriptionCard />
+        </TabsContent>
+
+        <TabsContent value="apropos" className="mt-3 space-y-3">
+          <AboutCard />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 }
 
 /**
@@ -206,8 +248,12 @@ function resolveIcon(name: string): typeof Store {
   return ICON_MAP[name] ?? Store;
 }
 
-function BusinessCard() {
+function BusinessCard({ cluster: clusterProp }: { cluster: ClusterId }) {
   const qc = useQueryClient();
+  const { data: profile } = useQuery({
+    queryKey: ["shop_profile"],
+    queryFn: getShopProfile,
+  });
   const { cluster, tablesEnabled, customDomain } = usePreferences();
   const clusterConfig = ACTIVE_CLUSTERS.find((c) => c.id === cluster);
   const ClusterIcon = clusterConfig ? resolveIcon(clusterConfig.icon) : Store;
@@ -1458,6 +1504,46 @@ function DeleteShopCard() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PinCard() {
+  const [open, setOpen] = useState(false);
+  // `isPinSet()` lit `localStorage` : il n'est pas réactif. `key` force le remontage du
+  // dialogue à chaque ouverture, pour qu'il relise l'état au bon moment.
+  const [key, setKey] = useState(0);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <KeyRound className="h-4 w-4" /> Code PIN d'annulation
+        </CardTitle>
+        <CardDescription>
+          Demandé avant d'annuler une vente encaissée ou une table, avec restauration du stock. Un
+          code à 4 chiffres que tout le monde devine n'annule plus rien.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-muted-foreground">
+            {isPinSet()
+              ? "Un code est défini sur cette caisse."
+              : "Aucun code défini — 4 chiffres suffisent."}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setKey((n) => n + 1);
+              setOpen(true);
+            }}
+          >
+            {isPinSet() ? "Changer" : "Créer"}
+          </Button>
+        </div>
+        <PinSetupDialog key={key} open={open} onOpenChange={setOpen} />
       </CardContent>
     </Card>
   );
