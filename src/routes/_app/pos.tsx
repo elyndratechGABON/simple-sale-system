@@ -1,4 +1,4 @@
-﻿import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
@@ -13,8 +13,6 @@ import {
   Utensils,
   Scissors,
   Package,
-  Camera,
-  Pencil,
   Search,
   Check,
   LayoutGrid,
@@ -54,7 +52,6 @@ import { savePreferences } from "@/lib/settings";
 import { PinDialog } from "@/components/PinDialog";
 import { playSuccessChime } from "@/lib/success-sound";
 import { useSaleTrigger } from "@/hooks/use-sale-trigger";
-import { LOW_STOCK_THRESHOLD } from "@/lib/alerts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,7 +68,7 @@ import {
 } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
 import { ProductForm } from "@/components/ProductForm";
-import { ProductPhotoDialog, ProductQuickEditDialog } from "@/components/ProductQuickEdit";
+import { POSProductCard } from "@/components/POSProductCard";
 import { ClientSelect } from "@/components/ClientSelect";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { VoiceDictation } from "@/components/VoiceDictation";
@@ -338,14 +335,11 @@ function PosPage() {
   } | null>(null);
   // Produit visé depuis la caisse : photo (bouton appareil) ou modification rapide
   // (bouton crayon) — deux fenêtres séparées, chacune ne montre que l'essentiel.
-  const [photoTarget, setPhotoTarget] = useState<Product | null>(null);
-  const [quickEditTarget, setQuickEditTarget] = useState<Product | null>(null);
   // Sélecteur de variante : quand un produit a plusieurs variantes, le clic
   // ouvre ce panneau au lieu d'ajouter directement.
   const [manualQtyOpen, setManualQtyOpen] = useState(false);
   const [manualQtyProduct, setManualQtyProduct] = useState<Product | null>(null);
   const [manualQtyValue, setManualQtyValue] = useState<string>("");
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [variantPicker, setVariantPicker] = useState<{ product: Product } | null>(null);
 
   // Table DÉRIVÉE de la liste des additions ouvertes, jamais copiée dans l'état local :
@@ -965,7 +959,7 @@ function PosPage() {
         </div>
       )}
 
-{/* Largeurs par palier (§21, §22) :
+      {/* Largeurs par palier (§21, §22) :
           - ≥1024 : produits ~70 %, panier 30 % (360 px) — la tablette a peu de place,
             un panier de 400 px y mange un tiers de l'écran.
           - ≥1280 : 3 colonnes Catégories | Produits | Panier (20 / 52 / 28).
@@ -1045,7 +1039,7 @@ function PosPage() {
               aria-label="Rechercher un article"
               className="h-12 rounded-xl pl-9"
             />
-</div>
+          </div>
           {/* Catégories : grille de cartes sous 1280 px. Au-dessus, elles vivent dans la
               colonne de gauche (xl:block) — sinon ce sont deux fois les mêmes boutons à
               l'écran. Mêmes `filter`, mêmes catégories, mêmes handlers : visuel seul. */}
@@ -1133,138 +1127,21 @@ function PosPage() {
               const inCart = Object.entries(cart)
                 .filter(([k]) => k === p.id || k.startsWith(`${p.id}::`))
                 .reduce((s, [, e]) => s + e.qty, 0);
-              const out = Number.isFinite(p.stock) && p.stock - inCart <= 0;
               return (
-                // La carte reste UNE cible : un tap ajoute au panier, où que ce soit sur la
-                // fiche. ✏️ et 📷 restent des FRÈRES (du HTML invalide sinon) et la fiche
-                // produit reste ouvrable même en rupture — seul le geste principal est bloqué.
-                <div
+                <POSProductCard
                   key={p.id}
-                  className="relative flex h-full flex-col rounded-xl border bg-card p-3 text-left transition-all hover:border-primary hover:shadow-md sm:p-4"
-                >
-                  <button
-                    onClick={() => {
-                      // Clic rapide → augmenter de 1
-                      onProductClick(p);
-                      // Si maintenu > 500ms → fenêtre manuelle
-                      longPressTimer.current = setTimeout(() => {
-                        setManualQtyProduct(p);
-                        setManualQtyValue(String(cart[p.id]?.qty ?? 1));
-                        setManualQtyOpen(true);
-                      }, 500);
-                    }}
-                    onMouseDown={() => {
-                      longPressTimer.current = setTimeout(() => {
-                        setManualQtyProduct(p);
-                        setManualQtyValue(String(cart[p.id]?.qty ?? 1));
-                        setManualQtyOpen(true);
-                      }, 500);
-                    }}
-                    onMouseUp={() => {
-                      if (longPressTimer.current) {
-                        clearTimeout(longPressTimer.current);
-                        longPressTimer.current = null;
-                      }
-                    }}
-                    onMouseLeave={() => {
-                      if (longPressTimer.current) {
-                        clearTimeout(longPressTimer.current);
-                        longPressTimer.current = null;
-                      }
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setManualQtyProduct(p);
-                      setManualQtyValue(String(cart[p.id]?.qty ?? 1));
-                      setManualQtyOpen(true);
-                    }}
-                    disabled={out}
-                    className={cn(
-                      "flex flex-1 flex-col rounded-lg text-left active:scale-[0.98] transition-transform",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      out && "opacity-50 cursor-not-allowed",
-                    )}
-                  >
-                    {p.photo ? (
-                      <img
-                        src={p.photo}
-                        alt=""
-                        className="mb-2 h-20 w-full rounded-lg object-cover"
-                        loading="lazy"
-                      />
-                    ) : null}
-                    <div className="font-semibold leading-tight">{p.name}</div>
-                    <div className="mt-1 text-lg font-bold text-primary">{formatFCFA(p.price)}</div>
-                    <div
-                      className={cn(
-                        "mt-1 text-xs",
-                        out
-                          ? "font-medium text-destructive"
-                          : Number.isFinite(p.stock) &&
-                              p.stock - inCart <= (p.min_stock ?? LOW_STOCK_THRESHOLD)
-                            ? "font-medium text-amber-600 dark:text-amber-400"
-                            : "text-muted-foreground",
-                      )}
-                    >
-                      {out
-                        ? "Rupture"
-                        : Number.isFinite(p.stock)
-                          ? `Stock : ${p.stock - inCart}`
-                          : "Illimité"}
-                    </div>
-                  </button>
-                  {inCart > 0 && (
-                    <span className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center shadow">
-                      {inCart}
-                    </span>
-                  )}
-                  {/* Rangée d'actions : l'appareil ouvre la fenêtre PHOTO seule, le crayon la
-                       modification rapide nom/prix/stock — parfaitement alignés en bas de
-                       carte au lieu d'une pose en coin, gestes d'appoint qui restent
-                       cliquables même en rupture. Le reste de la ligne est le bouton
-                       « + Ajouter », la cible du pouce alignée partout sur la grille. */}
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      aria-label={`Modifier ${p.name}`}
-                      title="Modifier nom, prix, stock"
-                      onClick={() => setQuickEditTarget(p)}
-                      className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-card shadow-sm",
-                        "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      )}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Photo de ${p.name}`}
-                      title="Changer la photo"
-                      onClick={() => setPhotoTarget(p)}
-                      className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-card shadow-sm",
-                        "text-muted-foreground transition-colors hover:text-primary hover:border-primary",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      )}
-                    >
-                      <Camera className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onProductClick(p)}
-                      disabled={out}
-                      className={cn(
-                        "flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary text-sm font-semibold text-primary-foreground",
-                        "shadow-sm active:scale-[0.98] transition-transform",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        out && "opacity-50 cursor-not-allowed",
-                      )}
-                    >
-                      <Plus className="h-4 w-4" /> Ajouter
-                    </button>
-                  </div>
-                </div>
+                  product={p}
+                  inCart={inCart}
+                  onAdd={onProductClick}
+                  // Appui long = saisie manuelle de la quantité. C'est le seul geste de
+                  // « gestion » que la caisse garde : ouvrir une fiche pour corriger une
+                  // quantité ferait perdre la vente, et 20 c'est un cas réel en Weight.
+                  onLongPress={(prod: Product) => {
+                    setManualQtyProduct(prod);
+                    setManualQtyValue(String(cart[p.id]?.qty ?? 1));
+                    setManualQtyOpen(true);
+                  }}
+                />
               );
             })}
           </div>
@@ -2126,11 +2003,6 @@ function PosPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Fenêtres éclair de la caisse : la photo seule, ou la modification rapide
-          pré-remplie — jamais le formulaire complet pour un geste de service. */}
-      <ProductPhotoDialog product={photoTarget} onClose={() => setPhotoTarget(null)} />
-      <ProductQuickEditDialog product={quickEditTarget} onClose={() => setQuickEditTarget(null)} />
     </div>
   );
 }
@@ -2655,14 +2527,19 @@ function CategoryRail({
       <span
         className={cn(
           "flex h-5 w-5 shrink-0 items-center justify-center rounded-md transition-colors",
-          active ? "bg-primary-foreground/15 text-primary-foreground" : "bg-muted text-muted-foreground",
+          active
+            ? "bg-primary-foreground/15 text-primary-foreground"
+            : "bg-muted text-muted-foreground",
         )}
       >
         <Icon className="h-3 w-3" strokeWidth={2.2} />
       </span>
       <span className="min-w-0 flex-1 truncate leading-tight">{label}</span>
       <Check
-        className={cn("h-3.5 w-3.5 shrink-0 transition-opacity", active ? "opacity-100" : "opacity-0")}
+        className={cn(
+          "h-3.5 w-3.5 shrink-0 transition-opacity",
+          active ? "opacity-100" : "opacity-0",
+        )}
         strokeWidth={3}
       />
     </button>
