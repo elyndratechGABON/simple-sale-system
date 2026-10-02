@@ -44,7 +44,7 @@ export function ProductForm({
   defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
-  const { hasSerialNumber, unitType, hasExpiryDate, isLocation, hasVariants } =
+  const { hasSerialNumber, unitType, hasExpiryDate, isLocation, hasVariants, hasWeightInput, hasRentalBooking, allowServiceBooking } =
     useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
@@ -58,11 +58,21 @@ export function ProductForm({
   const [category, setCategory] = useState<Category>(
     editing?.category ?? defaultCategory ?? "Boisson",
   );
+  const [unit, setUnit] = useState<"piece" | "meter" | "liter">(editing?.unit ?? "piece");
+  // Période tarifaire retenue pour l'ACTIF. Le prix saisi va dans `rental_pricing[periode]`
+  // (cf. `Product`), donc un même actif porte un prix différent par heure / jour / semaine.
+  const [pricingUnit, setPricingUnit] = useState<"hour" | "day" | "week" | "month" | "year">(
+    "day",
+  );
+  // Les tarifs déjà saisis, pour que changer de période ne perde rien : on edite
+  // `rental_pricing`, on ne l'écrase pas à chaque rendu.
+  const [rentalPricing, setRentalPricing] = useState<NonNullable<Product["rental_pricing"]>>(
+    () => editing?.rental_pricing ?? {},
+  );
   const [productType, setProductType] = useState<"product" | "service">(
     isLocation ? "service" : (editing?.type ?? defaultType ?? "product"),
   );
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
-  const [unit, setUnit] = useState<"piece" | "meter" | "liter">(editing?.unit ?? "piece");
   const [expiryDate, setExpiryDate] = useState(
     editing?.expiryDate ? new Date(editing.expiryDate).toISOString().split("T")[0] : "",
   );
@@ -147,17 +157,29 @@ export function ProductForm({
             ? Number.POSITIVE_INFINITY
             : Number(stock) || 0,
         min_stock: !unlimited && !isAsset && minStock ? Number(minStock) : undefined,
+        // Pour la location : un prix PAR PÉRIODE. Le prix saisi s'écrit dans la case de la
+        // période choisie (`rental_pricing`), les autres périodes sont conservées — c'est
+        // ce qui permet de facturer 10 h et 3 jours différemment sur le MÊME actif.
+        ...(isLocation
+          ? {
+              is_asset: true,
+              rental_pricing: rentalPricing,
+              // `price` reste la référence lue par la caisse ; on y met le tarif de la
+              // période par défaut pour qu'un appel sans période précise ne soit pas à 0.
+              price: rentalPricing[pricingUnit] ?? rentalPricing.day ?? 0,
+              deposit_amount: depositAmount ? Number(depositAmount) : undefined,
+              total_units: totalUnits ? Number(totalUnits) : undefined,
+            }
+          : {}),
         category,
         type: productType,
         serialNumber: serialNumber.trim() || undefined,
+        // L'unité n'est posée que là où elle a un sens : kg pour la vente au poids,
+        // pièce/mètre/litre pour les clusters `mixed`. Jamais pour `unit` simple.
         unit: unitType === "mixed" || unitType === "weight" ? unit : undefined,
         expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
         photo,
         ...(variantsOut ? { variants: variantsOut } : {}),
-        // Champs location
-        is_asset: isAsset || undefined,
-        deposit_amount: isAsset && depositAmount ? Number(depositAmount) : undefined,
-        total_units: isAsset && totalUnits ? Number(totalUnits) : undefined,
       };
       if (!p.name) throw new Error("Nom requis");
       if (!isAsset && p.price <= 0) throw new Error("Prix invalide");
@@ -236,8 +258,7 @@ export function ProductForm({
             onChange={handlePhoto}
           />
         </div>
-        {!isAsset &&
-          (productType === "service" ? (
+        {!isLocation && !isAsset && (productType === "service" ? (
             <div>
               <Label htmlFor="price">Prix de vente</Label>
               <Input
@@ -403,59 +424,64 @@ export function ProductForm({
                 placeholder="Ex : 50 chaises, 3 voitures"
               />
             </div>
+
+            {/* PRIX PAR PÉRIODE — le champ propre à la location. Un actif porte un
+                tarif distinct pour chaque plage : la saisie va dans la case de la
+                période, les autres sont conservées. C'est ce qui permet à la caisse de
+                facturer 3 heures et 2 jours différemment sur le MÊME produit. */}
             <div>
-              <Label>Tarifs de location (FCFA)</Label>
-              <div className="text-xs text-muted-foreground mb-2">
-                Chaque variante = un prix pour une période choisie (par jour, semaine, mois…).
-              </div>
-              <div className="mt-1.5 space-y-2">
-                {variants.map((v) => (
-                  <div key={v.id} className="flex items-center gap-2 rounded-xl border bg-card p-2">
-                    <Input
-                      className="h-9 flex-1"
-                      placeholder="Nom (ex : Chaise standard)"
-                      value={v.name}
-                      onChange={(e) => updateVariant(v.id, { name: e.target.value })}
-                    />
-                    <Input
-                      className="h-9 w-24"
-                      inputMode="numeric"
-                      placeholder="Prix"
-                      value={v.price}
-                      onChange={(e) =>
-                        updateVariant(v.id, { price: e.target.value.replace(/\D/g, "") })
-                      }
-                    />
-                    <select
-                      className="h-9 rounded-lg border bg-input px-2 text-sm"
-                      value={v.period ?? "day"}
-                      onChange={(e) =>
-                        updateVariant(v.id, { period: e.target.value as VariantDraft["period"] })
-                      }
+              <Label>Prix par période (FCFA)</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Remplissez seulement les périodes que vous facturez. La première reste le
+                tarif par défaut quand la durée n'est pas précisée.
+              </p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {(
+                  [
+                    ["hour", "Heure"],
+                    ["day", "Jour"],
+                    ["week", "Semaine"],
+                    ["month", "Mois"],
+                    ["year", "Année"],
+                  ] as const
+                ).map(([key, label]) => {
+                  const active = pricingUnit === key;
+                  return (
+                    <div
+                      key={key}
+                      className={`rounded-lg border p-2 ${
+                        active ? "border-primary bg-accent/40" : ""
+                      }`}
                     >
-                      <option value="hour">Par heure</option>
-                      <option value="day">Par jour</option>
-                      <option value="week">Par semaine</option>
-                      <option value="month">Par mois</option>
-                      <option value="year">Par an</option>
-                    </select>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 shrink-0"
-                      onClick={() => removeVariant(v.id)}
-                      aria-label={`Retirer la variante ${v.name || "sans nom"}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={addVariant}>
-                  <Plus className="h-4 w-4 mr-1.5" /> Ajouter une variante
-                </Button>
+                      <label
+                        htmlFor={`rental-${key}`}
+                        className="text-xs font-medium text-muted-foreground"
+                      >
+                        {label}
+                      </label>
+                      <Input
+                        id={`rental-${key}`}
+                        inputMode="numeric"
+                        className="mt-1 h-9"
+                        value={rentalPricing[key] ?? ""}
+                        onFocus={() => setPricingUnit(key)}
+                        onChange={(e) =>
+                          setRentalPricing((prev) => {
+                            const v = e.target.value.replace(/\D/g, "");
+                            const next = { ...prev };
+                            if (v) next[key] = Number(v);
+                            else delete next[key];
+                            return next;
+                          })
+                        }
+                        placeholder={active ? "Tarif par défaut" : "—"}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
+
             <div>
               <Label htmlFor="deposit">Caution par défaut (FCFA)</Label>
               <Input
