@@ -51,7 +51,7 @@ import { formatFCFA, formatTime } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { savePreferences } from "@/lib/settings";
-import { verifyPin } from "@/lib/pin";
+import { PinDialog } from "@/components/PinDialog";
 import { playSuccessChime } from "@/lib/success-sound";
 import { useSaleTrigger } from "@/hooks/use-sale-trigger";
 import { LOW_STOCK_THRESHOLD } from "@/lib/alerts";
@@ -313,7 +313,6 @@ function PosPage() {
   // ouverte pour la suite de la commande.
   const [cashing, setCashing] = useState<Cashing>(null);
   const [cancelPinOpen, setCancelPinOpen] = useState(false);
-  const [pin, setPin] = useState("");
   // `lg` et non le défaut à 768 : c'est là que la mise en page passe en colonne unique,
   // et ce commutateur change la STRUCTURE (panneau latéral ou feuille), pas juste le style.
   const compact = useIsMobile(1024);
@@ -667,7 +666,6 @@ function PosPage() {
       qc.invalidateQueries({ queryKey: ["sales"] });
       toast.success("Table annulée, stock restauré");
       setCancelPinOpen(false);
-      setPin("");
       selectTarget({ kind: "direct" });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1814,48 +1812,14 @@ function PosPage() {
         </DrawerContent>
       </Drawer>
 
-      <Dialog open={cancelPinOpen} onOpenChange={setCancelPinOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Annuler la table {activeTable?.table} ?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Toute l'addition est supprimée et le stock des articles servis est restauré. Entrez le
-              code PIN pour confirmer.
-            </p>
-            <div>
-              <Label htmlFor="table-pin">Code PIN</Label>
-              <Input
-                id="table-pin"
-                type="password"
-                inputMode="numeric"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                autoFocus
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setCancelPinOpen(false)}>
-              Retour
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={cancelTableMut.isPending}
-              onClick={() => {
-                if (!verifyPin(pin)) {
-                  toast.error("Code PIN incorrect");
-                  return;
-                }
-                if (activeTable) cancelTableMut.mutate(activeTable.id);
-              }}
-            >
-              Confirmer l'annulation
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PinDialog
+        open={cancelPinOpen}
+        onOpenChange={setCancelPinOpen}
+        description={`Toute l'addition de la table ${activeTable?.table ?? ""} est supprimée et le stock des articles servis est restauré.`}
+        onConfirm={() => {
+          if (activeTable) cancelTableMut.mutate(activeTable.id);
+        }}
+      />
 
       {/* Étape d'encaissement du comptoir : le total est figé en haut, on saisit l'argent
           reçu, la monnaie se calcule en direct. C'est ICI et pas avant que l'argent

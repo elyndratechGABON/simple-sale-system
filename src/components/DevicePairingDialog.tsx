@@ -217,7 +217,8 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                     subCategory: prefs.subCategory ?? undefined,
                     customDomain: prefs.customDomain ?? "",
                     customUnitType: prefs.customUnitType ?? "unit",
-                    businessType: prefs.businessType ?? "retail",
+                    businessType: prefs.businessType ?? (prefs.cluster === "restaurant" ? "restaurant" : "snack"),
+
                     tablesEnabled: prefs.tablesEnabled ?? false,
                   },
                 }

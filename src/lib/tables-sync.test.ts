@@ -25,7 +25,9 @@ import {
   resetDBForTests,
   setShopAccount,
 } from "./db";
-import { applyRemoteOps } from "./syncengine/apply";
+import { announceOpFor, applyRemoteOpsSigned, captureSigned } from "./syncengine/__tests__/setup";
+import { signAll } from "./syncengine/ops";
+import { announceDevice } from "./syncengine/pairing";
 import { ensureIdentity, getIdentity, resetIdentityForTests } from "./syncengine/identity";
 import { listPendingOps } from "./syncengine/outbox";
 import type { SyncOp } from "./syncengine/types";
@@ -43,12 +45,17 @@ const LINE = (productId: string, quantity = 2) => ({
 });
 const FREE_LINE = { name: "Coiffure", price: 500, cost: 100, category: CATEGORY, quantity: 2 };
 
-/** Caisse neuve du compte : même shopId que les autres appareils. */
+/** Caisse neuve du compte : même shopId que les autres appareils.
+ *
+ *  Elle S'ANNONCE aussi. En production c'est l'onboarding qui le fait, et l'annonce
+ *  porte la clé publique de l'appareil : sans elle au registre du pair, celui-ci n'a
+ *  rien contre quoi vérifier les ops reçues et les refuse. */
 async function onAccount(): Promise<void> {
   await resetDBForTests();
   resetIdentityForTests();
   await setShopAccount(ACCOUNT);
   await ensureIdentity();
+  await announceDevice();
 }
 
 const stockOf = async (productId: string): Promise<number> =>
@@ -68,7 +75,7 @@ describe("tables & tournées : propagation entre caisses", () => {
     expect(settled.id).toBe(table.id);
     expect(settled.status).toBe("paid");
 
-    const created = (await listPendingOps(getIdentity().shopId)).filter(
+    const created = (await captureSigned()).filter(
       (o) => o.type === "sale.created" && o.entity_id === table.id,
     );
     expect(created.length).toBe(1);
@@ -83,9 +90,9 @@ describe("tables & tournées : propagation entre caisses", () => {
     expect(await stockOf(product.id)).toBe(8);
 
     // Le pair rejoue les ops (product.created puis sale.created) et converge.
-    const ops = await listPendingOps(getIdentity().shopId);
+    const ops = await captureSigned();
     await onAccount();
-    const { applied } = await applyRemoteOps(ops);
+    const { applied } = await applyRemoteOpsSigned(ops);
     expect(applied).toBeGreaterThan(0);
     expect((await listSales()).length).toBe(1);
     expect((await listSales())[0].id).toBe(table.id);
@@ -112,9 +119,9 @@ describe("tables & tournées : propagation entre caisses", () => {
     expect((await listSales()).length).toBe(2);
 
     // Le pair rejoue : les deux tournées arrivent, le stock converge (10 - 2 - 2).
-    const ops = await listPendingOps(getIdentity().shopId);
+    const ops = await captureSigned();
     await onAccount();
-    await applyRemoteOps(ops);
+    await applyRemoteOpsSigned(ops);
     expect((await listSales()).length).toBe(2);
     expect(await stockOf(product.id)).toBe(6);
   });
@@ -127,7 +134,7 @@ describe("tables & tournées : propagation entre caisses", () => {
 
     await cancelSale(table.id);
 
-    const ops = await listPendingOps(getIdentity().shopId);
+    const ops = await captureSigned();
     expect(ops.filter((o) => o.type === "sale.cancelled")).toHaveLength(0);
     expect(await stockOf(product.id)).toBe(10); // restauration locale, uniquement
   });
@@ -140,21 +147,23 @@ describe("tables & tournées : propagation entre caisses", () => {
     await payTable(table.id, 1200);
 
     // Caisse B : applique la vente, puis en propage l'annulation.
-    const opsA = await listPendingOps(getIdentity().shopId);
+    const opsA = await captureSigned();
     await onAccount();
-    await applyRemoteOps(opsA);
+    await applyRemoteOpsSigned(opsA);
     expect((await listSales()).length).toBe(1);
     expect(await stockOf(product.id)).toBe(8);
 
     await cancelSale((await listSales())[0].id);
-    const cancelled = (await listPendingOps(getIdentity().shopId)).filter(
-      (o) => o.type === "sale.cancelled",
-    );
+    const opsB = await captureSigned();
+    const announceB = opsB.filter((o) => o.type === "device.announce");
+    const cancelled = opsB.filter((o) => o.type === "sale.cancelled");
     expect(cancelled.length).toBe(1);
 
     // Caisse C : rejoue création + annulation → vente disparue, stock revenu à 10.
+    // `cancelled` vient de la CAISSE B : son annonce accompagne le lot, faute de quoi C
+    // n'a pas la clé de B et refuserait l'annulation.
     await onAccount();
-    await applyRemoteOps([...opsA, cancelled[0]]);
+    await applyRemoteOpsSigned([...opsA, ...announceB, cancelled[0]]);
     expect((await listSales()).length).toBe(0);
     expect(await stockOf(product.id)).toBe(10);
   });
@@ -175,19 +184,24 @@ describe("tables & tournées : propagation entre caisses", () => {
     const sale = await createSale({ lines: [LINE(product.id)], cash_given: 1200 });
     await closeDay(); // verrouille la journée : la vente du jour est clôturée
 
-    const op: SyncOp = {
-      id: "device-x:1",
-      shop_id: getIdentity().shopId,
-      device_id: "device-x",
-      seq: 1,
-      created_at: Date.now(),
-      type: "sale.cancelled",
-      entity_id: sale.id,
-      payload: { sale_id: sale.id },
-      status: "pending",
-    };
-    const { applied } = await applyRemoteOps([op]);
-    expect(applied).toBe(1); // l'op est consumée (idempotence), sans effet métier
+    // L'annulation vient d'un PAIR : elle doit être signée par une clé qu'on connaît,
+    // sinon elle serait refusée en amont de la garde métier testée ici. L'annonce du
+    // pair installe cette clé (groupe encore vide → premier contact).
+    const [op] = await signAll([
+      {
+        id: "device-x:1",
+        shop_id: getIdentity().shopId,
+        device_id: "device-x",
+        seq: 1,
+        created_at: Date.now(),
+        type: "sale.cancelled",
+        entity_id: sale.id,
+        payload: { sale_id: sale.id },
+        status: "pending",
+      } as SyncOp,
+    ]);
+    const { applied } = await applyRemoteOpsSigned([await announceOpFor("device-x"), op]);
+    expect(applied).toBe(2); // l'annonce + l'annulation, cette dernière sans effet métier
 
     expect((await listSales()).length).toBe(1); // la vente reste
     expect(await stockOf(product.id)).toBe(8); // stock non restauré

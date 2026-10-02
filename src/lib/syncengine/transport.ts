@@ -25,7 +25,7 @@
 import { syncSemaphore } from "./semaphore";
 import { applyRemoteOps } from "./apply";
 import { isSharedGroup, getIdentity } from "./identity";
-import { emitOp } from "./ops";
+import { emitOp, signAll } from "./ops";
 import { listPendingOps, markOpsSynced } from "./outbox";
 import { getDB, listProducts } from "../db";
 import { getPreferences } from "../settings";
@@ -44,72 +44,6 @@ import type {
  *  d'instantanés serait du bruit inutile. */
 const SNAPSHOT_THROTTLE_MS = 20_000;
 
-/**
- * Gère l'annonce d'un nouvel appareil sur le canal P2P.
- * Si le code de paire reçu correspond au code local affiché par le propriétaire,
- * l'appareil est marqué comme `paired` avec le rôle fourni (généralement "employee").
- * Sinon, il reste en `pending` en attente d'approbation manuelle.
- */
-async function handleDeviceAnnounce(payload: DeviceAnnouncePayload): Promise<void> {
-  if (!payload?.device_id) return;
-
-  const db = getDB();
-  const now = Date.now();
-
-  // Ensure identity is loaded before accessing shopId
-  let identity;
-  try {
-    identity = await import("./identity").then((m) => m.ensureIdentity());
-  } catch {
-    console.warn("[handleDeviceAnnounce] Identity not loaded, skipping");
-    return;
-  }
-
-  const shopId = identity.shopId;
-
-  if (!shopId || !isSharedGroup(shopId)) {
-    console.warn("[handleDeviceAnnounce] Not in shared group, skipping");
-    return;
-  }
-
-  // Récupérer le code de paire actif local (6 caractères, null si expiré/absent)
-  const activeCode = await getPairingToken();
-
-  // Vérifier si le code reçu est valide et correspond au code actif
-  const codeMatches = Boolean(
-    payload.pair_code && activeCode && payload.pair_code.toUpperCase() === activeCode,
-  );
-
-  // Récupérer la fiche existante ou en créer une nouvelle
-  const existing =
-    (await db.paired_devices.get(payload.device_id)) ??
-    ({
-      id: payload.device_id,
-      shop_id: shopId,
-      updated_at: now,
-    } satisfies PairedDevice);
-
-  // Déterminer le statut : paired si code valide OU si déjà pairé OU si rôle owner (confiance).
-  // Le rôle d'une annonce n'est reconnu qu'au premier contact ou avec un code juste : un
-  // appareil déjà au registre (même pending) ne se promouvoit pas propriétaire en
-  // re-annonçant sans code — miroir de la décision d'application (`apply.ts`).
-  const wasPaired = existing.status === "paired";
-  const firstSighting = !existing.role && !existing.status;
-  const role = payload.role && (codeMatches || firstSighting) ? payload.role : existing.role;
-  const autoPaired = codeMatches || wasPaired || (payload.role === "owner" && firstSighting);
-
-  // Mettre à jour la fiche avec les données de l'annonce
-  await db.paired_devices.put({
-    ...existing,
-    device_name: payload.employee_name ?? existing.device_name,
-    role,
-    public_key: payload.public_key ?? existing.public_key,
-    server_device_id: payload.server_device_id ?? existing.server_device_id,
-    status: autoPaired ? "paired" : "pending",
-    paired_at: autoPaired ? (existing.paired_at ?? now) : existing.paired_at,
-    updated_at: now,
-  });
-}
 const KEY_LAST_SNAPSHOT = "syncengine_last_snapshot_at";
 
 /** Publication continue du catalogue : le propriétaire maintient FRIS un instantané ABSOLU
@@ -159,17 +93,23 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
     }
 
+    // Signature AU PUSH, pas à l'écriture : signer est une promesse WebCrypto, et une
+    // transaction Dexie ne survit pas à cet await. L'outbox reste donc le journal brut
+    // (atomique avec l'écriture métier) et la signature n'apparaît que sur le réseau —
+    // où elle est la seule preuve d'origine acceptée à la réception.
     const pending = await listPendingOps(identity.shopId);
     let pushed = 0;
-    if (pending.length > 0 && (await client.push(identity.shopId, pending))) {
-      await markOpsSynced(pending.map((o) => o.id));
-      pushed = pending.length;
+    if (pending.length > 0) {
+      const signed = await signAll(pending);
+      if (await client.push(identity.shopId, signed)) {
+        await markOpsSynced(pending.map((o) => o.id));
+        pushed = pending.length;
+      }
     }
 
     const remote = await client.pull(identity.shopId, identity.deviceId);
     const foreign: SyncOp[] = [];
     let skipped = 0;
-    let announceApplied = 0;
 
     // Know which devices are already paired BEFORE processing announces
     const knownBefore = new Set(
@@ -190,15 +130,14 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         skipped++;
         continue;
       }
-      // NOUVEAU : gérer l'annonce d'un nouvel appareil (employé)
-      if (op.type === "device.announce") {
-        await handleDeviceAnnounce(op.payload as DeviceAnnouncePayload);
-        // Check if this is a new device (not already paired before we started)
-        if (!knownBefore.has(op.entity_id)) {
-          newcomerAnnounced = true;
-        }
-        announceApplied++;
-        continue;
+      // Une annonce N'EST PAS interceptée ici : elle part dans `foreign` comme les
+      // autres ops, et `applyOp` la traite. Intercepter ici (ancien
+      // `handleDeviceAnnounce`, supprimé) créait un second chemin de décision, et surtout une
+      // annonce consommée localement n'arrivait jamais à `applyRemoteOps` — donc la clé
+      // publique du pair n'était jamais PINsée, et toutes ses ops suivantes se
+      // faisaient refuser. Une seule porte : `applyOp`.
+      if (op.type === "device.announce" && !knownBefore.has(op.entity_id)) {
+        newcomerAnnounced = true;
       }
       foreign.push(op);
     }
@@ -227,7 +166,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     // instantané ABSOLU au relais, dans la même rotation. L'écran employé qui importera son
     // stock le tirera directement, même si ce téléphone est déjà éteint.
     await publishFreshCatalog(client, identity);
-    return { pushed, applied: applied + announceApplied, skipped, remote: foreign.length };
+    return { pushed, applied, skipped, remote: foreign.length };
   } finally {
     release();
   }
@@ -269,10 +208,13 @@ async function publishFreshCatalog(client: TransportClient, identity: SyncIdenti
   if (now - Number(lastAt?.value ?? 0) < AUTO_SNAPSHOT_MIN_INTERVAL_MS) return;
   await emitCatalogSnapshot(identity);
   const pending = await listPendingOps(identity.shopId);
-  if (pending.length > 0 && (await client.push(identity.shopId, pending))) {
-    await markOpsSynced(pending.map((o) => o.id));
-    await db.settings.put({ key: KEY_LAST_CATALOG_SIG, value: sig });
-    await db.settings.put({ key: KEY_LAST_AUTO_SNAPSHOT, value: now });
+  if (pending.length > 0) {
+    const signed = await signAll(pending);
+    if (await client.push(identity.shopId, signed)) {
+      await markOpsSynced(pending.map((o) => o.id));
+      await db.settings.put({ key: KEY_LAST_CATALOG_SIG, value: sig });
+      await db.settings.put({ key: KEY_LAST_AUTO_SNAPSHOT, value: now });
+    }
   }
 }
 

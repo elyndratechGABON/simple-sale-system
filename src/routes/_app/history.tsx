@@ -27,7 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { verifyPin } from "@/lib/pin";
+import { PinDialog } from "@/components/PinDialog";
 import { SaleItemChips } from "@/components/SaleItemChips";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -334,7 +334,6 @@ function HistoryPage() {
 function SaleRow({ sale, profit, items }: { sale: Sale; profit: number; items: SaleItem[] }) {
   const [open, setOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
-  const [pin, setPin] = useState("");
   const qc = useQueryClient();
 
   const cancelMut = useMutation({
@@ -344,7 +343,6 @@ function SaleRow({ sale, profit, items }: { sale: Sale; profit: number; items: S
       qc.invalidateQueries({ queryKey: ["products"] });
       toast.success("Vente annulée, stock restauré");
       setPinOpen(false);
-      setPin("");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -440,46 +438,12 @@ function SaleRow({ sale, profit, items }: { sale: Sale; profit: number; items: S
         )}
       </CardContent>
 
-      <Dialog open={pinOpen} onOpenChange={setPinOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Annuler cette vente ?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Entrez le code PIN pour confirmer l'annulation. Le stock sera restauré.
-            </p>
-            <div>
-              <Label htmlFor="pin">Code PIN</Label>
-              <Input
-                id="pin"
-                type="password"
-                inputMode="numeric"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                autoFocus
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setPinOpen(false)}>
-              Annuler
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (!verifyPin(pin)) {
-                  toast.error("Code PIN incorrect");
-                  return;
-                }
-                cancelMut.mutate();
-              }}
-            >
-              Confirmer l'annulation
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PinDialog
+        open={pinOpen}
+        onOpenChange={setPinOpen}
+        description="Entrez le code PIN pour confirmer l'annulation. Le stock sera restauré."
+        onConfirm={() => cancelMut.mutate()}
+      />
     </Card>
   );
 }

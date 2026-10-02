@@ -385,6 +385,20 @@ export interface ShopProfile extends SyncFields {
    * vides sur une caisse qui se connecte par téléphone+mot de passe.
    */
   accountKeyword?: string;
+  /**
+   * Identifiant de compte opaque, attribué par l'orchestrateur au handshake et conservé
+   * tel quel. C'est la SOURCE du `shopId` dès qu'il est présent (cf. `deriveShopId`).
+   *
+   * Pourquoi : la dérivation locale (`SHA-256(téléphone|nom)`) est DEVINABLE — l'espace
+   * des numéros et des noms de boutique est tout petit, et un `shop_id` ainsi calculé
+   * s'énumère. Or le relais est aveugle et se fie au `shop_id` que le client annonce :
+   * deviner le `shop_id` d'un concurrent donnait l'accès en lecture à ses ventes et en
+   * écriture à sa caisse. Un identifiant non dérifiable ferme l'énumération.
+   *
+   * Absent tant que le serveur ne le fournit pas : la caisse retombe alors sur la
+   * dérivation locale, l'état actuel. Champ optionnel, aucun `upgrade()`.
+   */
+  accountId?: string;
   /** Empreinte numérique de l'appareil (SHA-256) — garantit 1 téléphone = 1 boutique. */
   deviceFingerprint?: string;
 }
@@ -2261,6 +2275,22 @@ export async function setShopKeyword(keyword: string | null): Promise<void> {
   await db.shop_profiles.put({
     ...profile,
     accountKeyword: keyword ? keyword.trim().toUpperCase() : undefined,
+    ...touch(),
+  });
+}
+
+/**
+ * Pose l'identifiant de compte opaque renvoyé par l'orchestrateur. Il remplace la
+ * dérivation locale téléphone+nom comme source du `shopId` (cf. `deriveShopId`), qu'il
+ * rend non énumérable. `null` efface — utile si le compte est dissocié.
+ */
+export async function setShopAccountId(accountId: string | null): Promise<void> {
+  const db = getDB();
+  const profile = await db.shop_profiles.get("me");
+  if (!profile) return;
+  await db.shop_profiles.put({
+    ...profile,
+    accountId: accountId?.trim() || undefined,
     ...touch(),
   });
 }

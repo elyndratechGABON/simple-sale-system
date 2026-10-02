@@ -54,6 +54,21 @@ export interface SyncOp {
   created_at: number;
   /** Cycle de vie dans l'outbox local. */
   status: "pending" | "synced";
+  /**
+   * Signature RSA-OAEP/SHA-256, base64, de `signableBody()` par la clé PRIVÉE de
+   * `device_id`. Vérifiée à l'application contre la clé publique pairée.
+   *
+   * C'est ce qui distingue une opération émise par un appareil authentifié d'une
+   * opération injectée par quiconque peut écrire au relais : le relais est aveugle,
+   * `shop_id` vient du client, et rien d'autre ne prouvait l'origine de l'op. Sans
+   * signature, un jeton lu dans le bundle suffisait à écrire dans la caisse d'autrui.
+   *
+   * Absente sur les ops émises avant ce déploiement (dépôt tiers, ancien client) :
+   * l'reception les tolère (`verifyOpSignature` → `true` sur absence) pour ne pas
+   * perdre l'historique. Cette tolérance est ce qui laisse la fenêtre ouverte — elle
+   * se ferme quand tous les clients sont à jour et qu'on retire le cas.
+   */
+  sig?: string;
 }
 
 /** Table de déduplication : un id d'op déjà appliquée = une application de moins. */
@@ -139,6 +154,14 @@ export interface DeviceAnnouncePayload {
 export interface DeviceApprovePayload {
   org_device_id: string;
   role: DeviceRole;
+  /**
+   * Clé publique de l'appareil approuvé, recopiée de sa fiche par le principal. C'est
+   * elle qui la PINSE : une annonce `pending` ne l week's pas fait (cf. `applyOp`,
+   * `device.announce`), donc l'approbation est le seul autre moment où une clé peut
+   * entrer en référence. Sans ce champ, un appareil approuvé à la main verrait ses
+   * ops rejetées faute de clé connue.
+   */
+  public_key?: string;
 }
 
 /**

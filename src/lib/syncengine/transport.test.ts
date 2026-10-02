@@ -15,7 +15,10 @@ import {
   setShopAccount,
 } from "../db";
 import { ensureIdentity, getIdentity, resetIdentityForTests, setIdentityRole } from "./identity";
-import { applyRemoteOps } from "./apply";
+import { announceDevice } from "./pairing";
+import { signAll } from "./ops";
+import { getDeviceKeys } from "./identity";
+import { applyRemoteOpsSigned } from "./__tests__/setup";
 import { listPairedDevices } from "./peers";
 import { listPendingOps, markOpsSynced, purgeSyncedOps } from "./outbox";
 import { exchangeOps, relayTransport, KEY_LAST_AUTO_SNAPSHOT } from "./transport";
@@ -38,10 +41,65 @@ async function freshDevice(): Promise<void> {
   resetIdentityForTests();
 }
 
-/** Relais de test : un Map `shop_id → ops[]`, servi par un mock `fetch`. */
-function makeRelay() {
+/**
+ * L'annonce d'un pair, comme le relais la verrait : l'appareil local se présente, et le
+ * pair d'abord contact est accepté parce que le GROUPE EST VIDE (confiance initiale).
+ * C'est cette op qui installe la clé du pair dans le registre local — sans elle, ses
+ * autres ops n'ont rien contre quoi se vérifier.
+ */
+async function announceOpFor(peerId: string): Promise<SyncOp> {
+  const identity = await ensureIdentity();
+  const [signed] = await signAll([
+    {
+      id: `annonce:${peerId}:1`,
+      shop_id: identity.shopId,
+      device_id: peerId,
+      seq: 1,
+      type: "device.announce",
+      entity_id: peerId,
+      payload: {
+        device_id: peerId,
+        // La chaîne SÉRIE, pas l'objet : c'est la forme que le pair annonce et que
+        // `applyOp` réécrit en base. Un objet se sérialiserait en `[object Object]` et
+        // deviendrait une clé invérifiable.
+        public_key: getDeviceKeys().publicKey,
+        employee_name: "Le proprietaire",
+        role: "owner" as const,
+      },
+      created_at: Date.now(),
+      status: "pending",
+    },
+  ]);
+  return signed;
+}
+
+/** Relais de test : un Map `shop_id → ops[]`, servi par un mock `fetch`.
+ *
+ *  Il signe ce qu'on lui pousse, comme le ferait un émetteur honnête : le relais est
+ *  aveugle et ne Sait pas signer, mais les ops qui le traversent portent leur `sig`
+ *  d'origine. C'est ce qui permet aux tests d'injecter une op « d'un pair » sans
+ *  manufacture manuelle de signatures. */
+function makeRelay(peerSign?: () => Promise<SyncOp[]>) {
   const rows = new Map<string, SyncOp[]>();
   let fetches = 0;
+  /** Op forgée « par un pair » : signée par la clé de l'appareil courant. */
+  const asPeer = async (over: Partial<SyncOp>): Promise<SyncOp> => {
+    const identity = await ensureIdentity();
+    const base: SyncOp = {
+      id: `pair:${identity.deviceId.slice(0, 8)}:1`,
+      shop_id: identity.shopId,
+      device_id: identity.deviceId,
+      seq: 1,
+      type: "catalogue.snapshot",
+      entity_id: "catalog",
+      payload: { products: [] },
+      created_at: Date.now(),
+      status: "pending",
+      ...over,
+    };
+    const [signed] = await signAll([base]);
+    return signed;
+  };
   const fetchImpl: typeof fetch = async (input, init) => {
     fetches++;
     const url = String(input);
@@ -69,6 +127,8 @@ function makeRelay() {
     client: relayTransport("https://relay.test", fetchImpl),
     fetches: () => fetches,
     count: (shopId: string) => (rows.get(shopId) ?? []).length,
+    asPeer,
+    peerSign,
   };
 }
 
@@ -80,6 +140,12 @@ describe("transport P2P via relais", () => {
     const idA = getIdentity();
     const relay = makeRelay();
 
+    // L'ANNONCE d'A d'abord : c'est elle qui donne à B la clé publique d'A, sans quoi B
+    // n'a rien contre quoi vérifier les ops suivantes et les refuserait toutes.
+    await announceDevice();
+    await exchangeOps(relay.client);
+    expect(relay.count(idA.shopId)).toBe(1);
+
     const product = await addProduct({
       name: "Coca 1L",
       price: 600,
@@ -89,13 +155,13 @@ describe("transport P2P via relais", () => {
     });
     await createSale({ lines: [LINE(product.id)], cash_given: 1200 });
 
-    // Mobile A pousse son outbox → relais, acquitte localement.
+    // Mobile A pousse le reste de son outbox → relais, acquitte localement.
     const stateA = await exchangeOps(relay.client);
     expect(stateA.pushed).toBe(2); // product.created + sale.created
     expect(stateA.applied).toBe(0);
     expect((await listPendingOps(idA.shopId)).length).toBe(0);
     // Publication continue : le propriétaire laisse aussi un instantané ABSOLU au relais.
-    expect(relay.count(idA.shopId)).toBe(3);
+    expect(relay.count(idA.shopId)).toBe(4);
 
     // Mobile B (base et identité neuves) tire et rejoue.
     await freshDevice();
@@ -106,8 +172,11 @@ describe("transport P2P via relais", () => {
     expect(idB.shopId).toBe(idA.shopId);
 
     const stateB = await exchangeOps(relay.client);
-    expect(stateB.remote).toBe(3); // product.created + sale.created + instantané
-    expect(stateB.applied).toBe(3);
+    // Les 4 ops du relais (annonce, product.created, sale.created, instantané) sont
+    // étrangères à B et passent toutes par `applyRemoteOps` — l'annonce comprise, c'est
+    // elle qui installe la clé d'A dont B a besoin pour vérifier les trois autres.
+    expect(stateB.remote).toBe(4);
+    expect(stateB.applied).toBe(4);
     expect(stateB.pushed).toBe(0);
 
     // B a convergé : stock, ventes, lignes.
@@ -117,9 +186,12 @@ describe("transport P2P via relais", () => {
     expect(salesB.length).toBe(1);
     expect(await getSaleItems(salesB[0].id)).toHaveLength(1);
 
-    // B a rencontré A : registre des pairs rempli.
+    // B a rencontré A : registre des pairs rempli, clé comprise — c'est elle qui
+    // permettra de vérifier les prochaines ops d'A.
     const peersB = await listPairedDevices(idB.shopId);
-    expect(peersB.map((p) => p.id)).toContain(idA.deviceId);
+    const peerA = peersB.find((p) => p.id === idA.deviceId);
+    expect(peerA).toBeDefined();
+    expect(peerA?.public_key).toBeTruthy();
   });
 
   it("ne jette pas quand le relais est inaccessible (push en échec)", async () => {
@@ -211,19 +283,8 @@ describe("transport P2P via relais", () => {
     });
     await addStock(product.id, 5);
 
-    // Un écran inconnu s'annonce au groupe : op étrangère injectée directement.
-    const newcomerId = "00000000-0000-0000-0000-0000000000aa";
-    const announceOp: SyncOp = {
-      id: "otr:1",
-      shop_id: id.shopId,
-      device_id: newcomerId,
-      seq: 1,
-      type: "device.announce",
-      entity_id: newcomerId,
-      payload: { device_id: newcomerId },
-      created_at: Date.now(),
-      status: "synced",
-    };
+    // Un écran inconnu s'annonce au groupe : son annonce, signée par sa propre clé.
+    const announceOp = await announceOpFor("00000000-0000-0000-0000-0000000000aa");
     await relay.client.push(id.shopId, [announceOp]);
 
     await exchangeOps(relay.client);
@@ -248,13 +309,11 @@ describe("transport P2P via relais", () => {
     const id = getIdentity();
     const relay = makeRelay();
 
-    const snapOp: SyncOp = {
+    // L'op vient d'un PAIR : son `device_id` n'est pas le nôtre, sa signature doit être
+    // valide, et sa clé doit être celle qu'on connaît — d'où l'annonce du pair d'abord.
+    const snapOp = await relay.asPeer({
       id: "snap:1",
-      shop_id: id.shopId,
-      device_id: "un-proprietaire",
-      seq: 1,
-      type: "catalogue.snapshot",
-      entity_id: "catalog",
+      device_id: "proprietaire",
       payload: {
         products: [
           {
@@ -269,10 +328,11 @@ describe("transport P2P via relais", () => {
           },
         ],
       },
-      created_at: Date.now(),
       status: "synced",
-    };
-    await relay.client.push(id.shopId, [snapOp]);
+    });
+    // Annonce ET snapshot dans le MÊME lot : c'est le cas réel — le relais rend tout le
+    // groupe d'un coup — et la clé doit être résolue AVANT que le snapshot se vérifie.
+    await relay.client.push(id.shopId, [await announceOpFor("proprietaire"), snapOp]);
 
     await exchangeOps(relay.client);
     const products = await listProducts();
@@ -284,6 +344,7 @@ describe("transport P2P via relais", () => {
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
     const id = getIdentity();
+    const relay = makeRelay();
 
     // Le pair a déjà son catalogue : un produit créé, deux unités déjà vendues.
     const product = await addProduct({
@@ -309,13 +370,11 @@ describe("transport P2P via relais", () => {
     expect((await listProducts()).find((p) => p.id === product.id)?.stock).toBe(4);
 
     // Un instantané STALE (pris avant la vente) + un produit inconnu arrivent du principal.
-    const snapOp: SyncOp = {
+    // L'instantané vient d'un pair : son annonce d'abord, sinon sa clé n'est pas
+    // connue et le snapshot serait refusé.
+    const snapOp = await relay.asPeer({
       id: "snap:2",
-      shop_id: id.shopId,
-      device_id: "un-proprietaire",
-      seq: 1,
-      type: "catalogue.snapshot",
-      entity_id: "catalog",
+      device_id: "proprietaire",
       payload: {
         products: [
           {
@@ -340,10 +399,9 @@ describe("transport P2P via relais", () => {
           },
         ],
       },
-      created_at: Date.now(),
       status: "synced",
-    };
-    await applyRemoteOps([snapOp]);
+    });
+    await applyRemoteOpsSigned([await announceOpFor("proprietaire"), snapOp]);
 
     // Le produit connu GARDE son stock (4) : la vente du pair n'est pas « ressuscitée ».
     expect((await listProducts()).find((p) => p.id === product.id)?.stock).toBe(4);
@@ -358,21 +416,16 @@ describe("transport P2P via relais", () => {
     const id = getIdentity();
     const relay = makeRelay();
 
-    const snapOp: SyncOp = {
+    const snapOp = await relay.asPeer({
       id: "snap:shop",
-      shop_id: id.shopId,
-      device_id: "un-proprietaire",
-      seq: 1,
-      type: "catalogue.snapshot",
-      entity_id: "catalog",
+      device_id: "proprietaire",
       payload: {
         products: [],
         shop: { storeName: "Boutique Du Marché" },
       },
-      created_at: Date.now(),
       status: "synced",
-    };
-    await relay.client.push(id.shopId, [snapOp]);
+    });
+    await relay.client.push(id.shopId, [await announceOpFor("proprietaire"), snapOp]);
 
     await exchangeOps(relay.client);
     // L'écran local est encore sur le fallback « Ma boutique » → il adopte le nom du relais.
@@ -430,6 +483,8 @@ describe("transport P2P via relais", () => {
     await setIdentityRole("employee");
     const employeeId = getIdentity().deviceId;
     const relay = makeRelay();
+    // L'employé s'annonce : sans cette clé chez le propriétaire, ses ops sont refusées.
+    await announceDevice();
 
     const product = await addProduct({
       name: "Pain",
@@ -454,7 +509,9 @@ describe("transport P2P via relais", () => {
     // Son catalogue a changé de l'extérieur → il le republie au STOCK qui lui fait foi.
     const remote = await relay.client.pull(getIdentity().shopId, ownerId);
     const snapshots = remote.filter((o) => o.type === "catalogue.snapshot");
-    expect(snapshots.length).toBe(1); // la publication continue du propriétaire
+    // 2 : l'employé n'en publie pas, mais le propriétaire en a poussé un à sa rencontre
+    // (nouvel écran) puis un autre après avoir appliqué la vente.
+    expect(snapshots.length).toBe(2);
     const payload = snapshots[0].payload as { products: Array<{ id: string; stock: number }> };
     expect(payload.products.find((p) => p.id === product.id)?.stock).toBe(4); // 6 − 2 vendus
   });

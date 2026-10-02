@@ -10,9 +10,17 @@
 // verrou, échéance et messages ne bougent que sur SUCCÈS d'un handshake. Seule
 // exception : le verrou déjà en place est rechargé au démarrage depuis IndexedDB, pour
 // qu'une caisse suspendue le reste même sans réseau.
-import { getShopProfile, getSetting, setSetting, setShopExpiry, setShopKeyword } from "@/lib/db";
+import {
+  getShopProfile,
+  getSetting,
+  setSetting,
+  setShopAccountId,
+  setShopExpiry,
+  setShopKeyword,
+} from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
+import { refreshShopId } from "@/lib/syncengine/identity";
 import { toast } from "sonner";
 
 /** Version de l'application remontée au serveur (colonne `app_version_used`). */
@@ -412,7 +420,7 @@ export async function handshake(): Promise<HandshakeResult> {
       grace_ends_at?: number;
       commands: AdminCommand[];
       shop?: { subscription_end_date?: number };
-      account?: { max_devices?: number; device_count?: number };
+      account?: { max_devices?: number; device_count?: number; id?: string };
       subscription_request?: SubscriptionRequestStatus;
       /** Mot clé de récupération — présent UNIQUEMENT à la création du compte. */
       keyword?: string;
@@ -429,6 +437,15 @@ export async function handshake(): Promise<HandshakeResult> {
         maxDevices: data.account.max_devices,
         deviceCount: data.account.device_count,
       } satisfies AccountQuota);
+    }
+
+    // Identifiant de compte opaque, persisté sur la fiche. C'est lui qui devient la
+    // source du `shopId` : non dérivable de l'extérieur, donc non énumérable, là où la
+    // dérivation téléphone+nom se devinait. Un serveur ancien ne l'envoie pas — la caisse
+    // garde alors sa dérivation locale, sans casser.
+    if (typeof data.account?.id === "string" && data.account.id.trim()) {
+      await setShopAccountId(data.account.id.trim());
+      await refreshShopId();
     }
 
     // Statut de la demande d'abonnement : même tolérance qu'au-dessus (serveur ancien).

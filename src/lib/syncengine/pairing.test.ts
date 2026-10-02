@@ -10,9 +10,11 @@
 //  - la PROPAGATION d'une approbation (pending → paired) à un troisième écran.
 import { describe, it, expect } from "vitest";
 import { ensureShopProfile, getDB, resetDBForTests, setShopAccount, setShopKeyword } from "../db";
-import { applyRemoteOps } from "./apply";
+import { applyRemoteOpsSigned, captureSigned } from "./__tests__/setup";
+import { signAll } from "./ops";
 import {
   ensureIdentity,
+  getDeviceKeys,
   getIdentity,
   resetDeviceIdentity,
   resetIdentityForTests,
@@ -70,30 +72,38 @@ function makeRelay() {
   };
 }
 
-/** Une op `device.announce` SYNTHÉTIQUE, telle qu'un pair étranger l'aurait émise. */
-function announceOp(
+/** Une op `device.announce` SYNTHÉTIQUE, telle qu'un pair étranger l'aurait émise.
+ *
+ *  Signée par la clé de l'appareil COURANT : le pair est simulé dans le même process,
+ * et la seule clé privée disponible est celle-ci. La signature est donc valide — ce qui
+ * est le point : ces tests portent sur la DÉCISION d'appairage (code juste, faux,
+ *  expiré, sans code), pas sur la cryptographie (c'est `signature.test.ts`). */
+async function announceOp(
   shopId: string,
   deviceId: string,
   seq: number,
   over: Partial<DeviceAnnouncePayload> = {},
-): SyncOp {
-  return {
-    id: `pair:${seq}`,
-    shop_id: shopId,
-    device_id: deviceId,
-    seq,
-    type: "device.announce",
-    entity_id: deviceId,
-    payload: {
+): Promise<SyncOp> {
+  const [signed] = await signAll([
+    {
+      id: `pair:${seq}`,
+      shop_id: shopId,
       device_id: deviceId,
-      public_key: `key-${seq}`,
-      employee_name: "Écran",
-      role: "employee",
-      ...over,
-    },
-    created_at: 1000 + seq,
-    status: "synced",
-  };
+      seq,
+      type: "device.announce",
+      entity_id: deviceId,
+      payload: {
+        device_id: deviceId,
+        public_key: getDeviceKeys().publicKey,
+        employee_name: "Écran",
+        role: "employee",
+        ...over,
+      },
+      created_at: 1000 + seq,
+      status: "synced",
+    } as SyncOp,
+  ]);
+  return signed;
 }
 
 const PAIR_SHOP = (deviceId: string) =>
@@ -115,9 +125,9 @@ describe("code de paire", () => {
   it("un appareil sans compte n'a rien à annoncer", async () => {
     await freshDevice();
     await ensureIdentity();
-    const before = (await listPendingOps(getIdentity().shopId)).length;
+    const before = (await captureSigned()).length;
     await announceDevice("ABCDEF");
-    expect((await listPendingOps(getIdentity().shopId)).length).toBe(before);
+    expect((await captureSigned()).length).toBe(before);
   });
 
   it("une saisie valide se présente au groupe une seule fois", async () => {
@@ -143,14 +153,15 @@ describe("décision d'application du code (côté principal)", () => {
     const code = await generatePairingCode();
     const shopId = getIdentity().shopId;
 
-    await applyRemoteOps([
-      announceOp(shopId, "device-juste", 1, { employee_name: "Vendeuse", pair_code: code }),
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-juste", 1, { employee_name: "Vendeuse", pair_code: code }),
     ]);
     const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-juste");
     expect(peer?.status).toBe("paired");
     expect(peer?.role).toBe("employee");
     expect(peer?.device_name).toBe("Vendeuse");
-    expect(peer?.public_key).toBe("key-1");
+    // La clé est PINSÉE : c'est elle qui permettra de vérifier les ops suivantes du pair.
+    expect(peer?.public_key).toBe(getDeviceKeys().publicKey);
     expect(peer?.paired_at).toBeDefined();
   });
 
@@ -161,8 +172,11 @@ describe("décision d'application du code (côté principal)", () => {
     await generatePairingCode(); // le code du principal est « autre » que celui du pair
     const shopId = getIdentity().shopId;
 
-    await applyRemoteOps([
-      announceOp(shopId, "device-intrus", 1, { employee_name: "Intrus", pair_code: "ZZZZZZ" }),
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-intrus", 1, {
+        employee_name: "Intrus",
+        pair_code: "ZZZZZZ",
+      }),
     ]);
     let peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-intrus");
     expect(peer?.status).toBe("pending");
@@ -183,7 +197,7 @@ describe("décision d'application du code (côté principal)", () => {
     await getDB().settings.put({ key: PAIRING_KEYS.codeExpiresAt, value: Date.now() - 1000 });
     const shopId = getIdentity().shopId;
 
-    await applyRemoteOps([announceOp(shopId, "device-tardif", 1, { pair_code: code })]);
+    await applyRemoteOpsSigned([await announceOp(shopId, "device-tardif", 1, { pair_code: code })]);
     const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-tardif");
     expect(peer?.status).toBe("pending");
   });
@@ -194,9 +208,9 @@ describe("décision d'application du code (côté principal)", () => {
     await ensureIdentity();
     const shopId = getIdentity().shopId;
 
-    await applyRemoteOps([
-      announceOp(shopId, "device-boss", 1, { role: "owner", employee_name: "Chef" }),
-      announceOp(shopId, "device-inconnu", 2, { pair_code: undefined }),
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-boss", 1, { role: "owner", employee_name: "Chef" }),
+      await announceOp(shopId, "device-inconnu", 2, { pair_code: undefined }),
     ]);
     const peers = await listPairedDevices(shopId);
     expect(peers.find((p) => p.id === "device-boss")?.status).toBe("paired");
@@ -210,14 +224,14 @@ describe("décision d'application du code (côté principal)", () => {
     const shopId = getIdentity().shopId;
 
     // L'écran s'est présenté avec un mauvais code (pending), le principal l'a approuvé employé.
-    await applyRemoteOps([
-      announceOp(shopId, "device-e8", 1, { employee_name: "Vendeuse", pair_code: "ZZZZZZ" }),
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-e8", 1, { employee_name: "Vendeuse", pair_code: "ZZZZZZ" }),
     ]);
     await approveDevice("device-e8", "employee");
 
     // Il RE-annonce en se prétendant propriétaire, sans aucun code.
-    await applyRemoteOps([
-      announceOp(shopId, "device-e8", 2, { role: "owner", pair_code: undefined }),
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-e8", 2, { role: "owner", pair_code: undefined }),
     ]);
     const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-e8");
     expect(peer?.status).toBe("paired"); // déjà pairé : le statut ne bouge pas
@@ -230,11 +244,11 @@ describe("décision d'application du code (côté principal)", () => {
     await ensureIdentity();
     const shopId = getIdentity().shopId;
 
-    await applyRemoteOps([
-      announceOp(shopId, "device-p", 1, { employee_name: "Intrus", pair_code: "ZZZZZZ" }),
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-p", 1, { employee_name: "Intrus", pair_code: "ZZZZZZ" }),
     ]);
-    await applyRemoteOps([
-      announceOp(shopId, "device-p", 2, { role: "owner", pair_code: undefined }),
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-p", 2, { role: "owner", pair_code: undefined }),
     ]);
     const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-p");
     expect(peer?.status).toBe("pending");
@@ -276,18 +290,26 @@ describe("rencontre par relais", () => {
     const shopId = getIdentity().shopId;
     const relay = makeRelay();
 
-    // Le principal applique une annonce restée PENDING (mauvais code), puis approuve.
-    await applyRemoteOps([
-      announceOp(shopId, "device-e9", 1, { employee_name: "Nouveau", pair_code: "ZZZZZZ" }),
+    // Le principal s'annonce d'abord (comme à l'onboarding) : c'est cette op qui donne
+    // sa clé au troisième écran, sans quoi l'approbation qu'il pousse ensuite ne serait
+    // vérifiable par personne.
+    await announceDevice();
+    await exchangeOps(relay.client);
+
+    // Puis il applique une annonce restée PENDING (mauvais code) et l'approuve à la main.
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-e9", 1, { employee_name: "Nouveau", pair_code: "ZZZZZZ" }),
     ]);
     await approveDevice("device-e9", "employee");
     await exchangeOps(relay.client); // pousse l'approbation vers le relais
 
-    // Troisième écran (employé) tire : il voit le pair PENDING puis la décision le PAIR.
+    // Troisième écran : il TIRE sans s'annoncer. Un appareil `pending` ne synchronise
+    // pas (garde d'`exchangeOps`) — s'annoncer ici le laisserait bloqué, ce qui est le
+    // comportement voulu : tant qu'il n'a ni le code ni une approbation, il ne reçoit
+    // rien. Ce qu'il vérifie ici, c'est la propagation de l'approbation elle-même.
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
-    await setIdentityRole("employee");
     const state = await exchangeOps(relay.client);
     expect(state.applied).toBeGreaterThan(0);
     const peers = await listPairedDevices(getIdentity().shopId);

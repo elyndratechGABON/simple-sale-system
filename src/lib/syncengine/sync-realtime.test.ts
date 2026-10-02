@@ -21,6 +21,7 @@ import { canAccessRoute } from "../access";
 import { ensureIdentity, getIdentity, resetIdentityForTests, setIdentityRole } from "./identity";
 import { listPairedDevices } from "./peers";
 import { exchangeOps, relayTransport } from "./transport";
+import { announceDevice, approveDevice, generatePairingCode, getPairingToken } from "./pairing";
 import type { SyncOp } from "./types";
 
 const ACCOUNT = { name: "Boutique Test", phone: "+24100000000", password: "secret" };
@@ -28,6 +29,44 @@ const ACCOUNT = { name: "Boutique Test", phone: "+24100000000", password: "secre
 async function freshDevice(): Promise<void> {
   await resetDBForTests();
   resetIdentityForTests();
+}
+
+/**
+ * Un appareil du groupe, appairé pour de vrai.
+ *
+ * Le propriétaire se présente sans code (premier contact : le groupe est vide, sa clé
+ * s'installe d'office). L'employé, lui, présente LE CODE : c'est la seule preuve qu'un
+ * appareil ne peut pas fabriquer, et donc la seule façon d'entrer comme autorité de
+ * signature dans un groupe déjà peuplé. Un employé qui s'annoncerait sans code resterait
+ * `pending` — comportement correct, mais ses ops seraient alors refusées partout.
+ */
+async function joinAs(role: "owner" | "employee", pairCode?: string): Promise<void> {
+  await setShopAccount(ACCOUNT);
+  await ensureIdentity();
+  if (role === "employee") await setIdentityRole("employee");
+  await announceDevice(pairCode);
+  if (role === "owner") {
+    // Le propriétaire affiche un code que l'employé saisira.
+    await generatePairingCode();
+  }
+}
+
+/**
+ * Le propriétaire balaie le relais et APPROUVE à la main tout pair resté `pending`.
+ *
+ * C'est la seconde porte d'entrée d'une clé (cf. `applyOp`, `device.approve`) : un
+ * employé qui s'est annoncé SANS code — donc non prouvé — entre quand même au registre
+ * dès que le propriétaire tranche, et son announced `public_key` est alors épinglée.
+ * Les autres écrans l'apprennent par l'op d'approbation, signée du principal.
+ */
+async function ownerApprovesPending(relay: ReturnType<typeof makeRelay>): Promise<void> {
+  await joinAs("owner");
+  await exchangeOps(relay.client);
+  const pending = (await listPairedDevices(getIdentity().shopId)).filter(
+    (d) => d.status === "pending" && d.public_key,
+  );
+  for (const peer of pending) await approveDevice(peer.id, "employee");
+  await exchangeOps(relay.client);
 }
 
 /** Relais de test : un Map `shop_id → ops[]`, servi par un mock `fetch`. */
@@ -67,6 +106,8 @@ describe("sync temps réel : produit créé par le propriétaire", () => {
     await ensureIdentity();
     const idOwner = getIdentity();
     const relay = makeRelay();
+    await joinAs("owner");
+    const pairCode = await getPairingToken();
 
     const product = await addProduct({
       name: "Coca 1L",
@@ -77,11 +118,9 @@ describe("sync temps réel : produit créé par le propriétaire", () => {
     });
     await exchangeOps(relay.client);
 
-    // Appareil B : employé, même compte
+    // Appareil B : employé, même compte, appairé avec le CODE du propriétaire.
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
-    await setIdentityRole("employee");
+    await joinAs("employee", pairCode ?? undefined);
     expect(getIdentity().shopId).toBe(idOwner.shopId);
 
     const state = await exchangeOps(relay.client);
@@ -100,10 +139,9 @@ describe("sync temps réel : vente créée par l'employé", () => {
   it("l'employé encaisse → le propriétaire voit la vente et le stock baisse", async () => {
     // Propriétaire crée le produit et sync
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
-    const idOwner = getIdentity();
     const relay = makeRelay();
+    await joinAs("owner");
+    const pairCode = await getPairingToken();
 
     const product = await addProduct({
       name: "Café",
@@ -114,11 +152,9 @@ describe("sync temps réel : vente créée par l'employé", () => {
     });
     await exchangeOps(relay.client);
 
-    // Employé reçoit le produit
+    // Employé reçoit le produit (appairé avec le code du propriétaire).
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
-    await setIdentityRole("employee");
+    await joinAs("employee", pairCode ?? undefined);
     await exchangeOps(relay.client);
 
     const localProducts = await listProducts();
@@ -170,9 +206,9 @@ describe("sync temps réel : ajustement de stock par l'employé", () => {
   it("un employé ajuste le stock → le propriétaire et l'employé voient le nouveau stock", async () => {
     // Propriétaire crée le produit
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
     const relay = makeRelay();
+    await joinAs("owner");
+    const pairCode = await getPairingToken();
 
     const product = await addProduct({
       name: "Pain",
@@ -185,9 +221,7 @@ describe("sync temps réel : ajustement de stock par l'employé", () => {
 
     // Employé reçoit le produit, ajuste le stock
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
-    await setIdentityRole("employee");
+    await joinAs("employee", pairCode ?? undefined);
     await exchangeOps(relay.client);
 
     const before = await listProducts();
@@ -216,9 +250,9 @@ describe("sync temps réel : convergence après hors-ligne", () => {
   it("deux appareils modifient le même produit hors-ligne → les deux ventes convergent", async () => {
     // Setup : propriétaire crée le produit et le pousse
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
     const relay = makeRelay();
+    await joinAs("owner");
+    const pairCode = await getPairingToken();
 
     const product = await addProduct({
       name: "Eau 1L",
@@ -229,10 +263,9 @@ describe("sync temps réel : convergence après hors-ligne", () => {
     });
     await exchangeOps(relay.client);
 
-    // Appareil A (hors-ligne) : reçoit le produit, vend 10, pousse
+    // Appareil A : reçoit le produit, vend 10, pousse.
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
+    await joinAs("employee", pairCode ?? undefined);
     await exchangeOps(relay.client);
     const pA = (await listProducts()).find((p) => p.id === product.id);
     expect(pA?.stock).toBe(100);
@@ -255,10 +288,11 @@ describe("sync temps réel : convergence après hors-ligne", () => {
     expect(afterSaleA.find((p) => p.id === product.id)?.stock).toBe(90);
     await exchangeOps(relay.client);
 
-    // Appareil B (hors-ligne) : reçoit le produit + la vente A, vend 5 de plus, pousse
+    // Appareil B (hors-ligne) : reçoit le produit + la vente A, vend 5 de plus, pousse.
+    // B s'appaire avec le code du propriétaire : sans quoi A ne connaîtrait pas sa clé et
+    // refuserait la vente de B — ce qui est exactement le comportement voulu.
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
+    await joinAs("employee", pairCode ?? undefined);
     await exchangeOps(relay.client);
     const pB = (await listProducts()).find((p) => p.id === product.id);
     expect(pB?.stock).toBe(90); // A a déjà vendu 10
@@ -281,10 +315,10 @@ describe("sync temps réel : convergence après hors-ligne", () => {
     expect(afterSaleB.find((p) => p.id === product.id)?.stock).toBe(85);
     await exchangeOps(relay.client);
 
-    // Troisième appareil converge : les deux ventes sont visibles
+    // Troisième appareil converge : les deux ventes sont visibles. Il s'appaire comme
+    // les autres, sinon il n'a la clé de personne et ne peut rien appliquer.
     await freshDevice();
-    await setShopAccount(ACCOUNT);
-    await ensureIdentity();
+    await joinAs("employee", pairCode ?? undefined);
     const final = await exchangeOps(relay.client);
     expect(final.applied).toBeGreaterThanOrEqual(2);
 
@@ -325,6 +359,10 @@ describe("sync temps réel : garde d'accès par rôle", () => {
     await ensureIdentity();
     const idOwner = getIdentity();
     const relay = makeRelay();
+
+    // L'appareil se présente : cette op installe sa clé dans le registre des pairs.
+    // Sans elle, aucun pair ne peut vérifier ses ops.
+    await announceDevice();
 
     // Le propriétaire crée un produit (génère une op qui peuple paired_devices via applyRemoteOps)
     await addProduct({

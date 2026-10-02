@@ -18,7 +18,7 @@ import {
   resetDBForTests,
   setShopAccount,
 } from "../db";
-import { applyRemoteOps } from "./apply";
+import { applyRemoteOpsSigned, captureSigned } from "./__tests__/setup";
 import {
   ensureIdentity,
   getDeviceKeys,
@@ -45,15 +45,17 @@ async function freshDevice(): Promise<void> {
 }
 
 describe("identité", () => {
-  it("crée une identité stable par appareil (deviceId + clés RSA)", async () => {
+  it("crée une identité stable par appareil (deviceId + clé de signature)", async () => {
     await ensureIdentity();
     const a = getIdentity();
     expect(a.deviceId.length).toBeGreaterThan(0);
     // Pas de compte en base → groupe isolé, rien à partager.
     expect(a.shopId.startsWith("d_")).toBe(true);
 
+    // ECDSA P-256 : la paire signe les opérations, c'est elle la preuve d'origine.
     const keys = getDeviceKeys();
-    expect(JSON.parse(keys.publicKey).kty).toBe("RSA");
+    expect(JSON.parse(keys.publicKey).kty).toBe("EC");
+    expect(JSON.parse(keys.publicKey).crv).toBe("P-256");
     expect(keys.privateKey.length).toBeGreaterThan(0);
 
     // Rechargement : l'identité persiste et ne change pas.
@@ -134,7 +136,7 @@ describe("convergence entre deux appareils du même compte", () => {
       category: "Boisson",
     });
     const sale = await createSale({ lines: [LINE(product.id)], cash_given: 1200 });
-    const sourceOps = await listPendingOps(idA.shopId);
+    const sourceOps = await captureSigned();
 
     // ---- Appareil B : base neuve, même compte ----
     await freshDevice();
@@ -143,7 +145,7 @@ describe("convergence entre deux appareils du même compte", () => {
     expect(idB.shopId).toBe(idA.shopId);
     expect(idB.deviceId).not.toBe(idA.deviceId);
 
-    const { applied, skipped } = await applyRemoteOps(sourceOps);
+    const { applied, skipped } = await applyRemoteOpsSigned(sourceOps);
     expect(applied).toBeGreaterThan(0);
     expect(skipped).toBe(0);
 
@@ -161,7 +163,7 @@ describe("convergence entre deux appareils du même compte", () => {
     expect(items[0].quantity).toBe(2);
 
     // Idempotence : rejouer la même liste ne change RIEN.
-    const replay = await applyRemoteOps(sourceOps);
+    const replay = await applyRemoteOpsSigned(sourceOps);
     expect(replay.applied).toBe(0);
     expect(replay.skipped).toBe(sourceOps.length);
     expect((await listProducts())[0].stock).toBe(8);
@@ -180,14 +182,14 @@ describe("convergence entre deux appareils du même compte", () => {
     });
     const sale = await createSale({ lines: [LINE(product.id)], cash_given: 1200 });
     await cancelSale(sale.id); // chez A : 10 - 2 puis +2 → 10
-    const sourceOps = await listPendingOps(idA.shopId);
+    const sourceOps = await captureSigned();
     expect(sourceOps.some((o) => o.type === "sale.cancelled")).toBe(true);
 
     // ---- Appareil B : rejoue tout, l'annulation suit la création ----
     await freshDevice();
     await setShopAccount(ACCOUNT);
     const idB = await ensureIdentity();
-    await applyRemoteOps(sourceOps);
+    await applyRemoteOpsSigned(sourceOps);
 
     expect(idB.deviceId).not.toBe(idA.deviceId);
     expect(await listProducts()).toHaveLength(1);
@@ -207,7 +209,7 @@ describe("convergence entre deux appareils du même compte", () => {
       category: "Boisson",
     });
     await addStock(product.id, 5, { unit_cost: 290 });
-    const sourceOps = await listPendingOps(idA.shopId);
+    const sourceOps = await captureSigned();
     expect(
       sourceOps.some(
         (o) => o.type === "stock.adjusted" && (o.payload as { delta: number }).delta === 5,
@@ -217,7 +219,7 @@ describe("convergence entre deux appareils du même compte", () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
-    await applyRemoteOps(sourceOps);
+    await applyRemoteOpsSigned(sourceOps);
 
     const p = (await listProducts())[0];
     expect(p.stock).toBe(15); // 10 + delta 5
@@ -232,13 +234,13 @@ describe("convergence entre deux appareils du même compte", () => {
       phone: "066123456",
       notes: "Allergique",
     });
-    const sourceOps = await listPendingOps(idA.shopId);
+    const sourceOps = await captureSigned();
 
     await freshDevice();
     await setShopAccount(ACCOUNT);
     const idB = await ensureIdentity();
     expect(idB.deviceId).not.toBe(idA.deviceId);
-    await applyRemoteOps(sourceOps);
+    await applyRemoteOpsSigned(sourceOps);
 
     expect(await listClients()).toHaveLength(1);
     expect((await listClients())[0].id).toBe(client.id);

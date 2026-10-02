@@ -162,7 +162,15 @@ export async function approveDevice(orgDeviceId: string, role: DeviceRole): Prom
     await emitOp(db, identity, {
       type: "device.approve",
       entity_id: orgDeviceId,
-      payload: { org_device_id: orgDeviceId, role },
+      // La clé de l'appareil approuvé voyage dans l'op : c'est l'approbation, signée
+      // par le principal, qui la PINSE chez les autres écrans. Une annonce `pending`
+      // ne lel's fait pas (cf. `applyOp`), sans quoi n'importe quel `device_id`
+      // inventé deviendrait une autorité de signature.
+      payload: {
+        org_device_id: orgDeviceId,
+        role,
+        ...(existing.public_key ? { public_key: existing.public_key } : {}),
+      },
     });
   });
 }

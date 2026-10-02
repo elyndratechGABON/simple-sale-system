@@ -15,6 +15,7 @@
 import { getDB, isClosed } from "../db";
 import type { PosDatabase } from "../db";
 import { getPreferences, savePreferences } from "../settings";
+import { verifyOpSignature } from "./identity";
 import type {
   CatalogueSnapshotPayload,
   ClientCreatedPayload,
@@ -36,6 +37,21 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
   if (ops.length === 0) return { applied: 0, skipped: 0 };
   const sorted = [...ops].sort(compareOps);
   const db = getDB();
+
+  // TOUTE LA CRYPTOGRAPHIE AVANT LA TRANSACTION. La vérification est une promesse
+  // WebCrypto : l'await qui la suit sortirait de la zone IndexedDB-native de Dexie et la
+  // transaction se committerait sous les pieds de l'appelant (`PrematureCommitError`).
+  // On résout donc les clés et les signatures ICI, hors transaction ; celle-ci ne
+  // manipule plus que du JSON déjà indexé.
+  //
+  // Pourquoi une preuve est nécessaire : le relais est aveugle et `shop_id` vient du
+  // client. Sans signature, quiconque peut écrire au relais (jeton lu dans le bundle,
+  // `shop_id` énumérable) injecte des ventes, des prix, des annulations.
+  const keys = await resolveTrustedKeys(db, sorted);
+  const checks = await Promise.all(sorted.map((op) => verifyAgainst(op, keys.get(op.device_id))));
+  // L'ordre global est RÉTABLI : `trusted` suit `sorted`, pas l'ordre des vérifications.
+  const trusted = sorted.filter((_, i) => checks[i]);
+
   return db.transaction(
     "rw",
     [
@@ -52,8 +68,8 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
       const seen = new Set<string>();
       const now = Date.now();
       let applied = 0;
-      let skipped = 0;
-      for (const op of sorted) {
+      let skipped = sorted.length - trusted.length;
+      for (const op of trusted) {
         if (seen.has(op.id) || (await db.processed_ops.get(op.id))) {
           skipped++;
           continue;
@@ -93,6 +109,77 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
       return { applied, skipped };
     },
   );
+}
+
+/**
+ * Clés publiques autorisées à signer, résolues AVANT toute vérification.
+ *
+ * Deux sources, et la seconde est ce qui rend la chaîne non circulaire :
+ *
+ *  1. Les fiches pairées déjà connues — la clé y a été posée par une annonce acceptée.
+ *  2. Les annonces du lot EN COURS, mais seulement si elles sont PROUVÉES : le code de
+ *     paire correspond, ou l'appareil est déjà au registre, ou le groupe est encore vide
+ *     (premier contact : il n'y a rien à protéger, c'est le cas du premier écran d'un
+ *     commerce — et c'est pour cela que le `seq` de l'annonce, forcément postérieur aux
+ *     ventes qu'elle accompagne, peut encore servir).
+ *
+ * Le `seq` de l'annonce la plaçant APRÈS les ventes du même émetteur au tri global, la
+ * clé doit être connue AVANT que ces ventes soient vérifiées — d'où la résolution
+ * préalable, et non une clé qui n'apparaîtrait qu'en cours de route.
+ *
+ * Conséquence, et c'est le but : un attaquant qui écrit librement au relais ne peut pas
+ * s'attribuer une identité. Il peut annoncer un `device_id` inventé, mais dans un groupe
+ * déjà peuplé et sans le code de paire, son annonce n'entre pas dans cette table, sa clé
+ * n'est donc reference nulle part, et toutes les ops qu'il signerait ensuite sont
+ * refusées. Il peut annoncer sous le `device_id` d'un vrai appareil, mais il ne détient
+ * pas sa clé privée.
+ */
+async function resolveTrustedKeys(db: PosDatabase, ops: SyncOp[]): Promise<Map<string, string>> {
+  const keys = new Map<string, string>();
+  for (const op of ops) {
+    if (op.type !== "device.announce") continue;
+    const pl = op.payload as DeviceAnnouncePayload;
+    if (!pl?.public_key) continue;
+    const existing = await db.paired_devices.get(pl.device_id ?? op.device_id);
+    const proved = await isAnnounceProven(db, pl, op, existing);
+    if (proved) keys.set(pl.device_id ?? op.device_id, pl.public_key);
+  }
+  for (const peer of await db.paired_devices.toArray()) {
+    if (peer.public_key && !keys.has(peer.id)) keys.set(peer.id, peer.public_key);
+  }
+  return keys;
+}
+
+/** L'annonce apporte-t-elle une preuve qu'on ne peut pas fabriquer ? */
+async function isAnnounceProven(
+  db: PosDatabase,
+  pl: DeviceAnnouncePayload,
+  op: SyncOp,
+  existing: PairedDevice | undefined,
+): Promise<boolean> {
+  if (existing?.status === "paired") return true; // déjà au registre : rien à prouver
+  const [codeRow, expRow] = await Promise.all([
+    db.settings.get(PAIRING_KEYS.code),
+    db.settings.get(PAIRING_KEYS.codeExpiresAt),
+  ]);
+  if (pl.pair_code && codeRow?.value === pl.pair_code && Number(expRow?.value ?? 0) > Date.now()) {
+    return true; // le secret que le propriétaire affiche, jamais envoyé
+  }
+  // Groupe vide : premier écran du commerce. Rien à protéger — c'est la confiance
+  // initiale, celle qui existait avant les signatures.
+  return (await db.paired_devices.where("shop_id").equals(op.shop_id).count()) === 0;
+}
+
+/**
+ * L'op est-elle authentique ? Une op sans signature est TOUJOURS refusée : tolérer
+ * l'absence laisserait exactement la faille qu'on ferme (l'attaquant omet le champ).
+ * C'est le coût du déploiement — une caisse pas encore mise à jour est ignorée au lieu
+ * d'appliquer ses ops, ses ventes convergeront au rollout suivant.
+ */
+async function verifyAgainst(op: SyncOp, publicKey: string | undefined): Promise<boolean> {
+  if (!op.sig) return false;
+  if (!publicKey) return false;
+  return verifyOpSignature(op, publicKey);
 }
 
 function compareOps(a: SyncOp, b: SyncOp): number {
@@ -261,16 +348,34 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       // Le rôle d'une annonce n'est reconnu qu'au premier contact (aucune fiche) ou avec
       // un code de paire juste : une fois l'appareil au registre — même `pending` —, seul
       // le principal peut le changer (`device.approve`). Un employé pairé qui re-annoncerait
-      // `role: "owner"` ne se promouvoit donc pas : même règle que l'assistant de jonction,
+      // `role: "owner"` ne se promeut donc pas : même règle que l'assistant de jonction,
       // qui n'a jamais créé de second propriétaire.
       const firstSighting = !existing.role && !existing.status;
       const role = pl.role && (codeOk || firstSighting) ? pl.role : existing.role;
       const autoPaired = codeOk || wasPaired || (pl.role === "owner" && firstSighting);
+
+      // PREMIER CONTACT. Un groupe sans aucun appareil connu n'a rien à protéger : la
+      // confiance initiale y est implicite (c'est ce que veut dire « la première caisse
+      // du commerce »). Dès qu'un appareil est au registre, en revanche, une annonce
+      // sans code ne doit plus pouvoir s'installer comme autorité — c'est là que
+      // l'attaquant frappe.
+      const groupEmpty =
+        (await db.paired_devices.where("shop_id").equals(op.shop_id).count()) === 0;
+
+      // La clé publique n'est PINSÉE que sur une annonce PROUVÉE : le code de paire
+      // correct, un appareil déjà au registre, ou le tout premier appareil d'un groupe
+      // encore vide. Ni le `pending` ni l'auto-pairage de rôle ne suffisent — ce sont des
+      // déclarations de l'op lui-même, alors que la signature d'une annonce d'appareil
+      // inconnu ne peut pas encore être vérifiée (cf. `isTrustedOp`). Épingler sur cette
+      // base laisserait un attaquant s'annoncer `owner` dans un groupe DÉJÀ peuplé, faire
+      // pincer SA clé, puis faire vérifier par `verifyOpSignature` toutes les ops qu'il
+      // signerait ensuite.
+      const pinned = codeOk || wasPaired || groupEmpty;
       await db.paired_devices.put({
         ...existing,
         device_name: pl.employee_name || existing.device_name,
         role,
-        public_key: pl.public_key || existing.public_key,
+        ...(pinned && pl.public_key ? { public_key: pl.public_key } : {}),
         server_device_id: pl.server_device_id || existing.server_device_id,
         status: autoPaired ? "paired" : "pending",
         paired_at: autoPaired ? (existing.paired_at ?? now) : existing.paired_at,
@@ -291,6 +396,13 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       await db.paired_devices.put({
         ...existing,
         role: pl.role ?? existing.role,
+        // L'approbation est une décision du PRINCIPAL, dont la signature est vérifiée
+        // ci-dessus : elle peut donc pincer la clé de l'appareil qu'elle approuve. La
+        // clé vient de sa fiche (`pending`), pas de l'op — un attaquant ne peut pas
+        // faire approuver sa propre clé.
+        ...((pl.public_key ?? existing.public_key)
+          ? { public_key: pl.public_key ?? existing.public_key }
+          : {}),
         status: "paired",
         paired_at: existing.paired_at ?? now,
         updated_at: now,
