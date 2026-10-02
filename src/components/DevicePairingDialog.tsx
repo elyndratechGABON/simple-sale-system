@@ -37,7 +37,7 @@ import {
   setIdentityEmployeeName,
   setIdentityRole,
 } from "@/lib/syncengine/identity";
-import { listPairedDevices } from "@/lib/syncengine/peers";
+import { invalidateDeviceQueries, listPairedDevices } from "@/lib/syncengine/peers";
 import {
   announceDevice,
   approveDevice,
@@ -302,6 +302,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
         toast.info("Enregistrement serveur en attente.", { description: res.message });
       }
     }
+    // Le nombre d'écrans affiché ailleurs (carte « Appareils », quota) dépend de trois
+    // requêtes distinctes ; l'invalidateur central les rafraîchit toutes. Sans cela le
+    // compteur restait figé jusqu'au handshake suivant — indéfiniment hors ligne.
+    await invalidateDeviceQueries(qc);
   }
 
   return (

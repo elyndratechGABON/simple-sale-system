@@ -16,6 +16,7 @@ import { getDB, isClosed } from "../db";
 import type { PosDatabase } from "../db";
 import { getPreferences, savePreferences } from "../settings";
 import { verifyOpSignature } from "./identity";
+import { invalidateSyncQueries } from "@/lib/syncengine/queries";
 import type {
   CatalogueSnapshotPayload,
   ClientCreatedPayload,
@@ -52,7 +53,7 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
   // L'ordre global est RÉTABLI : `trusted` suit `sorted`, pas l'ordre des vérifications.
   const trusted = sorted.filter((_, i) => checks[i]);
 
-  return db.transaction(
+  const result = await db.transaction(
     "rw",
     [
       db.products,
@@ -109,6 +110,17 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
       return { applied, skipped };
     },
   );
+
+  // Une op distante MODIFIE les mêmes tables que les mutations locales : sans ce
+  // rafraîchissement, l'écran continuait d'afficher l'ancienne quantité jusqu'au
+  // remontage de page. C'est le symptôme « le stock ne se met pas à jour » sur un
+  // téléphone qui reçoit la vente d'un autre écran du même commerce.
+  //
+  // `applyRemoteOps` est donc responsible de l'invalidation de ce qu'elle a écrit —
+  // sinon chaque appelant doit s'en souvenir, et il y en a déjà un qui l'avait oublié
+  // (les invalidations locales de pos.tsx).
+  await invalidateSyncQueries();
+  return result;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { clearQueryClient, setQueryClient } from "@/lib/syncengine/queries";
 import {
   Outlet,
   Link,
@@ -165,6 +166,14 @@ function RootComponent() {
   useEffect(() => {
     void import("html5-qrcode");
   }, []);
+
+  // Le moteur de synchronisation écrit dans IndexedDB puis invalide les lectures
+  // concernées (cf. src/lib/syncengine/queries.ts). Il tourne dans un effet, donc il n'a
+  // pas accès au provider par le contexte : on lui passe le client ici, une fois.
+  useEffect(() => {
+    setQueryClient(queryClient);
+    return () => clearQueryClient();
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

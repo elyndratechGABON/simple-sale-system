@@ -620,6 +620,10 @@ function PosPage() {
   const payMut = useMutation({
     mutationFn: (saleId: string) => payTable(saleId, cash),
     onSuccess: (sale) => {
+      // `products` aussi : encaisser une table SORT le stock des plateaux, et l'écran
+      // Caisse comme l'accueil affichaient encore l'ancienne quantité. Les ventes au
+      // comptoir le faisaient déjà (l. 529/610) — l'encaissement de table avait été oublié.
+      qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["sale_items", sale.id] });
       toast.success(`Table ${sale.table} encaissée`, {
@@ -644,6 +648,9 @@ function PosPage() {
       cash: number;
     }) => payRound(saleId, orderedAt, cash),
     onSuccess: (sale) => {
+      // Même raison que `payMut` : l'encaissement d'une tournée déstoc, donc `products`
+      // doit être invalidé — sans quoi les autres écrans gardent l'ancienne quantité.
+      qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["sales"] });
       qc.invalidateQueries({ queryKey: ["sale_items", activeTable?.id] });
       notifyOwner(); // Trigger temps réel propriétaire + son
