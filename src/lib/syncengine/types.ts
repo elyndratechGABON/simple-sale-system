@@ -204,6 +204,20 @@ export const IDENTITY_KEYS = {
   privateKey: "syncengine_private_key_jwk",
 } as const;
 
+/**
+ * `shop_id` ADOPTÉ — celui que le relais a attribué au groupe lors d'un appairage
+ * (`share_tokens.shop_id`).
+ *
+ * Source d'AUTORITÉ, prioritaire sur toute dérivation locale (cf. `deriveShopId`).
+ * Sans lui, un employé rattaché par QR à un propriétaire porteur d'un `accountId`
+ * serveur (`s_41`) retombe sur `SHA-256(téléphone|nom)` et atterrit dans un AUTRE
+ * groupe : le vendeur encaisse, le patron ne voit rien, et rien ne le signale.
+ *
+ * Volontairement hors de `ShopProfile` : c'est une donnée d'identité d'appareil, au
+ * même titre que `deviceId`, et elle doit être purgée par `resetDeviceIdentity`.
+ */
+export const IDENTITY_ADOPTED_SHOP_ID = "syncengine_adopted_shop_id";
+
 /** Compteur de séquence des ops, PAR APPAREIL. Persévéré à part du journal (`settings`) :
  *  même si les ops acquittées sont purgées, le compteur ne repart jamais à zéro et aucun
  *  id `${device}:${seq}` n'est réutilisé. */

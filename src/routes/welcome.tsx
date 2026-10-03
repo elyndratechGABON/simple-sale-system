@@ -42,6 +42,7 @@ import {
   setIdentityEmployeeName,
   setIdentityRole,
   refreshShopId,
+  adoptShopIdFromRelay,
 } from "@/lib/syncengine/identity";
 
 export const Route = createFileRoute("/welcome")({
@@ -105,12 +106,18 @@ function WelcomePage() {
       let accountName = parsed.name || "";
       let accountPhone = parsed.phone || parsed.shop?.phone || "";
       let pairCode = parsed.pair_code;
+      // Le `shop_id` du GROUPE, tel que le relais l'a dans `share_tokens`. C'est le seul
+      // moyen de garantir la convergence : le recalculer depuis le téléphone ou le mot
+      // clé (cf. deriveShopId) produit un AUTRE groupe si le propriétaire a un accountId
+      // serveur — et les deux écrans ne se verraient plus, silencieusement.
+      let relayShopId: string | undefined;
       if (parsed.token) {
         const redeem = await redeemShareToken(parsed.token, identity.deviceId);
         if (redeem) {
           if (redeem.account_name) accountName = redeem.account_name;
           if (redeem.account_phone) accountPhone = redeem.account_phone;
           if (redeem.pair_code) pairCode = redeem.pair_code;
+          if (redeem.shop_id) relayShopId = redeem.shop_id;
         }
       }
       // 1. Applique la copie complète de la boutique du propriétaire.
@@ -125,8 +132,9 @@ function WelcomePage() {
         });
         qc.invalidateQueries({ queryKey: ["preferences"] });
       }
-      // 3. Pose le compte en mode "lien" — tél/nom du compte PROPRIÉTAIRE (même groupe P2P,
-      //    même `s_...` pour deriveShopId) : c'est ce qui fait converger stock et ventes.
+      // 3. Pose le compte en mode "lien" — tél/nom du compte PROPRIÉTAIRE. Nécessaire pour que
+      // le handshake atteigne le bon compte, mais INSUFFISANT pour la convergence : voir
+      // l'étape 3 bis.
       await setShopAccount({
         name: accountName,
         phone: accountPhone,
@@ -144,6 +152,19 @@ function WelcomePage() {
       });
       // 4. Force le rôle employé et le groupe P2P au scan.
       await setIdentityRole("employee");
+
+      // 3 bis. Le relais a fourni le `shop_id` du groupe (`share_tokens.shop_id`) :
+      // on l'ADOPTE au lieu de laisser `deriveShopId` le recalculer. Sans cela, un
+      // propriétaire porteur d'un `accountId` serveur (`s_41`) et son employé dérivé
+      // local (`s_<sha du téléphone>`) atterrissent dans deux boîtes aux lettres
+      // distinctes — le vendeur encaisse, le patron ne voit rien, sans message.
+      //
+      // Format attendu : `s_<accountId>` ou `s_<hash>` — `deriveShopId` le reconnaît et
+      // n'écrasera pas cet identifiant par le sien.
+      if (relayShopId && /^s_[A-Za-z0-9_-]{1,24}$/.test(relayShopId)) {
+        await adoptShopIdFromRelay(relayShopId);
+      }
+
       await refreshShopId();
       // 5. Se souvient du code du QR (ou du relais) pour valider la saisie de l'employé.
       setScannedPairCode(pairCode);
