@@ -190,6 +190,56 @@ export function computeDayDetail(sales: Sale[], items: SaleItem[]): DayDetail {
 
 export const dayKey = (ts: number) => startOfDay(ts).getTime();
 
+/** Une échéance sur un actif : un retour de location attendu, ou un rappel que
+ *  le propriétaire s'est fixé. Deux colonnes distinctes dans le formulaire, donc
+ *  deux événements distincts — les confondre afficherait « retour » pour une
+ *  simple note, et l'inverse ferait manquer une échéance. */
+export interface AssetReminder {
+  product: Product;
+  /** Jour local (`dayKey`), donc comparable aux clés de `DayBucket`. */
+  at: number;
+  kind: "retour" | "rappel";
+}
+
+/** Répartition des rappels d'actifs : par jour pour le calendrier, et en liste
+ *  pour le rapport.
+ *
+ *  `agenda` ne garde que ce qui est à traiter — un retard, ou une échéance dans
+ *  les `horizonDays` prochains jours. Au-delà, c'est de l'archive : l'échéance
+ *  reste marquée sur le calendrier, mais une liste qui récite tout le stock
+ *  deviendrait impossible à lire. Un retard n'est jamais filtré, quel que soit
+ *  l'horizon : c'est précisément ce qu'il faut voir.
+ *
+ *  Pur, comme le reste du module : le jour courant est paramétré pour que le
+ *  calcul soit vérifiable sans Depends-on de l'horloge. */
+export function computeAssetAgenda(
+  products: Product[],
+  today: number,
+  horizonDays = 30,
+): { byDay: Map<number, AssetReminder[]>; agenda: AssetReminder[] } {
+  const byDay = new Map<number, AssetReminder[]>();
+  const push = (ts: number | undefined, product: Product, kind: AssetReminder["kind"]) => {
+    if (!ts) return;
+    const at = dayKey(ts);
+    const rows = byDay.get(at) ?? [];
+    rows.push({ product, at, kind });
+    byDay.set(at, rows);
+  };
+  for (const product of products) {
+    if (!product.is_asset) continue;
+    push(product.expected_return_date, product, "retour");
+    push(product.reminderDate, product, "rappel");
+  }
+
+  const horizon = dayKey(today) + horizonDays * 86400000;
+  const agenda = [...byDay.values()]
+    .flat()
+    .filter((r) => r.at <= horizon)
+    .sort((a, b) => a.at - b.at || a.product.name.localeCompare(b.product.name));
+
+  return { byDay, agenda };
+}
+
 /** Bornes [from, to[ des `days` derniers jours, aujourd'hui inclus. */
 export function lastDaysRange(days: number): { from: number; to: number } {
   const today = startOfDay(new Date());

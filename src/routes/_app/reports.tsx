@@ -3,18 +3,34 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
+  BellRing,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  PackageCheck,
   Scissors,
   SlidersHorizontal,
   Weight,
 } from "lucide-react";
-import { addDays, addMonths, addYears, endOfYear, startOfDay, startOfMonth, startOfYear } from "date-fns";
-import type { PaymentMethod } from "@/lib/db";
+import {
+  addDays,
+  addMonths,
+  addYears,
+  endOfYear,
+  startOfDay,
+  startOfMonth,
+  startOfYear,
+} from "date-fns";
+import type { PaymentMethod, Product } from "@/lib/db";
 import { listProducts } from "@/lib/db";
-import type { DayBucket } from "@/lib/analytics";
-import { computeDayDetail, computePeriodStats, computeWeightSales } from "@/lib/analytics";
+import type { AssetReminder, DayBucket } from "@/lib/analytics";
+import {
+  computeAssetAgenda,
+  computeDayDetail,
+  computePeriodStats,
+  computeWeightSales,
+  dayKey,
+} from "@/lib/analytics";
 import { usePeriodData } from "@/hooks/use-period-data";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { formatDay, formatDayShort, formatFCFA, formatFCFACompact, formatKg } from "@/lib/format";
@@ -188,7 +204,20 @@ function ReportsPage() {
       : "—";
   })();
 
-  const showSector = (isService ? (stats?.salesCount ?? 0) > 0 : hasWeightInput ? (weightSales?.weightKg ?? 0) > 0 : false);
+  const showSector = isService
+    ? (stats?.salesCount ?? 0) > 0
+    : hasWeightInput
+      ? (weightSales?.weightKg ?? 0) > 0
+      : false;
+
+  /* Rappel des actifs : deux dates distinctes sur un même produit —
+   * `expected_return_date` (retour du client) et `reminderDate` (note du
+   * propriétaire). `computeAssetAgenda` est la source unique : le calendrier et
+   * la liste ne peuvent donc pas diverger sur ce qui compte comme échéance. */
+  const { byDay: assetEvents, agenda: assetAgenda } = useMemo(
+    () => computeAssetAgenda(products ?? [], Date.now()),
+    [products],
+  );
 
   return (
     <div className="app-container space-y-4 py-4">
@@ -267,6 +296,7 @@ function ReportsPage() {
             <MonthGrid
               month={startOfMonth(focusedDay).getTime()}
               days={days}
+              assetEvents={assetEvents}
               selected={focusedDay}
               onSelect={setFocusedDay}
             />
@@ -297,6 +327,10 @@ function ReportsPage() {
             />
           )}
         </div>
+
+        {/* Retours d'actifs : en retard d'abord, donc le plus urgent en haut.
+            Passe avant le détail du jour, c'est une echeance, pas une stat. */}
+        {assetAgenda.length > 0 && <AssetReminders rows={assetAgenda} onSelect={setFocusedDay} />}
 
         {/* Détail de la journée : sous le calendrier sur mobile, à sa droite dès que
             la largeur le permet (§18/§19 — une seule interface, pas deux). */}
@@ -357,11 +391,7 @@ function ReportsPage() {
       )}
 
       {/* ── Période personnalisée : repliée derrière un bouton (§20) ── */}
-      <Button
-        variant="outline"
-        className="w-full"
-        onClick={() => setRangeOpen(true)}
-      >
+      <Button variant="outline" className="w-full" onClick={() => setRangeOpen(true)}>
         <SlidersHorizontal className="mr-2 h-4 w-4" /> Période personnalisée
       </Button>
 
@@ -425,8 +455,8 @@ function ReportsPage() {
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Navigation rapide ci-dessus : Mois, Semaine, Jour et Année couvrent l'usage
-              courant ; la plage libre reste pour un export ponctuel.
+              Navigation rapide ci-dessus : Mois, Semaine, Jour et Année couvrent l'usage courant ;
+              la plage libre reste pour un export ponctuel.
             </p>
           </div>
         </DialogContent>
@@ -475,11 +505,13 @@ function Kpi({
 function MonthGrid({
   month,
   days,
+  assetEvents,
   selected,
   onSelect,
 }: {
   month: number;
   days: Map<number, DayBucket>;
+  assetEvents: Map<number, AssetReminder[]>;
   selected: number;
   onSelect: (ts: number) => void;
 }) {
@@ -494,7 +526,9 @@ function MonthGrid({
 
   const cells: (number | null)[] = [
     ...Array.from({ length: lead }, () => null),
-    ...Array.from({ length: total }, (_, i) => startOfDay(new Date(month + i * 86400000)).getTime()),
+    ...Array.from({ length: total }, (_, i) =>
+      startOfDay(new Date(month + i * 86400000)).getTime(),
+    ),
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
@@ -516,12 +550,23 @@ function MonthGrid({
             const isSel = ts === selected;
             const ratio = max > 0 ? revenue / max : 0;
             const hot = ratio > 0.75;
+            const asset = assetEvents.get(ts);
+            const retours = asset?.filter((r) => r.kind === "retour").length ?? 0;
+            const rappels = asset?.filter((r) => r.kind === "rappel").length ?? 0;
+            const overdue = (retours > 0 || rappels > 0) && ts < dayKey(Date.now());
+            // Un libelle speaking : la pastille ne se resume pas a une couleur.
+            const assetLabel = [
+              retours > 0 && (retours > 1 ? `${retours} retours d'actifs` : "1 retour d'actif"),
+              rappels > 0 && (rappels > 1 ? `${rappels} rappels` : "1 rappel"),
+            ]
+              .filter(Boolean)
+              .join(", ");
             return (
               <button
                 key={ts}
                 onClick={() => onSelect(ts)}
                 aria-pressed={isSel}
-                aria-label={`${formatDay(ts)} — ${revenue > 0 ? formatFCFA(revenue) : "aucune vente"}`}
+                aria-label={`${formatDay(ts)} — ${revenue > 0 ? formatFCFA(revenue) : "aucune vente"}${assetLabel ? ` — ${assetLabel}${overdue ? ", en retard" : ""}` : ""}`}
                 className={cn(
                   "flex h-[58px] flex-col justify-between rounded-xl border p-1 text-left transition-colors sm:h-16 sm:p-1.5",
                   isSel
@@ -530,21 +575,44 @@ function MonthGrid({
                       ? "border-border bg-card hover:border-primary/50 hover:bg-accent/50"
                       : "border-transparent bg-muted/40",
                   hot && !isSel && "ring-1 ring-primary/25",
+                  overdue && !isSel && "border-destructive/60 bg-destructive/5",
                 )}
               >
                 <div className="flex items-start justify-between">
                   <span className="text-[11px] font-medium leading-none tabular-nums">
                     {new Date(ts).getDate()}
                   </span>
-                  {revenue > 0 && (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        isSel ? "bg-primary-foreground" : "bg-primary",
-                      )}
-                    />
-                  )}
+                  {/* Deux pastilles distinctes : le CA (vert, ou l'inverse
+                      quand le jour est selectionne) et l'echeance actif. Les
+                      confondre en une seule pastille ferait disparaitre le CA
+                      d'un jour d'echeance — l'information la moins visible
+                      disparaitrait, ce qui est l'inverse de l'usage d'un
+                      calendrier. */}
+                  <span className="flex items-center gap-0.5">
+                    {revenue > 0 && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          isSel ? "bg-primary-foreground" : "bg-primary",
+                        )}
+                      />
+                    )}
+                    {(retours > 0 || rappels > 0) && (
+                      <span
+                        aria-hidden
+                        title={assetLabel}
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          isSel
+                            ? "bg-primary-foreground"
+                            : overdue
+                              ? "bg-destructive"
+                              : "bg-amber-500",
+                        )}
+                      />
+                    )}
+                  </span>
                 </div>
                 <span
                   className={cn(
@@ -567,7 +635,10 @@ function MonthGrid({
                   )}
                 >
                   <span
-                    className={cn("block h-full rounded-full", isSel ? "bg-primary-foreground" : "bg-primary")}
+                    className={cn(
+                      "block h-full rounded-full",
+                      isSel ? "bg-primary-foreground" : "bg-primary",
+                    )}
                     style={{ width: `${Math.round(ratio * 100)}%`, opacity: 0.4 + ratio * 0.6 }}
                   />
                 </span>
@@ -625,7 +696,11 @@ function WeekStrip({
                 <span
                   className={cn(
                     "mt-auto truncate text-[10px] leading-none tabular-nums",
-                    isSel ? "text-primary-foreground" : revenue > 0 ? "font-semibold text-primary" : "text-muted-foreground",
+                    isSel
+                      ? "text-primary-foreground"
+                      : revenue > 0
+                        ? "font-semibold text-primary"
+                        : "text-muted-foreground",
                   )}
                 >
                   {revenue > 0 ? formatFCFACompact(revenue) : "—"}
@@ -704,7 +779,9 @@ function YearGrid({
                 <span
                   className={cn(
                     "text-[10px] tabular-nums",
-                    m.month === selectedMonth ? "text-primary-foreground/80" : "text-muted-foreground",
+                    m.month === selectedMonth
+                      ? "text-primary-foreground/80"
+                      : "text-muted-foreground",
                   )}
                 >
                   {m.salesCount > 0 ? `${m.salesCount} ventes` : "aucune vente"}
@@ -715,6 +792,72 @@ function YearGrid({
         </div>
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
           Touchez un mois pour ouvrir son calendrier détaillé.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Échéances des actifs : retours de location et rappels que le propriétaire
+ *  s'est fixés. La liste est triée par date, donc un retard remonte tout seul ;
+ *  le clic déplace le calendrier sur le jour concerné, ce qui évite d'expliquer
+ *  deux fois la même chose (marqueur sur la case + ligne dans la liste). */
+function AssetReminders({
+  rows,
+  onSelect,
+}: {
+  rows: AssetReminder[];
+  onSelect: (ts: number) => void;
+}) {
+  const today = dayKey(Date.now());
+  return (
+    <Card>
+      <CardContent className="space-y-2 p-3 sm:p-4">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <PackageCheck className="h-4 w-4 text-primary" />
+          Retours d'actifs
+          <span className="text-xs font-normal text-muted-foreground">
+            {rows.length > 0 ? `${rows.length} à venir` : ""}
+          </span>
+        </p>
+        <ul className="space-y-1.5">
+          {rows.map(({ product, at, kind }) => {
+            const late = at < today;
+            const days = Math.round((at - today) / 86400000);
+            return (
+              <li key={`${product.id}-${kind}`}>
+                <button
+                  onClick={() => onSelect(at)}
+                  className="flex w-full items-center gap-2 rounded-lg border border-border/60 px-2 py-1.5 text-left transition-colors hover:border-primary/50 hover:bg-accent/50"
+                >
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                      kind === "retour"
+                        ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {kind === "retour" ? "Retour" : "Rappel"}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{product.name}</span>
+                  {late ? (
+                    <span className="shrink-0 text-xs font-medium text-destructive">
+                      {days === 0 ? "aujourd'hui" : `${-days} j de retard`}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {formatDayShort(at)}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <BellRing className="h-3 w-3 shrink-0" />
+          La pastille ambre marque l'échéance sur le calendrier ; rouge, elle est en retard.
         </p>
       </CardContent>
     </Card>

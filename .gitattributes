@@ -1,0 +1,11 @@
+# Le dépôt est en LF. Sans cette ligne, un `core.autocrlf=true` (le défaut sur
+# Windows) réécrit chaque fichier en CRLF au checkout, et prettier signale alors
+# 22 000 « Delete ␍ » sur des fichiers parfaitement corrects côté CI. Le symptôme
+# est local, la cause est ici.
+* text=auto eol=lf
+
+# Les scripts Windows gardent leur convention native, sinon Git les exécutables
+# dispose d'un shebang LF que cmd ne comprend pas.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
