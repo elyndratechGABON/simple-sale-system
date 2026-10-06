@@ -156,6 +156,7 @@ import { WhatsAppProfilePage } from "@/components/WhatsAppProfilePage";
 
 function SettingsPage() {
   const { cluster } = usePreferences();
+  const clusterConfig = ACTIVE_CLUSTERS.find((c) => c.id === cluster);
   const { role } = useAccess();
   const accountLabel = `Compte ${ROLE_LABELS[role]}`;
 
@@ -189,7 +190,7 @@ function SettingsPage() {
           <BusinessCard cluster={cluster ?? "retail"} />
           <AppearanceCard />
           <ClientsCard />
-          <TablesCard />
+          {clusterConfig?.workflow.hasTables && <TablesCard />}
         </TabsContent>
 
         {/* Affichage des cards produit : réglage séparé du thème (§22). */}
@@ -336,58 +337,62 @@ function BusinessCard({ cluster: clusterProp }: { cluster: ClusterId }) {
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-          <div>
-            <div className="flex items-center gap-2 font-medium">
-              <Utensils className="h-4 w-4" /> Système de tables
+        {clusterConfig?.workflow.hasTables && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+            <div>
+              <div className="flex items-center gap-2 font-medium">
+                <Utensils className="h-4 w-4" /> Système de tables
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {tablesEnabled
+                  ? "Commandes par table, encaissées en fin de service."
+                  : "Service direct : chaque vente est encaissée à la commande."}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {tablesEnabled
-                ? "Commandes par table, encaissées en fin de service."
-                : "Service direct : chaque vente est encaissée à la commande."}
-            </p>
+            <Switch
+              checked={tablesEnabled}
+              onCheckedChange={onTablesToggle}
+              disabled={disabling}
+              aria-label="Activer le système de tables"
+            />
           </div>
-          <Switch
-            checked={tablesEnabled}
-            onCheckedChange={onTablesToggle}
-            disabled={disabling}
-            aria-label="Activer le système de tables"
-          />
-        </div>
+        )}
 
-        <AlertDialog
-          open={confirmingDisable}
-          onOpenChange={(v) => !v && setConfirmingDisable(false)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                Désactiver le système de tables ?
-              </AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="flex flex-col gap-2">
-                  <p>
-                    {openTables.length} table{openTables.length > 1 ? "s" : ""} ouverte
-                    {openTables.length > 1 ? "s" : ""} encore active
-                    {openTables.length > 1 ? "s" : ""} seront annulées : les articles servis
-                    retournent en rayon et ne seront pas encaissés.
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Les tables configurées dans « Tables » seront aussi retirées ; réactiver le
-                    système de tables ne les restaurera pas.
-                  </p>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={disabling}>Annuler</AlertDialogCancel>
-              <AlertDialogAction onClick={() => void disableTables()} disabled={disabling}>
-                {disabling ? "…" : "Désactiver et annuler"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {clusterConfig?.workflow.hasTables && (
+          <AlertDialog
+            open={confirmingDisable}
+            onOpenChange={(v) => !v && setConfirmingDisable(false)}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  Désactiver le système de tables ?
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="flex flex-col gap-2">
+                    <p>
+                      {openTables.length} table{openTables.length > 1 ? "s" : ""} ouverte
+                      {openTables.length > 1 ? "s" : ""} encore active
+                      {openTables.length > 1 ? "s" : ""} seront annulées : les articles servis
+                      retournent en rayon et ne seront pas encaissés.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Les tables configurées dans « Tables » seront aussi retirées ; réactiver le
+                      système de tables ne les restaurera pas.
+                    </p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={disabling}>Annuler</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void disableTables()} disabled={disabling}>
+                  {disabling ? "…" : "Désactiver et annuler"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </CardContent>
     </Card>
   );

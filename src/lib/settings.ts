@@ -10,11 +10,7 @@
 // pas sérialisable en JSON, il ne peut PAS tenir dans localStorage. Il reste donc dans
 // IndexedDB via src/lib/files.ts. Ne pas tenter de « ranger » les deux au même endroit.
 
-import {
-  CARD_PRESETS,
-  normalizeCardFields,
-  type ProductCardField,
-} from "@/lib/card-display";
+import { CARD_PRESETS, normalizeCardFields, type ProductCardField } from "@/lib/card-display";
 
 const KEY = "pos_preferences";
 
@@ -54,10 +50,12 @@ export type WorkflowType =
 export interface ClusterWorkflow {
   /** `direct` = panier → paiement ; `order-first` = commande → cuisine → paiement. */
   mode: "direct" | "order-first";
+  /** Les tables existent et sont proposées. `false` = aucun écran de tables : le
+   *  cluster les masque dans Réglages au lieu d'en proposer puis de les laisser
+   *  vides. L'ancien `hasTablesOptional` offrait un interrupteur pour un cluster
+   *  dépourvu de tables ; plus aucun code ne le lisait, il est retiré. */
   hasTables: boolean;
   hasKitchenPrint: boolean;
-  /** Les tables existent mais sont optionnelles — l'utilisateur les active dans Réglages. */
-  hasTablesOptional?: boolean;
 }
 
 export interface ClusterStock {
@@ -239,7 +237,7 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     icon: "Coffee",
     description: "Boissons, ventes directes ou commandes ouvertes.",
     workflowType: "open-tab",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false, hasTablesOptional: true },
+    workflow: { mode: "direct", hasTables: true, hasKitchenPrint: false },
     stock: {
       unitType: "unit",
       hasVariants: false,

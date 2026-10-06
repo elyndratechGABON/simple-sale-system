@@ -33,7 +33,6 @@ export function useClusterFeatures(): ClusterConfig & {
   unitType: "unit" | "weight" | "mixed";
   // Flags dépliés au top-level
   allowServiceBooking: boolean;
-  hasTablesOptional: boolean;
   // Flags location
   hasRentalBooking: boolean;
   hasDeposit: boolean;
@@ -70,7 +69,6 @@ export function useClusterFeatures(): ClusterConfig & {
     unitType: config.stock.unitType,
     // Flags
     allowServiceBooking: config.flags.allowServiceBooking,
-    hasTablesOptional: config.workflow.hasTablesOptional ?? false,
     // Flags location
     hasRentalBooking: config.flags.hasRentalBooking,
     hasDeposit: config.flags.hasDeposit,

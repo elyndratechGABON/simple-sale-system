@@ -44,10 +44,19 @@ export function ProductForm({
   defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
-  const { hasSerialNumber, unitType, hasExpiryDate, isLocation, hasVariants, hasWeightInput, hasRentalBooking, allowServiceBooking } =
-    useClusterFeatures();
+  const {
+    hasSerialNumber,
+    unitType,
+    hasExpiryDate,
+    isLocation,
+    hasVariants,
+    hasWeightInput,
+    hasRentalBooking,
+    allowServiceBooking,
+  } = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
+  const [cost, setCost] = useState<string>(editing?.cost ? String(editing.cost) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
   const [stock, setStock] = useState<string>(
     editing && Number.isFinite(editing.stock) ? String(editing.stock) : "",
@@ -61,9 +70,7 @@ export function ProductForm({
   const [unit, setUnit] = useState<"piece" | "meter" | "liter">(editing?.unit ?? "piece");
   // Période tarifaire retenue pour l'ACTIF. Le prix saisi va dans `rental_pricing[periode]`
   // (cf. `Product`), donc un même actif porte un prix différent par heure / jour / semaine.
-  const [pricingUnit, setPricingUnit] = useState<"hour" | "day" | "week" | "month" | "year">(
-    "day",
-  );
+  const [pricingUnit, setPricingUnit] = useState<"hour" | "day" | "week" | "month" | "year">("day");
   // Les tarifs déjà saisis, pour que changer de période ne perde rien : on edite
   // `rental_pricing`, on ne l'écrase pas à chaque rendu.
   const [rentalPricing, setRentalPricing] = useState<NonNullable<Product["rental_pricing"]>>(
@@ -75,6 +82,9 @@ export function ProductForm({
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
   const [expiryDate, setExpiryDate] = useState(
     editing?.expiryDate ? new Date(editing.expiryDate).toISOString().split("T")[0] : "",
+  );
+  const [reminderDate, setReminderDate] = useState<string>(
+    editing?.reminderDate ? new Date(editing.reminderDate).toISOString().split("T")[0] : "",
   );
   // Photo libre du produit ou service : dataURL webp réduit, purement local.
   const [photo, setPhoto] = useState<string | undefined>(editing?.photo);
@@ -145,7 +155,7 @@ export function ProductForm({
           : undefined;
       const p = {
         name: name.trim(),
-        cost: 0,
+        cost: Number(cost) || 0,
         price: isAsset
           ? variantsOut && variantsOut.length > 0
             ? (variantsOut[0].price ?? 0)
@@ -160,6 +170,9 @@ export function ProductForm({
         // Pour la location : un prix PAR PÉRIODE. Le prix saisi s'écrit dans la case de la
         // période choisie (`rental_pricing`), les autres périodes sont conservées — c'est
         // ce qui permet de facturer 10 h et 3 jours différemment sur le MÊME actif.
+        // Le bloc reste conditionné à `isLocation` : les périodes ne sont affichées que
+        // là (ligne 437). Élargir à `isAsset` revenait à écrire `rental_pricing` et un
+        // `price` que personne n'a pu saisir, en écrasant le prix du bien vendu.
         ...(isLocation
           ? {
               is_asset: true,
@@ -171,6 +184,10 @@ export function ProductForm({
               total_units: totalUnits ? Number(totalUnits) : undefined,
             }
           : {}),
+        // Le rappel, lui, concerne TOUT actif : il sert au propriétaire à retrouver un
+        // bien à vérifier, loué ou non. Écrit hors du bloc de location, sinon il était
+        // impossible d'en mettre un sur un bien simple.
+        ...(isAsset && reminderDate ? { reminderDate: new Date(reminderDate).getTime() } : {}),
         category,
         type: productType,
         serialNumber: serialNumber.trim() || undefined,
@@ -258,70 +275,90 @@ export function ProductForm({
             onChange={handlePhoto}
           />
         </div>
-        {!isLocation && !isAsset && (productType === "service" ? (
-            <div>
-              <Label htmlFor="price">Prix de vente</Label>
-              <Input
-                id="price"
-                inputMode="numeric"
-                value={price}
-                onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-                placeholder="300"
-              />
+        {!isLocation && !isAsset && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="cost">Prix d'achat (FCFA)</Label>
+                <Input
+                  id="cost"
+                  inputMode="numeric"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Ex : 200"
+                />
+              </div>
+              <div>
+                <Label htmlFor="price">Prix de revente (FCFA)</Label>
+                <Input
+                  id="price"
+                  inputMode="numeric"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Ex : 300"
+                />
+              </div>
             </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3">
+
+            {/* Marge calculée en direct */}
+            {Number(price) > 0 && Number(cost) > 0 && (
+              <div className="rounded-lg bg-muted/50 p-2 text-xs text-muted-foreground flex items-center justify-between">
+                <span>Marge brute estimée :</span>
+                <span
+                  className={`font-semibold ${Number(price) - Number(cost) >= 0 ? "text-emerald-600" : "text-destructive"}`}
+                >
+                  {Number(price) - Number(cost)} FCFA (
+                  {Math.round(((Number(price) - Number(cost)) / Number(price)) * 100)}%)
+                </span>
+              </div>
+            )}
+
+            {productType === "product" && (
+              <>
                 <div>
-                  <Label htmlFor="price">Prix de vente</Label>
-                  <Input
-                    id="price"
-                    inputMode="numeric"
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-                    placeholder="300"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="stock">Stock</Label>
+                  <Label htmlFor="stock">Stock disponible</Label>
                   <Input
                     id="stock"
                     inputMode="numeric"
+                    className="mt-1"
                     value={stock}
                     onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
                     placeholder="50"
                     disabled={unlimited}
                   />
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="unlimited"
-                  checked={unlimited}
-                  onCheckedChange={(v) => setUnlimited(Boolean(v))}
-                />
-                <Label htmlFor="unlimited" className="cursor-pointer">
-                  Stock illimité
-                </Label>
-              </div>
-              {!unlimited && (
-                <div>
-                  <Label htmlFor="min-stock">Stock minimum (alerte)</Label>
-                  <Input
-                    id="min-stock"
-                    inputMode="numeric"
-                    value={minStock}
-                    onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
-                    placeholder="Par défaut : 5"
-                    className="mt-1.5"
+
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="unlimited"
+                    checked={unlimited}
+                    onCheckedChange={(v) => setUnlimited(Boolean(v))}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Sous ce seuil, le produit apparaît comme « stock faible ».
-                  </p>
+                  <Label htmlFor="unlimited" className="cursor-pointer text-xs">
+                    Stock illimité
+                  </Label>
                 </div>
-              )}
-            </>
-          ))}
+
+                {!unlimited && (
+                  <div>
+                    <Label htmlFor="min-stock">Stock minimum (seuil d'alerte)</Label>
+                    <Input
+                      id="min-stock"
+                      inputMode="numeric"
+                      value={minStock}
+                      onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
+                      placeholder="Par défaut : 5"
+                      className="mt-1.5"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Sous ce seuil, le produit apparaît comme « stock faible ».
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
         {/* Un seul enfant : une grille 2 colonnes laissait une moitié vide. */}
         {!isLocation && (
           <div>
@@ -432,8 +469,8 @@ export function ProductForm({
             <div>
               <Label>Prix par période (FCFA)</Label>
               <p className="text-xs text-muted-foreground mb-2">
-                Remplissez seulement les périodes que vous facturez. La première reste le
-                tarif par défaut quand la durée n'est pas précisée.
+                Remplissez seulement les périodes que vous facturez. La première reste le tarif par
+                défaut quand la durée n'est pas précisée.
               </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {(
@@ -491,6 +528,20 @@ export function ProductForm({
                 onChange={(e) => setDepositAmount(e.target.value.replace(/\D/g, ""))}
                 placeholder="Optionnel — montant retenu au client"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="reminderDate">Date de rappel pour le propriétaire</Label>
+              <Input
+                id="reminderDate"
+                type="date"
+                value={reminderDate}
+                onChange={(e) => setReminderDate(e.target.value)}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Rappel automatique pour la révision, l'entretien ou le suivi de cet actif.
+              </p>
             </div>
           </>
         )}

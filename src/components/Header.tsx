@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, QrCode, Sun, Moon } from "lucide-react";
+import { Activity, Sun, Moon, Users } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getSetting } from "@/lib/db";
 import { TopNav } from "@/components/Nav";
@@ -139,11 +139,11 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Employés — scanner QR de clôture"
-              title="Employés — scanner QR de clôture"
+              aria-label="Employés"
+              title="Employés"
               onClick={() => setEmployeesOpen(true)}
             >
-              <QrCode className="h-5 w-5" />
+              <Users className="h-5 w-5" />
             </Button>
           )}
           {isOwner && (

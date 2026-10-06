@@ -124,6 +124,8 @@ export interface Product extends SyncFields {
   return_date?: number;
   /** Date de reprise prévue pour l'actif loué (retour du client). */
   expected_return_date?: number;
+  /** Date de rappel pour le propriétaire (location/maintenance/révision). */
+  reminderDate?: number;
 }
 
 /**
