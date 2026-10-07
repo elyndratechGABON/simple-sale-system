@@ -5,8 +5,8 @@
 // sans re-rendu superflu, et le verrou persiste dans IndexedDB : une caisse suspendue le
 // reste même hors ligne, jusqu'à une prolongation livrée par le serveur.
 import { useSyncExternalStore, useState } from "react";
-import { AlertTriangle, LockKeyhole, MonitorX, ScanLine } from "lucide-react";
-import { getLockSnapshot, resetKeywordBlock, subscribeLock } from "@/lib/gatekeeper";
+import { AlertTriangle, Fingerprint, LockKeyhole, MonitorX, ScanLine } from "lucide-react";
+import { getLockSnapshot, resetDeviceConflict, resetKeywordBlock, subscribeLock } from "@/lib/gatekeeper";
 import { unlockFromPaymentSms } from "@/lib/offline-unlock";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -27,15 +27,26 @@ export function SuspendedScreen() {
   const [unlocking, setUnlocking] = useState(false);
   if (!locked) return null;
 
-  // Trois blocages, trois messages : le dépassement de quota n'est pas un impayé, et le
-  // mot clé invalide est un rejet net des informations de reconnexion — jamais une dette.
+  // Quatre blocages, quatre messages : le dépassement de quota n'est pas un impayé, le
+  // mot clé invalide est un rejet net des informations de reconnexion — jamais une dette,
+  // et le conflit d'empreinte n'est ni un impayé ni une erreur de l'utilisateur.
   const overLimit = reason === "device_limit";
   const keywordInvalid = reason === "keyword_invalid";
+  const deviceConflict = reason === "device_conflict";
 
   async function retryKeyword() {
     setBusy(true);
     try {
       await resetKeywordBlock();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function retryDeviceConflict() {
+    setBusy(true);
+    try {
+      await resetDeviceConflict();
     } finally {
       setBusy(false);
     }
@@ -75,6 +86,8 @@ export function SuspendedScreen() {
             <MonitorX className="h-6 w-6 text-destructive" aria-hidden />
           ) : keywordInvalid ? (
             <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />
+          ) : deviceConflict ? (
+            <Fingerprint className="h-6 w-6 text-destructive" aria-hidden />
           ) : (
             <LockKeyhole className="h-6 w-6 text-destructive" aria-hidden />
           )}
@@ -82,18 +95,33 @@ export function SuspendedScreen() {
         <h1 className="text-lg font-semibold text-card-foreground">
           {keywordInvalid
             ? "Mot clé de récupération invalide"
-            : overLimit
-              ? "Limite d'appareils atteinte"
-              : "Abonnement suspendu"}
+            : deviceConflict
+              ? "Cet appareil est déjà enregistré"
+              : overLimit
+                ? "Limite d'appareils atteinte"
+                : "Abonnement suspendu"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {keywordInvalid
             ? "Aucun compte ne correspond à ce nom de boutique, ce propriétaire et ce mot clé. Vérifiez vos informations ou contactez le service client pour récupérer votre compte."
-            : overLimit
-              ? "Toutes les places de votre abonnement sont utilisées par d'autres caisses. Passez à un palier supérieur ou libérez un appareil pour activer celle-ci."
-              : "Votre abonnement a été suspendu. La caisse est bloquée tant que le renouvellement n'est pas enregistré."}
+            : deviceConflict
+              ? "Un seul appareil physique peut correspondre à une boutique, et le serveur a retrouvé celui-ci déjà rattaché à une autre inscription. Vos données locales sont intactes et la caisse continue de fonctionner hors ligne : c'est la synchronisation qui attend. Contactez le service client pour rattacher cette caisse à votre boutique."
+              : overLimit
+                ? "Toutes les places de votre abonnement sont utilisées par d'autres caisses. Passez à un palier supérieur ou libérez un appareil pour activer celle-ci."
+                : "Votre abonnement a été suspendu. La caisse est bloquée tant que le renouvellement n'est pas enregistré."}
         </p>
-        {keywordInvalid ? (
+        {deviceConflict ? (
+          <div className="mt-6 flex flex-col gap-2">
+            <Button onClick={retryDeviceConflict} disabled={busy}>
+              {busy ? "Vérification…" : "Réessayer"}
+            </Button>
+            <Button asChild variant="outline">
+              <a href={SUPPORT_WHATSAPP} target="_blank" rel="noreferrer">
+                Contacter le service client
+              </a>
+            </Button>
+          </div>
+        ) : keywordInvalid ? (
           <div className="mt-6 flex flex-col gap-2">
             <Button onClick={retryKeyword} disabled={busy}>
               {busy ? "Vérification…" : "Réessayer"}
@@ -149,7 +177,9 @@ export function SuspendedScreen() {
             ? "Paliers : 10 000 F (3 écrans) · 25 000 F (5) · 50 000 F (9) / 30 jours."
             : keywordInvalid
               ? "Préparez le mot clé reçu à la création du compte (format XXXX-XXXX)."
-              : "Renouvelez votre abonnement via WhatsApp, votre caisse sera relancée rapidement."}
+              : deviceConflict
+                ? "La caisse vend et enregistre normalement — seule la synchronisation avec le serveur est suspendue."
+                : "Renouvelez votre abonnement via WhatsApp, votre caisse sera relancée rapidement."}
         </p>
       </div>
     </div>

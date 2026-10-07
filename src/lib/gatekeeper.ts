@@ -128,8 +128,8 @@ export async function getGraceEndsAt(): Promise<number | null> {
 export type CommandType = "suspend" | "renew" | "broadcast_message" | "delete_account_request";
 
 /** Pourquoi la caisse est bloquée : abonnement suspendu, quota d'appareils dépassé,
- *  ou mot clé de récupération rejeté par le serveur. */
-export type LockReason = "suspended" | "device_limit" | "keyword_invalid";
+ *  mot clé de récupération rejeté, ou appareil déjà enregistré ailleurs. */
+export type LockReason = "suspended" | "device_limit" | "keyword_invalid" | "device_conflict";
 
 export interface AdminCommand {
   id: string;
@@ -181,7 +181,13 @@ export interface HandshakeResult {
   sync_allowed: boolean;
   status: "active" | "suspended" | "expired" | "unknown";
   reason?:
-    "no-profile" | "network" | "error" | "account_password" | "device_limit" | "keyword_invalid";
+    | "no-profile"
+    | "network"
+    | "error"
+    | "account_password"
+    | "device_limit"
+    | "keyword_invalid"
+    | "device_conflict";
 }
 
 // ── Verrou de suspension (store minimal, synchrone pour useSyncExternalStore) ──────
@@ -395,18 +401,21 @@ export async function handshake(): Promise<HandshakeResult> {
       return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
     }
     // Conflit d'empreinte : cet appareil est déjà enregistré sous un autre device_id.
+    // Blocage DUR et NOMMÉ, pas un vague « error » : sans message, le commerçant
+    // réessaie en boucle, chaque essai lui renvoyant la même erreur muette. Le nom de la
+    // boutique en conflit est affiché tel quel par le serveur, et un bouton « Réessayer »
+    // permet de retenter après que le support ait débloqué la situation.
     if (res.status === 409) {
       const data = (await res.json().catch(() => null)) as {
         code?: string;
         existing_device_id?: string;
+        error?: string;
       } | null;
       if (data?.code === "fingerprint_conflict") {
-        return {
-          ok: false,
-          sync_allowed: false,
-          status: "unknown",
-          reason: "error",
-        };
+        await setSetting(SETTING_LOCKED, true);
+        await setSetting(SETTING_LOCK_REASON, "device_conflict" as LockReason);
+        setLock(true, "device_conflict");
+        return { ok: false, sync_allowed: false, status: "unknown", reason: "device_conflict" };
       }
       return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
     }
@@ -570,6 +579,20 @@ export async function joinByKeyword(input: KeywordJoinInput): Promise<KeywordJoi
 export async function resetKeywordBlock(): Promise<void> {
   await setShopKeyword(null);
   await clearKeywordClaim();
+  await setSetting(SETTING_LOCKED, false);
+  await setSetting(SETTING_LOCK_REASON, null);
+  setLock(false, null);
+}
+
+/**
+ * Réinitialise le blocage « appareil déjà enregistré ailleurs ».
+ *
+ * On ne touche à AUCUNE donnée : ni la fiche, ni le catalogue. Un conflit d'empreinte est
+ * un refus d'inscription, pas une décision de suppression — une boutique qui vend en local
+ * doit rester utilisable pendant que le support débloque la situation. Le handshake suivant
+ * repose le verrou si le conflit persiste.
+ */
+export async function resetDeviceConflict(): Promise<void> {
   await setSetting(SETTING_LOCKED, false);
   await setSetting(SETTING_LOCK_REASON, null);
   setLock(false, null);

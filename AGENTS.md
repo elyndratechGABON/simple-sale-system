@@ -64,6 +64,17 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
   `build:static` (cf. `vercel.json`) : l'application n'ayant aucune logique serveur, une
   coquille SPA suffit. Le `rewrite` vers `/index.html` est indispensable, et sans danger
   pour `/sw.js` et `/assets/*` que Vercel sert en priorité comme fichiers statiques.
+- **`vercel.json` doit rester du JSON valide, jusqu'au dernier octet.** Une queue
+  dupliquée (le symptôme : quatre lignes répétées après l'accolade finale) fait échouer
+  le parseur, et le CLI Vercel refuse d'aller plus loin (`Couldn't parse JSON file`) :
+  plus aucun déploiement ni lecture de config depuis ce dépôt. Un `JSON.parse` de dix
+  lignes suffit à l'attraper avant le commit.
+- **L'empreinte d'appareil ne doit pas être appauvrie.** Elle sert à bloquer une seconde
+  inscription depuis le même téléphone (Phase 2 — 1 téléphone = 1 boutique). Le
+  user-agent d'Android Chrome étant réduit (« Android 10; K »), les signaux matériels
+  (client hints = modèle réel, mémoire, points de contact) sont les SEULS qui séparent
+  deux téléphones de même profil : les retirer recommence à refuser l'inscription du
+  second commerçant. Voir `fingerprintInput` et son test.
 - **L'ordre des plugins Vite compte.** `tanstackStart` doit précéder `viteReact` : il
   génère les routes et les entrées client/serveur que le plugin React transforme ensuite.
   Les deux configs assemblent ces plugins à la main depuis que le wrapper qui les
