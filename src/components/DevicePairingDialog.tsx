@@ -304,6 +304,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     // requêtes distinctes ; l'invalidateur central les rafraîchit toutes. Sans cela le
     // compteur restait figé jusqu'au handshake suivant — indéfiniment hors ligne.
     await invalidateDeviceQueries(qc);
+    // Le compteur affiché doit bouger ICI, sans attendre que le patron ferme et rouvre le
+    // dialogue : l'approbation vient de consommer une place, c'est le moment de le dire.
+    const frais = await refreshAccountQuota();
+    if (frais) await qc.invalidateQueries({ queryKey: ["account_quota"] });
     // L'approbation est le moment où le propriétaire décide du STOCK : on ouvre le choix
     // tout de suite, tant qu'il a l'écran en tête.
     const approuve = await getDB().paired_devices.get(peerId);
