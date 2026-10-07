@@ -209,15 +209,19 @@ function WelcomePage() {
       toast.error("Ce code ne correspond pas à celui affiché par le propriétaire.");
       return;
     }
+    // L'identité est posée AVANT l'annonce : sinon la première annonce — celle qui porte
+    // le code de paire, donc celle qui proves l'appairage — partait avec un nom et un
+    // numéro vides, et le patron devait attendre un second cycle pour les savoir.
+    await setIdentityEmployeeName(name);
+    // Facultatif : le patron voit ce numéro dans « Activité du personnel ». Absent, il
+    // affiche « Numéro non déclaré » plutôt qu'un numéro deviné.
+    if (employeePhoneInput.trim()) await setIdentityEmployeePhone(employeePhoneInput.trim());
+
     const result = await enterPairingCode(code);
     if (result === "invalid") {
       toast.error("Code invalide — vérifiez-le auprès du propriétaire.");
       return;
     }
-    await setIdentityEmployeeName(name);
-    // Facultatif : le patron voit ce numéro dans « Activité du personnel ». Absent, il
-    // affiche « Numéro non déclaré » plutôt qu'un numéro deviné.
-    if (employeePhoneInput.trim()) await setIdentityEmployeePhone(employeePhoneInput.trim());
     toast.success(`Bienvenue ${name} — boutique synchronisée.`);
     savePreferences({ onboarded: true, onboardingCompleted: true });
     qc.invalidateQueries({ queryKey: ["preferences"] });

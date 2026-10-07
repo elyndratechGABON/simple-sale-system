@@ -253,7 +253,11 @@ export async function setIdentityEmployeeName(name: string): Promise<SyncIdentit
 }
 
 /** Le numéro est déclaré par l'EMPLOYÉ, pas déduit : le patron doit pouvoir l'appeler
- *  sans que l'application invente quoi que ce soit. Vide = non déclaré. */
+ *  sans que l'application invente quoi que ce soit. Vide = non déclaré.
+ *
+ *  ⚠️ Neither setter se ré-annonce : `pairing.ts` importe `identity.ts`, donc l'appel
+ *  dans l'autre sens créerait un cycle d'imports. C'est à l'appelant (écran de saisie)
+ *  d'enchaîner `reannounceProfile()` juste après. */
 export async function setIdentityEmployeePhone(phone: string): Promise<SyncIdentity> {
   const id = getIdentity();
   await getDB().settings.put({ key: IDENTITY_KEYS.employeePhone, value: phone.trim() });

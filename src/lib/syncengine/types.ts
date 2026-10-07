@@ -200,9 +200,15 @@ export interface CatalogueRequestPayload {
 export const PAIRING_KEYS = {
   code: "syncengine_pair_code",
   codeExpiresAt: "syncengine_pair_code_expires_at",
-  /** Drapeau one-shot : l'appareil ne se re-annonce jamais au groupe (idempotence de l'onboarding). */
+  /** Drapeau one-shot : l'appareil ne se ré-annonce jamais au groupe (idempotence de l'onboarding). */
   announced: "syncengine_announced",
+  /** Nom + numéro au moment de la DERNIÈRE annonce. Une fiche change après coup (le
+   *  commerçant corrige un numéro) ; sans cette trace, le one-shot ci-dessus garderait le
+   *  patron sur une fiche périmée pour toujours. Compare pour ne ré-annoncer qu'au
+   *  changement réel. */
+  announcedProfile: "syncengine_announced_profile",
 } as const;
+
 
 /** Clés de persistence de l'identité — partagées entre `db.ts` et `identity.ts`. */
 export const IDENTITY_KEYS = {

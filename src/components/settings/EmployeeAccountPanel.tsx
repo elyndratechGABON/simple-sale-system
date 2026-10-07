@@ -41,6 +41,7 @@ import {
   setIdentityEmployeeName,
   setIdentityEmployeePhone,
 } from "@/lib/syncengine/identity";
+import { reannounceProfile } from "@/lib/syncengine/pairing";
 import { importOwnerCatalog, type ImportPhase } from "@/lib/sync";
 import { buildClosingPayload, parseRestitutionRequest } from "@/lib/restitution";
 import { closeEmployeeHistory, getShopProfile, purgeAllData } from "@/lib/db";
@@ -257,10 +258,14 @@ export function EmployeeAccountPanel() {
               type="button"
               size="sm"
               variant="outline"
-              disabled={!employeeName.trim()}
-              onClick={() => {
-                void setIdentityEmployeeName(employeeName.trim());
-                toast.success("Nom enregistré.");
+              disabled={!employeeName.trim() || employeeName.trim() === identity?.employeeName}
+              onClick={async () => {
+                const name = employeeName.trim();
+                await setIdentityEmployeeName(name);
+                setIdentity((id) => (id ? { ...id, employeeName: name } : id));
+                // Ré-annonce : le patron voit le nouveau nom sans ré-appairer l'écran.
+                await reannounceProfile();
+                toast.success("Nom envoyé au propriétaire.");
               }}
             >
               <UserRound className="h-4 w-4 mr-1" />
@@ -284,10 +289,13 @@ export function EmployeeAccountPanel() {
               size="sm"
               variant="outline"
               disabled={!employeePhone.trim() || employeePhone.trim() === identity?.employeePhone}
-              onClick={() => {
-                void setIdentityEmployeePhone(employeePhone.trim());
-                setIdentity((id) => (id ? { ...id, employeePhone: employeePhone.trim() } : id));
-                toast.success("Numéro enregistré — visible par le propriétaire.");
+              onClick={async () => {
+                const phone = employeePhone.trim();
+                await setIdentityEmployeePhone(phone);
+                setIdentity((id) => (id ? { ...id, employeePhone: phone } : id));
+                // Idem pour le numéro : c'est LA raison d'être du re-announcement.
+                await reannounceProfile();
+                toast.success("Numéro envoyé au propriétaire.");
               }}
             >
               <Phone className="h-4 w-4 mr-1" />
