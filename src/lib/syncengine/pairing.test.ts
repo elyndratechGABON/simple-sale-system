@@ -285,6 +285,56 @@ describe("ré-annonce de fiche (le patron voit le numéro tout de suite)", () =>
   });
 });
 
+describe("le registre ne contient pas l'écran courant", () => {
+  it("lister les pairs exclut cet écran, même si sa fiche traîne en base", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const moi = getIdentity().deviceId;
+    // Cas réel : une approbation ancienne, ou une op d'avant le filtre, a laissé une fiche
+    // pour l'écran lui-même. Elle s'affichait dans « Activité du personnel » comme
+    // « Écran sans nom » avec le rôle absent lu « Propriétaire ».
+    await getDB().paired_devices.put({
+      id: moi,
+      shop_id: getIdentity().shopId,
+      last_seen: Date.now(),
+      updated_at: Date.now(),
+    });
+    await getDB().paired_devices.put({
+      id: "employe-1",
+      shop_id: getIdentity().shopId,
+      device_name: "Fatou",
+      role: "employee",
+      status: "paired",
+      updated_at: Date.now(),
+    });
+
+    const pairs = await listPairedDevices(getIdentity().shopId);
+    expect(pairs.map((p) => p.id)).toEqual(["employe-1"]);
+  });
+
+  it("une approbation ne crée pas de fiche fantôme pour l'appareil approuveur", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const approuveur = getIdentity().deviceId;
+    const boutique = getIdentity().shopId;
+
+    // Le principal approuve un employé : l'op porte l'APPROUVÉ, l'approuveur n'a rien à
+    // faire dans le registre de celui qui reçoit l'op.
+    await approveDevice("employe-2", "employee");
+    const op = (await listPendingOps(boutique)).find((o) => o.type === "device.approve");
+    expect(op).toBeDefined();
+    // On la fait appliquer par un AUTRE écran (simulé via la même base de test) :
+    // aucune fiche ne doit apparaître pour l'approuveur.
+    await applyRemoteOpsSigned([op!]);
+
+    expect((await getDB().paired_devices.get(approuveur)) ?? null).toBeNull();
+    // L'employé approuvé, lui, existe bien.
+    expect((await getDB().paired_devices.get("employe-2"))).toBeDefined();
+  });
+});
+
 describe("décision d'application du code (côté principal)", () => {
   it("un code juste appaire l'écran d'office (clé publique, nom, rôle, date)", async () => {
     await freshDevice();

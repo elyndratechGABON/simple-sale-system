@@ -4,12 +4,33 @@
 // nourrira la liste « Appareils » des Paramètres, le pairing chiffré et la gestion des
 // rôles — le transport n'en dépend pas encore.
 import { getDB } from "../db";
+import { getIdentity } from "./identity";
 import type { PairedDevice } from "./types";
 
-/** Les appareils du groupe connus localement, du plus récent au plus ancien. */
+/** L'identité courante, ou `null` si elle n'est pas encore chargée — ce module est aussi
+ *  lu depuis des contextes où l'identité peut manquer ; on ne veut pas planter un écran
+ *  pour un filtre d'affichage. */
+function currentDeviceId(): string | null {
+  try {
+    return getIdentity().deviceId;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Les appareils du groupe connus localement, du plus récent au plus ancien.
+ *
+ * MOI-MÊME n'en fait PAS partie : un appareil n'est pas son propre pair. Le registre peut
+ * contenir sa propre ligne — une approbation ou une op ancienne l'y a mise — et l'afficher
+ * dans « Activité du personnel » produisait une ligne « Écran sans nom » que le rôle
+ * absent faisait lire « Propriétaire ».
+ */
 export async function listPairedDevices(shopId: string): Promise<PairedDevice[]> {
   const device = await getDB().paired_devices.where("shop_id").equals(shopId).sortBy("updated_at");
-  return device.reverse();
+  const moi = currentDeviceId();
+  const pairs = device.reverse();
+  return moi ? pairs.filter((p) => p.id !== moi) : pairs;
 }
 
 /**

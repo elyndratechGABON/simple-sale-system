@@ -6,7 +6,7 @@
 // filtrées par `seller_device_id` (ou par nom pour les ventes antérieures au suivi) —
 // le propriétaire voit ses ventes directes (aucun vendeur attaché). Les appareils en
 // attente d'approbation sont signalés séparément avec un bouton « Approuver ».
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -41,6 +41,9 @@ import type { PairedDevice, DeviceRole } from "@/lib/syncengine/types";
 interface TeamDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Écran à ouvrir directement en détail. C'est par là que « Activité du personnel »
+   *  atteint le détail d'un vendeur : une seule implémentation de ce détail, pas deux. */
+  initialDeviceId?: string | null;
 }
 
 /** Début du mois courant (fenêtre par défaut du détail). */
@@ -93,9 +96,14 @@ function isOwnSale(sale: Sale, device: PairedDevice): boolean {
   );
 }
 
-export function TeamDialog({ open, onOpenChange }: TeamDialogProps) {
+export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogProps) {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Ouverture sur un écran précis (appelée depuis « Activité du personnel »).
+  useEffect(() => {
+    if (open && initialDeviceId) setSelectedId(initialDeviceId);
+  }, [open, initialDeviceId]);
 
   const { data: identity } = useQuery({
     queryKey: ["sync_identity"],

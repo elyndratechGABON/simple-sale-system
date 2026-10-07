@@ -59,6 +59,7 @@ export function Header() {
     }
   }
   const [teamOpen, setTeamOpen] = useState(false);
+  const [teamDeviceId, setTeamDeviceId] = useState<string | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const clicks = useRef(0);
@@ -162,9 +163,26 @@ export function Header() {
         </div>
       </div>
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />
-      <TeamDialog open={teamOpen} onOpenChange={setTeamOpen} />
+      <TeamDialog
+        open={teamOpen}
+        onOpenChange={(v) => {
+          setTeamOpen(v);
+          if (!v) setTeamDeviceId(null);
+        }}
+        initialDeviceId={teamDeviceId}
+      />
       <EmployeesDialog open={employeesOpen} onOpenChange={setEmployeesOpen} />
-      <ActivityDialog open={activityOpen} onOpenChange={setActivityOpen} />
+      <ActivityDialog
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
+        // Un vendeur cliqué dans l'activité s'ouvre en détail dans la fiche Équipe — une
+        // seule implémentation de ce détail, pas deux écrans qui divergent.
+        onOpenDevice={(deviceId) => {
+          setActivityOpen(false);
+          setTeamDeviceId(deviceId);
+          setTeamOpen(true);
+        }}
+      />
     </header>
   );
 }

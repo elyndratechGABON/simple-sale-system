@@ -13,6 +13,7 @@ import {
   Activity,
   BadgeCheck,
   Boxes,
+  ChevronRight,
   Clock,
   MonitorSmartphone,
   Phone,
@@ -37,6 +38,8 @@ import type { DeviceRole, PairedDevice } from "@/lib/syncengine/types";
 interface ActivityDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Ouvre le détail d'un vendeur (délégué à la fiche « Équipe », qui sait déjà le montrer). */
+  onOpenDevice?: (deviceId: string) => void;
 }
 
 /** Début du mois courant (fenêtre par défaut). */
@@ -79,7 +82,7 @@ function RoleBadge({ role }: { role?: DeviceRole }) {
   );
 }
 
-export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
+export function ActivityDialog({ open, onOpenChange, onOpenDevice }: ActivityDialogProps) {
   const [range, setRange] = useState<"month" | "week" | "day">("month");
 
   const { data: identity } = useQuery({
@@ -120,19 +123,28 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
     staleTime: 30_000,
   });
 
-  // CA agrégé par ÉCRAN, pas par nom : deux employés qui n'ont pas encore saisi leur nom
-  // s'appellent tous deux « Employé », et le patron voyait une seule ligne. La clé est
-  // `seller_device_id` (posé à la vente par l'écran qui encaisse) ; le libellé vient du
-  // registre des pairs — la fiche de l'écran, donc son nom et son numéro déclarés.
-  const bySeller = useMemo(() => {
+  // CA agrégé par ÉCRAN, trié du plus gros au plus petit. La clé est `seller_device_id`
+  // (posé à la vente par l'écran qui encaisse) : deux employés anonymes ne se confondent
+  // donc plus en une seule ligne « Employé ». Le libellé vient du registre des pairs, et
+  // le numéro d'y est aussi — c'est ce que le patron cherche ici.
+  const moi = identity?.deviceId;
+  const parVendeur = useMemo(() => {
     const peerById = new Map((peers ?? []).map((p) => [p.id, p]));
-    const map = new Map<string, { key: string; name: string; phone: string; count: number; revenue: number }>();
+    const map = new Map<
+      string,
+      { key: string; nom: string; phone: string; estMoi: boolean; count: number; revenue: number }
+    >();
     for (const s of sales ?? []) {
       const key = s.seller_device_id ?? "direct";
+      const peer = peerById.get(key);
       const cur = map.get(key) ?? {
         key,
-        name: sellerDisplay(s.seller_name),
-        phone: peerById.get(key)?.phone?.trim() ?? "",
+        nom:
+          key === "direct"
+            ? "Ventes directes"
+            : peer?.device_name?.trim() || sellerDisplay(s.seller_name, "Employé sans nom"),
+        phone: peer?.phone?.trim() ?? "",
+        estMoi: key === moi,
         count: 0,
         revenue: 0,
       };
@@ -141,7 +153,7 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
       map.set(key, cur);
     }
     return [...map.values()].sort((a, b) => b.revenue - a.revenue);
-  }, [sales, peers]);
+  }, [sales, peers, moi]);
 
   const itemsCount = useMemo(() => {
     const map = new Map<string, number>();
@@ -149,8 +161,8 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
     return map;
   }, [items]);
 
-  const totalRevenue = bySeller.reduce((s, b) => s + b.revenue, 0);
-  const totalCount = bySeller.reduce((s, b) => s + b.count, 0);
+  const totalRevenue = parVendeur.reduce((s, b) => s + b.revenue, 0);
+  const totalCount = parVendeur.reduce((s, b) => s + b.count, 0);
 
   const paired = (peers ?? []).filter((p) => p.status !== "pending");
   const pending = (peers ?? []).filter((p) => p.status === "pending");
@@ -208,29 +220,54 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
           </div>
         </div>
 
-        {/* CA par vendeur */}
-        {bySeller.length > 0 ? (
+        {/* CA par vendeur — une ligne par écran, triée du plus gros au plus petit, et le détail
+            s'ouvre d'un clic. C'est le tableau que le patron veut lire en premier. */}
+        {parVendeur.length > 0 ? (
           <div className="space-y-2">
-            {bySeller.map((b) => (
-              <div
-                key={b.key}
-                className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <UserRound className="h-5 w-5" />
+            <p className="text-xs font-medium text-muted-foreground">
+              Qui a vendu, du plus gros au plus petit — touchez un vendeur pour son détail.
+            </p>
+            {parVendeur.map((b) => {
+              const details = !b.estMoi && b.key !== "direct" && onOpenDevice;
+              const Ligne = details ? "button" : "div";
+              return (
+                <Ligne
+                  key={b.key}
+                  {...(details
+                    ? {
+                        type: "button" as const,
+                        onClick: () => onOpenDevice(b.key),
+                        className:
+                          "flex w-full items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 text-left transition-colors hover:bg-accent/50",
+                      }
+                    : {
+                        className:
+                          "flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3",
+                      })}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <UserRound className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {b.estMoi ? `${b.nom} (vous)` : b.nom}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {b.count} vente{b.count > 1 ? "s" : ""}
+                        {b.phone ? ` · ${b.phone}` : ""}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{b.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {b.count} vente{b.count > 1 ? "s" : ""}
-                      {b.phone ? ` · ${b.phone}` : ""}
-                    </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <p className="font-bold tabular-nums">{formatFCFA(b.revenue)}</p>
+                    {details && (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    )}
                   </div>
-                </div>
-                <p className="font-bold tabular-nums">{formatFCFA(b.revenue)}</p>
-              </div>
-            ))}
+                </Ligne>
+              );
+            })}
           </div>
         ) : (
           <p className="rounded-xl border border-dashed py-6 text-center text-sm text-muted-foreground">

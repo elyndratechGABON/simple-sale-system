@@ -84,15 +84,14 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
           // `applyOp` a déjà écrit la fiche détaillée (statut, rôle, clé publique) ;
           // la surcharger ici effacerait précisément ce que l'annonce apportait.
         } else if (op.type === "device.approve") {
-          // La décision du principal : sa propre fiche, si elle n'est pas déjà connue
-          // (une annonce peut ne jamais l'avoir précédée).
-          if (!(await db.paired_devices.get(op.device_id))) {
-            await db.paired_devices.put({
-              id: op.device_id,
-              shop_id: op.shop_id,
-              last_seen: now,
-              updated_at: now,
-            });
+          // La décision du principal porte l'APPROUVÉ, pas l'approbateur : elle ne crée
+          // donc aucune fiche. Elle se contente de marquer l'approbateur comme vu — s'il
+          // est connu. Créer ici une fiche à son nom produisait une ligne « Écran sans
+          // nom » que `RoleBadge` lisait « Propriétaire » faute de rôle : un fantôme
+          // d employing device dans « Activité du personnel ».
+          const dejaConnu = await db.paired_devices.get(op.device_id);
+          if (dejaConnu) {
+            await db.paired_devices.put({ ...dejaConnu, last_seen: now, updated_at: now });
           }
         } else {
           // Toute autre op prouve qu'on a RENCONTRÉ l'appareil : tampon `last_seen` sur la
