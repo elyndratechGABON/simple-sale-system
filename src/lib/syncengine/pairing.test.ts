@@ -19,6 +19,7 @@ import {
   resetDeviceIdentity,
   resetIdentityForTests,
   setIdentityEmployeeName,
+  setIdentityEmployeePhone,
   setIdentityRole,
 } from "./identity";
 import { listPairedDevices } from "./peers";
@@ -143,6 +144,48 @@ describe("code de paire", () => {
     await exchangeOps(relay.client);
     expect(relay.count(shopId)).toBe(1);
   });
+
+  it("l'annonce porte le nom ET le numéro saisis par l'employé", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    await setIdentityRole("employee");
+    await setIdentityEmployeeName("  Vendeuse Fatou  ");
+    await setIdentityEmployeePhone("  0761234567  ");
+    await enterPairingCode("A2B2C3");
+
+    const announce = (await listPendingOps(getIdentity().shopId)).find(
+      (o) => o.type === "device.announce",
+    );
+    const payload = announce?.payload as {
+      employee_name?: string;
+      employee_phone?: string;
+      role?: string;
+    };
+    // Espaces coupés des deux côtés : le patron ne doit pas lire «  Vendeuse  ».
+    expect(payload.employee_name).toBe("Vendeuse Fatou");
+    expect(payload.employee_phone).toBe("0761234567");
+    // Un employé qui n'a rien saisi ne porte ni le nom de la boutique (qui n'est pas
+    // une personne) ni un numéro inventé.
+    expect(payload.role).toBe("employee");
+  });
+
+  it("un employé sans nom ne s'annonce pas sous le nom de la boutique", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    await setIdentityRole("employee");
+    await enterPairingCode("A2B2C3");
+
+    const announce = (await listPendingOps(getIdentity().shopId)).find(
+      (o) => o.type === "device.announce",
+    );
+    const payload = announce?.payload as { employee_name?: string; employee_phone?: string };
+    // Avant, ce champ recevait le nom de la boutique : le propriétaire lisait le nom du
+    // commerce comme si c'était un vendeur, et ne pouvait pas distinguer deux employés.
+    expect(payload.employee_name).toBe("");
+    expect(payload.employee_phone).toBe("");
+  });
 });
 
 describe("décision d'application du code (côté principal)", () => {
@@ -154,12 +197,19 @@ describe("décision d'application du code (côté principal)", () => {
     const shopId = getIdentity().shopId;
 
     await applyRemoteOpsSigned([
-      await announceOp(shopId, "device-juste", 1, { employee_name: "Vendeuse", pair_code: code }),
+      await announceOp(shopId, "device-juste", 1, {
+      employee_name: "Vendeuse",
+      employee_phone: "0761234567",
+      pair_code: code,
+    }),
     ]);
     const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-juste");
     expect(peer?.status).toBe("paired");
     expect(peer?.role).toBe("employee");
     expect(peer?.device_name).toBe("Vendeuse");
+    // Le numéro voyage dans la MÊME annonce que le nom : c'est ce que le propriétaire
+    // affiche dans « Activité du personnel ». Il n'est jamais déduit, seulement déclaré.
+    expect(peer?.phone).toBe("0761234567");
     // La clé est PINSÉE : c'est elle qui permettra de vérifier les ops suivantes du pair.
     expect(peer?.public_key).toBe(getDeviceKeys().publicKey);
     expect(peer?.paired_at).toBeDefined();

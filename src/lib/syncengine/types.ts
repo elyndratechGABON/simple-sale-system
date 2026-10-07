@@ -14,6 +14,10 @@ export interface SyncIdentity {
   shopId: string;
   role: DeviceRole;
   employeeName: string;
+  /** Numéro que l'employé déclare pour être joint par son patron. Volontairement hors du
+   *  compte : c'est une identité de personne, pas une donnée d'abonnement. Vide = non
+   *  déclaré, et l'interface le dit au lieu d'inventer une valeur. */
+  employeePhone: string;
 }
 
 export interface DeviceKeys {
@@ -83,6 +87,10 @@ export interface PairedDevice {
   /** Groupe de partage auquel appartient le pair. */
   shop_id: string;
   device_name?: string;
+  /** Numéro déclaré par l'écrans (`device.announce`) : sert au patron à joindre la
+   *  bonne personne dans « Activité du personnel ». Facultatif — un écran qui ne l'a
+   *  pas déclaré n'affiche aucun numéro, jamais un numéro deviné. */
+  phone?: string;
   role?: DeviceRole;
   public_key?: string;
   last_seen?: number;
@@ -147,6 +155,8 @@ export interface DeviceAnnouncePayload {
   server_device_id?: string;
   public_key: string;
   employee_name: string;
+  /** Numéro déclaré par la personne — facultatif, jamais déduit. */
+  employee_phone?: string;
   role: DeviceRole;
   pair_code?: string;
 }
@@ -200,6 +210,7 @@ export const IDENTITY_KEYS = {
   shop: "syncengine_shop_id",
   role: "syncengine_role",
   employeeName: "syncengine_employee_name",
+  employeePhone: "syncengine_employee_phone",
   publicKey: "syncengine_public_key_jwk",
   privateKey: "syncengine_private_key_jwk",
 } as const;

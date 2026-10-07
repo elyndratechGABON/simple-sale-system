@@ -386,6 +386,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       await db.paired_devices.put({
         ...existing,
         device_name: pl.employee_name || existing.device_name,
+        phone: pl.employee_phone || existing.phone,
         role,
         ...(pinned && pl.public_key ? { public_key: pl.public_key } : {}),
         server_device_id: pl.server_device_id || existing.server_device_id,

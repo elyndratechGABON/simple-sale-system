@@ -40,6 +40,7 @@ import { enterPairingCode, normPairCode } from "@/lib/syncengine/pairing";
 import {
   ensureIdentity,
   setIdentityEmployeeName,
+  setIdentityEmployeePhone,
   setIdentityRole,
   refreshShopId,
   adoptShopIdFromRelay,
@@ -78,6 +79,7 @@ function WelcomePage() {
   const [scanningJoin, setScanningJoin] = useState(false);
   const [showEmployeeNameModal, setShowEmployeeNameModal] = useState(false);
   const [employeeNameInput, setEmployeeNameInput] = useState("");
+  const [employeePhoneInput, setEmployeePhoneInput] = useState("");
   const [pairCodeInput, setPairCodeInput] = useState("");
   const [scannedPairCode, setScannedPairCode] = useState<string | undefined>();
 
@@ -170,6 +172,7 @@ function WelcomePage() {
       setScannedPairCode(pairCode);
       // 6. Ouvre un modal : nom + mot de passe temporaire (le code affiché sous le QR).
       setEmployeeNameInput("");
+      setEmployeePhoneInput("");
       setPairCodeInput("");
       setShowEmployeeNameModal(true);
     } catch {
@@ -212,6 +215,9 @@ function WelcomePage() {
       return;
     }
     await setIdentityEmployeeName(name);
+    // Facultatif : le patron voit ce numéro dans « Activité du personnel ». Absent, il
+    // affiche « Numéro non déclaré » plutôt qu'un numéro deviné.
+    if (employeePhoneInput.trim()) await setIdentityEmployeePhone(employeePhoneInput.trim());
     toast.success(`Bienvenue ${name} — boutique synchronisée.`);
     savePreferences({ onboarded: true, onboardingCompleted: true });
     qc.invalidateQueries({ queryKey: ["preferences"] });
@@ -380,7 +386,7 @@ function WelcomePage() {
                   </p>
                 </div>
               </div>
-              <div>
+<div>
                 <Label htmlFor="emp-name">Votre nom (pour l'équipe)</Label>
                 <Input
                   id="emp-name"
@@ -397,8 +403,22 @@ function WelcomePage() {
                 />
               </div>
               <div>
+                <Label htmlFor="emp-phone">Votre numéro (facultatif)</Label>
+                <Input
+                  id="emp-phone"
+                  type="tel"
+                  inputMode="tel"
+                  value={employeePhoneInput}
+                  onChange={(e) => setEmployeePhoneInput(e.target.value)}
+                  placeholder="Pour que le propriétaire vous joigne"
+                  className="h-12 text-base"
+                  autoComplete="tel"
+                />
+              </div>
+              <div>
                 <Label htmlFor="emp-code">Mot de passe temporaire (sous le QR)</Label>
                 <Input
+
                   id="emp-code"
                   value={pairCodeInput}
                   onChange={(e) => setPairCodeInput(e.target.value)}

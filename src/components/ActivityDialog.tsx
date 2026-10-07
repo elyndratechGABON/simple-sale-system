@@ -15,6 +15,7 @@ import {
   Boxes,
   Clock,
   MonitorSmartphone,
+  Phone,
   Receipt,
   UserRound,
   Users,
@@ -119,18 +120,28 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
     staleTime: 30_000,
   });
 
-  // CA agrégé par vendeur : `seller_name` absent = caisse propriétaire (Direct).
+  // CA agrégé par ÉCRAN, pas par nom : deux employés qui n'ont pas encore saisi leur nom
+  // s'appellent tous deux « Employé », et le patron voyait une seule ligne. La clé est
+  // `seller_device_id` (posé à la vente par l'écran qui encaisse) ; le libellé vient du
+  // registre des pairs — la fiche de l'écran, donc son nom et son numéro déclarés.
   const bySeller = useMemo(() => {
-    const map = new Map<string, { name: string; count: number; revenue: number }>();
+    const peerById = new Map((peers ?? []).map((p) => [p.id, p]));
+    const map = new Map<string, { key: string; name: string; phone: string; count: number; revenue: number }>();
     for (const s of sales ?? []) {
-      const label = sellerDisplay(s.seller_name);
-      const cur = map.get(label) ?? { name: label, count: 0, revenue: 0 };
+      const key = s.seller_device_id ?? "direct";
+      const cur = map.get(key) ?? {
+        key,
+        name: sellerDisplay(s.seller_name),
+        phone: peerById.get(key)?.phone?.trim() ?? "",
+        count: 0,
+        revenue: 0,
+      };
       cur.count += 1;
       cur.revenue += s.total;
-      map.set(label, cur);
+      map.set(key, cur);
     }
     return [...map.values()].sort((a, b) => b.revenue - a.revenue);
-  }, [sales]);
+  }, [sales, peers]);
 
   const itemsCount = useMemo(() => {
     const map = new Map<string, number>();
@@ -202,7 +213,7 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
           <div className="space-y-2">
             {bySeller.map((b) => (
               <div
-                key={b.name}
+                key={b.key}
                 className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
@@ -213,6 +224,7 @@ export function ActivityDialog({ open, onOpenChange }: ActivityDialogProps) {
                     <p className="truncate text-sm font-semibold">{b.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {b.count} vente{b.count > 1 ? "s" : ""}
+                      {b.phone ? ` · ${b.phone}` : ""}
                     </p>
                   </div>
                 </div>
@@ -334,10 +346,29 @@ function DeviceRow({ device, pending }: { device: PairedDevice; pending?: boolea
           className={`h-2 w-2 shrink-0 rounded-full ${pending ? "bg-amber-500" : "bg-emerald-500"}`}
         />
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{device.device_name || "Écran sans nom"}</p>
+          <p className="truncate text-sm font-medium">
+            {device.device_name?.trim() || "Écran sans nom"}
+          </p>
+          {/* Numéro déclaré par l'écran : c'est ce que le patron compose. Vide = non
+              déclaré, et on le dit — un numéro inventé serait pire qu'un numéro absent. */}
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <MonitorSmartphone className="h-3 w-3" />
-            {lastSeenLabel(device.last_seen)}
+            {device.phone?.trim() ? (
+              <>
+                <Phone className="h-3 w-3" />
+                <a
+                  href={`tel:${device.phone.replace(/\s+/g, "")}`}
+                  className="hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {device.phone.trim()}
+                </a>
+              </>
+            ) : (
+              <>
+                <MonitorSmartphone className="h-3 w-3" />
+                {lastSeenLabel(device.last_seen)}
+              </>
+            )}
           </p>
         </div>
       </div>

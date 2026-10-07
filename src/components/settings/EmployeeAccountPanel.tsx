@@ -39,6 +39,7 @@ import {
   ensureIdentity,
   resetDeviceIdentity,
   setIdentityEmployeeName,
+  setIdentityEmployeePhone,
 } from "@/lib/syncengine/identity";
 import { importOwnerCatalog, type ImportPhase } from "@/lib/sync";
 import { buildClosingPayload, parseRestitutionRequest } from "@/lib/restitution";
@@ -51,6 +52,7 @@ import {
   Download,
   Loader2,
   Lock,
+  Phone,
   Send,
   ShieldAlert,
   Trash2,
@@ -72,11 +74,18 @@ export function EmployeeAccountPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [immediateOpen, setImmediateOpen] = useState(false);
 
-  // Profil : nom affiché de l'employé — chargé depuis l'identité, modifiable.
+  // Profil : nom affiché et numéro joignable — chargés depuis l'identité, modifiables.
+  // Le numéro est ce que le propriétaire compose dans « Activité du personnel ».
   const qc = useQueryClient();
   const [employeeName, setEmployeeName] = useState("");
+  const [employeePhone, setEmployeePhone] = useState("");
+  const [identity, setIdentity] = useState<Awaited<ReturnType<typeof ensureIdentity>> | null>(null);
   useEffect(() => {
-    void ensureIdentity().then((id) => setEmployeeName(id.employeeName ?? ""));
+    void ensureIdentity().then((id) => {
+      setIdentity(id);
+      setEmployeeName(id.employeeName ?? "");
+      setEmployeePhone(id.employeePhone ?? "");
+    });
   }, []);
 
   // Import manuel du catalogue propriétaire (pull des ops du groupe + application).
@@ -255,6 +264,33 @@ export function EmployeeAccountPanel() {
               }}
             >
               <UserRound className="h-4 w-4 mr-1" />
+              OK
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="emp-phone">Numéro de téléphone</Label>
+          <div className="flex gap-2">
+            <Input
+              id="emp-phone"
+              type="tel"
+              inputMode="tel"
+              value={employeePhone}
+              onChange={(e) => setEmployeePhone(e.target.value)}
+              placeholder="Pour que le propriétaire vous joigne"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!employeePhone.trim() || employeePhone.trim() === identity?.employeePhone}
+              onClick={() => {
+                void setIdentityEmployeePhone(employeePhone.trim());
+                setIdentity((id) => (id ? { ...id, employeePhone: employeePhone.trim() } : id));
+                toast.success("Numéro enregistré — visible par le propriétaire.");
+              }}
+            >
+              <Phone className="h-4 w-4 mr-1" />
               OK
             </Button>
           </div>

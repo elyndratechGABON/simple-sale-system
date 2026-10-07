@@ -139,12 +139,13 @@ export async function verifyOpSignature(op: SyncOp, publicKeyJwk: string): Promi
 export async function ensureIdentity(): Promise<SyncIdentity> {
   if (cache) return cache;
   const db = getDB();
-  const [deviceRow, publicRow, privateRow, roleRow, nameRow] = await Promise.all([
+  const [deviceRow, publicRow, privateRow, roleRow, nameRow, phoneRow] = await Promise.all([
     db.settings.get(IDENTITY_KEYS.device),
     db.settings.get(IDENTITY_KEYS.publicKey),
     db.settings.get(IDENTITY_KEYS.privateKey),
     db.settings.get(IDENTITY_KEYS.role),
     db.settings.get(IDENTITY_KEYS.employeeName),
+    db.settings.get(IDENTITY_KEYS.employeePhone),
   ]);
 
   let deviceId = deviceRow?.value as string | undefined;
@@ -179,6 +180,7 @@ export async function ensureIdentity(): Promise<SyncIdentity> {
     // base devient employé — jamais propriétaire (pas de montée de privilège).
     role: roleRow?.value === "employee" || roleRow?.value === "manager" ? "employee" : "owner",
     employeeName: typeof nameRow?.value === "string" ? nameRow.value : "",
+    employeePhone: typeof phoneRow?.value === "string" ? phoneRow.value : "",
   };
   return cache;
 }
@@ -250,6 +252,15 @@ export async function setIdentityEmployeeName(name: string): Promise<SyncIdentit
   return cache;
 }
 
+/** Le numéro est déclaré par l'EMPLOYÉ, pas déduit : le patron doit pouvoir l'appeler
+ *  sans que l'application invente quoi que ce soit. Vide = non déclaré. */
+export async function setIdentityEmployeePhone(phone: string): Promise<SyncIdentity> {
+  const id = getIdentity();
+  await getDB().settings.put({ key: IDENTITY_KEYS.employeePhone, value: phone.trim() });
+  cache = { ...id, employeePhone: phone.trim() };
+  return cache;
+}
+
 /** Oublie l'identité courante, purge le journal et repart d'un appareil neuf.
  *  À utiliser quand le mobile change de compte/commerce : les ops de l'ancien monde
  *  n'ont plus d'objet ici. */
@@ -262,6 +273,7 @@ export async function resetDeviceIdentity(): Promise<SyncIdentity> {
       IDENTITY_KEYS.privateKey,
       IDENTITY_KEYS.role,
       IDENTITY_KEYS.employeeName,
+      IDENTITY_KEYS.employeePhone,
       SEQUENCE_KEY,
       // Un appareil neuf doit pouvoir (se) présenter à nouveau : le drapeau d'annonce
       // et le code de paire de l'ancienne vie n'ont plus de sens.

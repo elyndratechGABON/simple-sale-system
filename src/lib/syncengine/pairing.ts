@@ -96,7 +96,15 @@ export async function announceDevice(pairCode?: string): Promise<void> {
     device_id: identity.deviceId,
     server_device_id: profile?.deviceId ?? "",
     public_key: getDeviceKeys().publicKey,
-    employee_name: identity.employeeName || profile?.storeName?.trim() || "",
+    // Le nom d'un EMPLOYÉ est celui que la personne a saisi. Le repli sur le nom de la
+    // boutique n'a de sens que pour le PROPRIÉTAIRE (son écran se nomme par la boutique) :
+    // chez un employé, il affichait le nom du commerce à la place d'une personne, et le
+    // patron croyait avoir autant d'employés que de boutiques.
+    employee_name:
+      identity.role === "owner"
+        ? identity.employeeName || profile?.storeName?.trim() || ""
+        : identity.employeeName.trim(),
+    employee_phone: identity.employeePhone?.trim() ?? "",
     role: identity.role,
     ...(pairCode ? { pair_code: pairCode.toUpperCase() } : {}),
   };

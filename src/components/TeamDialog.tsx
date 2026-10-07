@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Clock,
   MonitorSmartphone,
+  Phone,
   Receipt,
   TrendingUp,
   UserRound,
@@ -242,10 +243,17 @@ function TeamRow({
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">
-          {device.device_name || "Écran sans nom"}
+          {device.device_name?.trim() || "Écran sans nom"}
           {isOwnerDevice && <span className="ml-1.5 text-xs text-muted-foreground">(vous)</span>}
         </p>
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          {device.phone?.trim() ? (
+            <>
+              <Phone className="h-3 w-3" />
+              {device.phone.trim()}
+              <span aria-hidden>·</span>
+            </>
+          ) : null}
           <Clock className="h-3 w-3" />
           {lastSeenLabel(device.last_seen)}
         </p>
@@ -278,6 +286,29 @@ function EmployeeResults({ device }: { device: PairedDevice }) {
 
   return (
     <div className="space-y-3">
+      {/* Identité de la personne : nom + numéro joignable, tels que l'écran les déclare */}
+      <div className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            {device.device_name?.trim() || "Écran sans nom"}
+          </p>
+          {device.phone?.trim() ? (
+            <a
+              href={`tel:${device.phone.replace(/\s+/g, "")}`}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+            >
+              <Phone className="h-3 w-3" />
+              {device.phone.trim()}
+            </a>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Numéro non déclaré par cet écran.
+            </p>
+          )}
+        </div>
+        <RoleBadge role={device.role} />
+      </div>
+
       {/* Sélecteur de période */}
       <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
         {(
