@@ -81,12 +81,26 @@ export interface ProcessedOp {
   processed_at: number;
 }
 
+/** Décision du propriétaire : ce qu'il partage avec UN écran. */
+export type ShareMode = "all" | "selection";
+
 /** Registre local des appareils connus du même compte (post-pairing). */
 export interface PairedDevice {
   id: string;
   /** Groupe de partage auquel appartient le pair. */
   shop_id: string;
   device_name?: string;
+  /** `all` = tout le catalogue ; `selection` = une liste de produits. Absent = `all`
+   *  (les pairs enregistrés avant l'introduction du choix se comportent comme avant). */
+  share_mode?: ShareMode;
+  /** Produits retenus quand `share_mode === "selection"`. */
+  shared_product_ids?: string[];
+  /** Empreinte du sous-catalogue déjà publié pour ce pair : évite de renvoyer le même
+   *  stock à chaque cycle. Mémorisée seulement après un push réussi. */
+  shared_signature?: string;
+  /** Dernière publication pour ce pair — la fenêtre anti-spam vit ICI, pas en mémoire :
+   *  un redémarrage de l'application ne doit pas redéclencher une rafale d'instantanés. */
+  shared_published_at?: number;
   /** Numéro déclaré par l'écrans (`device.announce`) : sert au patron à joindre la
    *  bonne personne dans « Activité du personnel ». Facultatif — un écran qui ne l'a
    *  pas déclaré n'affiche aucun numéro, jamais un numéro deviné. */
@@ -187,6 +201,11 @@ export interface DeviceApprovePayload {
 export interface CatalogueSnapshotPayload {
   products: import("@/lib/db").Product[];
   shop?: { storeName: string; ownerName?: string };
+  /** Destinataire EXCLUSIF de l'instantané, si le propriétaire partage une sélection.
+   *  Absent = historique : le catalogue entier, pour tout le groupe (le comportement
+   *  d'avant). Présent, l'écran visé l'applique, tous les AUTRES l'ignorent — c'est ce
+   *  qui permet de partager un choix différent à chaque employé. */
+  target_device_id?: string;
 }
 
 /** Demande d'un instantané FRIS du catalogue : émise par l'écran qui importe le stock du

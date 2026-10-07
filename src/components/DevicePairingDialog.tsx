@@ -31,13 +31,15 @@ import {
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import { getPreferences } from "@/lib/settings";
 import { blessEmployeeDevice, getAccountQuota } from "@/lib/gatekeeper";
-import { getDB, getShopProfile } from "@/lib/db";
+import { getDB, getShopProfile, listProducts } from "@/lib/db";
 import {
   ensureIdentity,
   setIdentityEmployeeName,
   setIdentityRole,
 } from "@/lib/syncengine/identity";
 import { invalidateDeviceQueries, listPairedDevices } from "@/lib/syncengine/peers";
+import { ShareStockDialog } from "@/components/ShareStockDialog";
+import { shareLabel } from "@/lib/syncengine/sharing";
 import {
   announceDevice,
   approveDevice,
@@ -47,7 +49,7 @@ import {
   pairCodeExpiry,
   ROLE_LABELS,
 } from "@/lib/syncengine/pairing";
-import type { DeviceRole } from "@/lib/syncengine/types";
+import type { DeviceRole, PairedDevice } from "@/lib/syncengine/types";
 
 interface DevicePairingDialogProps {
   open: boolean;
@@ -65,6 +67,8 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   const [enteredCode, setEnteredCode] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
+  // Partage de stock : écran employé dont on est en train de régler le partage.
+  const [sharePeer, setSharePeer] = useState<PairedDevice | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ["shop_profile"],
@@ -86,6 +90,14 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     queryFn: () => listPairedDevices(identity?.shopId ?? ""),
     enabled: open && Boolean(identity),
   });
+  // Nombre de produits du catalogue : le libellé « Tout le stock (N produits) » doit
+  // compter le catalogue RÉEL, pas une valeur devinée.
+  const { data: produitsCount } = useQuery({
+    queryKey: ["share_stock_count"],
+    queryFn: async () => (await listProducts()).length,
+    enabled: open,
+    staleTime: 15_000,
+  });
 
   const hasNamePhone = Boolean(
     (profile?.accountPhone || profile?.phone) && (profile?.accountName || profile?.storeName),
@@ -101,7 +113,8 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
   const atCapacity = quota ? localDeviceCount >= quota.maxDevices : false;
   const isOwner = identity?.role === "owner";
   const pending = (peers ?? []).filter((p) => p.status === "pending");
-  const pairedCount = (peers ?? []).filter((p) => p.status !== "pending").length;
+  const paired = (peers ?? []).filter((p) => p.status !== "pending");
+  const pairedCount = paired.length;
   const minutesLeft = codeExpiry ? Math.max(0, Math.ceil((codeExpiry - Date.now()) / 60_000)) : 0;
 
   // Génération paresseuse : seulement quand le dialogue s'ouvre avec un compte connu.
@@ -306,6 +319,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     // requêtes distinctes ; l'invalidateur central les rafraîchit toutes. Sans cela le
     // compteur restait figé jusqu'au handshake suivant — indéfiniment hors ligne.
     await invalidateDeviceQueries(qc);
+    // L'approbation est le moment où le propriétaire décide du STOCK : on ouvre le choix
+    // tout de suite, tant qu'il a l'écran en tête.
+    const approuve = await getDB().paired_devices.get(peerId);
+    if (approuve) setSharePeer(approuve);
   }
 
   return (
@@ -457,9 +474,58 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                   : "Aucun employé connecté pour l'instant. Partagez le QR ci-dessus."}
               </p>
             )}
+
+            {/* Stock partagé, écran par écran : c'est ICI que le propriétaire change ce qu'un
+                employé a le droit de voir. Le réglage s'applique sans ré-appairage. */}
+            {isOwner && paired.length > 0 && (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">Stock partagé</p>
+                {paired
+                  .filter((p) => p.id !== identity?.deviceId)
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {p.device_name?.trim() || "Écran sans nom"}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {shareLabel(p, produitsCount ?? 0)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSharePeer(p)}
+                      >
+                        Changer
+                      </Button>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
       </DialogContent>
+
+      {/* Le choix du stock : une modale au-dessus de l'appairage, pour qu'un partage ne
+          puisse pas rester coincé derrière ce dialogue. */}
+      <ShareStockDialog
+        open={sharePeer !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setSharePeer(null);
+            void qc.invalidateQueries({ queryKey: ["paired_devices"] });
+          }
+        }}
+        peer={sharePeer}
+        onShared={(count) =>
+          toast.success("Stock partagé — l'employé le reçoit à sa prochaine connexion.")
+        }
+      />
     </Dialog>
   );
 }

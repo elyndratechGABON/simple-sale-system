@@ -30,9 +30,9 @@ import { listPendingOps, markOpsSynced } from "./outbox";
 import { getDB, listProducts } from "../db";
 import { getPreferences } from "../settings";
 import { getPairingToken } from "./pairing"; // Nouveau jeton pour l'appairage
+import { emitShareOps, markSharePublished, pairedEmployees } from "./sharing";
 import type {
   CatalogueRequestPayload,
-  CatalogueSnapshotPayload,
   DeviceAnnouncePayload,
   SyncIdentity,
   SyncOp,
@@ -46,15 +46,13 @@ const SNAPSHOT_THROTTLE_MS = 20_000;
 
 const KEY_LAST_SNAPSHOT = "syncengine_last_snapshot_at";
 
-/** Publication continue du catalogue : le propriétaire maintient FRIS un instantané ABSOLU
- *  au relais — à chaque changement de son catalogue (création, vente, réappro, réception de
- *  la vente d'un employé qui modifie son stock). Ainsi « Importer le stock du propriétaire »
- *  n'attend plus le propriétaire : l'instantané est déjà au relais, le tir suffit. Deux
- *  garde-fous : la signature du catalogue (ne re-publier que si quelque chose a changé) et un
- *  pas minimal (ne pas publier une centaine de fois pendant une fermeture de caisse). */
-const AUTO_SNAPSHOT_MIN_INTERVAL_MS = 30_000;
+/** Publication continue du catalogue : le propriétaire maintient pour CHAQUE écran employé
+ *  un instantané ABSOLU au relais — à chaque changement de son catalogue (création, vente,
+ *  réappro, réception de la vente d'un employé qui modifie son stock). Ainsi « Importer le
+ *  stock du propriétaire » n'attend plus le propriétaire : l'instantané est déjà au relais,
+ *  le tir suffit. Deux garde-fous : la signature du catalogue (ne re-publier que si quelque
+ *  chose a changé) et le délai par écran (pas une rafale pendant une fermeture de caisse). */
 export const KEY_LAST_CATALOG_SIG = "syncengine_last_catalog_sig";
-export const KEY_LAST_AUTO_SNAPSHOT = "syncengine_last_auto_snapshot_at";
 
 /** La bouche d'entrée/sortie d'un canal d'échange. Remplaçable inconditionnellement. */
 export interface TransportClient {
@@ -143,21 +141,38 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     }
 
     // Import « stock du propriétaire » demandé par un écran du groupe : le membre principal
-    // répond en poussant un instantané ABSOLU du catalogue vivant (stock courant). Ne
-    // réagir qu'à une demande PAS ENCORE consommée (`processed_ops`) : `foreign` contient
-    // toutes les ops du relais, y compris celles déjà rejouées aux cycles précédents.
-    const pendingRequests = await Promise.all(
-      foreign
-        .filter((op) => op.type === "catalogue.request")
-        .map((op) => getDB().processed_ops.get(op.id)),
-    );
-    const catalogRequested = pendingRequests.some((row) => !row);
+    // répond avec LE sous-catalogue choisi pour cet écran (`shared_product_ids` /
+    // `share_mode` de sa fiche), jamais avec le catalogue entier. On ne répond qu'aux
+    // demandes PAS ENCORE consommées (`processed_ops`) : `foreign` contient toutes les ops
+    // du relais, y compris celles rejouées aux cycles précédents.
+    //
+    // `requester_id` est la clé : c'est lui qui dit à qui on parle. Plusieurs employés
+    // peuvent demander au même cycle — chacun reçoit le sien.
+    const demandes = foreign.filter((op) => op.type === "catalogue.request");
+    const dejaVues = await Promise.all(demandes.map((op) => getDB().processed_ops.get(op.id)));
+    const fresh = demandes.filter((_, i) => !dejaVues[i]);
     const { applied } = await applyRemoteOps(foreign);
-    if (identity.role !== "employee" && (newcomerAnnounced || catalogRequested)) {
+
+    // Nouvelle arrivée au groupe : elle a droit à son stock, mais celui qu'on lui a choisi.
+    if (identity.role !== "employee") {
       const db = getDB();
+      const peers = await pairedEmployees(identity.shopId);
+      const cibles: string[] = [];
+      for (const demande of fresh) {
+        const id = (demande.payload as CatalogueRequestPayload | undefined)?.requester_id;
+        if (id && !cibles.includes(id)) cibles.push(id);
+      }
+      if (newcomerAnnounced) {
+        // L'op d'annonce est dans `foreign` : le nouveau pair est donc déjà enregistré.
+        for (const peer of peers) if (!cibles.includes(peer.id)) cibles.push(peer.id);
+      }
       const last = Number((await db.settings.get(KEY_LAST_SNAPSHOT))?.value ?? 0);
-      if (Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
-        await emitCatalogSnapshot(identity);
+      if (cibles.length > 0 && Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
+        for (const cible of cibles) {
+          const peer = peers.find((p) => p.id === cible);
+          if (!peer) continue;
+          await emitShareOps(peer);
+        }
         await db.settings.put({ key: KEY_LAST_SNAPSHOT, value: Date.now() });
       }
     }
@@ -187,33 +202,43 @@ async function catalogSignature(): Promise<string> {
   return JSON.stringify(products);
 }
 
-/** Republie l'instantané FRIS du catalogue si (1) il a changé depuis la dernière
- *  publication ET (2) la fenêtre minimale est passée. Pousse l'op sur-le-champ (mini-push
- *  de fin de rotation) pour que le relais la détienne dès ce cycle — le prochain « importer »
- *  de l'employé la tirera. La signature n'est mémorisée qu'après un push RÉUSSI : un échec
- *  n'emprisonne jamais le relais dans un catalogue périmé. */
+/** Republie, pour CHAQUE écran employé, le sous-catalogue que le propriétaire lui a
+ *  choisi — et lui seulement. Avant, un changement de catalogue repartait en un instantané
+ *  que TOUT le groupe appliquait : un employé ne pouvait donc pas être privé d'un article.
+ *  `emitShareOps` ne sort que si le sous-catalogue de ce pair a changé depuis son dernier
+ *  envoi RÉUSSI, et la signature n'est mémorisée qu'après le push (un échec n'enferme pas
+ *  le relais sur un catalogue périmé). Pousse sur-le-champ (mini-push de fin de rotation)
+ *  pour que le relais la détienne dès ce cycle. */
 async function publishFreshCatalog(client: TransportClient, identity: SyncIdentity): Promise<void> {
   if (identity.role === "employee") return;
   const db = getDB();
-  const now = Date.now();
   const sig = await catalogSignature();
   // Catalogue vide → rien à redistribuer, et aucune trace : un republier avec zéro produit
   // n'apporterait que du bruit au relais (et ferait « voir » un appareil sans catalogue).
   if (!sig || sig === "[]") return;
-  const [lastSig, lastAt] = await Promise.all([
-    db.settings.get(KEY_LAST_CATALOG_SIG),
-    db.settings.get(KEY_LAST_AUTO_SNAPSHOT),
-  ]);
+  const lastSig = await db.settings.get(KEY_LAST_CATALOG_SIG);
+  // Catalogue inchangé : inutile de calculer une part par employé.
   if (lastSig?.value === sig) return;
-  if (now - Number(lastAt?.value ?? 0) < AUTO_SNAPSHOT_MIN_INTERVAL_MS) return;
-  await emitCatalogSnapshot(identity);
+
+  // Une seule passe : on prépare les parts à envoyer, puis on ne pousse que si au moins
+  // un écran a effectivement changé de sous-catalogue. Le délai anti-spam est celui du
+  // PAIR (`shared_published_at`) : un délai global bloquerait la publication même quand la
+  // part d'UN employé vient de changer — précisément le cas qu'on veut voir passer.
+  const peers = await pairedEmployees(identity.shopId);
+  const parts: { peerId: string; signature: string; at: number }[] = [];
+  for (const peer of peers) {
+    const part = await emitShareOps(peer);
+    if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
+  }
+  if (parts.length === 0) return;
+
   const pending = await listPendingOps(identity.shopId);
   if (pending.length > 0) {
     const signed = await signAll(pending);
     if (await client.push(identity.shopId, signed)) {
       await markOpsSynced(pending.map((o) => o.id));
       await db.settings.put({ key: KEY_LAST_CATALOG_SIG, value: sig });
-      await db.settings.put({ key: KEY_LAST_AUTO_SNAPSHOT, value: now });
+      for (const part of parts) await markSharePublished(part.peerId, part.signature, part.at);
     }
   }
 }
@@ -230,27 +255,6 @@ export async function emitCatalogRequest(identity: SyncIdentity): Promise<void> 
     await emitOp(db, identity, {
       type: "catalogue.request",
       entity_id: identity.deviceId,
-      payload,
-    });
-  });
-}
-
-/** Instantané du catalogue vivant, émis pour un écran qui vient de rejoindre le groupe. */
-async function emitCatalogSnapshot(identity: SyncIdentity): Promise<void> {
-  const db = getDB();
-  // La photo voyage : réduite en webp ~256 px (~5-30 Ko par produit), un bootstrap
-  // complet reste léger pour le relais — et un écran neuf doit VOIR les photos du
-  // catalogue, pas des cases vides en attendant une future édition.
-  const products = await listProducts();
-  const shopName = await snapshotShopName();
-  const payload: CatalogueSnapshotPayload = {
-    products,
-    ...(shopName ? { shop: { storeName: shopName } } : {}),
-  };
-  await db.transaction("rw", db.sync_ops, db.settings, async () => {
-    await emitOp(db, identity, {
-      type: "catalogue.snapshot",
-      entity_id: "catalog",
       payload,
     });
   });

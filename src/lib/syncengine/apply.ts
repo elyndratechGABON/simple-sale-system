@@ -15,7 +15,7 @@
 import { getDB, isClosed } from "../db";
 import type { PosDatabase, ProductVariant } from "../db";
 import { getPreferences, savePreferences } from "../settings";
-import { verifyOpSignature } from "./identity";
+import { verifyOpSignature, getIdentity } from "./identity";
 import { invalidateSyncQueries } from "@/lib/syncengine/queries";
 import type {
   CatalogueSnapshotPayload,
@@ -437,6 +437,11 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       // écran a déjà comptée, ne peut donc pas ressusciter des unités vendues. Les
       // deltas restent le canal des mouvements, l'instantané celui de l'état.
       const pl = op.payload as CatalogueSnapshotPayload;
+      // Partage ciblé : le propriétaire peut envoyer un sous-catalogue différent à chaque
+      // employé. Tout le groupe voit les mêmes ops au relais (il est aveugle), donc c'est
+      // ICI qu'on décide : un instantané qui porte un destinataire et qui n'est pas le
+      // mien ne s'applique pas. Sans `target_device_id`, c'est le broadcasting historique.
+      if (pl?.target_device_id && pl.target_device_id !== getIdentity().deviceId) break;
       for (const p of pl?.products ?? []) {
         if (!p?.id || p.deleted_at) continue;
         const existing = await db.products.get(p.id);

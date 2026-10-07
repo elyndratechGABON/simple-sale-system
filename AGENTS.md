@@ -75,6 +75,16 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
   (client hints = modèle réel, mémoire, points de contact) sont les SEULS qui séparent
   deux téléphones de même profil : les retirer recommence à refuser l'inscription du
   second commerçant. Voir `fingerprintInput` et son test.
+- **Un instantané de catalogue S'ADRESSE ou il ne vaut rien.** `catalogue.snapshot`
+  porte `target_device_id` : le propriétaire partage un choix DIFFÉRENT à chaque employé,
+  et `apply.ts` ignore un instantané qui ne le vise pas. Supprimer ce filtre rend le partage
+  à personne — c'était le modèle précédent (un broadcasting que tout le groupe appliquait,
+  donc aucun employé ne pouvait être privé d'un article). Corollaire de déploiement : une
+  caisse restée à l'ancien bundle applique les instantanés des AUTRES (elle ignore le
+  champ), donc le cloisonnement n'est complet qu'après son prochain cycle de mise à jour.
+  La décision du propriétaire vit dans `paired_devices` (`share_mode`,
+  `shared_product_ids`), jamais côté employé. Et le partage n'ajoute/actualise que :
+  retirer un produit ne le supprime PAS de la caisse de l'employé.
 - **L'ordre des plugins Vite compte.** `tanstackStart` doit précéder `viteReact` : il
   génère les routes et les entrées client/serveur que le plugin React transforme ensuite.
   Les deux configs assemblent ces plugins à la main depuis que le wrapper qui les
