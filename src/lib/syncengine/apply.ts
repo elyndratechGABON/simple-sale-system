@@ -13,7 +13,7 @@
 // Ne JAMAIS passer par les fonctions publiques de db.ts ici : elles re-émettraient des
 // ops. Application directe sur les stores, sous le seul contrôle de `processed_ops`.
 import { getDB, isClosed } from "../db";
-import type { PosDatabase } from "../db";
+import type { PosDatabase, ProductVariant } from "../db";
 import { getPreferences, savePreferences } from "../settings";
 import { verifyOpSignature } from "./identity";
 import { invalidateSyncQueries } from "@/lib/syncengine/queries";
@@ -422,18 +422,42 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       break;
     }
     case "catalogue.snapshot": {
-      // L'instantané sert de BOOTSTRAP à un écran qui rejoint : les produits qu'il ne
-      // connaît pas encore sont créés à la valeur ABSOLUE portée par l'op (point de
-      // départ de ses deltas). Un produit DÉJÀ présent n'est en revanche ni écrasé ni
-      // ajusté : son stock est arrivé par deltas (commutatifs), et un instantané pris
-      // AVANT une vente que le pair compte déjà « ressusciterait » des unités vendues.
-      // Toute correction de stock passe par `stock.adjusted`, jamais par l'instantané.
+      // L'instantané est le BOOTSTRAP d'un écran qui rejoint — les produits qu'il ne
+      // connaît pas sont créés à la valeur ABSOLUE portée par l'op, point de départ de
+      // ses deltas — mais il est aussi le SEUL canal d'une CORRECTION de stock faite par
+      // le propriétaire : `updateProduct` ne propage pas le stock (une correction de
+      // comptage est un choix local) et une écriture distante n'émet aucune op. Sans
+      // réalignement, la caisse employé garderait le stock de son premier import pour
+      // toujours, et le « transfert de stock » n'aurait lieu qu'une fois dans la vie.
+      //
+      // Réaligner, oui ; écraser, non. L'instantané est DATED (le `updated_at` que le
+      // propriétaire a posé sur sa fiche) et n'est retenu que s'il est plus récent que ce
+      // que l'appareil sait déjà : un instantané périmé, pris avant une vente que cet
+      // écran a déjà comptée, ne peut donc pas ressusciter des unités vendues. Les
+      // deltas restent le canal des mouvements, l'instantané celui de l'état.
       const pl = op.payload as CatalogueSnapshotPayload;
       for (const p of pl?.products ?? []) {
         if (!p?.id || p.deleted_at) continue;
         const existing = await db.products.get(p.id);
-        if (existing) continue;
-        await db.products.put({ ...p, ...touch() });
+        if (!existing) {
+          // Bootstrap : la fiche est celle du propriétaire, `updated_at` compris — c'est
+          // cette date qui decidera, à l'import suivant, si son stock est plus frais.
+          await db.products.put({ ...p });
+          continue;
+        }
+        if (existing.deleted_at) continue;
+        if (!(p.updated_at > existing.updated_at)) continue;
+        // Stock illimité : l'instantané ne peut pas le porter (JSON n'a pas d'infini,
+        // il y voyage en `null`) — on n'y touche donc pas.
+        const stock = Number.isFinite(p.stock) ? p.stock : existing.stock;
+        const variants = p.variants?.map((v) => ({ ...v }));
+        if (stock === existing.stock && sameVariantStocks(variants, existing.variants)) continue;
+        await db.products.put({
+          ...existing,
+          stock,
+          ...(variants ? { variants } : {}),
+          ...touch(),
+        });
       }
       // Le relais est aussi le garant du NOM de la boutique : si ce nouvel écran est
       // encore sur le placeholder « Ma boutique » (fiche jamais écrite à l'onboarding,
@@ -463,3 +487,14 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
 }
 
 const touch = () => ({ updated_at: Date.now(), sync_status: "local" as const });
+
+/** Les stocks de variantes portent-ils les mêmes valeurs ? (l'absence de variante des
+ *  deux côtés compte comme « identique » : rien à réaligner). */
+function sameVariantStocks(
+  next: ProductVariant[] | undefined,
+  current: ProductVariant[] | undefined,
+): boolean {
+  const a = next?.map((v) => v.stock) ?? [];
+  const b = current?.map((v) => v.stock) ?? [];
+  return a.length === b.length && a.every((s, i) => s === b[i]);
+}

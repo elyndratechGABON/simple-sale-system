@@ -229,10 +229,11 @@ export type ImportPhase = "relay" | "waiting" | "receiving";
  * sur l'écran employé). Passe PAR LE RELAIS — jamais l'orchestrateur :
  *  1. l'écran émet une demande d'instantané FRIS → le principal répond à son prochain
  *     cycle d'échange (le téléphone du propriétaire « sonne » toutes les minutes) ;
- *  2. cycles de réception : si le catalogue est déjà au relais (synchro récente du
- *     propriétaire), le premier pull suffit — retour immédiat. Sinon, on attend la réponse
- *     (jusqu'à ~85 s : la fenêtre doit dépasser le cycle de 60 s du propriétaire) et on
- *     s'arrête dès que des produits arrivent.
+ *  2. cycles de réception : on s'arrête dès que le stock BOUGE (import initial : dès que
+ *     des produits arrivent, le reste suivra par deltas). Tant que le téléphone du
+ *     propriétaire n'a pas répondu, le relais n'a rien de neuf — le ré-import attend donc
+ *     sa réponse (jusqu'à ~115 s : la fenêtre doit dépasser le cycle de 60 s du
+ *     propriétaire) au lieu d'annoncer un « déjà à jour » qui n'a rien transféré.
  *  Le `cause` distingue l'échec pour l'UI (« offline », « orphan » = caisse sans compte,
  *  « timeout » = demande en route, réponse pas encore reçue). `progress` pilote
  *  l'animation de transfert affichée pendant l'import.
@@ -255,22 +256,32 @@ export async function importOwnerCatalog(progress?: (phase: ImportPhase) => void
   await emitCatalogRequest(identity);
   progress?.("waiting");
 
-  let lastApplied = 0;
+  const before = await stockFingerprint();
+  let applied = 0;
   let count = 0;
   for (let i = 0; i < 24; i++) {
     const state = await runOpsExchange();
     if (state && state.applied > 0) progress?.("receiving");
-    if (state) lastApplied = state.applied;
+    if (state) applied += state.applied;
     count = (await listProducts()).length;
-    if (count > 0) break;
+    // Le stock est arrivé s'il est ENTRÉ (import initial) ou s'il a BOUGÉ depuis le début
+    // de la manœuvre. « J'ai déjà des produits » ne prouve rien : tant que le téléphone
+    // du propriétaire n'a pas poussé, le relais n'a rien de neuf à rendre, et c'est
+    // exactement ce ré-import que le vendeur attend. Sortir sur ce critère seul
+    // transformait le bouton en « Catalogue déjà à jour » alors que rien n'avait été
+    // transféré — le stock du propriétaire n'arrivait qu'à la PREMIÈRE importation.
+    if (count > 0 && (!before || (await stockFingerprint()) !== before)) break;
     if (i > 0) await sleep(5000);
   }
-  // Check if we already have products (already synced before)
-  const allProducts = await listProducts();
-  if (allProducts.length > 0) {
-    return { ok: true, applied: lastApplied, count: allProducts.length, cause: undefined };
-  }
-  return { ok: count > 0, applied: lastApplied, count, cause: count > 0 ? undefined : "timeout" };
+  if (count > 0) return { ok: true, applied, count, cause: undefined };
+  return { ok: false, applied, count, cause: "timeout" };
+}
+
+/** Empreinte du stock local (`id:niveau`) : répond à « le catalogue a-t-il bougé ? ».
+ *  Vide = caisse sans produit — c'est l'import initial, qui n'attend pas de mouvement. */
+async function stockFingerprint(): Promise<string> {
+  const products = await listProducts();
+  return products.length === 0 ? "" : products.map((p) => `${p.id}:${p.stock}`).join("|");
 }
 
 function sleep(ms: number): Promise<void> {

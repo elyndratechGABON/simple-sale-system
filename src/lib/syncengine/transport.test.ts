@@ -409,6 +409,74 @@ describe("transport P2P via relais", () => {
     expect((await listProducts()).find((p) => p.id === "p2")?.stock).toBe(3);
   });
 
+  it("un instantané plus récent réaligne le stock d'un écran qui a déjà le produit", async () => {
+    // Le « transfert de stock » du propriétaire vers l'employé n'est pas qu'un bootstrap :
+    // une correction de comptage faite par le propriétaire NE part par aucune op
+    // (`updateProduct` ne propage pas le stock, `applyRemoteOps` n'émet rien) — l'instantané
+    // est alors le SEUL canal qui la porte. Sans réalignement, la caisse employé garde le
+    // stock de son dernier import pour toujours.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const relay = makeRelay();
+
+    const drink = await addProduct({
+      name: "Coca 1L",
+      price: 600,
+      cost: 300,
+      category: "Boisson",
+      stock: 4,
+    });
+    const shirt = await addProduct({
+      name: "T-shirt",
+      price: 5000,
+      cost: 2000,
+      category: "Vetement",
+      stock: 3,
+      variants: [
+        { id: "v1", name: "M", stock: 2 },
+        { id: "v2", name: "L", stock: 1 },
+      ],
+    });
+
+    const snapshot = (id: string, stock: number, variantStock: number, updatedAt: number) =>
+      relay.asPeer({
+        id,
+        device_id: "proprietaire",
+        payload: {
+          products: [
+            { ...drink, stock, updated_at: updatedAt },
+            {
+              ...shirt,
+              stock,
+              updated_at: updatedAt,
+              variants: [
+                { id: "v1", name: "M", stock: variantStock },
+                { id: "v2", name: "L", stock: variantStock },
+              ],
+            },
+          ],
+        },
+        status: "synced",
+      });
+
+    // Le propriétaire republie au stock qui lui fait foi — écrit APRÈS notre copie.
+    await applyRemoteOpsSigned([
+      await announceOpFor("proprietaire"),
+      await snapshot("snap:frais", 15, 9, Date.now() + 60_000),
+    ]);
+    const after = await listProducts();
+    expect(after.find((p) => p.id === drink.id)?.stock).toBe(15);
+    expect(after.find((p) => p.id === shirt.id)?.stock).toBe(15);
+    expect(after.find((p) => p.id === shirt.id)?.variants?.map((v) => v.stock)).toEqual([9, 9]);
+
+    // Un instantané PÉRIMÉ (pris avant une vente déjà comptée ici) ne ressuscite rien.
+    await applyRemoteOpsSigned([await snapshot("snap:perime", 4, 1, Date.now() - 60_000)]);
+    const stale = await listProducts();
+    expect(stale.find((p) => p.id === drink.id)?.stock).toBe(15);
+    expect(stale.find((p) => p.id === shirt.id)?.variants?.map((v) => v.stock)).toEqual([9, 9]);
+  });
+
   it("le snapshot porte le nom de la boutique au nouvel écran resté sur « Ma boutique »", async () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
