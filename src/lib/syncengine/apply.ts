@@ -356,14 +356,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         pl.pair_code && activeCode?.value === pl.pair_code && Number(expiresAt?.value ?? 0) > now,
       );
       const wasPaired = existing.status === "paired";
-      // Le rôle d'une annonce n'est reconnu qu'au premier contact (aucune fiche) ou avec
-      // un code de paire juste : une fois l'appareil au registre — même `pending` —, seul
-      // le principal peut le changer (`device.approve`). Un employé pairé qui re-annoncerait
-      // `role: "owner"` ne se promeut donc pas : même règle que l'assistant de jonction,
-      // qui n'a jamais créé de second propriétaire.
       const firstSighting = !existing.role && !existing.status;
-      const role = pl.role && (codeOk || firstSighting) ? pl.role : existing.role;
-      const autoPaired = codeOk || wasPaired || (pl.role === "owner" && firstSighting);
 
       // PREMIER CONTACT. Un groupe sans aucun appareil connu n'a rien à protéger : la
       // confiance initiale y est implicite (c'est ce que veut dire « la première caisse
@@ -372,6 +365,26 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       // l'attaquant frappe.
       const groupEmpty =
         (await db.paired_devices.where("shop_id").equals(op.shop_id).count()) === 0;
+
+      // QUI est le propriétaire, c'est decided ICI et nulle part ailleurs.
+      //
+      //  - un code de paire = le propriétaire a ouvert un poste D'EMPLOYÉ. Le rôle
+      //    annoncé est ignoré : aucun scan, aucun dispositif, aucune annonce forgée ne
+      //    peut produire un second compte propriétaire ;
+      //  - le tout premier écran d'un groupe encore vide EST le propriétaire (c'est lui
+      //    qui a créé la boutique) ;
+      //  - sinon le rôle déjà connu ne bouge pas : seul le principal le change, via
+      //    `device.approve`.
+      //
+      // Avant, `pl.role` passait dès le premier contact : un appareil inconnu pouvait
+      // s'annoncer `owner` et s'afficher « Propriétaire » chez le patron.
+      const role = codeOk
+        ? "employee"
+        : firstSighting && groupEmpty && pl.role === "owner"
+          ? "owner"
+          : existing.role;
+      const autoPaired =
+        codeOk || wasPaired || (role === "owner" && firstSighting && groupEmpty);
 
       // La clé publique n'est PINSÉE que sur une annonce PROUVÉE : le code de paire
       // correct, un appareil déjà au registre, ou le tout premier appareil d'un groupe

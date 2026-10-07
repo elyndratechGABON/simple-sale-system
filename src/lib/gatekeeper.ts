@@ -51,6 +51,23 @@ export async function getAccountQuota(): Promise<AccountQuota | null> {
 }
 
 /**
+ * Relit les places du compte marchand AUPRÈS DU SERVEUR, sans attendre le cycle de sync.
+ *
+ * Le compteur affiché (« 2 / 3 écrans ») vient de la réponse du handshake. Hors ligne, ou
+ * simplement entre deux cycles, il datait du dernier écran connu — un employé qui venait
+ * de scanner n'y était pas, et le patron lisait une place libre alors qu'elle était prise.
+ * Appelé à l'ouverture de « Ajouter un device » : c'est l'instant où il regarde.
+ *
+ * Best-effort : hors ligne, la valeur en cache reste affichée — c'est déjà ce qu'on
+ * montrait, et un « 0/3 » inventé serait pire que « je ne sais pas ».
+ */
+export async function refreshAccountQuota(): Promise<AccountQuota | null> {
+  const result = await handshake();
+  if (!result.ok) return null;
+  return getAccountQuota();
+}
+
+/**
  * Rattache un écran approuvé au compte marchand côté orchestrateur (`/api/v1/account/bless`).
  * Best-effort : le crédit d'écran vit d'abord localement (`1 + écrans approuvés`) ; cet appel
  * ne fait que le faire remonter dès que l'orchestrateur répond — il ne bloque jamais l'usage.

@@ -85,6 +85,19 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
   La décision du propriétaire vit dans `paired_devices` (`share_mode`,
   `shared_product_ids`), jamais côté employé. Et le partage n'ajoute/actualise que :
   retirer un produit ne le supprime PAS de la caisse de l'employé.
+- **Un scan fait un EMPLOYÉ, jamais un PROPRIÉTAIRE.** Dans `apply.ts` (annonce), un code
+  de paire impose `role: "employee"` : le rôle annoncé n'est qu'une déclaration de
+  l'appareil, seul le code du propriétaire compte. Propriétaire, il n'y a que deux cas —
+  la toute première caisse d'un groupe encore vide (elle a créé la boutique), ou un
+  `device.approve` du principal. Retirer cette règle et le rôle reviendrait sur le
+  `firstSighting` : n'importe quel appareil inconnu s'afficherait « Propriétaire » chez le
+  patron. Aucun écran ne peut non plus se promouvoir (`setIdentityRole` refuse
+  employé → propriétaire) : n'expose surtout pas ce sélecteur de rôle dans une interface.
+- **Le compteur d'écrans se rafraîchit à l'ouverture du dialogue.** `refreshAccountQuota`
+  refait un handshake au lieu d'attendre le cycle : la valeur en cache datait du dernier
+  écran connu et lisait « 1 / 3 » alors que le serveur voyait déjà 3 écrans pris. Quand le
+  compteur serveur dépasse le compteur local, l'interface le dit — les deux se complètent,
+  aucun ne remplace l'autre.
 - **Un écran n'est JAMAIS son propre pair.** `listPairedDevices` exclut l'identité
   courante, et une `device.approve` ne crée aucune fiche pour l'appareil approuveur (l'op
   porte l'APPROUVÉ). Rompre l'un ou l'autre fait réapparaître dans « Activité du

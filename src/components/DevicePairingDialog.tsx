@@ -30,13 +30,9 @@ import {
 } from "@/components/ui/select";
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import { getPreferences } from "@/lib/settings";
-import { blessEmployeeDevice, getAccountQuota } from "@/lib/gatekeeper";
+import { blessEmployeeDevice, getAccountQuota, refreshAccountQuota } from "@/lib/gatekeeper";
 import { getDB, getShopProfile, listProducts } from "@/lib/db";
-import {
-  ensureIdentity,
-  setIdentityEmployeeName,
-  setIdentityRole,
-} from "@/lib/syncengine/identity";
+import { ensureIdentity } from "@/lib/syncengine/identity";
 import { invalidateDeviceQueries, listPairedDevices } from "@/lib/syncengine/peers";
 import { ShareStockDialog } from "@/components/ShareStockDialog";
 import { shareLabel } from "@/lib/syncengine/sharing";
@@ -274,31 +270,20 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
 
   // Nom affiché : reprendre celui de l'identité dès qu'elle est chargée.
   useEffect(() => {
-    if (identity) setEmployeeName(identity.employeeName);
-  }, [identity]);
-
-  async function submitPairCode() {
-    const result = await enterPairingCode(enteredCode);
-    if (result === "invalid") {
-      toast.error("Code invalide : 6 caractères (sans O, I, 0, 1 ni 8).");
-      return;
-    }
-    setEnteredCode("");
-    toast.success("Demande envoyée — le principal l'accepte au prochain échange.");
-    setInfoOpen(true);
-  }
-
-  async function changeRole(role: DeviceRole) {
-    await setIdentityRole(role);
-    toast.success(`Cet écran est désormais : ${ROLE_LABELS[role]}.`);
-    await qc.invalidateQueries({ queryKey: ["sync_identity"] });
-  }
-
-  async function saveName() {
-    const trimmed = employeeName.trim();
-    await setIdentityEmployeeName(trimmed);
-    if (trimmed) toast.success(`Nom affiché : ${trimmed}`);
-  }
+    if (!open) return;
+    let annule = false;
+    void (async () => {
+      // Le compteur du compte vient du SERVEUR : le cached peut dater du dernier
+      // handshake, donc d'avant l'employé qui vient de scanner. On le rafraîchit à
+      // l'ouverture — c'est le moment où le patron regarde cette carte.
+      const frais = await refreshAccountQuota();
+      if (annule) return;
+      if (frais) await qc.invalidateQueries({ queryKey: ["account_quota"] });
+    })();
+    return () => {
+      annule = true;
+    };
+  }, [open, qc]);
 
   async function approve(peerId: string) {
     await approveDevice(peerId, "employee");
@@ -342,11 +327,23 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
         {hasNamePhone ? (
           <div className="space-y-4">
             {quota && (
-              <div className="flex items-center justify-between rounded-lg border bg-accent/50 px-3 py-2">
-                <span className="text-sm text-muted-foreground">Appareils sur le compte</span>
-                <Badge variant={atCapacity ? "destructive" : "secondary"} className="tabular-nums">
-                  {localDeviceCount} / {quota.maxDevices}
-                </Badge>
+              <div className="space-y-1 rounded-lg border bg-accent/50 px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Appareils sur le compte</span>
+                  <Badge variant={atCapacity ? "destructive" : "secondary"} className="tabular-nums">
+                    {localDeviceCount} / {quota.maxDevices}
+                  </Badge>
+                </div>
+{/* Le compteur local est instantané (1 écran + pairs approuvés) ; celui du
+                    serveur fait foi et peut le dépasser — un écran connu ailleurs, pas
+                    encore appairé ici. L'afficher évite « 1 / 3 » pendant que le serveur
+                    dit « 3 / 3 ». */}
+                {quota.deviceCount > localDeviceCount && (
+                  <p className="text-xs text-muted-foreground">
+                    {quota.deviceCount} écran{quota.deviceCount > 1 ? "s" : ""} côté serveur —
+                    certains écrans de ce compte ne sont pas encore appairés ici.
+                  </p>
+                )}
               </div>
             )}
 
