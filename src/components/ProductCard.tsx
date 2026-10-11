@@ -42,11 +42,19 @@ export function ProductCard({
 
   // Rupture se dit en toutes lettres : « 0 » se lit comme un stock réellement vide,
   // l'utilisateur doit comprendre que la fiche est à recommander.
+  // Sur un produit à variantes, `product.stock` est la somme des variantes : « Rupture de
+  // stock » ne doit nommer QUE les variantes réellement épuisées, sinon une taille en rayon
+  // fait croire à la rupture du produit entier.
+  const variantes = product.variants ?? [];
   const stockText = isService
     ? "Actif"
     : state === "out"
-      ? "Rupture de stock"
-      : `Stock : ${product.stock}`;
+      ? variantes.length > 0
+        ? `Épuisé : ${variantes.filter((v) => (v.stock ?? 0) <= 0).map((v) => v.name).join(", ")}`
+        : "Rupture de stock"
+      : variantes.length > 0
+        ? `${variantes.filter((v) => (v.stock ?? 0) > 0).length}/${variantes.length} variantes`
+        : `Stock : ${product.stock}`;
 
   return (
     <article

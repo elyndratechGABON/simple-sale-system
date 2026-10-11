@@ -43,14 +43,21 @@ export function buildAlerts(
     // Une prestation n'a pas de réserve : un service ne déclenche ni rupture ni seuil.
     if (p.type === "service") continue;
     if (p.stock === Number.POSITIVE_INFINITY) continue;
-    if (p.stock <= 0) {
-      alerts.push({
-        id: `rupture:${p.id}`,
-        severity: "danger",
-        title: p.name,
-        detail: "Rupture de stock",
-        to: "/stocks",
-      });
+if (p.stock <= 0) {
+        // Sur un produit à variantes, `stock` est la somme des variantes : dire « rupture »
+        // nommerait à tort une taille épuisée alors que les autres sont en rayon.
+        const variantes = p.variants ?? [];
+        const encoreDispo = variantes.filter((v) => (v.stock ?? 0) > 0);
+        alerts.push({
+          id: `rupture:${p.id}`,
+          severity: encoreDispo.length > 0 ? "warning" : "danger",
+          title: p.name,
+          detail:
+            encoreDispo.length > 0
+              ? `${encoreDispo.length} variante${encoreDispo.length > 1 ? "s" : ""} sur ${variantes.length} épuisée${encoreDispo.length > 1 ? "s" : ""} (${encoreDispo.map((v) => v.name).join(", ")})`
+              : "Rupture de stock",
+          to: "/stocks",
+        });
     } else {
       const threshold =
         typeof p.min_stock === "number" && p.min_stock > 0 ? p.min_stock : LOW_STOCK_THRESHOLD;

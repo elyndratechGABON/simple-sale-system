@@ -1022,9 +1022,27 @@ export async function listProducts(): Promise<Product[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Un produit à variantes porte son stock DANS ses variantes — c'est l'invariant annoncé sur
+ * `ProductVariant`. `stock` n'en est que la somme, appliquée ici, au seul endroit où TOUT
+ * le monde écrit un produit (formulaire, onboarding, import JSON).
+ *
+ * Sans cette normalisation, un produit dont le stock n'a été saisi que dans les variantes
+ * reste à 0 : l'alerte « rupture de stock » se déclenche alors que ses variantes sont en
+ * rayon, et la pastille « stock faible » colle sur la carte en caisse. Un bien de location
+ * (`is_asset`) fait exception : son stock est le nombre d'unités physiques (`total_units`),
+ * pas une somme de variantes.
+ */
+export function normalizeVariantStock<
+  T extends { stock: number; is_asset?: boolean; variants?: ProductVariant[] },
+>(p: T): T {
+  if (!p.variants?.length || p.is_asset) return p;
+  return { ...p, stock: p.variants.reduce((total, v) => total + (v.stock ?? 0), 0) };
+}
+
 export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Promise<Product> {
   await ensureIdentity();
-  const product: Product = { ...p, id: uid(), ...touch() };
+  const product: Product = normalizeVariantStock({ ...p, id: uid(), ...touch() });
   const db = getDB();
   // Produit + op dans UNE transaction : un produit présent sans son op de création ne
   // pourrait jamais arriver seul sur un autre appareil.
@@ -1065,6 +1083,9 @@ export async function updateProduct(p: Product): Promise<void> {
   await ensureIdentity();
   const db = getDB();
   const previous = await db.products.get(p.id);
+  // Normalisé AVANT la comparaison : le journal doit raconter la même correction que celle
+  // réellement écrite, pas un écart entre le stock somme et le stock saisi dans le formulaire.
+  const next = normalizeVariantStock({ ...p, ...touch() });
   await db.transaction(
     "rw",
     db.products,
@@ -1072,19 +1093,19 @@ export async function updateProduct(p: Product): Promise<void> {
     db.sync_ops,
     db.settings,
     async () => {
-      await db.products.put({ ...p, ...touch() });
+      await db.products.put(next);
       // Le formulaire écrit un stock ABSOLU : s'il change, c'est une correction de
       // comptage et elle doit figurer au journal comme les autres variations.
       if (
         previous &&
         Number.isFinite(previous.stock) &&
-        Number.isFinite(p.stock) &&
-        p.stock !== previous.stock
+        Number.isFinite(next.stock) &&
+        next.stock !== previous.stock
       ) {
         await recordMovement(db, {
-          product_id: p.id,
-          product_name: p.name,
-          delta: p.stock - previous.stock,
+          product_id: next.id,
+          product_name: next.name,
+          delta: next.stock - previous.stock,
           reason: "correction",
           note: "Modification du produit",
         });
@@ -1092,12 +1113,12 @@ export async function updateProduct(p: Product): Promise<void> {
       // Le stock N'EST PAS propagé par `product.updated` : il passe exclusivement par les
       // deltas (`stock.adjusted`). Une correction de comptage est un choix local — l'écart
       // réel entre le stock en rayon et le delta comptable se fige au prochain inventaire.
-      const fields = productPatch(previous, p);
+      const fields = productPatch(previous, next);
       if (fields) {
         await emitOp(db, getIdentity(), {
           type: "product.updated",
-          entity_id: p.id,
-          payload: { product_id: p.id, fields },
+          entity_id: next.id,
+          payload: { product_id: next.id, fields },
         });
       }
     },

@@ -163,10 +163,19 @@ export function ProductForm({
           : Number(price) || 0,
         stock: isAsset
           ? Number(totalUnits) || 0
-          : unlimited
-            ? Number.POSITIVE_INFINITY
-            : Number(stock) || 0,
-        min_stock: !unlimited && !isAsset && minStock ? Number(minStock) : undefined,
+          : variantsOut && variantsOut.length > 0
+            ? // Le stock d'un produit à variantes est la somme des variantes — même « illimité »
+              // est ignoré ici, une variante à stock fini reste un stock fini. La valeur
+              // définitive est posée par `normalizeVariantStock`, au seul endroit où tout le
+              // monde écrit un produit.
+              variantsOut.reduce((t, v) => t + (v.stock ?? 0), 0)
+            : unlimited
+              ? Number.POSITIVE_INFINITY
+              : Number(stock) || 0,
+        min_stock:
+          !unlimited && !isAsset && !(variantsOut && variantsOut.length > 0) && minStock
+            ? Number(minStock)
+            : undefined,
         // Pour la location : un prix PAR PÉRIODE. Le prix saisi s'écrit dans la case de la
         // période choisie (`rental_pricing`), les autres périodes sont conservées — c'est
         // ce qui permet de facturer 10 h et 3 jours différemment sur le MÊME actif.
@@ -315,18 +324,24 @@ export function ProductForm({
 
             {productType === "product" && (
               <>
-                <div>
-                  <Label htmlFor="stock">Stock disponible</Label>
-                  <Input
-                    id="stock"
-                    inputMode="numeric"
-                    className="mt-1"
-                    value={stock}
-                    onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
-                    placeholder="50"
-                    disabled={unlimited}
-                  />
-                </div>
+                {/* Le stock global n'est PAS saisissable sur un produit à variantes : il est
+                    la somme des variantes (`normalizeVariantStock`). Proposer une case à
+                    côté des stocks par variante ferait saisir deux fois le même stock, et
+                    le premier venu l'écraserait. */}
+                {variants.length === 0 && (
+                  <div>
+                    <Label htmlFor="stock">Stock disponible</Label>
+                    <Input
+                      id="stock"
+                      inputMode="numeric"
+                      className="mt-1"
+                      value={stock}
+                      onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
+                      placeholder="50"
+                      disabled={unlimited}
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -339,7 +354,7 @@ export function ProductForm({
                   </Label>
                 </div>
 
-                {!unlimited && (
+                {variants.length === 0 && !unlimited && (
                   <div>
                     <Label htmlFor="min-stock">Stock minimum (seuil d'alerte)</Label>
                     <Input
@@ -388,7 +403,7 @@ export function ProductForm({
             </div>
           </div>
         )}
-        {hasVariants && productType === "product" && (
+        {productType === "product" && (
           <div>
             <Label>Variantes (taille, couleur, pointure…) — prix et stock par variante</Label>
             <div className="mt-1.5 space-y-2">

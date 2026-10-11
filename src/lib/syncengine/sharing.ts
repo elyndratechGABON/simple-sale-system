@@ -39,10 +39,17 @@ export async function resolveSharedProducts(peer: PairedDevice): Promise<Product
   return all.filter((p) => garder.has(p.id));
 }
 
-/** Empreinte du sous-catalogue : « ce que je lui ai déjà envoyé a-t-il changé ? ». */
+/** Empreinte du sous-catalogue : « ce que je lui ai déjà envoyé a-t-il changé ? ».
+ * Inclut le stock global + CHAQUE stock de variante, sinon une variante déplacée
+ * (total inchangé) ne déclencherait pas de réenvoi. */
 export function signatureOf(products: Product[]): string {
   return products
-    .map((p) => `${p.id}:${Number.isFinite(p.stock) ? p.stock : "inf"}:${p.price}`)
+    .map((p) => {
+      const vars = p.variants
+        ?.map((v) => `${v.id}:${v.stock ?? "inf"}`)
+        .join(",");
+      return `${p.id}:${Number.isFinite(p.stock) ? p.stock : "inf"}:${p.price}${vars ? `|${vars}` : ""}`;
+    })
     .sort()
     .join("|");
 }
