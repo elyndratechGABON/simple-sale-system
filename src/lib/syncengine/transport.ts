@@ -183,10 +183,16 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         const peer = peers.find((p) => p.id === deviceId);
         if (peer) await emitShareOps(peer);
       }
-      // Les snapshots pour les nouveaux approuvés viennent d'être écrits dans l'outbox :
-      // on les pousse TOUT DE SUITE pour que l'employé les reçoive à son prochain pull
-      // (qui peut être dans la seconde), et non au cycle d'après (20 s).
-      if (freshApproves.length > 0) {
+      // Demandes d'import fraîches (catalogue.request) : envoi IMMÉDIAT du snapshot,
+      // sans attendre le throttle 20 s. L'employé a cliqué « Importer le stock du
+      // propriétaire » — il ne doit pas attendre le cycle d'après.
+      for (const deviceId of cibles) {
+        const peer = peers.find((p) => p.id === deviceId);
+        if (peer) await emitShareOps(peer);
+      }
+      // Les snapshots (nouveaux approuvés + demandes d'import) viennent d'être écrits
+      // dans l'outbox : on les pousse TOUT DE SUITE.
+      if (freshApproves.length > 0 || cibles.length > 0) {
         const pendingNow = await listPendingOps(identity.shopId);
         if (pendingNow.length > 0) {
           const signed = await signAll(pendingNow);
