@@ -515,6 +515,25 @@ export interface EmployeeHistory {
   durationDays: number;
 }
 
+/** Demande de catalogue en attente de confirmation du propriétaire.
+ *  Créée quand un employé clique "Importer le stock du propriétaire".
+ *  Le propriétaire doit confirmer pour que le snapshot soit envoyé. */
+export interface CatalogueRequestPending {
+  /** ID de l'op `catalogue.request` (ex: "dev_abc:5"). */
+  id: string;
+  /** Groupe de partage (`s_...`). */
+  shop_id: string;
+  /** Device ID de l'employé demandeur. */
+  requester_id: string;
+  /** État : pending | confirmed | denied | expired. */
+  status: "pending" | "confirmed" | "denied" | "expired";
+  created_at: number;
+  confirmed_at?: number;
+  denied_at?: number;
+  /** Si le snapshot a été envoyé après confirmation. */
+  snapshot_sent: boolean;
+}
+
 export class PosDatabase extends Dexie {
   products!: Table<Product, string>;
   sales!: Table<Sale, string>;
@@ -529,6 +548,7 @@ export class PosDatabase extends Dexie {
   rentals!: Table<Rental, string>;
   closings!: Table<ClosingImport, string>;
   employee_history!: Table<EmployeeHistory, string>;
+  catalogue_requests!: Table<CatalogueRequestPending, string>;
   sync_ops!: Table<SyncOp, string>;
   monthly_overviews!: Table<MonthlyOverview, string>;
   processed_ops!: Table<ProcessedOp, string>;
@@ -918,6 +938,37 @@ export class PosDatabase extends Dexie {
       closings: "id, imported_at, employee_device_id, period_from, updated_at",
 
       employee_history: "id, employeeId, shopId, [employeeId+startedAt]",
+    });
+
+    // Version 22 — demandes de catalogue en attente de confirmation du propriétaire.
+    // Quand un employé clique "Importer le stock du propriétaire", une op `catalogue.request`
+    // est envoyée. Le propriétaire doit confirmer avant que le snapshot ne soit envoyé.
+    // Ce store trace les demandes en attente : `status` = pending | confirmed | denied | expired.
+    this.version(22).stores({
+      products: "id, name, category, updated_at",
+      sales: "id, timestamp, status, client_name, client_id, updated_at",
+      sale_items: "id, sale_id, updated_at",
+      settings: "key",
+      subscriptions: "id, updated_at",
+      shop_profiles: "id, updated_at",
+
+      clients: "id, name, phone, updated_at",
+      product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+      stock_movements: "id, product_id, created_at, [product_id+created_at]",
+      day_closures: "id, closed_at",
+      rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
+
+      sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
+      processed_ops: "id",
+      paired_devices: "id, updated_at, shop_id",
+
+      monthly_overviews: "id, updated_at",
+
+      closings: "id, imported_at, employee_device_id, period_from, updated_at",
+
+      employee_history: "id, employeeId, shopId, [employeeId+startedAt]",
+
+      catalogue_requests: "id, shop_id, requester_id, status, created_at, confirmed_at, denied_at, snapshot_sent",
     });
   }
 }
@@ -2442,6 +2493,56 @@ export async function closeEmployeeHistory(shopId: string): Promise<void> {
   const endedAt = Date.now();
   const durationDays = Math.max(1, Math.round((endedAt - open.startedAt) / 86_400_000));
   await db.employee_history.put({ ...open, endedAt, durationDays });
+}
+
+// ---------- Catalogue Requests (pending owner confirmation) ----------
+/** Enregistre une demande d'import de catalogue envoyée par un employé. */
+export async function addCatalogueRequest(request: Omit<CatalogueRequestPending, "status" | "snapshot_sent">): Promise<void> {
+  const db = getDB();
+  const existing = await db.catalogue_requests.get(request.id);
+  if (existing && existing.status !== "expired") return; // déjà en attente
+  await db.catalogue_requests.put({ ...request, status: "pending", snapshot_sent: false });
+}
+
+/** Liste les demandes en attente pour un shop (propriétaire). */
+export async function listPendingCatalogueRequests(shopId: string): Promise<CatalogueRequestPending[]> {
+  const db = getDB();
+  return db.catalogue_requests.where("shop_id").equals(shopId).and(r => r.status === "pending").toArray();
+}
+
+/** Le propriétaire confirme : le snapshot pourra être envoyé au prochain cycle. */
+export async function confirmCatalogueRequest(id: string): Promise<void> {
+  const db = getDB();
+  const req = await db.catalogue_requests.get(id);
+  if (!req || req.status !== "pending") return;
+  await db.catalogue_requests.put({ ...req, status: "confirmed", confirmed_at: Date.now() });
+}
+
+/** Le propriétaire refuse : aucune snapshot ne sera envoyé. */
+export async function denyCatalogueRequest(id: string): Promise<void> {
+  const db = getDB();
+  const req = await db.catalogue_requests.get(id);
+  if (!req || req.status !== "pending") return;
+  await db.catalogue_requests.put({ ...req, status: "denied", denied_at: Date.now() });
+}
+
+/** Marque le snapshot comme envoyé après confirmation. */
+export async function markCatalogueRequestSnapshotSent(id: string): Promise<void> {
+  const db = getDB();
+  const req = await db.catalogue_requests.get(id);
+  if (!req || req.status !== "confirmed") return;
+  await db.catalogue_requests.put({ ...req, snapshot_sent: true });
+}
+
+/** Nettoie les demandes expirées (plus de 24h sans réponse). */
+export async function expireOldCatalogueRequests(maxAgeMs = 24 * 60 * 60 * 1000): Promise<number> {
+  const db = getDB();
+  const cutoff = Date.now() - maxAgeMs;
+  const expired = await db.catalogue_requests.where("status").equals("pending").and(r => r.created_at < cutoff).toArray();
+  for (const req of expired) {
+    await db.catalogue_requests.put({ ...req, status: "expired", denied_at: Date.now() });
+  }
+  return expired.length;
 }
 
 // ---------- Settings ----------

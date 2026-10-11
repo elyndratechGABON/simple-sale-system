@@ -1,6 +1,5 @@
-// Dialog « Équipe » : liste des appareils du compte marchand (propriétaire, employés). Accessible depuis l'icône Users dans le header — owner only.
-//
-// Chaque ligne affiche le nom de l'appareil (`device_name` — le nom de l'employé pour
+// Dialog Équipe : liste des appareils du compte marchand (propriétaire, employés). Accessible depuis l'icône Users dans le header - owner only.
+// Chaque ligne affiche le nom de l'appareil (`device_name` ou le nom de l'employé pour
 // une caisse employé), le rôle (badge coloré) et le dernier contact (`last_seen`).
 // Cliquer sur un écran approuvé ouvre ses RÉSULTATS : ses ventes sur la période choisie,
 // filtrées par `seller_device_id` (ou par nom pour les ventes antérieures au suivi) —
@@ -37,11 +36,13 @@ import { ensureIdentity } from "@/lib/syncengine/identity";
 import { listPairedDevices } from "@/lib/syncengine/peers";
 import { approveDevice, ROLE_LABELS } from "@/lib/syncengine/pairing";
 import type { PairedDevice, DeviceRole } from "@/lib/syncengine/types";
+import { usePendingCatalogueRequests } from "@/hooks/use-pending-catalogue-requests";
+import { CatalogueRequestConfirmDialog } from "@/components/CatalogueRequestConfirmDialog";
 
 interface TeamDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Écran à ouvrir directement en détail. C'est par là que « Activité du personnel »
+  /** Écran à ouvrir directement en détail. C'est par là que l'Activité du personnel
    *  atteint le détail d'un vendeur : une seule implémentation de ce détail, pas deux. */
   initialDeviceId?: string | null;
 }
@@ -117,6 +118,10 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
     staleTime: 10_000,
   });
 
+  // Demandes de catalogue en attente de confirmation (propriétaire)
+  const { requests: pendingCatalogueRequests, confirm: confirmCatalogue, deny: denyCatalogue } =
+    usePendingCatalogueRequests(identity?.shopId ?? null);
+
   const allDevices = peers ?? [];
   const pending = allDevices.filter((d) => d.status === "pending");
   const paired = allDevices.filter((d) => d.status !== "pending");
@@ -128,6 +133,32 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
   const sorted = [...paired].sort(
     (a, b) => (roleOrder[a.role ?? "employee"] ?? 9) - (roleOrder[b.role ?? "employee"] ?? 9),
   );
+
+  // Dialog de confirmation pour les demandes de catalogue
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmRequestId, setConfirmRequestId] = useState<string | null>(null);
+
+  function openConfirmDialog(requestId: string) {
+    setConfirmRequestId(requestId);
+    setConfirmDialogOpen(true);
+  }
+
+  function closeConfirmDialog() {
+    setConfirmDialogOpen(false);
+    setConfirmRequestId(null);
+  }
+
+  async function handleConfirm() {
+    if (!confirmRequestId) return;
+    await confirmCatalogue(confirmRequestId);
+    closeConfirmDialog();
+  }
+
+  async function handleDeny() {
+    if (!confirmRequestId) return;
+    await denyCatalogue(confirmRequestId);
+    closeConfirmDialog();
+  }
 
   async function approve(peerId: string) {
     await approveDevice(peerId, "employee");
@@ -219,17 +250,56 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
               </div>
             )}
 
+            {/* Demandes d'import de catalogue en attente */}
+            {pendingCatalogueRequests.length > 0 && (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Demandes d'import de stock ({pendingCatalogueRequests.length})
+                </p>
+                {pendingCatalogueRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border bg-blue-50 border-blue-200 px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-blue-800">
+                        Import demandé par {req.requester_id.slice(0, 8)}…
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        {new Date(req.created_at).toLocaleString()} · {req.status}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openConfirmDialog(req.id)}
+                    >
+                      {req.status === "pending" ? "Voir" : req.status}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="text-xs text-muted-foreground text-center">
               {paired.length > 0
                 ? `${paired.length} écran${paired.length > 1 ? "s" : ""} actif${paired.length > 1 ? "s" : ""}`
                 : "Partagez votre boutique via Réglages → Appareils → Ajouter un appareil."}
             </p>
+            {/* Dialog de confirmation pour les demandes d'import de catalogue */}
+            <CatalogueRequestConfirmDialog
+              open={confirmDialogOpen}
+              onOpenChange={closeConfirmDialog}
+              requesterId={confirmRequestId ?? ""}
+              onConfirm={handleConfirm}
+              onDeny={handleDeny}
+            />
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
 function TeamRow({
   device,
