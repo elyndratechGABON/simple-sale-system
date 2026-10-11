@@ -282,25 +282,28 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground text-center">
-              {paired.length > 0
-                ? `${paired.length} écran${paired.length > 1 ? "s" : ""} actif${paired.length > 1 ? "s" : ""}`
-                : "Partagez votre boutique via Réglages → Appareils → Ajouter un appareil."}
-            </p>
-            {/* Dialog de confirmation pour les demandes d'import de catalogue */}
-            <CatalogueRequestConfirmDialog
-              open={confirmDialogOpen}
-              onOpenChange={closeConfirmDialog}
-              requesterId={confirmRequestId ?? ""}
-              onConfirm={handleConfirm}
-              onDeny={handleDeny}
-            />
+<div className="space-y-3">
+              <p className="text-xs text-muted-foreground text-center">
+                {paired.length > 0
+                  ? `${paired.length} écran${paired.length > 1 ? "s" : ""} actif${paired.length > 1 ? "s" : ""}`
+                  : "Partagez votre boutique via Réglages → Appareils → Ajouter un appareil."}
+              </p>
+              {/* Dialog de confirmation pour les demandes d'import de catalogue */}
+              <CatalogueRequestConfirmDialog
+                open={confirmDialogOpen}
+                onOpenChange={closeConfirmDialog}
+                requesterId={confirmRequestId ?? ""}
+                onConfirm={handleConfirm}
+                onDeny={handleDeny}
+              />
+</div>
           </div>
+        )}
         </DialogContent>
       </Dialog>
-    );
-  }
-
+);
+}
+ 
 function TeamRow({
   device,
   isOwnerDevice,

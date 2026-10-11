@@ -1,10 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, CheckCircle, XCircle } from "lucide-react";
-import { formatDateTime } from "@/lib/utils";
+import { createPortal } from "react-dom";
 
 interface CatalogueRequestConfirmDialogProps {
   open: boolean;
@@ -25,7 +34,6 @@ export function CatalogueRequestConfirmDialog({
 
   useEffect(() => {
     if (open) {
-      // Focus trap pour l'accessibilité
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Escape") onOpenChange(false);
       };
@@ -54,22 +62,22 @@ export function CatalogueRequestConfirmDialog({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
+  const content = (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
             <AlertCircle className="h-5 w-5" />
             Demande d'import de stock
-          </DialogTitle>
-          <DialogDescription>
+          </AlertDialogTitle>
+          <AlertDialogDescription>
             L'écran <strong>{requesterId.slice(0, 8)}...</strong> demande d'importer votre stock.
             <br />
             Voulez-vous autoriser le transfert ?
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
-        <DialogFooter className="flex-row gap-2">
+        <AlertDialogFooter className="flex-row gap-2">
           <Button
             variant="destructive"
             onClick={handleDeny}
@@ -87,8 +95,57 @@ export function CatalogueRequestConfirmDialog({
             <CheckCircle className="h-4 w-4 mr-2" />
             Autoriser
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  if (!open) return null;
+
+  // Use a portal to render the dialog outside the current component tree
+  const container = document.getElementById("catalogue-request-portal");
+  if (!container) {
+    const div = document.createElement("div");
+    div.id = "catalogue-request-portal";
+    document.body.appendChild(div);
+  }
+
+  return createPortal(
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-5 w-5" />
+            Demande d'import de stock
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            L'écran <strong>{requesterId.slice(0, 8)}...</strong> demande d'importer votre stock.
+            <br />
+            Voulez-vous autoriser le transfert ?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <AlertDialogFooter className="flex-row gap-2">
+          <Button
+            variant="destructive"
+            onClick={handleDeny}
+            disabled={loading}
+            className="flex-1"
+          >
+            <XCircle className="h-4 w-4 mr-2" />
+            Refuser
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="flex-1"
+          >
+            <CheckCircle className="h-4 w-4 mr-2" />
+            Autoriser
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>,
+    document.getElementById("catalogue-request-portal") || document.body
   );
 }

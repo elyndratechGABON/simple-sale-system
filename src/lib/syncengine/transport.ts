@@ -166,10 +166,10 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     const { applied } = await applyRemoteOps(foreign);
 
     // Nouvelle arrivée au groupe : elle a droit à son stock, mais celui qu'on lui a choisi.
+    const peers = await pairedEmployees(identity.shopId);
+    const cibles: string[] = [];
+
     if (identity.role !== "employee") {
-      const db = getDB();
-      const peers = await pairedEmployees(identity.shopId);
-      const cibles: string[] = [];
       for (const demande of fresh) {
         const id = (demande.payload as CatalogueRequestPayload | undefined)?.requester_id;
         if (id && !cibles.includes(id)) cibles.push(id);
@@ -202,7 +202,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
           }
         }
       }
-      } else {
+    } else {
     // Les snapshots pour les nouveaux approuvés (device.approve) viennent d'être écrits
     // dans l'outbox : on les pousse TOUT DE SUITE.
     if (freshApproves.length > 0) {
