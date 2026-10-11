@@ -183,6 +183,17 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         const peer = peers.find((p) => p.id === deviceId);
         if (peer) await emitShareOps(peer);
       }
+      // Les snapshots pour les nouveaux approuvés viennent d'être écrits dans l'outbox :
+      // on les pousse TOUT DE SUITE pour que l'employé les reçoive à son prochain pull
+      // (qui peut être dans la seconde), et non au cycle d'après (20 s).
+      if (freshApproves.length > 0) {
+        const pendingNow = await listPendingOps(identity.shopId);
+        if (pendingNow.length > 0) {
+          const signed = await signAll(pendingNow);
+          await client.push(identity.shopId, signed);
+          await markOpsSynced(pendingNow.map((o) => o.id));
+        }
+      }
       const last = Number((await db.settings.get(KEY_LAST_SNAPSHOT))?.value ?? 0);
       if (cibles.length > 0 && Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
         for (const cible of cibles) {
