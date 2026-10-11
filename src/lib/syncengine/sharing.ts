@@ -45,9 +45,7 @@ export async function resolveSharedProducts(peer: PairedDevice): Promise<Product
 export function signatureOf(products: Product[]): string {
   return products
     .map((p) => {
-      const vars = p.variants
-        ?.map((v) => `${v.id}:${v.stock ?? "inf"}`)
-        .join(",");
+      const vars = p.variants?.map((v) => `${v.id}:${v.stock ?? "inf"}`).join(",");
       return `${p.id}:${Number.isFinite(p.stock) ? p.stock : "inf"}:${p.price}${vars ? `|${vars}` : ""}`;
     })
     .sort()
@@ -67,8 +65,8 @@ async function shopNameForSnapshot(): Promise<string | undefined> {
 
 /** Les pairs employés réellement appairés, hors soi-même. */
 export async function pairedEmployees(shopId: string): Promise<PairedDevice[]> {
-  return getDB().paired_devices
-    .where("shop_id")
+  return getDB()
+    .paired_devices.where("shop_id")
     .equals(shopId)
     .filter((p) => p.status !== "pending" && p.id !== getIdentity().deviceId)
     .toArray();

@@ -34,8 +34,7 @@ export interface FingerprintSignals {
   clientHints: string;
 }
 
-const str = (v: unknown): string =>
-  v === undefined || v === null ? "" : String(v);
+const str = (v: unknown): string => (v === undefined || v === null ? "" : String(v));
 
 /** Ce qui est réellement haché. La version `v2` est dans la chaîne : un changement
  *  d'algorithme rend les anciennes empreintes intentionally méconnaissables (elles ne
@@ -62,11 +61,15 @@ export function fingerprintInput(s: FingerprintSignals): string {
  *  lisible. Absent sur Safari/Firefox — on rend alors une chaîne vide, les autres signaux
  *  suffisent à faire la différence. */
 async function readClientHints(): Promise<string> {
-  const uaData = (navigator as Navigator & {
-    userAgentData?: {
-      getHighEntropyValues?: (hints: string[]) => Promise<{ platform?: string; model?: string; platformVersion?: string }>;
-    };
-  }).userAgentData;
+  const uaData = (
+    navigator as Navigator & {
+      userAgentData?: {
+        getHighEntropyValues?: (
+          hints: string[],
+        ) => Promise<{ platform?: string; model?: string; platformVersion?: string }>;
+      };
+    }
+  ).userAgentData;
   if (typeof uaData?.getHighEntropyValues !== "function") return "";
   try {
     const v = await uaData.getHighEntropyValues(["platform", "model", "platformVersion"]);
@@ -103,7 +106,7 @@ export async function getDeviceFingerprint(): Promise<string | null> {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? "",
     cores: str(nav.hardwareConcurrency),
     language: nav.language ?? "",
-    pixelRatio: str(typeof window === "undefined" ? 1 : window.devicePixelRatio ?? 1),
+    pixelRatio: str(typeof window === "undefined" ? 1 : (window.devicePixelRatio ?? 1)),
     touchPoints: str(nav.maxTouchPoints),
     deviceMemory: str(nav.deviceMemory),
     clientHints: await readClientHints(),

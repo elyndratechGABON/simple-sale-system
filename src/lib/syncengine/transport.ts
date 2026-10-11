@@ -27,7 +27,14 @@ import { applyRemoteOps } from "./apply";
 import { isSharedGroup, getIdentity } from "./identity";
 import { emitOp, signAll } from "./ops";
 import { listPendingOps, markOpsSynced } from "./outbox";
-import { getDB, listProducts, addCatalogueRequest, expireOldCatalogueRequests, listPendingCatalogueRequests, markCatalogueRequestSnapshotSent } from "../db";
+import {
+  getDB,
+  listProducts,
+  addCatalogueRequest,
+  expireOldCatalogueRequests,
+  listPendingCatalogueRequests,
+  markCatalogueRequestSnapshotSent,
+} from "../db";
 import { getPreferences } from "../settings";
 import { getPairingToken } from "./pairing"; // Nouveau jeton pour l'appairage
 import { emitShareOps, markSharePublished, pairedEmployees } from "./sharing";
@@ -186,7 +193,9 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       // Demandes d'import fraîches (catalogue.request) : on les enregistre en attente
       // de confirmation du propriétaire. L'UI affichera une boîte de confirmation.
       for (const deviceId of cibles) {
-        const demande = fresh.find(d => (d.payload as CatalogueRequestPayload).requester_id === deviceId);
+        const demande = fresh.find(
+          (d) => (d.payload as CatalogueRequestPayload).requester_id === deviceId,
+        );
         if (demande) {
           await addCatalogueRequest({
             id: demande.id,
@@ -196,23 +205,25 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
           });
           // Notifie l'UI pour afficher la boîte de confirmation
           if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("catalogue-request-pending", {
-              detail: { requester_id: deviceId, shop_id: identity.shopId }
-            }));
+            window.dispatchEvent(
+              new CustomEvent("catalogue-request-pending", {
+                detail: { requester_id: deviceId, shop_id: identity.shopId },
+              }),
+            );
           }
         }
       }
     } else {
-    // Les snapshots pour les nouveaux approuvés (device.approve) viennent d'être écrits
-    // dans l'outbox : on les pousse TOUT DE SUITE.
-    if (freshApproves.length > 0) {
-      const pendingNow = await listPendingOps(identity.shopId);
-      if (pendingNow.length > 0) {
-        const signed = await signAll(pendingNow);
-        await client.push(identity.shopId, signed);
-        await markOpsSynced(pendingNow.map((o) => o.id));
+      // Les snapshots pour les nouveaux approuvés (device.approve) viennent d'être écrits
+      // dans l'outbox : on les pousse TOUT DE SUITE.
+      if (freshApproves.length > 0) {
+        const pendingNow = await listPendingOps(identity.shopId);
+        if (pendingNow.length > 0) {
+          const signed = await signAll(pendingNow);
+          await client.push(identity.shopId, signed);
+          await markOpsSynced(pendingNow.map((o) => o.id));
+        }
       }
-    }
       const last = Number((await db.settings.get(KEY_LAST_SNAPSHOT))?.value ?? 0);
       if (cibles.length > 0 && Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
         for (const cible of cibles) {
@@ -225,7 +236,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     }
     // Demandes d'import confirmées par le propriétaire : envoyer le snapshot maintenant.
     const confirmedRequests = await listPendingCatalogueRequests(identity.shopId);
-    const confirmed = confirmedRequests.filter(r => r.status === "confirmed" && !r.snapshot_sent);
+    const confirmed = confirmedRequests.filter((r) => r.status === "confirmed" && !r.snapshot_sent);
     for (const req of confirmed) {
       const peer = peers.find((p) => p.id === req.requester_id);
       if (peer) {

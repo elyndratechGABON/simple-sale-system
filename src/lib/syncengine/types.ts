@@ -228,7 +228,6 @@ export const PAIRING_KEYS = {
   announcedProfile: "syncengine_announced_profile",
 } as const;
 
-
 /** Clés de persistence de l'identité — partagées entre `db.ts` et `identity.ts`. */
 export const IDENTITY_KEYS = {
   device: "syncengine_device_id",

@@ -55,9 +55,7 @@ export function ProductCardSettings({ context }: { context: CardContext }) {
   const toggle = (field: ProductCardField) => {
     // Le nom ne se retire pas : une card sans titre n'a plus de sens dans la grille.
     if (field === "name" && fields.includes(field)) return;
-    write(
-      fields.includes(field) ? fields.filter((f) => f !== field) : [...fields, field],
-    );
+    write(fields.includes(field) ? fields.filter((f) => f !== field) : [...fields, field]);
   };
 
   const activePreset = useMemo(
@@ -78,17 +76,14 @@ export function ProductCardSettings({ context }: { context: CardContext }) {
             <EyeOff className="h-4 w-4" /> Affichage des cards produits
           </CardTitle>
           <CardDescription className="text-xs">
-            {CONTEXT_LABEL[context]} — seul le propriétaire choisit les informations
-            affichées sur les cards.
+            {CONTEXT_LABEL[context]} — seul le propriétaire choisit les informations affichées sur
+            les cards.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="flex flex-wrap gap-1.5">
             {fields.map((f) => (
-              <li
-                key={f}
-                className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium"
-              >
+              <li key={f} className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium">
                 {CARD_FIELD_LABELS[f]}
               </li>
             ))}
@@ -103,8 +98,8 @@ export function ProductCardSettings({ context }: { context: CardContext }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Affichage des cards produits</CardTitle>
         <CardDescription className="text-xs">
-          {CONTEXT_LABEL[context]} — choisissez ce qui apparaît sur chaque fiche produit et
-          dans quel ordre. Rien n&apos;est affiché tant que vous ne l&apos;avez pas coché.
+          {CONTEXT_LABEL[context]} — choisissez ce qui apparaît sur chaque fiche produit et dans
+          quel ordre. Rien n&apos;est affiché tant que vous ne l&apos;avez pas coché.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -138,10 +133,7 @@ export function ProductCardSettings({ context }: { context: CardContext }) {
                 <div key={field} className="flex items-center justify-between gap-3 px-3 py-2">
                   <Label
                     htmlFor={`f-${context}-${field}`}
-                    className={cn(
-                      "flex-1 text-sm",
-                      locked && "text-muted-foreground",
-                    )}
+                    className={cn("flex-1 text-sm", locked && "text-muted-foreground")}
                   >
                     {CARD_FIELD_LABELS[field]}
                     {locked && (

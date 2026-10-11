@@ -50,7 +50,10 @@ export function ProductCard({
     ? "Actif"
     : state === "out"
       ? variantes.length > 0
-        ? `Épuisé : ${variantes.filter((v) => (v.stock ?? 0) <= 0).map((v) => v.name).join(", ")}`
+        ? `Épuisé : ${variantes
+            .filter((v) => (v.stock ?? 0) <= 0)
+            .map((v) => v.name)
+            .join(", ")}`
         : "Rupture de stock"
       : variantes.length > 0
         ? `${variantes.filter((v) => (v.stock ?? 0) > 0).length}/${variantes.length} variantes`
@@ -183,7 +186,14 @@ function FieldLine({
     case "status":
       return (
         <p className="truncate text-[11px] leading-tight text-muted-foreground">
-          {label} : {isService ? "prestation" : state === "out" ? "rupture" : state === "low" ? "faible" : "ok"}
+          {label} :{" "}
+          {isService
+            ? "prestation"
+            : state === "out"
+              ? "rupture"
+              : state === "low"
+                ? "faible"
+                : "ok"}
         </p>
       );
 

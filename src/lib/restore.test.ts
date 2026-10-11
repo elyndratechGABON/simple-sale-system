@@ -13,11 +13,7 @@ import { test, expect, vi, afterEach } from "vitest";
 import { listProducts, resetDBForTests } from "@/lib/db";
 import { applyRemoteOps } from "@/lib/syncengine/apply";
 import { signAll } from "@/lib/syncengine/ops";
-import {
-  ensureIdentity,
-  getDeviceKeys,
-  resetIdentityForTests,
-} from "@/lib/syncengine/identity";
+import { ensureIdentity, getDeviceKeys, resetIdentityForTests } from "@/lib/syncengine/identity";
 import type { SyncOp } from "@/lib/syncengine/types";
 
 /** Signe des ops brutes comme le ferait un appareil émetteur. */

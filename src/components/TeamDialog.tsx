@@ -119,8 +119,11 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
   });
 
   // Demandes de catalogue en attente de confirmation (propriétaire)
-  const { requests: pendingCatalogueRequests, confirm: confirmCatalogue, deny: denyCatalogue } =
-    usePendingCatalogueRequests(identity?.shopId ?? null);
+  const {
+    requests: pendingCatalogueRequests,
+    confirm: confirmCatalogue,
+    deny: denyCatalogue,
+  } = usePendingCatalogueRequests(identity?.shopId ?? null);
 
   const allDevices = peers ?? [];
   const pending = allDevices.filter((d) => d.status === "pending");
@@ -282,7 +285,7 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
               </div>
             )}
 
-<div className="space-y-3">
+            <div className="space-y-3">
               <p className="text-xs text-muted-foreground text-center">
                 {paired.length > 0
                   ? `${paired.length} écran${paired.length > 1 ? "s" : ""} actif${paired.length > 1 ? "s" : ""}`
@@ -296,14 +299,14 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
                 onConfirm={handleConfirm}
                 onDeny={handleDeny}
               />
-</div>
+            </div>
           </div>
         )}
-        </DialogContent>
-      </Dialog>
-);
+      </DialogContent>
+    </Dialog>
+  );
 }
- 
+
 function TeamRow({
   device,
   isOwnerDevice,
@@ -382,9 +385,7 @@ function EmployeeResults({ device }: { device: PairedDevice }) {
               {device.phone.trim()}
             </a>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              Numéro non déclaré par cet écran.
-            </p>
+            <p className="text-xs text-muted-foreground">Numéro non déclaré par cet écran.</p>
           )}
         </div>
         <RoleBadge role={device.role} />

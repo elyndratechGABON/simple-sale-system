@@ -175,10 +175,7 @@ function FilterChip({
       )}
     >
       {Icon && (
-        <Icon
-          className={cn("h-4 w-4 shrink-0", active && "text-primary-foreground")}
-          aria-hidden
-        />
+        <Icon className={cn("h-4 w-4 shrink-0", active && "text-primary-foreground")} aria-hidden />
       )}
       <span className="whitespace-nowrap">{label}</span>
       {count !== undefined && (
@@ -199,13 +196,7 @@ function FilterChip({
 
 /** Titre de section + rangée de chips. Le rangée défile seule : la page, elle, ne défile
  *  jamais horizontalement — un `overflow-x-auto` sur la rangée suffit. */
-function ChipRow({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function ChipRow({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -924,8 +915,8 @@ function StocksPageContent() {
           >
             <TriangleAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <span className="min-w-0 flex-1 truncate text-xs">
-              <span className="font-semibold">Attention au stock</span> ·{" "}
-              {attention.length} produit{attention.length > 1 ? "s" : ""} à surveiller
+              <span className="font-semibold">Attention au stock</span> · {attention.length} produit
+              {attention.length > 1 ? "s" : ""} à surveiller
             </span>
             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           </button>
@@ -965,78 +956,78 @@ function StocksPageContent() {
                 dimensions des cards ne dépendent PAS des champs cochés : la grille ne
                 bouge jamais quand on change l'affichage. */}
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {visible.map((p) => {
-              const state = stateOf(p);
-              const isServiceItem = state === "service";
-              return (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  fields={cardFields}
-                  state={state}
-                  lastSoldAt={lastSoldAtByProduct.get(p.id)}
-                  onOpen={() => setDetailId(p.id)}
-                  actions={
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="secondary"
-                          size="icon"
-                          className="h-7 w-7"
-                          aria-label={`Actions sur ${p.name}`}
-                        >
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {!isServiceItem && Number.isFinite(p.stock) && (
-                          <>
-                            <DropdownMenuItem onClick={() => openAddStock(p)}>
-                              <PackagePlus className="h-4 w-4 mr-2" /> Ajouter du stock
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setRemoveProductId(p.id);
-                                setRemoveQty("");
-                                setRemoveOpen(true);
-                              }}
-                            >
-                              <PackageMinus className="h-4 w-4 mr-2" /> Retirer du stock
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditing(p);
-                            setEditOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4 mr-2" /> Modifier
-                        </DropdownMenuItem>
-                        {/* Journal du produit : la page affiche déjà l'historique
+              {visible.map((p) => {
+                const state = stateOf(p);
+                const isServiceItem = state === "service";
+                return (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    fields={cardFields}
+                    state={state}
+                    lastSoldAt={lastSoldAtByProduct.get(p.id)}
+                    onOpen={() => setDetailId(p.id)}
+                    actions={
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={`Actions sur ${p.name}`}
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {!isServiceItem && Number.isFinite(p.stock) && (
+                            <>
+                              <DropdownMenuItem onClick={() => openAddStock(p)}>
+                                <PackagePlus className="h-4 w-4 mr-2" /> Ajouter du stock
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setRemoveProductId(p.id);
+                                  setRemoveQty("");
+                                  setRemoveOpen(true);
+                                }}
+                              >
+                                <PackageMinus className="h-4 w-4 mr-2" /> Retirer du stock
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditing(p);
+                              setEditOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4 mr-2" /> Modifier
+                          </DropdownMenuItem>
+                          {/* Journal du produit : la page affiche déjà l'historique
                             global, mais depuis une fiche on veut les mouvements de
                             CET article. Même source, filtre par produit. */}
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setMovementsProductId(p.id);
-                            setMovementsOpen(true);
-                          }}
-                        >
-                          <History className="h-4 w-4 mr-2" /> Voir le journal
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setDeleteTarget(p)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" /> Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  }
-                />
-              );
-            })}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setMovementsProductId(p.id);
+                              setMovementsOpen(true);
+                            }}
+                          >
+                            <History className="h-4 w-4 mr-2" /> Voir le journal
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setDeleteTarget(p)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    }
+                  />
+                );
+              })}
             </div>
           </>
         )}

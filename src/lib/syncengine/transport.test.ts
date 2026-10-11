@@ -317,10 +317,13 @@ describe("transport P2P via relais", () => {
     await exchangeOps(relay.client);
     const remote = await relay.client.pull(id.shopId, id.deviceId);
     const snaps = remote.filter((o) => o.type === "catalogue.snapshot");
-    const partages = snaps.map((o) => o.payload as {
-      target_device_id?: string;
-      products: Array<{ id: string; stock: number; photo?: unknown }>;
-    });
+    const partages = snaps.map(
+      (o) =>
+        o.payload as {
+          target_device_id?: string;
+          products: Array<{ id: string; stock: number; photo?: unknown }>;
+        },
+    );
 
     const fatou = partages.find((p) => p.target_device_id === "fatu");
     expect(fatou?.products.map((p) => p.id).sort()).toEqual([coca.id, pain.id].sort());
@@ -592,7 +595,7 @@ describe("transport P2P via relais", () => {
     expect(profile.storeName).toBe("Boutique Du Marché");
   });
 
-it("le propriétaire republie à chaque employé, et seulement quand SA part change", async () => {
+  it("le propriétaire republie à chaque employé, et seulement quand SA part change", async () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
@@ -663,7 +666,13 @@ it("le propriétaire republie à chaque employé, et seulement quand SA part cha
       const remote = await relay.client.pull(id.shopId, id.deviceId);
       return remote
         .filter((o) => o.type === "catalogue.snapshot")
-        .map((o) => o.payload as { target_device_id?: string; products: Array<{ id: string; stock: number }> })
+        .map(
+          (o) =>
+            o.payload as {
+              target_device_id?: string;
+              products: Array<{ id: string; stock: number }>;
+            },
+        )
         .filter((p) => p.target_device_id === "yves");
     };
 
@@ -689,7 +698,6 @@ it("le propriétaire republie à chaque employé, et seulement quand SA part cha
   });
 
   it("une vente d'employé republie l'instantané via le cycle du propriétaire", async () => {
-
     // La caisse employé vend : ops product.created + sale.created posées au relais.
     await freshDevice();
     await setShopAccount(ACCOUNT);

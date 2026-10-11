@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { listPendingCatalogueRequests, confirmCatalogueRequest, denyCatalogueRequest } from "@/lib/db";
+import {
+  listPendingCatalogueRequests,
+  confirmCatalogueRequest,
+  denyCatalogueRequest,
+} from "@/lib/db";
 
 export interface PendingCatalogueRequest {
   id: string;
@@ -47,12 +51,20 @@ export function usePendingCatalogueRequests(shopId: string | null) {
 
   const confirm = async (id: string) => {
     await confirmCatalogueRequest(id);
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "confirmed" as const, confirmed_at: Date.now() } : r));
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, status: "confirmed" as const, confirmed_at: Date.now() } : r,
+      ),
+    );
   };
 
   const deny = async (id: string) => {
     await denyCatalogueRequest(id);
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: "denied" as const, denied_at: Date.now() } : r));
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, status: "denied" as const, denied_at: Date.now() } : r,
+      ),
+    );
   };
 
   return { requests, confirm, deny };

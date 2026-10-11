@@ -116,7 +116,8 @@ export async function announceDevice(pairCode?: string): Promise<void> {
       : identity.employeeName.trim();
   const employeePhone = identity.employeePhone?.trim() ?? "";
   if (alreadyAnnounced) {
-    const seen = (await db.settings.get(PAIRING_KEYS.announcedProfile))?.value as string | undefined;
+    const seen = (await db.settings.get(PAIRING_KEYS.announcedProfile))?.value as
+      string | undefined;
     if (seen === profileFingerprint(employeeName, employeePhone)) return;
   }
 

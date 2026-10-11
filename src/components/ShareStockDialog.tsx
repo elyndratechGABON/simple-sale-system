@@ -21,7 +21,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { listProducts } from "@/lib/db";
-import { resolveSharedProducts, saveShareDecision, shareDecisionOf } from "@/lib/syncengine/sharing";
+import {
+  resolveSharedProducts,
+  saveShareDecision,
+  shareDecisionOf,
+} from "@/lib/syncengine/sharing";
 import type { PairedDevice, ShareMode } from "@/lib/syncengine/types";
 
 interface ShareStockDialogProps {
@@ -100,8 +104,8 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
             <Boxes className="h-5 w-5" /> Stock partagé avec {nom}
           </DialogTitle>
           <DialogDescription>
-            Choisissez ce que cet écran reçoit du catalogue de la boutique. Ce choix lui est
-            propre : un autre employé peut recevoir autre chose.
+            Choisissez ce que cet écran reçoit du catalogue de la boutique. Ce choix lui est propre
+            : un autre employé peut recevoir autre chose.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,9 +116,7 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
             onClick={() => setMode("all")}
             className={[
               "rounded-lg border px-3 py-2.5 text-left text-sm transition-colors",
-              mode === "all"
-                ? "border-primary bg-primary/10 font-medium"
-                : "hover:bg-accent",
+              mode === "all" ? "border-primary bg-primary/10 font-medium" : "hover:bg-accent",
             ].join(" ")}
           >
             <span className="flex items-center gap-1.5">
@@ -130,9 +132,7 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
             onClick={() => setMode("selection")}
             className={[
               "rounded-lg border px-3 py-2.5 text-left text-sm transition-colors",
-              mode === "selection"
-                ? "border-primary bg-primary/10 font-medium"
-                : "hover:bg-accent",
+              mode === "selection" ? "border-primary bg-primary/10 font-medium" : "hover:bg-accent",
             ].join(" ")}
           >
             <span className="flex items-center gap-1.5">
@@ -161,9 +161,7 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() =>
-                  setChoisis(filtres.map((p) => p.id))
-                }
+                onClick={() => setChoisis(filtres.map((p) => p.id))}
               >
                 Tout cocher
               </Button>
@@ -185,7 +183,9 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
                     <span
                       className={[
                         "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                        actif ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
+                        actif
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground/40",
                       ].join(" ")}
                     >
                       {actif && <Check className="h-3 w-3" />}

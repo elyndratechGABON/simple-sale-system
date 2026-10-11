@@ -968,7 +968,8 @@ export class PosDatabase extends Dexie {
 
       employee_history: "id, employeeId, shopId, [employeeId+startedAt]",
 
-      catalogue_requests: "id, shop_id, requester_id, status, created_at, confirmed_at, denied_at, snapshot_sent",
+      catalogue_requests:
+        "id, shop_id, requester_id, status, created_at, confirmed_at, denied_at, snapshot_sent",
     });
   }
 }
@@ -2497,7 +2498,9 @@ export async function closeEmployeeHistory(shopId: string): Promise<void> {
 
 // ---------- Catalogue Requests (pending owner confirmation) ----------
 /** Enregistre une demande d'import de catalogue envoyée par un employé. */
-export async function addCatalogueRequest(request: Omit<CatalogueRequestPending, "status" | "snapshot_sent">): Promise<void> {
+export async function addCatalogueRequest(
+  request: Omit<CatalogueRequestPending, "status" | "snapshot_sent">,
+): Promise<void> {
   const db = getDB();
   const existing = await db.catalogue_requests.get(request.id);
   if (existing && existing.status !== "expired") return; // déjà en attente
@@ -2505,9 +2508,15 @@ export async function addCatalogueRequest(request: Omit<CatalogueRequestPending,
 }
 
 /** Liste les demandes en attente pour un shop (propriétaire). */
-export async function listPendingCatalogueRequests(shopId: string): Promise<CatalogueRequestPending[]> {
+export async function listPendingCatalogueRequests(
+  shopId: string,
+): Promise<CatalogueRequestPending[]> {
   const db = getDB();
-  return db.catalogue_requests.where("shop_id").equals(shopId).and(r => r.status === "pending").toArray();
+  return db.catalogue_requests
+    .where("shop_id")
+    .equals(shopId)
+    .and((r) => r.status === "pending")
+    .toArray();
 }
 
 /** Le propriétaire confirme : le snapshot pourra être envoyé au prochain cycle. */
@@ -2538,7 +2547,11 @@ export async function markCatalogueRequestSnapshotSent(id: string): Promise<void
 export async function expireOldCatalogueRequests(maxAgeMs = 24 * 60 * 60 * 1000): Promise<number> {
   const db = getDB();
   const cutoff = Date.now() - maxAgeMs;
-  const expired = await db.catalogue_requests.where("status").equals("pending").and(r => r.created_at < cutoff).toArray();
+  const expired = await db.catalogue_requests
+    .where("status")
+    .equals("pending")
+    .and((r) => r.created_at < cutoff)
+    .toArray();
   for (const req of expired) {
     await db.catalogue_requests.put({ ...req, status: "expired", denied_at: Date.now() });
   }

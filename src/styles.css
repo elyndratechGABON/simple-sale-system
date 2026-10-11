@@ -6,9 +6,9 @@
 :root {
   --card-radius: 24px;
   --card-padding: 20px;
-  --card-shadow: 0 2px 12px rgba(0,0,0,0.05);
-  --card-border: 1px solid #E5E8E7;
-  --card-bg: #FFFFFF;
+  --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  --card-border: 1px solid #e5e8e7;
+  --card-bg: #ffffff;
   --card-gap: 16px;
   --color-primary: #059669;
 }

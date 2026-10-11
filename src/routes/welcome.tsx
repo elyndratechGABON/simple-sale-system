@@ -390,7 +390,7 @@ function WelcomePage() {
                   </p>
                 </div>
               </div>
-<div>
+              <div>
                 <Label htmlFor="emp-name">Votre nom (pour l'équipe)</Label>
                 <Input
                   id="emp-name"
@@ -422,7 +422,6 @@ function WelcomePage() {
               <div>
                 <Label htmlFor="emp-code">Mot de passe temporaire (sous le QR)</Label>
                 <Input
-
                   id="emp-code"
                   value={pairCodeInput}
                   onChange={(e) => setPairCodeInput(e.target.value)}

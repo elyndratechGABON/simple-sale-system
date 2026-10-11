@@ -383,8 +383,7 @@ async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
         : firstSighting && groupEmpty && pl.role === "owner"
           ? "owner"
           : existing.role;
-      const autoPaired =
-        codeOk || wasPaired || (role === "owner" && firstSighting && groupEmpty);
+      const autoPaired = codeOk || wasPaired || (role === "owner" && firstSighting && groupEmpty);
 
       // La clé publique n'est PINSÉE que sur une annonce PROUVÉE : le code de paire
       // correct, un appareil déjà au registre, ou le tout premier appareil d'un groupe

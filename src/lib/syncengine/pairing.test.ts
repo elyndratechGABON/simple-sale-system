@@ -158,8 +158,9 @@ describe("code de paire", () => {
     // Une SEULE annonce doit suffire : le nom et le numéro sont posés AVANT l'appel
     // (cf. `welcome.tsx`). Si l'identité était réglée après, l'annonce porterait un nom
     // vide et il faudrait un second cycle — le patron ne voyait personne.
-    expect((await listPendingOps(getIdentity().shopId)).filter((o) => o.type === "device.announce"))
-      .toHaveLength(1);
+    expect(
+      (await listPendingOps(getIdentity().shopId)).filter((o) => o.type === "device.announce"),
+    ).toHaveLength(1);
 
     const announce = (await listPendingOps(getIdentity().shopId)).find(
       (o) => o.type === "device.announce",
@@ -400,7 +401,7 @@ describe("le registre ne contient pas l'écran courant", () => {
 
     expect((await getDB().paired_devices.get(approuveur)) ?? null).toBeNull();
     // L'employé approuvé, lui, existe bien.
-    expect((await getDB().paired_devices.get("employe-2"))).toBeDefined();
+    expect(await getDB().paired_devices.get("employe-2")).toBeDefined();
   });
 });
 
@@ -414,10 +415,10 @@ describe("décision d'application du code (côté principal)", () => {
 
     await applyRemoteOpsSigned([
       await announceOp(shopId, "device-juste", 1, {
-      employee_name: "Vendeuse",
-      employee_phone: "0761234567",
-      pair_code: code,
-    }),
+        employee_name: "Vendeuse",
+        employee_phone: "0761234567",
+        pair_code: code,
+      }),
     ]);
     const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-juste");
     expect(peer?.status).toBe("paired");

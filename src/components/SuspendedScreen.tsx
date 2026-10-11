@@ -6,7 +6,12 @@
 // reste même hors ligne, jusqu'à une prolongation livrée par le serveur.
 import { useSyncExternalStore, useState } from "react";
 import { AlertTriangle, Fingerprint, LockKeyhole, MonitorX, ScanLine } from "lucide-react";
-import { getLockSnapshot, resetDeviceConflict, resetKeywordBlock, subscribeLock } from "@/lib/gatekeeper";
+import {
+  getLockSnapshot,
+  resetDeviceConflict,
+  resetKeywordBlock,
+  subscribeLock,
+} from "@/lib/gatekeeper";
 import { unlockFromPaymentSms } from "@/lib/offline-unlock";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";

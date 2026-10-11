@@ -6,6 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Crown, Smartphone, Store, Database, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: ReadonlyArray<string>;
+  readonly userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+  prompt(): Promise<void>;
+}
+
 export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) => void }) {
   const { ownerName, ownerPhoto, workspaceName } = usePreferences();
   const { data: profile } = useQuery({ queryKey: ["shop_profile"], queryFn: getShopProfile });
@@ -13,13 +19,13 @@ export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) =
     ownerName || profile?.ownerName || profile?.storeName || workspaceName || "Propriétaire";
 
   const [bgType, setBgType] = useState<"classic" | "gradient">("gradient");
-  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
     const onPrompt = (e: Event) => {
       e.preventDefault();
-      setInstallPrompt(e);
+      setInstallPrompt(e as BeforeInstallPromptEvent);
     };
     // Référence nommée : sans elle le removeEventListener ne retrouverait pas la même
     // fonction et l'écouteur `appinstalled` survivrait au démontage.
@@ -128,7 +134,7 @@ export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) =
             type="button"
             onClick={() => {
               if (installPrompt) {
-                (installPrompt as any).prompt?.();
+                installPrompt.prompt();
               } else {
                 window.location.href = "/pos";
               }
@@ -136,10 +142,16 @@ export function WhatsAppProfilePage({ onNavigate }: { onNavigate: (to: string) =
             aria-label="Installer l'application"
           >
             <Smartphone className="h-4 w-4 mr-1.5" />
-            {installed ? "Installé" : installPrompt ? "Installer" : "Installer (naviguer vers /pos)"}
+            {installed
+              ? "Installé"
+              : installPrompt
+                ? "Installer"
+                : "Installer (naviguer vers /pos)"}
           </Button>
           <span className="text-xs text-muted-foreground">
-            {installed ? "L'application est installée sur cet appareil." : "Ajoutez sur l'écran d'accueil pour un accès rapide."}
+            {installed
+              ? "L'application est installée sur cet appareil."
+              : "Ajoutez sur l'écran d'accueil pour un accès rapide."}
           </span>
         </div>
       </div>

@@ -226,7 +226,9 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                     subCategory: prefs.subCategory ?? undefined,
                     customDomain: prefs.customDomain ?? "",
                     customUnitType: prefs.customUnitType ?? "unit",
-                    businessType: prefs.businessType ?? (prefs.cluster === "restaurant" ? "restaurant" : "snack"),
+                    businessType:
+                      prefs.businessType ??
+                      (prefs.cluster === "restaurant" ? "restaurant" : "snack"),
 
                     tablesEnabled: prefs.tablesEnabled ?? false,
                   },
@@ -334,11 +336,14 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
               <div className="space-y-1 rounded-lg border bg-accent/50 px-3 py-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Appareils sur le compte</span>
-                  <Badge variant={atCapacity ? "destructive" : "secondary"} className="tabular-nums">
+                  <Badge
+                    variant={atCapacity ? "destructive" : "secondary"}
+                    className="tabular-nums"
+                  >
                     {localDeviceCount} / {quota.maxDevices}
                   </Badge>
                 </div>
-{/* Le compteur local est instantané (1 écran + pairs approuvés) ; celui du
+                {/* Le compteur local est instantané (1 écran + pairs approuvés) ; celui du
                     serveur fait foi et peut le dépasser — un écran connu ailleurs, pas
                     encore appairé ici. L'afficher évite « 1 / 3 » pendant que le serveur
                     dit « 3 / 3 ». */}

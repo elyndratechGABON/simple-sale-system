@@ -110,9 +110,9 @@ export function RestoreShopCard() {
             <span>
               {phase.message}
               <span className="mt-1.5 block text-muted-foreground">
-                Sans données, ce n&apos;est pas que la boutique est vide : c&apos;est que le
-                service n&apos;a pas encore été lancé pour synchroniser. Relancez
-                l&apos;orchestrateur, puis cliquez à nouveau.
+                Sans données, ce n&apos;est pas que la boutique est vide : c&apos;est que le service
+                n&apos;a pas encore été lancé pour synchroniser. Relancez l&apos;orchestrateur, puis
+                cliquez à nouveau.
               </span>
             </span>
           </div>
@@ -140,8 +140,7 @@ export function RestoreShopCard() {
             <span>
               Boutique restaurée.
               <span className="mt-1 block text-muted-foreground">
-                Vos produits et vos ventes sont de retour. Ouvrez l&apos;accueil pour
-                vérifier.
+                Vos produits et vos ventes sont de retour. Ouvrez l&apos;accueil pour vérifier.
               </span>
             </span>
           </div>
@@ -153,8 +152,8 @@ export function RestoreShopCard() {
             <span>
               Récupération impossible : {phase.message}
               <span className="mt-1 block text-muted-foreground">
-                Vérifiez que le service est lancé et que vous utilisez le téléphone et le
-                mot de passe de votre boutique.
+                Vérifiez que le service est lancé et que vous utilisez le téléphone et le mot de
+                passe de votre boutique.
               </span>
             </span>
           </div>

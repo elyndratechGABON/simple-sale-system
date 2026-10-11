@@ -83,25 +83,42 @@ describe("adoption du shop_id du relais", () => {
 
     const ops: SyncOp[] = [
       {
-        id: "emp:1", shop_id: PROPRIETAIRE_SHOP, device_id: "dev-emp", seq: 1,
-        type: "device.announce", entity_id: "dev-emp",
+        id: "emp:1",
+        shop_id: PROPRIETAIRE_SHOP,
+        device_id: "dev-emp",
+        seq: 1,
+        type: "device.announce",
+        entity_id: "dev-emp",
         payload: {
           device_id: "dev-emp",
           public_key: getDeviceKeys().publicKey,
-          employee_name: " employe", role: "employee",
+          employee_name: " employe",
+          role: "employee",
         },
-        created_at: 1, status: "pending",
+        created_at: 1,
+        status: "pending",
       } as SyncOp,
       {
-        id: "emp:2", shop_id: PROPRIETAIRE_SHOP, device_id: "dev-emp", seq: 2,
-        type: "product.created", entity_id: "p1",
+        id: "emp:2",
+        shop_id: PROPRIETAIRE_SHOP,
+        device_id: "dev-emp",
+        seq: 2,
+        type: "product.created",
+        entity_id: "p1",
         payload: {
           product: {
-            id: "p1", name: "Eau", cost: 100, price: 500, stock: 24,
-            category: "Boissons", updated_at: 1, sync_status: "local",
+            id: "p1",
+            name: "Eau",
+            cost: 100,
+            price: 500,
+            stock: 24,
+            category: "Boissons",
+            updated_at: 1,
+            sync_status: "local",
           },
         },
-        created_at: 2, status: "pending",
+        created_at: 2,
+        status: "pending",
       } as SyncOp,
     ];
     const r = await applyRemoteOps(await signAll(ops));

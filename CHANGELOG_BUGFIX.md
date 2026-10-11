@@ -11,6 +11,7 @@
 ### 1. Réorganisation atomique de `finish()` (Onboarding.tsx)
 
 **Avant** (bugué) :
+
 ```typescript
 async function finish() {
   await setShopAccount({...});        // 1. Crée compte
@@ -20,29 +21,30 @@ async function finish() {
 ```
 
 **Après** (corrigé) :
+
 ```typescript
 async function finish() {
   // PHASE 1: Charger identité AVANT tout
   const identity = await ensureIdentity();
-  
+
   // PHASE 2: Si mode join, forcer employee IMMÉDIATEMENT
   if (accountMode === "join") {
     await setIdentityRole("employee");  // ← AVANT setShopAccount!
   }
-  
+
   // PHASE 3: Créer compte (ne peut plus glisser à owner)
   await setShopAccount({...});
-  
+
   // PHASE 4: Announce P2P avec rôle correct
   if (pairCode) {
     await enterPairingCode(pairCode);
   }
-  
+
   // PHASE 5: Historique + prefs
   if (accountMode === "join") {
     await addEmployeeHistory({...});
   }
-  
+
   savePreferences({...});
 }
 ```

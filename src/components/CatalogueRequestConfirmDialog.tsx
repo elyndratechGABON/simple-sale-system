@@ -78,20 +78,11 @@ export function CatalogueRequestConfirmDialog({
         </AlertDialogHeader>
 
         <AlertDialogFooter className="flex-row gap-2">
-          <Button
-            variant="destructive"
-            onClick={handleDeny}
-            disabled={loading}
-            className="flex-1"
-          >
+          <Button variant="destructive" onClick={handleDeny} disabled={loading} className="flex-1">
             <XCircle className="h-4 w-4 mr-2" />
             Refuser
           </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={loading}
-            className="flex-1"
-          >
+          <Button onClick={handleConfirm} disabled={loading} className="flex-1">
             <CheckCircle className="h-4 w-4 mr-2" />
             Autoriser
           </Button>
@@ -126,26 +117,17 @@ export function CatalogueRequestConfirmDialog({
         </AlertDialogHeader>
 
         <AlertDialogFooter className="flex-row gap-2">
-          <Button
-            variant="destructive"
-            onClick={handleDeny}
-            disabled={loading}
-            className="flex-1"
-          >
+          <Button variant="destructive" onClick={handleDeny} disabled={loading} className="flex-1">
             <XCircle className="h-4 w-4 mr-2" />
             Refuser
           </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={loading}
-            className="flex-1"
-          >
+          <Button onClick={handleConfirm} disabled={loading} className="flex-1">
             <CheckCircle className="h-4 w-4 mr-2" />
             Autoriser
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>,
-    document.getElementById("catalogue-request-portal") || document.body
+    document.getElementById("catalogue-request-portal") || document.body,
   );
 }

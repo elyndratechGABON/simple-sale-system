@@ -1,6 +1,7 @@
 # Architecture ECAISSE v2 - Share Token Flow
 
 ## Problème résolu
+
 - Scan QR employé créait un compte owner au lieu de employee
 - Pas de partage de stock entre appareils
 
@@ -18,30 +19,30 @@ sequenceDiagram
     Note over Owner: 2. Demande share_token au relais
     Owner->>Relais: POST /api/v1/share/mint<br/>{shop_id, account_name, account_phone, pair_code}
     Relais-->>Owner: {token: "abc123..."}
-    
+
     Note over Owner: 3. Affiche QR avec token + pair_code
     Owner->>Owner: buildPairingPayload() → QR {v:2, token, pair_code}
-    
+
     Note over Employee: 4. Scan QR
     Employee->>Employee: parsePairingPayload() → {token, pair_code}
-    
+
     Note over Employee: 5. Échange token contre shopId
     Employee->>Relais: POST /api/v1/share/redeem<br/>{token, device_id}
     Relais-->>Employee: {shop_id, account_name, pair_code}
-    
+
     Note over Employee: 6. Crée identity(employee) + shopId
     Employee->>IndexedDB: setIdentity(shopId, role="employee")
-    
+
     Note over Employee: 7. S'annonce avec pair_code
     Employee->>Relais: emitOp(device.announce, pair_code)
-    
+
     Note over Owner: 8. Vérifie pair_code local
     Owner->>Owner: getPairingToken() === pair_code
-    
+
     Note over Owner: 9. Marque comme paired + sync catalogue
     Owner->>IndexedDB: paired_devices.put({status: "paired"})
     Owner->>Relais: emitOp(catalogue.snapshot)
-    
+
     Employee->>Relais: pull(catalogue.snapshot)
     Employee->>IndexedDB: products.put()
 ```
@@ -122,7 +123,7 @@ CREATE INDEX idx_sync_ops_shop ON sync_ops(shop_id, device_id);
 {
   body: {
     shop_id: string,
-    account_name: string, 
+    account_name: string,
     account_phone: string,
     pair_code: string  // 6 lettres
   }
@@ -140,19 +141,19 @@ CREATE INDEX idx_sync_ops_shop ON sync_ops(shop_id, device_id);
 
 ## Corrections appliquées
 
-| Bug | Solution v2 |
-|-----|-------------|
-| Scan crée owner | Token déclenche `role=employee` |
-| Pas de stock share | Catalogue auto-sync sur paired |
-| QR contient password | Plus de password, token opaque |
-| Pairing non sécurisé | Code 6 lettres + token |
+| Bug                  | Solution v2                     |
+| -------------------- | ------------------------------- |
+| Scan crée owner      | Token déclenche `role=employee` |
+| Pas de stock share   | Catalogue auto-sync sur paired  |
+| QR contient password | Plus de password, token opaque  |
+| Pairing non sécurisé | Code 6 lettres + token          |
 
 ## Déploiement Gratuit
 
-| Service | Quota Gratuit | Usage |
-|---------|---------------|-------|
-| **Neon** | 512MB, 1 projet | BDD PostgreSQL |
-| **Cloudflare Workers** | 100K req/jour | API relais |
-| **Vercel** | 100GB bandwidth | SPA static |
+| Service                | Quota Gratuit   | Usage          |
+| ---------------------- | --------------- | -------------- |
+| **Neon**               | 512MB, 1 projet | BDD PostgreSQL |
+| **Cloudflare Workers** | 100K req/jour   | API relais     |
+| **Vercel**             | 100GB bandwidth | SPA static     |
 
 Coût total: **0€/mois** pour usage small business

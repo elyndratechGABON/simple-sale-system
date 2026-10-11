@@ -1,5 +1,10 @@
 import { describe, test, expect, beforeEach } from "vitest";
-import { ensureIdentity, getDeviceKeys, resetIdentityForTests, refreshShopId } from "@/lib/syncengine/identity";
+import {
+  ensureIdentity,
+  getDeviceKeys,
+  resetIdentityForTests,
+  refreshShopId,
+} from "@/lib/syncengine/identity";
 import { applyRemoteOps } from "@/lib/syncengine/apply";
 import { signAll } from "@/lib/syncengine/ops";
 import { saveShopProfile, listProducts, resetDBForTests } from "@/lib/db";

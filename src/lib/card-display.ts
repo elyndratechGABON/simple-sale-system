@@ -73,7 +73,10 @@ export const CARD_PRESETS: Record<"compact" | "standard" | "detailed", ProductCa
  * canonique : un champ qui ne figure pas dans `ALL_CARD_FIELDS` est ignoré, et
  * l'ordre de l'enregistrement est respecté pour les champs connus.
  */
-export function normalizeCardFields(value: unknown, fallback: ProductCardField[]): ProductCardField[] {
+export function normalizeCardFields(
+  value: unknown,
+  fallback: ProductCardField[],
+): ProductCardField[] {
   if (!Array.isArray(value)) return [...fallback];
   const seen = new Set<ProductCardField>();
   const out: ProductCardField[] = [];
