@@ -34,6 +34,7 @@ import { emitShareOps, markSharePublished, pairedEmployees } from "./sharing";
 import type {
   CatalogueRequestPayload,
   DeviceAnnouncePayload,
+  DeviceApprovePayload,
   SyncIdentity,
   SyncOp,
   PairedDevice,
@@ -151,6 +152,17 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     const demandes = foreign.filter((op) => op.type === "catalogue.request");
     const dejaVues = await Promise.all(demandes.map((op) => getDB().processed_ops.get(op.id)));
     const fresh = demandes.filter((_, i) => !dejaVues[i]);
+
+    // Ops d'approbation fraîchement appliquées : l'appareil vient d'être promu "paired"
+    // et doit recevoir son stock IMMÉDIATEMENT, sans attendre le throttle des snapshots.
+    const approveOps = foreign.filter((op) => op.type === "device.approve");
+    const freshApproves: string[] = [];
+    for (const op of approveOps) {
+      if (!(await getDB().processed_ops.get(op.id))) {
+        freshApproves.push((op.payload as DeviceApprovePayload).org_device_id);
+      }
+    }
+
     const { applied } = await applyRemoteOps(foreign);
 
     // Nouvelle arrivée au groupe : elle a droit à son stock, mais celui qu'on lui a choisi.
@@ -165,6 +177,11 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       if (newcomerAnnounced) {
         // L'op d'annonce est dans `foreign` : le nouveau pair est donc déjà enregistré.
         for (const peer of peers) if (!cibles.includes(peer.id)) cibles.push(peer.id);
+      }
+      // Appareils fraîchement approuvés : envoi IMMÉDIAT du snapshot (hors throttle).
+      for (const deviceId of freshApproves) {
+        const peer = peers.find((p) => p.id === deviceId);
+        if (peer) await emitShareOps(peer);
       }
       const last = Number((await db.settings.get(KEY_LAST_SNAPSHOT))?.value ?? 0);
       if (cibles.length > 0 && Date.now() - last >= SNAPSHOT_THROTTLE_MS) {
