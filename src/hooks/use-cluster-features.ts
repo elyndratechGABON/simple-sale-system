@@ -24,7 +24,6 @@ export function useClusterFeatures(): ClusterConfig & {
   isOrderFirst: boolean;
   isService: boolean;
   isMagasin: boolean;
-  isLocation: boolean;
   // Nouveaux helpers (V2, prêts à l'emploi)
   hasWeightInput: boolean;
   hasVariants: boolean;
@@ -32,10 +31,6 @@ export function useClusterFeatures(): ClusterConfig & {
   unitType: "unit" | "weight" | "mixed";
   // Flags dépliés au top-level
   allowServiceBooking: boolean;
-  // Flags location
-  hasRentalBooking: boolean;
-  hasDeposit: boolean;
-  hasAvailability: boolean;
   // Sous-catégorie magasin
   subCategory?: SubCategory;
 } {
@@ -59,7 +54,6 @@ export function useClusterFeatures(): ClusterConfig & {
     isOrderFirst: config.workflow.mode === "order-first",
     isService: config.id === "service",
     isMagasin: config.id === "magasin",
-    isLocation: config.id === "location",
     // Nouveaux
     hasWeightInput: config.flags.hasWeightInput,
     hasVariants: config.stock.hasVariants,
@@ -67,10 +61,6 @@ export function useClusterFeatures(): ClusterConfig & {
     unitType: config.stock.unitType,
     // Flags
     allowServiceBooking: config.flags.allowServiceBooking,
-    // Flags location
-    hasRentalBooking: config.flags.hasRentalBooking,
-    hasDeposit: config.flags.hasDeposit,
-    hasAvailability: config.flags.hasAvailability,
     // Sous-catégorie
     subCategory,
   };

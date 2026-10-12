@@ -30,7 +30,6 @@ const SYNCED_QUERY_KEYS: string[][] = [
   ["sales"],
   ["open_tables"],
   ["clients"],
-  ["rentals"],
   ["paired_devices"],
 ];
 
