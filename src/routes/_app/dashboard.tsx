@@ -32,14 +32,10 @@ import {
   getSaleItemsForSales,
   listSales,
   listOpenTables,
-  listActiveRentals,
-  listRentals,
 } from "@/lib/db";
 import {
   computePeriodStats,
-  computeRentalOccupancy,
   computeWeightSales,
-  computeRentalStats,
   lastDaysRange,
   scopeByDevice,
 } from "@/lib/analytics";
@@ -299,40 +295,6 @@ function DashboardPage() {
     staleTime: 30_000,
     refetchInterval: 10_000,
   });
-  const { data: activeRentals } = useQuery({
-    queryKey: ["rentals", "active"],
-    queryFn: listActiveRentals,
-    staleTime: 30_000,
-    refetchInterval: 10_000,
-  });
-  // Locations COMMENCÉES dans les 14 derniers jours : c'est le « revenu par actif » du
-  // cluster location, absent du canal des ventes (une location n'est jamais une vente).
-  const { data: fortnightRentals } = useQuery({
-    queryKey: ["rentals", "range", fortnightRange.from, fortnightRange.to],
-    queryFn: () => listRentals(fortnightRange.from, fortnightRange.to),
-    refetchInterval: 10_000,
-  });
-
-  const rentalStats = useMemo(
-    () =>
-      fortnightRentals && fortnightRentals.length > 0
-        ? computeRentalStats(fortnightRentals, fortnightRange.from, fortnightRange.to)
-        : null,
-    [fortnightRentals, fortnightRange],
-  );
-
-  const rentalOccupancy = useMemo(
-    () =>
-      fortnightRentals && (fortnightRentals.length > 0 || (products ?? []).length > 0)
-        ? computeRentalOccupancy(
-            fortnightRentals,
-            products ?? [],
-            fortnightRange.from,
-            fortnightRange.to,
-          )
-        : null,
-    [fortnightRentals, products, fortnightRange],
-  );
 
   // Ventes au poids (boucherie) : le poids vendu vit sur les lignes de vente des
   // produits vendus au kilo. Seules les lignes portant le poids comptent.
@@ -368,8 +330,8 @@ function DashboardPage() {
   }, [fortnightScoped, weekRange, fortnightRange]);
 
   const alerts = useMemo(
-    () => buildAlerts(products ?? [], openTables ?? [], activeRentals),
-    [products, openTables, activeRentals],
+    () => buildAlerts(products ?? [], openTables ?? []),
+    [products, openTables],
   );
 
   // Pas de base de comparaison (semaine précédente vide) → NaN → « — » affiché,
@@ -656,76 +618,6 @@ function DashboardPage() {
             </motion.div>
           )}
         </div>
-
-        {features.isLocation && rentalStats && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.55 }}
-          >
-            <Card>
-              <div className="border-b px-4 py-3">
-                <p className="text-base font-semibold">Location — 14 jours</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 border-b p-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Revenu locations</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {formatFCFA(rentalStats.revenue)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Locations</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {rentalStats.rentalsCount}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Durée moyenne</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {roundDuration(rentalStats.avgDuration)}{" "}
-                    {rentalStats.avgDurationUnit === "heure" ? "h" : "j"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Occupation</p>
-                  <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
-                    {formatPercent(rentalOccupancy?.rate ?? Number.NaN)}
-                  </p>
-                </div>
-              </div>
-              {rentalStats.byAsset.length > 0 && (
-                <div className="space-y-1 p-2">
-                  {rentalStats.byAsset.slice(0, 3).map((asset, index) => {
-                    const occ = rentalOccupancy?.byAsset.find((o) => o.asset_id === asset.asset_id);
-                    return (
-                      <div
-                        key={asset.asset_id}
-                        className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60"
-                      >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
-                          {index + 1}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                          {asset.name}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {asset.rentalsCount} location{asset.rentalsCount > 1 ? "s" : ""}
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {formatPercent(occ?.rate ?? Number.NaN)}
-                        </span>
-                        <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
-                          {formatFCFA(asset.revenue)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-          </motion.div>
-        )}
 
         {features.hasWeightInput && weightSales && weightSales.weightKg > 0 && (
           <motion.div
