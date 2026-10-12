@@ -21,7 +21,7 @@ export const NAV_LINKS = [
   { to: "/dashboard", label: "Accueil", icon: Home },
   { to: "/pos", label: "Caisse", icon: ShoppingCart },
   { to: "/stocks", label: "Stocks", icon: Package },
-  { to: "/reports", label: "Rapports", icon: BarChart3 },
+  { to: "/reports", label: "Comptabilité", icon: BarChart3 },
   { to: "/settings", label: "Réglages", icon: SettingsIcon },
 ] as const;
 
