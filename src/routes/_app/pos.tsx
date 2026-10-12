@@ -65,15 +65,7 @@ import { RentalView } from "@/components/RentalView";
 import type { ParseResult } from "@/lib/voice/parser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import {
-  cartKey,
-  nextTableLabel,
-  type CartEntry,
-  type Cashing,
-  type FreeLine,
-  type Target,
-  type UiLine,
-} from "@/lib/pos/types";
+import { cartKey, nextTableLabel, type Cashing, type Target } from "@/lib/pos/types";
 import {
   CartShell,
   CategoryCard,
@@ -85,8 +77,10 @@ import {
   TargetChip,
 } from "@/components/pos";
 import { tableStage } from "@/lib/pos/table-stage";
+import { useCart } from "@/lib/pos/use-cart";
 import { useSaleMutations } from "@/lib/pos/use-sale-mutations";
 import { useTableMutations } from "@/lib/pos/use-table-mutations";
+import { useSaleTrigger } from "@/hooks/use-sale-trigger";
 
 export const Route = createFileRoute("/_app/pos")({
   head: () => ({
@@ -115,6 +109,7 @@ function paymentLabel(m: PaymentMethod): string {
 // Ligne saisie à la main, pour encaisser sans catalogue (stocks pas encore initiés).
 
 function PosPage() {
+  const { notifyOwner } = useSaleTrigger();
   const qc = useQueryClient();
   const { tables: tableLabels } = usePreferences();
   const features = useClusterFeatures();
@@ -142,8 +137,6 @@ function PosPage() {
   const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 
   const [target, setTarget] = useState<Target>({ kind: "direct" });
-  const [cart, setCart] = useState<Record<string, CartEntry>>({});
-  const [freeLines, setFreeLines] = useState<FreeLine[]>([]);
   const [freeOpen, setFreeOpen] = useState(false);
   const [cashGiven, setCashGiven] = useState<string>("");
   const [filter, setFilter] = useState<Category | "Tous">("Tous");
@@ -154,6 +147,23 @@ function PosPage() {
   // Nom du client (services : coiffeur, salon, etc.). Optionnel.
   const [clientName, setClientName] = useState("");
   const [clientId, setClientId] = useState<string | undefined>(undefined);
+
+  // Le panier : état et gestes. Les RÈGLES (stock, variantes, projections) sont pures et
+  // testées dans `lib/pos/cart-ops.ts` ; ce hook n'ajoute que le message et la vibration.
+  const {
+    cart,
+    freeLines,
+    lines,
+    addEntry,
+    addOne,
+    addOneByKey,
+    removeOne,
+    removeLineByKey,
+    addQty,
+    addFreeLine,
+    setLineQty,
+    emptyCart,
+  } = useCart(products);
   // Le panneau d'encaissement ne s'ouvre qu'à la demande : tant qu'il est fermé, aucun
   // champ « argent donné » ne traîne à l'écran pendant le service, et on ne peut pas
   // confondre « ajouter une tournée » avec « faire payer ». Il vise soit TOUTE la table
@@ -240,29 +250,6 @@ function PosPage() {
       .slice(0, 8)
       .map((x) => x.product as Product);
   }, [todayItems, products]);
-
-  const lines: UiLine[] = useMemo(() => {
-    const fromCatalog = Object.entries(cart)
-      .map(([key, e]): UiLine | null => {
-        const [pid] = key.split("::");
-        const p = products.find((x) => x.id === pid);
-        if (!p || e.qty <= 0) return null;
-        return {
-          key,
-          product_id: p.id,
-          name: p.name,
-          price: e.price,
-          cost: e.cost,
-          category: p.category,
-          quantity: e.qty,
-          productType: p.type,
-          ...(e.variant ? { variant: e.variant } : {}),
-          ...(e.variant_id ? { variant_id: e.variant_id } : {}),
-        };
-      })
-      .filter((x): x is UiLine => Boolean(x));
-    return [...fromCatalog, ...freeLines];
-  }, [cart, products, freeLines]);
 
   /**
    * Le plan de salle : les tables des Réglages, PLUS toute table ouverte dont le libellé
@@ -425,112 +412,16 @@ function PosPage() {
     return () => clearTimeout(timer);
   }, [saleFlash]);
 
+  /** Vide la vente entière : le panier (dans le hook) puis tout ce qui décrit QUI on
+   *  encaisse et COMMENT — sans sens pour la vente suivante. */
   function resetCart() {
-    setCart({});
-    setFreeLines([]);
+    emptyCart();
     setCashGiven("");
     setCustomers(1);
     setClientName("");
     setClientId(undefined);
     setPayMethod("cash");
     setSheetOpen(false);
-  }
-
-  function variantOf(p: Product, variantId?: string) {
-    if (!variantId || !p.variants?.length) return undefined;
-    return p.variants.find((v) => v.id === variantId);
-  }
-
-  function addEntry(p: Product, variantId: string | undefined, qty = 1) {
-    const v = variantOf(p, variantId);
-    const key = cartKey(p, variantId);
-    const price = v?.price ?? p.price;
-    const cost = v?.cost ?? p.cost;
-    const stock = v?.stock ?? p.stock;
-    setCart((c) => {
-      const cur = c[key];
-      const next = (cur?.qty ?? 0) + qty;
-      if (p.type === "service" || stock === Number.POSITIVE_INFINITY || stock === undefined) {
-        // Service ou stock infini : pas de limite
-        return {
-          ...c,
-          [key]: { qty: next, price, cost, ...(v ? { variant: v.name, variant_id: v.id } : {}) },
-        };
-      }
-      if (next > stock + 1e-9) {
-        toast.warning(`Stock insuffisant pour ${p.name}`);
-        return c;
-      }
-      return {
-        ...c,
-        [key]: { qty: next, price, cost, ...(v ? { variant: v.name, variant_id: v.id } : {}) },
-      };
-    });
-  }
-
-  function addOne(p: Product) {
-    navigator.vibrate?.(8);
-    // Un produit au kilo ajoute « 1 kg » au tap : la balance ne se devine pas, et
-    // l'appui long (seule voie de saisie décimale) reste le geste de correction.
-    // Le garde de stock de `addEntry` compare des nombres réels — 2.5 <= 5 passe,
-    // 6 > 5 est refusé — donc rien à changer ici.
-    addEntry(p, undefined, 1);
-  }
-  function addOneByKey(line: UiLine) {
-    if (line.product_id) {
-      setCart((c) => {
-        const cur = c[line.key];
-        if (!cur) return c;
-        const p = products.find((x) => x.id === line.product_id);
-        if (!p) return c;
-        const v = variantOf(p, cur.variant_id);
-        const stock = v?.stock ?? p.stock;
-        if (stock !== undefined && cur.qty + 1 > stock + 1e-9) {
-          toast.warning(`Stock insuffisant pour ${line.name}`);
-          return c;
-        }
-        return { ...c, [line.key]: { ...cur, qty: cur.qty + 1 } };
-      });
-      return;
-    }
-    setFreeLines((f) =>
-      f.map((l) => (l.key === line.key ? { ...l, quantity: l.quantity + 1 } : l)),
-    );
-  }
-  function removeOne(line: UiLine) {
-    if (line.product_id) {
-      setCart((c) => {
-        const cur = c[line.key];
-        if (!cur) return c;
-        const next = cur.qty - 1;
-        const copy = { ...c };
-        if (next <= 0) delete copy[line.key];
-        else copy[line.key] = { ...cur, qty: next };
-        return copy;
-      });
-      return;
-    }
-    setFreeLines((f) =>
-      f
-        .map((l) => (l.key === line.key ? { ...l, quantity: l.quantity - 1 } : l))
-        .filter((l) => l.quantity > 0),
-    );
-  }
-  function removeLine(line: UiLine) {
-    if (line.product_id) {
-      setCart((c) => {
-        const copy = { ...c };
-        delete copy[line.key];
-        return copy;
-      });
-      return;
-    }
-    setFreeLines((f) => f.filter((l) => l.key !== line.key));
-  }
-
-  /** Ajout par la dictée : quantités fractionnaires admises (« un kilo et demi »). */
-  function addQty(p: Product, qty: number) {
-    addEntry(p, undefined, qty);
   }
 
   function onProductClick(p: Product) {
@@ -550,7 +441,7 @@ function PosPage() {
     if (result.command === "clear-last") {
       const last = lines[lines.length - 1];
       if (last) {
-        removeLine(last);
+        removeLineByKey(last);
         toast.success(`${last.name} retiré`);
       } else {
         toast.info("Le panier est déjà vide");
@@ -1043,7 +934,7 @@ function PosPage() {
                         isService={features.isService}
                         onRemoveOne={removeOne}
                         onAddOne={addOneByKey}
-                        onRemove={removeLine}
+                        onRemove={removeLineByKey}
                       />
                     ))}
                   </AnimatePresence>
@@ -1292,11 +1183,7 @@ function PosPage() {
         </button>
       )}
 
-      <FreeLineDialog
-        open={freeOpen}
-        onOpenChange={setFreeOpen}
-        onAdd={(l) => setFreeLines((f) => [...f, l])}
-      />
+      <FreeLineDialog open={freeOpen} onOpenChange={setFreeOpen} onAdd={addFreeLine} />
 
       {/* ── Sélecteur de variante ──────────────────────────────────────── */}
       <Dialog open={variantPicker !== null} onOpenChange={() => setVariantPicker(null)}>
@@ -1667,18 +1554,7 @@ function PosPage() {
                         className="flex-1"
                         onClick={() => {
                           const qty = Math.max(1, parseQty(manualQtyValue, 1));
-                          // Mettre à jour le panier avec la quantité exacte
-                          const key = manualQtyProduct.id;
-                          setCart((prev) => ({
-                            ...prev,
-                            [key]: {
-                              ...prev[key],
-                              qty,
-                              price: manualQtyProduct.price,
-                              cost: manualQtyProduct.cost,
-                              name: manualQtyProduct.name,
-                            },
-                          }));
+                          setLineQty(manualQtyProduct, qty);
                           setManualQtyOpen(false);
                         }}
                       >
