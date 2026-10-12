@@ -6,7 +6,7 @@ import { useRef } from "react";
 import type { Sale } from "@/lib/db";
 import { formatFCFA, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { LONG_PRESS_MS } from "@/lib/pos/table-stage";
+import { LONG_PRESS_MS } from "@/lib/pos/types";
 
 export function TableCard({
   label,

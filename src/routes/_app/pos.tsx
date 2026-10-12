@@ -75,7 +75,6 @@ import {
   TableCard,
   TargetChip,
 } from "@/components/pos";
-import { tableStage } from "@/lib/pos/table-stage";
 import { useCart } from "@/lib/pos/use-cart";
 import { useSaleMutations } from "@/lib/pos/use-sale-mutations";
 import { useTableMutations } from "@/lib/pos/use-table-mutations";
@@ -1198,81 +1197,40 @@ function PosPage() {
               <div className="space-y-2 pt-2">
                 {openTables
                   .slice()
-                  .sort((a, b) => {
-                    // Les plus urgents d'abord : à préparer, puis en préparation,
-                    // prête, servie, et enfin réglée.
-                    const order: Record<string, number> = {
-                      "to-prepare": 0,
-                      preparing: 1,
-                      ready: 2,
-                      served: 3,
-                      paid: 4,
-                    };
-                    const sa = order[tableStage(a)] ?? 5;
-                    const sb = order[tableStage(b)] ?? 5;
-                    return sa - sb || (a.opened_at ?? 0) - (b.opened_at ?? 0);
-                  })
-                  .map((t) => {
-                    const stage = tableStage(t);
-                    return (
-                      <div
-                        key={t.id}
-                        className={cn(
-                          "flex items-center justify-between gap-3 rounded-lg border p-3",
-                          stage === "to-prepare" &&
-                            "border-orange-400/40 bg-orange-50/50 dark:border-orange-400/40 dark:bg-orange-950/10",
-                          stage === "preparing" && "border-warning/40 bg-warning/5",
-                          stage === "ready" &&
-                            "border-green-500/40 bg-green-50/50 dark:bg-green-950/10",
-                          stage === "served" && "border-primary/30 bg-accent/50",
-                          stage === "paid" && "border-primary/30 bg-accent/50",
-                        )}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">Table {t.table}</span>
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                                stage === "to-prepare" &&
-                                  "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-                                stage === "preparing" && "bg-warning/20 text-warning-foreground",
-                                stage === "ready" &&
-                                  "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-                                (stage === "served" || stage === "paid") &&
-                                  "bg-primary/10 text-primary",
-                              )}
-                            >
-                              {stage === "to-prepare"
-                                ? "à préparer"
-                                : stage === "preparing"
-                                  ? "en préparation"
-                                  : stage === "ready"
-                                    ? "prête"
-                                    : stage === "served"
-                                      ? "servie"
-                                      : "payée"}
-                            </span>
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {formatFCFA(t.total)} · {t.opened_at ? formatTime(t.opened_at) : ""}
-                          </div>
+                  .sort((a, b) => (a.opened_at ?? 0) - (b.opened_at ?? 0))
+                  .map((t) => (
+                    <div
+                      key={t.id}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-lg border p-3",
+                        "border-primary/30 bg-accent/50",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">Table {t.table}</span>
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase bg-primary/10 text-primary">
+                            occupée
+                          </span>
                         </div>
-                        <div className="flex shrink-0 gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setOrdersOpen(false);
-                              selectTarget({ kind: "table", saleId: t.id });
-                            }}
-                          >
-                            Ouvrir
-                          </Button>
+                        <div className="text-sm text-muted-foreground">
+                          {formatFCFA(t.total)} · {t.opened_at ? formatTime(t.opened_at) : ""}
                         </div>
                       </div>
-                    );
-                  })}
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setOrdersOpen(false);
+                            selectTarget({ kind: "table", saleId: t.id });
+                          }}
+                        >
+                          Ouvrir
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
               </div>
             )}
           </div>

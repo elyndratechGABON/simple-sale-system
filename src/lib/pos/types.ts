@@ -56,5 +56,5 @@ export function nextTableLabel(labels: string[]): string {
   return String(max + 1);
 }
 
-/** Cycle de service d'une table. */
-export type TableStage = "libre" | "to-prepare" | "preparing" | "ready" | "served" | "paid";
+/** Durée d'un appui long, en ms. En dessous, un tap un peu lent libérerait une table. */
+export const LONG_PRESS_MS = 500;
