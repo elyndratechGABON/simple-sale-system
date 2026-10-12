@@ -9,7 +9,7 @@ import {
   useAssetAvailability,
   rentalTotal,
   unitsBetween,
-} from "@/hooks/use-rentals";
+} from "@/features/rentals/hooks/use-rentals";
 import { formatFCFA } from "@/lib/format";
 import type { Product } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
@@ -24,17 +24,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DateField,
+  MoneyField,
+  PricingPicker,
+  QtyField,
+  TextField,
+  UNIT_LABELS,
+  type PricingUnit,
+} from "./rental-fields";
 import { toast } from "sonner";
-
-type PricingUnit = "hour" | "day" | "week" | "month" | "year";
-
-const UNIT_LABELS: Record<PricingUnit, string> = {
-  hour: "Heure",
-  day: "Jour",
-  week: "Semaine",
-  month: "Mois",
-  year: "An",
-};
+import { useBookingForm } from "../hooks/use-booking-form";
 
 /** Ordre de préférence pour l'unité par défaut. */
 const UNIT_PRIORITY: PricingUnit[] = ["day", "hour", "week", "month", "year"];
@@ -67,60 +67,36 @@ export function RentalBookingDialog({
   const qc = useQueryClient();
   const createRental = useCreateRental();
 
-  const availableUnits = useMemo(() => {
-    const p = asset.rental_pricing ?? {};
-    return UNIT_PRIORITY.filter((u) => p[u] != null && p[u]! > 0) as PricingUnit[];
-  }, [asset.rental_pricing]);
+  const {
+    availableUnits,
+    pricingUnit,
+    setPricingUnit,
+    pricePerUnit,
+    setPricePerUnit,
+    quantity,
+    setQuantity,
+    deposit,
+    setDeposit,
+    startDate,
+    setStartDate,
+    endDate,
+    setEndDate,
+    clientName,
+    setClientName,
+    clientPhone,
+    setClientPhone,
+    notes,
+    setNotes,
+    startTs,
+    endTs,
+    qtyNum,
+    priceNum,
+    total,
+    units,
+    isAvailable,
+    canSubmit,
+  } = useBookingForm(asset, open);
 
-  const [pricingUnit, setPricingUnit] = useState<PricingUnit>("day");
-  const [pricePerUnit, setPricePerUnit] = useState("0");
-  const [quantity, setQuantity] = useState("1");
-  const [deposit, setDeposit] = useState(String(asset.deposit_amount ?? 0));
-  const [startDate, setStartDate] = useState(todayISO);
-  const [endDate, setEndDate] = useState("");
-  const [clientName, setClientName] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
-  const [notes, setNotes] = useState("");
-
-  // Sélectionner la meilleure unité à l'ouverture
-  useEffect(() => {
-    if (!open) return;
-    const best = availableUnits[0] ?? "day";
-    setPricingUnit(best);
-    setPricePerUnit(String(asset.rental_pricing?.[best] ?? 0));
-    setQuantity("1");
-    setDeposit(String(asset.deposit_amount ?? 0));
-    setStartDate(todayISO());
-    setEndDate("");
-    setClientName("");
-    setClientPhone("");
-    setNotes("");
-  }, [open, asset, availableUnits]);
-
-  const startTs = startDate ? fromDateInput(startDate) : 0;
-  const endTs = endDate ? fromDateInput(endDate) : 0;
-
-  const { data: availability } = useAssetAvailability(
-    asset.id,
-    startTs || Date.now(),
-    endTs || Date.now() + 86_400_000,
-  );
-
-  const qtyNum = Math.max(1, Math.floor(Number(quantity) || 1));
-  const priceNum = Math.max(0, Number(pricePerUnit) || 0);
-  const total = useMemo(
-    () =>
-      startTs && endTs && endTs > startTs
-        ? rentalTotal(priceNum, qtyNum, startTs, endTs, pricingUnit)
-        : 0,
-    [priceNum, qtyNum, startTs, endTs, pricingUnit],
-  );
-  const units = useMemo(
-    () => (startTs && endTs && endTs > startTs ? unitsBetween(startTs, endTs, pricingUnit) : 0),
-    [startTs, endTs, pricingUnit],
-  );
-
-  const isAvailable = availability != null ? availability.available > 0 : true;
   const busy = createRental.isPending;
 
   function handleClose() {
@@ -194,88 +170,39 @@ export function RentalBookingDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* Unité de tarification */}
-          {availableUnits.length > 0 && (
-            <div className="flex gap-1.5">
-              {availableUnits.map((u) => (
-                <Button
-                  key={u}
-                  size="sm"
-                  variant={pricingUnit === u ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => {
-                    setPricingUnit(u);
-                    setPricePerUnit(String(asset.rental_pricing?.[u] ?? 0));
-                  }}
-                >
-                  {UNIT_LABELS[u]}
-                </Button>
-              ))}
-            </div>
-          )}
-
-          {/* Tarif unitaire par période */}
-          <div>
-            <Label htmlFor="rental-price">
-              Tarif unitaire — par {UNIT_LABELS[pricingUnit].toLowerCase()} (FCFA)
-            </Label>
-            <div className="text-xs text-muted-foreground mb-1">
-              Ex : 35 000 FCFA/jour → 1 mois = 35 000 × 30 = 1 050 000 FCFA
-            </div>
-            <Input
-              id="rental-price"
-              value={pricePerUnit}
-              onChange={(e) => setPricePerUnit(e.target.value.replace(/\D/g, ""))}
-              inputMode="numeric"
-              placeholder="0"
-            />
-          </div>
+          <PricingPicker
+            availableUnits={availableUnits}
+            pricingUnit={pricingUnit}
+            onUnit={(u) => {
+              setPricingUnit(u);
+              setPricePerUnit(String(asset.rental_pricing?.[u] ?? 0));
+            }}
+            pricePerUnit={pricePerUnit}
+            onPrice={setPricePerUnit}
+          />
 
           {/* Quantité */}
-          <div>
-            <Label htmlFor="rental-qty">Quantité</Label>
-            <Input
-              id="rental-qty"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ""))}
-              inputMode="numeric"
-              placeholder="1"
-            />
-          </div>
+          <QtyField id="rental-qty" label="Quantité" value={quantity} onChange={setQuantity} />
 
           {/* Caution */}
-          <div>
-            <Label htmlFor="rental-deposit">Caution (FCFA)</Label>
-            <Input
-              id="rental-deposit"
-              value={deposit}
-              onChange={(e) => setDeposit(e.target.value.replace(/\D/g, ""))}
-              inputMode="numeric"
-              placeholder="0"
-            />
-          </div>
+          <MoneyField
+            id="rental-deposit"
+            label="Caution (FCFA)"
+            value={deposit}
+            onChange={setDeposit}
+            placeholder="0"
+          />
 
           {/* Dates */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="rental-start">Début</Label>
-              <Input
-                id="rental-start"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="rental-end">Fin prévue</Label>
-              <Input
-                id="rental-end"
-                type="date"
-                value={endDate}
-                min={startDate || undefined}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
+            <DateField id="rental-start" label="Début" value={startDate} onChange={setStartDate} />
+            <DateField
+              id="rental-end"
+              label="Fin prévue"
+              value={endDate}
+              onChange={setEndDate}
+              min={startDate || undefined}
+            />
           </div>
 
           {/* Disponibilité */}
@@ -299,15 +226,13 @@ export function RentalBookingDialog({
           )}
 
           {/* Client */}
-          <div>
-            <Label htmlFor="rental-client">Nom du client</Label>
-            <Input
-              id="rental-client"
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              placeholder="Ex : Moussa Diop"
-            />
-          </div>
+          <TextField
+            id="rental-client"
+            label="Nom du client"
+            value={clientName}
+            onChange={setClientName}
+            placeholder="Ex : Moussa Diop"
+          />
           <div>
             <Label htmlFor="rental-phone">Téléphone</Label>
             <Input

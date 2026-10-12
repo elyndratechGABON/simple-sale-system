@@ -93,7 +93,7 @@ export function useUpdateRental() {
 // Les formules (unités, total, retard, pénalité) vivent dans `@/lib/rentals` — module PUR,
 // source de vérité partagée avec les agrégats de `analytics.ts`. Re-exportées ici pour
 // préserver le point d'import des écrans sans dupliquer l'arithmétique.
-export { unitsBetween, rentalTotal, overdueDays, lateFee } from "@/lib/rentals";
+export { unitsBetween, rentalTotal, overdueDays, lateFee } from "../lib/rentals";
 
 /** Met à jour le statut des locations en retard. À appeler au démarrage de l'app. */
 export function useMarkOverdueRentals() {

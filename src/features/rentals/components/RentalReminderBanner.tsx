@@ -1,7 +1,7 @@
 // Alerte in-app : dates de retour d'actifs de location.
 // S'affiche quand un produit actif a return_date = aujourd'hui.
 import { useEffect, useState } from "react";
-import { fetchReminders } from "../lib/reminders";
+import { fetchReminders } from "@/features/rentals/lib/fetch-reminders";
 
 export function RentalReminderBanner() {
   const [reminders, setReminders] = useState<{ id: string; returnDate: number }[]>([]);

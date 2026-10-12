@@ -8,7 +8,7 @@
 // Le bénéfice est calculé depuis les coûts d'acquisition saisis dans les rapports
 // (table `product_expenses`), pas depuis `cost_at_sale` figé dans les lignes de vente.
 import { eachDayOfInterval, startOfDay, subDays } from "date-fns";
-import { unitsBetween } from "./rentals";
+import { unitsBetween } from "@/features/rentals/lib/rentals";
 import type {
   Category,
   PaymentMethod,

@@ -3,7 +3,12 @@
 // état, pénalité de retard, remboursement de caution, notes.
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useUpdateRental, useRental, overdueDays, lateFee } from "@/hooks/use-rentals";
+import {
+  useUpdateRental,
+  useRental,
+  overdueDays,
+  lateFee,
+} from "@/features/rentals/hooks/use-rentals";
 import { formatFCFA } from "@/lib/format";
 import type { Rental } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";

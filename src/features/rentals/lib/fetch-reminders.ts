@@ -1,4 +1,4 @@
-import { getDB } from "./db";
+import { getDB } from "@/lib/db";
 
 export interface Reminder {
   id: string;

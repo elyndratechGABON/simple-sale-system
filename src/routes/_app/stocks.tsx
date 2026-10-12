@@ -1,4 +1,4 @@
-﻿// Stocks & Produits — centre de pilotage du stock, pas une simple liste.
+// Stocks & Produits — centre de pilotage du stock, pas une simple liste.
 //
 // Résumé chiffré en tête (valeur, volumes, alertes), recherche/filtres/tri, bloc
 // d'attention, puis fiche produit compacte avec jauge de stock et actions rapides
@@ -46,7 +46,7 @@ import {
   type SaleItem,
   type StockMovement,
 } from "@/lib/db";
-import { RentalReminderBanner } from "@/components/RentalReminderBanner";
+import { RentalReminderBanner } from "@/features/rentals";
 import { lastDaysRange } from "@/lib/analytics";
 import { formatFCFA, formatRelative, formatTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";

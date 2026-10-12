@@ -61,7 +61,7 @@ import { POSProductCard } from "@/components/POSProductCard";
 import { ClientSelect } from "@/components/ClientSelect";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { VoiceDictation } from "@/components/VoiceDictation";
-import { RentalView } from "@/components/RentalView";
+import { RentalView } from "@/features/rentals";
 import type { ParseResult } from "@/lib/voice/parser";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
