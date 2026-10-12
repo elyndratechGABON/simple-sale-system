@@ -19,13 +19,11 @@ import { useClusterFeatures } from "@/hooks/use-cluster-features";
 
 // Brouillon de variante dans le formulaire : prix/stock gardés en texte pour la saisie,
 // convertis en `price?`/`stock?` (productVariant) à l'enregistrement.
-// Pour les actifs en location, chaque variante porte aussi une `period`.
 type VariantDraft = {
   id: string;
   name: string;
   price: string;
   stock: string;
-  period?: "hour" | "day" | "week" | "month" | "year";
 };
 
 function draftId(): string {
@@ -44,14 +42,8 @@ export function ProductForm({
   defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
-  const {
-    hasSerialNumber,
-    isLocation,
-    hasVariants,
-    hasWeightInput,
-    hasRentalBooking,
-    allowServiceBooking,
-  } = useClusterFeatures();
+  const { hasSerialNumber, hasVariants, hasWeightInput, allowServiceBooking } =
+    useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
@@ -65,35 +57,14 @@ export function ProductForm({
     editing?.category ?? defaultCategory ?? "Boisson",
   );
   const [unit, setUnit] = useState<NonNullable<Product["unit"]>>(editing?.unit ?? "piece");
-  // Période tarifaire retenue pour l'ACTIF. Le prix saisi va dans `rental_pricing[periode]`
-  // (cf. `Product`), donc un même actif porte un prix différent par heure / jour / semaine.
-  const [pricingUnit, setPricingUnit] = useState<"hour" | "day" | "week" | "month" | "year">("day");
-  // Les tarifs déjà saisis, pour que changer de période ne perde rien : on edite
-  // `rental_pricing`, on ne l'écrase pas à chaque rendu.
-  const [rentalPricing, setRentalPricing] = useState<NonNullable<Product["rental_pricing"]>>(
-    () => editing?.rental_pricing ?? {},
-  );
   const [productType, setProductType] = useState<"product" | "service">(
-    isLocation ? "service" : (editing?.type ?? defaultType ?? "product"),
+    editing?.type ?? defaultType ?? "product",
   );
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
-  const [reminderDate, setReminderDate] = useState<string>(
-    editing?.reminderDate ? new Date(editing.reminderDate).toISOString().split("T")[0] : "",
-  );
   // Photo libre du produit ou service : dataURL webp réduit, purement local.
   const [photo, setPhoto] = useState<string | undefined>(editing?.photo);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
-
-  // Champs location (cluster 'location') : dans ce cluster tout produit est un actif
-  // de location, donc `isAsset` est dérivé et non toggleable.
-  const isAsset = isLocation || editing?.is_asset === true;
-  const [depositAmount, setDepositAmount] = useState<string>(
-    editing?.deposit_amount != null ? String(editing.deposit_amount) : "",
-  );
-  const [totalUnits, setTotalUnits] = useState<string>(
-    editing?.total_units != null ? String(editing.total_units) : "",
-  );
 
   // Variantes (vêtements) : liste éditable, câblée à `productVariant`.
   const [variants, setVariants] = useState<VariantDraft[]>(
@@ -103,7 +74,6 @@ export function ProductForm({
         name: v.name,
         price: v.price !== undefined ? String(v.price) : "",
         stock: v.stock !== undefined ? String(v.stock) : "",
-        period: v.period ?? (isLocation ? "day" : undefined),
       })) ?? [],
   );
 
@@ -116,10 +86,7 @@ export function ProductForm({
   const showVariants = productType === "product" && (hasVariants || variants.length > 0);
 
   function addVariant() {
-    setVariants((vs) => [
-      ...vs,
-      { id: draftId(), name: "", price: "", stock: "", period: isLocation ? "day" : undefined },
-    ]);
+    setVariants((vs) => [...vs, { id: draftId(), name: "", price: "", stock: "" }]);
   }
   function updateVariant(id: string, patch: Partial<VariantDraft>) {
     setVariants((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)));
@@ -150,77 +117,34 @@ export function ProductForm({
           ? variants.map((v) => ({
               id: v.id,
               name: v.name,
-              period: v.period ?? (isLocation ? "day" : undefined),
               ...(v.price ? { price: Number(v.price) } : {}),
               ...(v.stock ? { stock: Number(v.stock) } : {}),
             }))
           : undefined;
       const p = {
         name: name.trim(),
-        // `cost` n'est PLUS SAISI ici (PRD v2.0 §5.2) : il se renseigne en Comptabilité,
-        // onglet « Coûts ». Deux cas, et l'écart estIMPORTANT :
-        //  - en ÉDITION, on REPREND la valeur existante. Sans cela, `updateProduct` fait
-        //    un PUT complet et le coût saisi en Comptabilité serait effacé à chaque
-        //    simple renommage de produit ;
-        //  - en CRÉATION, 0 = « coût inconnu » (cf. `db.ts:78`), et c'est l'état
-        //    normal d'un produit dont le prix d'achat n'a pas encore été saisi.
         cost: editing?.cost ?? 0,
-        price: isAsset
-          ? variantsOut && variantsOut.length > 0
-            ? (variantsOut[0].price ?? 0)
-            : 0
-          : Number(price) || 0,
-        stock: isAsset
-          ? Number(totalUnits) || 0
-          : variantsOut && variantsOut.length > 0
-            ? // Le stock d'un produit à variantes est la somme des variantes — même « illimité »
-              // est ignoré ici, une variante à stock fini reste un stock fini. La valeur
-              // définitive est posée par `normalizeVariantStock`, au seul endroit où tout le
-              // monde écrit un produit.
-              variantsOut.reduce((t, v) => t + (v.stock ?? 0), 0)
+        price:
+          variantsOut && variantsOut.length > 0 ? (variantsOut[0].price ?? 0) : Number(price) || 0,
+        stock:
+          variantsOut && variantsOut.length > 0
+            ? variantsOut.reduce((t, v) => t + (v.stock ?? 0), 0)
             : unlimited
               ? Number.POSITIVE_INFINITY
               : Number(stock) || 0,
         min_stock:
-          !unlimited && !isAsset && !(variantsOut && variantsOut.length > 0) && minStock
+          !unlimited && !(variantsOut && variantsOut.length > 0) && minStock
             ? Number(minStock)
             : undefined,
-        // Pour la location : un prix PAR PÉRIODE. Le prix saisi s'écrit dans la case de la
-        // période choisie (`rental_pricing`), les autres périodes sont conservées — c'est
-        // ce qui permet de facturer 10 h et 3 jours différemment sur le MÊME actif.
-        // Le bloc reste conditionné à `isLocation` : les périodes ne sont affichées que
-        // là (ligne 437). Élargir à `isAsset` revenait à écrire `rental_pricing` et un
-        // `price` que personne n'a pu saisir, en écrasant le prix du bien vendu.
-        ...(isLocation
-          ? {
-              is_asset: true,
-              rental_pricing: rentalPricing,
-              // `price` reste la référence lue par la caisse ; on y met le tarif de la
-              // période par défaut pour qu'un appel sans période précise ne soit pas à 0.
-              price: rentalPricing[pricingUnit] ?? rentalPricing.day ?? 0,
-              deposit_amount: depositAmount ? Number(depositAmount) : undefined,
-              total_units: totalUnits ? Number(totalUnits) : undefined,
-            }
-          : {}),
-        // Le rappel, lui, concerne TOUT actif : il sert au propriétaire à retrouver un
-        // bien à vérifier, loué ou non. Écrit hors du bloc de location, sinon il était
-        // impossible d'en mettre un sur un bien simple.
-        ...(isAsset && reminderDate ? { reminderDate: new Date(reminderDate).getTime() } : {}),
         category,
         type: productType,
         serialNumber: serialNumber.trim() || undefined,
-        // V23 : l'unité est posée partout, plus seulement sur les clusters `mixed`/`weight`.
-        // Le sélecteur est désormais visible pour TOUT produit, donc un produit qui
-        // n'en choisit pas explicitement doit rester à "piece" — l'absence de `unit`
-        // et la valeur "piece" signifieraient la même chose pour l'affichage, mais
-        // `analytics` teste `unit === "kg"` : un produit au kilo doit être explicite.
         unit,
         photo,
         ...(variantsOut ? { variants: variantsOut } : {}),
       };
       if (!p.name) throw new Error("Nom requis");
-      if (!isAsset && p.price <= 0) throw new Error("Prix invalide");
-      if (isAsset && !totalUnits) throw new Error("Nombre d'unités requis");
+      if (p.price <= 0) throw new Error("Prix invalide");
       if (editing) {
         await updateProduct({ ...editing, ...p });
       } else {
@@ -238,13 +162,7 @@ export function ProductForm({
   return (
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>
-          {editing
-            ? "Modifier le produit"
-            : isLocation
-              ? "Nouvel actif de location"
-              : "Nouveau produit"}
-        </DialogTitle>
+        <DialogTitle>{editing ? "Modifier le produit" : "Nouveau produit"}</DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
         <div>
@@ -294,8 +212,6 @@ export function ProductForm({
             className="hidden"
             onChange={handlePhoto}
           />
-        </div>
-        {!isLocation && !isAsset && (
           <div className="space-y-3">
             {/* `price` seul : il occupait la moitié droite d'une grille de deux colonnes
                 partagées avec le prix d'achat. Ce champ-ci part en Comptabilité (§5.5). */}
@@ -361,36 +277,35 @@ export function ProductForm({
               </>
             )}
           </div>
-        )}
+        </div>
         {/* Un seul enfant : une grille 2 colonnes laissait une moitié vide. */}
-        {!isLocation && (
-          <div>
-            <Label>Type</Label>
-            <div className="flex gap-2 mt-1">
-              <Button
-                type="button"
-                variant={productType === "product" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setProductType("product")}
-                className="flex-1"
-              >
-                Produit
-              </Button>
-              <Button
-                type="button"
-                variant={productType === "service" ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setProductType("service");
-                  setUnlimited(true);
-                }}
-                className="flex-1"
-              >
-                Prestation
-              </Button>
-            </div>
+        <div>
+          <Label>Type</Label>
+          <div className="flex gap-2 mt-1">
+            <Button
+              type="button"
+              variant={productType === "product" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setProductType("product")}
+              className="flex-1"
+            >
+              Produit
+            </Button>
+            <Button
+              type="button"
+              variant={productType === "service" ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setProductType("service");
+                setUnlimited(true);
+              }}
+              className="flex-1"
+            >
+              Prestation
+            </Button>
           </div>
-        )}
+        </div>
+
         {showVariants && (
           <div>
             <Label>Variantes (taille, couleur, pointure…) — prix et stock par variante</Label>
@@ -451,104 +366,7 @@ export function ProductForm({
             />
           </div>
         )}
-        {/* Champs location : tout produit est un actif de location, formulaire à variantes */}
-        {isLocation && (
-          <>
-            <div>
-              <Label htmlFor="total_units">Nombre d'unités physiques</Label>
-              <Input
-                id="total_units"
-                inputMode="numeric"
-                value={totalUnits}
-                onChange={(e) => setTotalUnits(e.target.value.replace(/\D/g, ""))}
-                placeholder="Ex : 50 chaises, 3 voitures"
-              />
-            </div>
-
-            {/* PRIX PAR PÉRIODE — le champ propre à la location. Un actif porte un
-                tarif distinct pour chaque plage : la saisie va dans la case de la
-                période, les autres sont conservées. C'est ce qui permet à la caisse de
-                facturer 3 heures et 2 jours différemment sur le MÊME produit. */}
-            <div>
-              <Label>Prix par période (FCFA)</Label>
-              <p className="text-xs text-muted-foreground mb-2">
-                Remplissez seulement les périodes que vous facturez. La première reste le tarif par
-                défaut quand la durée n'est pas précisée.
-              </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {(
-                  [
-                    ["hour", "Heure"],
-                    ["day", "Jour"],
-                    ["week", "Semaine"],
-                    ["month", "Mois"],
-                    ["year", "Année"],
-                  ] as const
-                ).map(([key, label]) => {
-                  const active = pricingUnit === key;
-                  return (
-                    <div
-                      key={key}
-                      className={`rounded-lg border p-2 ${
-                        active ? "border-primary bg-accent/40" : ""
-                      }`}
-                    >
-                      <label
-                        htmlFor={`rental-${key}`}
-                        className="text-xs font-medium text-muted-foreground"
-                      >
-                        {label}
-                      </label>
-                      <Input
-                        id={`rental-${key}`}
-                        inputMode="numeric"
-                        className="mt-1 h-9"
-                        value={rentalPricing[key] ?? ""}
-                        onFocus={() => setPricingUnit(key)}
-                        onChange={(e) =>
-                          setRentalPricing((prev) => {
-                            const v = e.target.value.replace(/\D/g, "");
-                            const next = { ...prev };
-                            if (v) next[key] = Number(v);
-                            else delete next[key];
-                            return next;
-                          })
-                        }
-                        placeholder={active ? "Tarif par défaut" : "—"}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="deposit">Caution par défaut (FCFA)</Label>
-              <Input
-                id="deposit"
-                inputMode="numeric"
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value.replace(/\D/g, ""))}
-                placeholder="Optionnel — montant retenu au client"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="reminderDate">Date de rappel pour le propriétaire</Label>
-              <Input
-                id="reminderDate"
-                type="date"
-                value={reminderDate}
-                onChange={(e) => setReminderDate(e.target.value)}
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Rappel automatique pour la révision, l'entretien ou le suivi de cet actif.
-              </p>
-            </div>
-          </>
-        )}
-        {!isAsset && productType === "product" && (
+        {productType === "product" && (
           <div>
             <Label>Unité de vente</Label>
             {/* Les quatre unités sont proposees partout : le kilo n'appartient plus au
