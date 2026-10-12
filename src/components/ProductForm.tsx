@@ -54,7 +54,6 @@ export function ProductForm({
   } = useClusterFeatures();
   const [name, setName] = useState(editing?.name ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
-  const [cost, setCost] = useState<string>(editing?.cost ? String(editing.cost) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
   const [stock, setStock] = useState<string>(
     editing && Number.isFinite(editing.stock) ? String(editing.stock) : "",
@@ -158,7 +157,14 @@ export function ProductForm({
           : undefined;
       const p = {
         name: name.trim(),
-        cost: Number(cost) || 0,
+        // `cost` n'est PLUS SAISI ici (PRD v2.0 §5.2) : il se renseigne en Comptabilité,
+        // onglet « Coûts ». Deux cas, et l'écart estIMPORTANT :
+        //  - en ÉDITION, on REPREND la valeur existante. Sans cela, `updateProduct` fait
+        //    un PUT complet et le coût saisi en Comptabilité serait effacé à chaque
+        //    simple renommage de produit ;
+        //  - en CRÉATION, 0 = « coût inconnu » (cf. `db.ts:78`), et c'est l'état
+        //    normal d'un produit dont le prix d'achat n'a pas encore été saisi.
+        cost: editing?.cost ?? 0,
         price: isAsset
           ? variantsOut && variantsOut.length > 0
             ? (variantsOut[0].price ?? 0)
@@ -291,41 +297,18 @@ export function ProductForm({
         </div>
         {!isLocation && !isAsset && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="cost">Prix d'achat (FCFA)</Label>
-                <Input
-                  id="cost"
-                  inputMode="numeric"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Ex : 200"
-                />
-              </div>
-              <div>
-                <Label htmlFor="price">Prix de revente (FCFA)</Label>
-                <Input
-                  id="price"
-                  inputMode="numeric"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Ex : 300"
-                />
-              </div>
+            {/* `price` seul : il occupait la moitié droite d'une grille de deux colonnes
+                partagées avec le prix d'achat. Ce champ-ci part en Comptabilité (§5.5). */}
+            <div>
+              <Label htmlFor="price">Prix de revente (FCFA)</Label>
+              <Input
+                id="price"
+                inputMode="numeric"
+                value={price}
+                onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+                placeholder="Ex : 300"
+              />
             </div>
-
-            {/* Marge calculée en direct */}
-            {Number(price) > 0 && Number(cost) > 0 && (
-              <div className="rounded-lg bg-muted/50 p-2 text-xs text-muted-foreground flex items-center justify-between">
-                <span>Marge brute estimée :</span>
-                <span
-                  className={`font-semibold ${Number(price) - Number(cost) >= 0 ? "text-emerald-600" : "text-destructive"}`}
-                >
-                  {Number(price) - Number(cost)} FCFA (
-                  {Math.round(((Number(price) - Number(cost)) / Number(price)) * 100)}%)
-                </span>
-              </div>
-            )}
 
             {productType === "product" && (
               <>
