@@ -45,6 +45,7 @@ import {
   type Sale,
   type SaleItem,
 } from "@/lib/db";
+import { isWeightProduct, filterQtyInput, parseQty } from "@/lib/pos-quantity";
 import { formatFCFA, formatTime } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useClusterFeatures } from "@/hooks/use-cluster-features";
@@ -742,6 +743,10 @@ function PosPage() {
 
   function addOne(p: Product) {
     navigator.vibrate?.(8);
+    // Un produit au kilo ajoute « 1 kg » au tap : la balance ne se devine pas, et
+    // l'appui long (seule voie de saisie décimale) reste le geste de correction.
+    // Le garde de stock de `addEntry` compare des nombres réels — 2.5 <= 5 passe,
+    // 6 > 5 est refusé — donc rien à changer ici.
     addEntry(p, undefined, 1);
   }
   function addOneByKey(line: UiLine) {
@@ -1904,9 +1909,14 @@ function PosPage() {
                     <Label>Nombre</Label>
                     <Input
                       type="number"
+                      step={isWeightProduct(manualQtyProduct.unit) ? "0.001" : "1"}
                       value={manualQtyValue}
-                      onChange={(e) => setManualQtyValue(e.target.value.replace(/\D/g, ""))}
-                      placeholder="1"
+                      onChange={(e) =>
+                        setManualQtyValue(
+                          filterQtyInput(e.target.value, isWeightProduct(manualQtyProduct.unit)),
+                        )
+                      }
+                      placeholder={isWeightProduct(manualQtyProduct.unit) ? "0,5" : "1"}
                       autoFocus
                     />
                     <div className="flex gap-2">
@@ -1924,7 +1934,7 @@ function PosPage() {
                         variant="default"
                         className="flex-1"
                         onClick={() => {
-                          const qty = Math.max(1, Number(manualQtyValue) || 1);
+                          const qty = Math.max(1, parseQty(manualQtyValue, 1));
                           // Mettre à jour le panier avec la quantité exacte
                           const key = manualQtyProduct.id;
                           setCart((prev) => ({
@@ -2327,16 +2337,19 @@ function FreeLineDialog({
       return;
     }
     const priceNum = Number(price);
-    const qtyNum = Number(quantity);
+    // `parseQty` normalise la virgule française : `Number("2,5")` vaut NaN, ce qui
+    // ferait retomber la quantité sur le repli et facturerait 1 au lieu de 2,5.
+    const qtyNum = parseQty(quantity, 1);
     if (!Number.isFinite(priceNum) || priceNum <= 0) {
       toast.error("Prix de vente invalide");
       return;
     }
     // Bornes de sécurité : une unité (FCFA) ou une quantité délirante corrompt la caisse.
+    // L'arrondi à l'entier (Math.round) partait d'une époque où tout se vendait à
+    // l'unité : il transforme une pesée de 2,5 en 3 et fait encaisser 500 FCFA de trop.
+    // On borne donc SANS arrondir, et on laisse passer les décimales jusqu'au gramme.
     const cappedPrice = Math.min(priceNum, 999_999_999);
-    const cappedQty = Number.isFinite(qtyNum)
-      ? Math.max(1, Math.min(Math.round(qtyNum), 10_000))
-      : 1;
+    const cappedQty = Number.isFinite(qtyNum) ? Math.max(0.001, Math.min(qtyNum, 10_000)) : 1;
     onAdd({
       key: `libre_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       name: label,
@@ -2384,13 +2397,13 @@ function FreeLineDialog({
               />
             </div>
             <div>
-              <Label htmlFor="free-qty">Quantité</Label>
+              <Label htmlFor="free-qty">Quantité (kg ou pièce)</Label>
               <Input
                 id="free-qty"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={quantity}
-                onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ""))}
-                placeholder="1"
+                onChange={(e) => setQuantity(filterQtyInput(e.target.value, true))}
+                placeholder="0,5"
               />
             </div>
           </div>
