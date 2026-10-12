@@ -46,7 +46,6 @@ export function ProductForm({
   const qc = useQueryClient();
   const {
     hasSerialNumber,
-    hasExpiryDate,
     isLocation,
     hasVariants,
     hasWeightInput,
@@ -79,9 +78,6 @@ export function ProductForm({
     isLocation ? "service" : (editing?.type ?? defaultType ?? "product"),
   );
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
-  const [expiryDate, setExpiryDate] = useState(
-    editing?.expiryDate ? new Date(editing.expiryDate).toISOString().split("T")[0] : "",
-  );
   const [reminderDate, setReminderDate] = useState<string>(
     editing?.reminderDate ? new Date(editing.reminderDate).toISOString().split("T")[0] : "",
   );
@@ -213,7 +209,6 @@ export function ProductForm({
         // et la valeur "piece" signifieraient la même chose pour l'affichage, mais
         // `analytics` teste `unit === "kg"` : un produit au kilo doit être explicite.
         unit,
-        expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
         photo,
         ...(variantsOut ? { variants: variantsOut } : {}),
       };
@@ -596,18 +591,6 @@ export function ProductForm({
                 </Button>
               ))}
             </div>
-          </div>
-        )}
-        {hasExpiryDate && productType === "product" && (
-          <div>
-            <Label htmlFor="expiryDate">Date de péremption</Label>
-            <Input
-              id="expiryDate"
-              type="date"
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              placeholder="Optionnel"
-            />
           </div>
         )}
         <div>

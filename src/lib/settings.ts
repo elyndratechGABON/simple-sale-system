@@ -63,7 +63,6 @@ export interface ClusterStock {
   unitType: "unit" | "weight" | "mixed";
   hasVariants: boolean;
   showCostPrice: boolean;
-  hasExpiryDate: boolean;
   hasSerialNumber: boolean;
 }
 
@@ -195,7 +194,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: true,
       hasSerialNumber: false,
     },
     flags: {
@@ -219,7 +217,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: false,
       showCostPrice: false,
-      hasExpiryDate: false,
       hasSerialNumber: false,
     },
     flags: {
@@ -242,7 +239,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: false,
       hasSerialNumber: false,
     },
     flags: {
@@ -266,7 +262,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: false,
       hasSerialNumber: false,
     },
     flags: {
@@ -289,7 +284,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: true,
       showCostPrice: true,
-      hasExpiryDate: false,
       hasSerialNumber: false,
     },
     flags: {
@@ -312,7 +306,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "mixed",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: false,
       hasSerialNumber: false,
     },
     flags: {
@@ -336,7 +329,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "weight",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: true,
       hasSerialNumber: false,
     },
     flags: {
@@ -361,7 +353,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: true,
       hasSerialNumber: false,
     },
     flags: {
@@ -385,7 +376,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
       unitType: "unit",
       hasVariants: false,
       showCostPrice: true,
-      hasExpiryDate: false,
       hasSerialNumber: false,
     },
     flags: {

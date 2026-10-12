@@ -909,7 +909,6 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
       // vendu au kilo s'écrit `unit: "kg"`, tout le reste vaut "piece".
       unit: sellsByWeight ? "kg" : "piece",
       serialNumber: undefined,
-      expiryDate: undefined,
       variants: variants
         .map((v) => ({
           id: crypto.randomUUID(),

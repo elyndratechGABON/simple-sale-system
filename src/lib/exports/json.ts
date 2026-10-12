@@ -44,10 +44,14 @@ const productSchema = z.object({
   category,
   type: z.enum(["product", "service"]).optional(),
   serialNumber: z.string().optional(),
-  unit: z.enum(["piece", "meter", "liter"]).optional(),
+  // V23 : `unit` vaut "kg" depuis l'unification. Le laisser sur l'ancien enum faisait
+  // ECHOUER la validation d'une sauvegarde contenant un produit au kilo - zod retire
+  // alors la cle, et la restauration perdait l'unite. `unitType`/`weightUnit` ont
+  // disparu avec la migration ; ils restent acceptes en lecture pour qu'une sauvegarde
+  // ecrite par une version anterieure se restaure (normalize les replie sur `unit`).
+  unit: z.enum(["piece", "kg", "liter", "meter"]).optional(),
   unitType: z.enum(["unit", "weight"]).optional(),
   weightUnit: z.string().optional(),
-  expiryDate: z.number().optional(),
   ...syncFields,
 });
 
@@ -205,6 +209,11 @@ export function parseBackup(text: string): { snapshot: DatabaseSnapshot; summary
       cost: p.cost ?? 0,
       // `null` en JSON = Infinity à l'origine : stock illimité. Cf. productSchema.
       stock: p.stock === null ? Number.POSITIVE_INFINITY : p.stock,
+      // Repli V23 : une sauvegarde écrite avant l'unification porte `unitType: "weight"`.
+      // Sans ce report, elle se restaurerait en produit à l'unité — la boucherie
+      // retrouverait ses produits au prix du kilo, vendus à l'unité. Mêmes règles que
+      // la migration Dexie : le poids l'emporte, sinon l'unité existante est conservée.
+      unit: p.unit ?? (p.unitType === "weight" ? "kg" : "piece"),
     })),
     sales: data.sales.map((s) => ({
       ...normalize(s, s.timestamp),

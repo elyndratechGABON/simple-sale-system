@@ -83,11 +83,6 @@ export interface Product extends SyncFields {
   /** Type métier : 'product' = bien physique (défaut), 'service' = prestation. */
   type?: "product" | "service";
   // ── V2 : champs pré-configurés (V10) ──────────────────────────────────
-  /**
-   * Timestamp de date de péremption (produits périssables). Absent = pas de suivi.
-   * @deprecated Champ mort : la lecture des indices est supplantée par le rapport de stock.
-   */
-  expiryDate?: number;
   /** Numéro de série / IMEI (électronique, SAV). Absent = pas de suivi. */
   serialNumber?: string;
   /**
@@ -1036,6 +1031,64 @@ export class PosDatabase extends Dexie {
             else if (!legacy.unit) legacy.unit = "piece";
             delete legacy.unitType;
             delete legacy.weightUnit;
+          });
+      });
+
+    // Version 24 — SUPPRESSION DE `Product.expiryDate`.
+    //
+    // Décision produit (PRD v2.0 §7) : la date de péremption sort du formulaire. Elle
+    // était saisie depuis la v10 et n'a jamais été LUE : aucun rapport, aucune alerte,
+    // aucun export ne la consommait — `alerts.ts` ne mentionne pas la péremption, et le
+    // champ n'avait pour seul lecteur que le formulaire qui l'affichait. Un champ de
+    // suivi qui ne déclenche aucun suivi.
+    //
+    // La purge est PHYSIQUE ici, et c'est délibéré : `delete` fait disparaître la clé
+    // du produit. Une péremption n'est pas du chiffre d'affaires — elle ne rentre dans
+    // aucune vente, aucun bénéfice, aucun export. La garder en `undefined`-costant
+    // laisserait un champ mort que le prochain lecteur croira encore alimenté.
+    //
+    // AUCUN `updated_at` touché : même raison qu'en v23 — ce sont des fiches, pas des
+    // ventes. Les toucher ferait refluer tout le catalogue en synchronisation P2P chez
+    // chaque commerçant pour une suppression de donnée qui ne vaut rien.
+    //
+    // ATTENTION — `expiryDate` SURVIT sur d'autres tables : `ShopProfile.expiryDate`
+    // porte la date d'expiration de l'ABONNEMENT (trial, grace, `setShopExpiry`, et
+    // `use-subscription.ts` qui affiche le bandeau). Ce champ n'a rien à voir avec la
+    // péremption d'un produit ; la migration ne le touche pas.
+    this.version(24)
+      .stores({
+        products: "id, name, category, updated_at",
+        sales: "id, timestamp, status, client_name, client_id, updated_at",
+        sale_items: "id, sale_id, updated_at",
+        settings: "key",
+        subscriptions: "id, updated_at",
+        shop_profiles: "id, updated_at",
+
+        clients: "id, name, phone, updated_at",
+        product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+        stock_movements: "id, product_id, created_at, [product_id+created_at]",
+        day_closures: "id, closed_at",
+        rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
+
+        sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
+        processed_ops: "id",
+        paired_devices: "id, updated_at, shop_id",
+
+        monthly_overviews: "id, updated_at",
+
+        closings: "id, imported_at, employee_device_id, period_from, updated_at",
+
+        employee_history: "id, employeeId, shopId, [employeeId+startedAt]",
+
+        catalogue_requests:
+          "id, shop_id, requester_id, status, created_at, confirmed_at, denied_at, snapshot_sent",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("products")
+          .toCollection()
+          .modify((p) => {
+            delete (p as { expiryDate?: number }).expiryDate;
           });
       });
   }

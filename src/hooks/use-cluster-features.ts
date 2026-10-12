@@ -28,7 +28,6 @@ export function useClusterFeatures(): ClusterConfig & {
   // Nouveaux helpers (V2, prêts à l'emploi)
   hasWeightInput: boolean;
   hasVariants: boolean;
-  hasExpiryDate: boolean;
   hasSerialNumber: boolean;
   unitType: "unit" | "weight" | "mixed";
   // Flags dépliés au top-level
@@ -64,7 +63,6 @@ export function useClusterFeatures(): ClusterConfig & {
     // Nouveaux
     hasWeightInput: config.flags.hasWeightInput,
     hasVariants: config.stock.hasVariants,
-    hasExpiryDate: config.stock.hasExpiryDate,
     hasSerialNumber: config.stock.hasSerialNumber,
     unitType: config.stock.unitType,
     // Flags
