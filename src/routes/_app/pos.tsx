@@ -1183,14 +1183,8 @@ function PosPage() {
                 </p>
               </CardContent>
             </Card>
-          )}
-          {salesToday.length > 0 && (
-            <div className="mt-3">
-              <RecentSalesMini sales={salesToday} />
-            </div>
-          )}
+          )}{" "}
         </div>
-
         {/* Panier / encaissement. Panneau latéral collant sur grand écran, feuille
             coulissante sur téléphone — cf. CartShell. */}
         <CartShell compact={compact} open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -2004,43 +1998,6 @@ function PosPage() {
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-/** Trois dernières ventes du jour, sous la grille du catalogue. */
-function RecentSalesMini({ sales }: { sales: Sale[] }) {
-  const latest = useMemo(
-    () => [...sales].sort((a, b) => b.timestamp - a.timestamp).slice(0, 3),
-    [sales],
-  );
-  const { data: items = [] } = useQuery({
-    queryKey: ["sale_items", "recent-mini", latest.map((s) => s.id).join(",")],
-    queryFn: () => getSaleItemsForSales(latest.map((s) => s.id)),
-    enabled: latest.length > 0,
-  });
-  const counts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const it of items) m.set(it.sale_id, (m.get(it.sale_id) ?? 0) + it.quantity);
-    return m;
-  }, [items]);
-  return (
-    <Card>
-      <CardContent className="space-y-2 p-4">
-        <p className="text-sm font-semibold">Ventes récentes</p>
-        {latest.map((s) => (
-          <div key={s.id} className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground tabular-nums">{formatTime(s.timestamp)}</span>
-            <span className="flex items-center gap-3">
-              <span className="text-muted-foreground">{counts.get(s.id) ?? 0} art.</span>
-              <span className="font-semibold tabular-nums">{formatFCFA(s.total)}</span>
-            </span>
-          </div>
-        ))}
-        <Link to="/history" className="block pt-1 text-sm text-primary underline">
-          Voir toutes les ventes
-        </Link>
-      </CardContent>
-    </Card>
   );
 }
 
