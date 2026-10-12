@@ -112,9 +112,6 @@ function PosPage() {
   const qc = useQueryClient();
   const { tables: tableLabels } = usePreferences();
   const features = useClusterFeatures();
-  // Le cycle de service « Préparer / Prêt / Servir » ne concerne que les cuisines :
-  // une addition de bar est servie dès qu'elle est versée, sans étape intermédiaire.
-  const isOrderPrep = features.workflowType === "order-prep";
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
@@ -471,10 +468,6 @@ function PosPage() {
                 table={table}
                 active={activeTable?.table === label}
                 disabled={openMut.isPending || closeMut.isPending}
-                showServiceCycle={isOrderPrep}
-                onPrepare={table ? () => prepareMut.mutate(table.id) : undefined}
-                onReady={table ? () => readyMut.mutate(table.id) : undefined}
-                onServe={table ? () => serveMut.mutate(table.id) : undefined}
                 onClick={() =>
                   table ? selectTarget({ kind: "table", saleId: table.id }) : openMut.mutate(label)
                 }
@@ -493,48 +486,15 @@ function PosPage() {
               <Plus className="h-4 w-4 mr-1" /> Nouvelle table
             </Button>
           </div>
-          {/* Légende du code couleur des étapes : toujours affichée, elle est ce qui rend
-              la lecture d'un coup d'œil possible pour un serveur qui ne connaît pas encore
-              le code. Le restaurant distingue les crans du service ; les autres métiers à
-              tables n'en ont que trois (libre, en cours, payée). */}
+          {/* Légende simplifiée : libre / occupée */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-border" />
               Libre
             </span>
-            {isOrderPrep ? (
-              <>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-orange-500" />À préparer
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-warning" />
-                  En préparation
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                  Prête
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-primary" />
-                  Servie
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-warning" />
-                  En cours
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-orange-500" />
-                  Servi
-                </span>
-              </>
-            )}
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-primary" />
-              Payé
+              Occupée
             </span>
           </div>
           {/* Le geste est invisible sans ce rappel, et il n'existe qu'une fois qu'une table
