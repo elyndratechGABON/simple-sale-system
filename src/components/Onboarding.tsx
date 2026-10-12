@@ -866,7 +866,10 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const addingProduct = isServiceCluster && serviceMode === "produit";
 
   // Variantes dynamiques — applicable à tout produit (vêtements, régables, etc.).
+  // `hasVariants` vient du cluster : seul `clothing` l'active aujourd'hui. Le bloc était
+  // sans condition — l'épicier voyait « taille, couleur » sur sa sauce.
   const [variants, setVariants] = useState<{ name: string; price: string; stock: string }[]>([]);
+  const showVariants = cluster === "clothing";
 
   // Formulaire produit
   const [productName, setProductName] = useState("");
@@ -1085,68 +1088,70 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
                   />
                 </div>
               )}
-              {/* Variantes — universel pour tout produit (vêtements, régables, etc.) */}
-              <div className="space-y-2">
-                <Label>Variantes (optionnel)</Label>
+              {/* Variantes — clothing seulement (vêtements, pointures, tailles). */}
+              {showVariants && (
                 <div className="space-y-2">
-                  {variants.map((v, i) => (
-                    <div key={i} className="flex gap-2">
-                      <Input
-                        placeholder="Nom variante (ex: Petit, Grand, Noir, M)"
-                        value={v.name}
-                        onChange={(e) => {
-                          const next = [...variants];
-                          next[i].name = e.target.value;
-                          setVariants(next);
-                        }}
-                        className="h-11 flex-1"
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Prix"
-                        value={v.price}
-                        onChange={(e) => {
-                          const next = [...variants];
-                          next[i].price = e.target.value;
-                          setVariants(next);
-                        }}
-                        className="h-11 w-24"
-                        inputMode="numeric"
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Stock"
-                        value={v.stock}
-                        onChange={(e) => {
-                          const next = [...variants];
-                          next[i].stock = e.target.value;
-                          setVariants(next);
-                        }}
-                        className="h-11 w-24"
-                        inputMode="numeric"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setVariants(variants.filter((_, j) => j !== i))}
-                        className="text-destructive"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setVariants([...variants, { name: "", price: "", stock: "" }])}
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-1" /> Ajouter une variante
-                  </Button>
+                  <Label>Variantes (optionnel)</Label>
+                  <div className="space-y-2">
+                    {variants.map((v, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          placeholder="Nom variante (ex: Petit, Grand, Noir, M)"
+                          value={v.name}
+                          onChange={(e) => {
+                            const next = [...variants];
+                            next[i].name = e.target.value;
+                            setVariants(next);
+                          }}
+                          className="h-11 flex-1"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Prix"
+                          value={v.price}
+                          onChange={(e) => {
+                            const next = [...variants];
+                            next[i].price = e.target.value;
+                            setVariants(next);
+                          }}
+                          className="h-11 w-24"
+                          inputMode="numeric"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Stock"
+                          value={v.stock}
+                          onChange={(e) => {
+                            const next = [...variants];
+                            next[i].stock = e.target.value;
+                            setVariants(next);
+                          }}
+                          className="h-11 w-24"
+                          inputMode="numeric"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setVariants(variants.filter((_, j) => j !== i))}
+                          className="text-destructive"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVariants([...variants, { name: "", price: "", stock: "" }])}
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Ajouter une variante
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </StepShell>
 

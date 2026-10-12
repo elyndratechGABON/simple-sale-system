@@ -113,6 +113,14 @@ export function ProductForm({
       })) ?? [],
   );
 
+  // Affiche le bloc variantes quand le produit EST un produit, OU quand il en porte déjà
+  // (édition d'une fiche existante). Le deuxième terme est un garde-fou de DONNÉES : des
+  // variantes ont pu être créées hors `clothing` (l'onboarding ne les bloquait pas), la
+  // caisse les vend toujours (`pos.tsx` variant picker). Masquer le bloc sur ces fiches
+  // les rendrait invisibles ET non modifiables. Un commerçant qui n'a jamais eu de
+  // variantes ne voit toujours rien.
+  const showVariants = productType === "product" && (hasVariants || variants.length > 0);
+
   function addVariant() {
     setVariants((vs) => [
       ...vs,
@@ -403,7 +411,7 @@ export function ProductForm({
             </div>
           </div>
         )}
-        {productType === "product" && (
+        {showVariants && (
           <div>
             <Label>Variantes (taille, couleur, pointure…) — prix et stock par variante</Label>
             <div className="mt-1.5 space-y-2">
