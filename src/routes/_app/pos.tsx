@@ -22,22 +22,11 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  addRound,
-  cancelSale,
-  closeDay,
-  closeTable,
-  createSale,
   getSaleItems,
   getSaleItemsForSales,
   listOpenTables,
   listProducts,
   listSalesToday,
-  openTable,
-  payRound,
-  payTable,
-  prepareTable,
-  readyTable,
-  serveTable,
   type CartLine,
   type Category,
   type PaymentMethod,
@@ -52,7 +41,6 @@ import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { savePreferences } from "@/lib/settings";
 import { PinDialog } from "@/components/PinDialog";
 import { playSuccessChime } from "@/lib/success-sound";
-import { useSaleTrigger } from "@/hooks/use-sale-trigger";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,6 +85,8 @@ import {
   TargetChip,
 } from "@/components/pos";
 import { tableStage } from "@/lib/pos/table-stage";
+import { useSaleMutations } from "@/lib/pos/use-sale-mutations";
+import { useTableMutations } from "@/lib/pos/use-table-mutations";
 
 export const Route = createFileRoute("/_app/pos")({
   head: () => ({
@@ -125,7 +115,6 @@ function paymentLabel(m: PaymentMethod): string {
 // Ligne saisie à la main, pour encaisser sans catalogue (stocks pas encore initiés).
 
 function PosPage() {
-  const { notifyOwner } = useSaleTrigger();
   const qc = useQueryClient();
   const { tables: tableLabels } = usePreferences();
   const features = useClusterFeatures();
@@ -365,87 +354,31 @@ function PosPage() {
     return list;
   }, [products, filter, search, features.isService, serviceTab]);
 
-  const saleMut = useMutation({
-    mutationFn: () =>
-      createSale({
-        lines: lines.map(({ key: _key, ...line }): CartLine => line),
-        cash_given: payMethod === "cash" ? cash : dueTotal,
-        customers_count: customers,
-        payment_method: payMethod,
-        ...(clientName.trim() ? { client_name: clientName.trim() } : {}),
-        ...(clientId ? { client_id: clientId } : {}),
-        ...(lines.some((l) => {
-          const prod = products.find((p) => p.id === l.product_id);
-          return prod?.is_asset;
-        }) && returnDate
-          ? { expected_return_date: new Date(returnDate).getTime() }
-          : {}),
-      }),
-    onSuccess: (sale) => {
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
+  /** Change de destination et remet à zéro tout ce qui n'a de sens que pour la précédente. */
+  function selectTarget(next: Target) {
+    setTarget(next);
+    setCashing(null);
+    resetCart();
+  }
+
+  // Écritures : la vente d'un côté, le cycle des tables de l'autre. Elles ne partagent
+  // aucun état, mais toutes deux chargent ce qu'elles ont besoin en paramètre et rendent
+  // la main par callback — aucune ne lit le panier par capture, sinon il y aurait deux
+  // chemins vers le même état.
+  const { saleMut, closeDayMut } = useSaleMutations({
+    onSold: (sale) => {
       setCheckoutOpen(false);
       resetCart();
-      playSuccessChime();
       setSaleFlash({
         total: sale.total,
         change: sale.change_due,
         method: sale.payment_method ?? "cash",
       });
     },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const openMut = useMutation({
-    mutationFn: (label: string) => openTable(label),
-    onSuccess: (sale) => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      selectTarget({ kind: "table", saleId: sale.id });
-      toast.success(`Table ${sale.table} ouverte`);
+    onDayClosed: (n) => {
+      setCloseOpen(false);
+      toast.success(`${n} vente(s) clôturée(s)`);
     },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  // Libération d'une table ouverte par erreur, cf. `closeTable` : refusée dès qu'une
-  // tournée est passée, c'est alors « Annuler la table » et son PIN.
-  const closeMut = useMutation({
-    mutationFn: (saleId: string) => closeTable(saleId),
-    onSuccess: (_void, saleId) => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      if (target.kind === "table" && target.saleId === saleId) selectTarget({ kind: "direct" });
-      toast.success("Table libérée");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  // Marquer une table comme servie (restaurant) : le paiement est débloqué.
-  const serveMut = useMutation({
-    mutationFn: (saleId: string) => serveTable(saleId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Commande servie — paiement débloqué");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  // Cycle de service (restaurant) : « Préparer » puis « Prêt » avancent la commande en
-  // cuisine, sans toucher au paiement — seul `serveTable` le débloque.
-  const prepareMut = useMutation({
-    mutationFn: (saleId: string) => prepareTable(saleId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Commande en préparation");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const readyMut = useMutation({
-    mutationFn: (saleId: string) => readyTable(saleId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Commandes prêtes à servir");
-    },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   // Le plan de salle vit dans les préférences : ajouter une table est un geste d'affichage,
@@ -455,101 +388,34 @@ function PosPage() {
     qc.invalidateQueries({ queryKey: ["preferences"] });
   }
 
-  const roundMut = useMutation({
-    mutationFn: (saleId: string) =>
-      addRound(
-        saleId,
-        lines.map(({ key: _key, ...line }): CartLine => line),
-      ),
-    onSuccess: (sale) => {
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["sale_items", sale.id] });
-      toast.success(`Tournée ajoutée à la table ${sale.table}`, {
-        description: `Addition en cours : ${formatFCFA(sale.total)}`,
-      });
-      resetCart();
+  const {
+    openMut,
+    closeMut,
+    serveMut,
+    prepareMut,
+    readyMut,
+    roundMut,
+    payMut,
+    payRoundMut,
+    cancelTableMut,
+  } = useTableMutations({
+    onTableOpened: (sale) => selectTarget({ kind: "table", saleId: sale.id }),
+    onTableReleased: (saleId) => {
+      // Revenir au comptoir UNIQUEMENT si c'était la table libérée : en libérer une
+      // autre ne doit pas changer la destination courante sous le doigt du vendeur.
+      if (target.kind === "table" && target.saleId === saleId) selectTarget({ kind: "direct" });
     },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const payMut = useMutation({
-    mutationFn: (saleId: string) => payTable(saleId, cash),
-    onSuccess: (sale) => {
-      // `products` aussi : encaisser une table SORT le stock des plateaux, et l'écran
-      // Caisse comme l'accueil affichaient encore l'ancienne quantité. Les ventes au
-      // comptoir le faisaient déjà (l. 529/610) — l'encaissement de table avait été oublié.
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["sale_items", sale.id] });
-      toast.success(`Table ${sale.table} encaissée`, {
-        description: `Total ${formatFCFA(sale.total)} · Rendu ${formatFCFA(sale.change_due)}`,
-      });
-      selectTarget({ kind: "direct" });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  // Encaissement d'une TOURNÉE : la table reste ouverte, seules les lignes de cette
-  // tournée passent en vente réglée (cf. payRound). L'invalidation du préfixe ["sales"]
-  // rafraîchit le plan de salle, l'addition et l'historique d'un coup.
-  const payRoundMut = useMutation({
-    mutationFn: ({
-      saleId,
-      orderedAt,
-      cash,
-    }: {
-      saleId: string;
-      orderedAt: number;
-      cash: number;
-    }) => payRound(saleId, orderedAt, cash),
-    onSuccess: (sale) => {
-      // Même raison que `payMut` : l'encaissement d'une tournée déstoc, donc `products`
-      // doit être invalidé — sans quoi les autres écrans gardent l'ancienne quantité.
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["sale_items", activeTable?.id] });
-      notifyOwner(); // Trigger temps réel propriétaire + son
-      toast.success(`Tournée encaissée sur la table ${sale.table}`, {
-        description: `Total ${formatFCFA(sale.total)} · Rendu ${formatFCFA(sale.change_due)}`,
-      });
+    onRoundAdded: () => resetCart(),
+    onTableSettled: () => selectTarget({ kind: "direct" }),
+    onRoundPaid: () => {
       setCashing(null);
       setCashGiven("");
     },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const cancelTableMut = useMutation({
-    // `cancelSale` restaure déjà le stock et supprime logiquement vente et lignes : une
-    // addition ouverte est une vente comme une autre, il n'y a pas de seconde annulation
-    // à écrire.
-    mutationFn: (saleId: string) => cancelSale(saleId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Table annulée, stock restauré");
+    onTableCancelled: () => {
       setCancelPinOpen(false);
       selectTarget({ kind: "direct" });
     },
-    onError: (e: Error) => toast.error(e.message),
   });
-
-  const closeDayMut = useMutation({
-    mutationFn: closeDay,
-    onSuccess: (n) => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      setCloseOpen(false);
-      toast.success(`${n} vente(s) clôturée(s)`);
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  /** Change de destination et remet à zéro tout ce qui n'a de sens que pour la précédente. */
-  function selectTarget(next: Target) {
-    setTarget(next);
-    setCashing(null);
-    resetCart();
-  }
 
   // Le voile de validation s'efface tout seul : le serveur n'a rien à cliquer, la vente
   // suivante peut commencer dès que l'animation a joué.
@@ -1331,7 +1197,7 @@ function PosPage() {
                         orderedAt: cashing.orderedAt,
                         cash,
                       })
-                    : payMut.mutate(activeTable.id)
+                    : payMut.mutate({ saleId: activeTable.id, cash })
                 }
               >
                 <CheckCircle2 className="h-5 w-5" />
@@ -1356,7 +1222,12 @@ function PosPage() {
                 size="lg"
                 className="w-full h-16 text-lg gap-2"
                 disabled={lines.length === 0 || roundMut.isPending}
-                onClick={() => roundMut.mutate(activeTable.id)}
+                onClick={() =>
+                  roundMut.mutate({
+                    saleId: activeTable.id,
+                    lines: lines.map(({ key: _key, ...line }): CartLine => line),
+                  })
+                }
               >
                 <Plus className="h-5 w-5" />
                 Prendre la commande
@@ -1823,7 +1694,23 @@ function PosPage() {
               size="lg"
               className="w-full h-14 text-lg gap-2"
               disabled={!canValidate || saleMut.isPending}
-              onClick={() => saleMut.mutate()}
+              onClick={() =>
+                saleMut.mutate({
+                  lines: lines.map(({ key: _key, ...line }): CartLine => line),
+                  cash_given: payMethod === "cash" ? cash : dueTotal,
+                  customers_count: customers,
+                  payment_method: payMethod,
+                  ...(clientName.trim() ? { client_name: clientName.trim() } : {}),
+                  ...(clientId ? { client_id: clientId } : {}),
+                  // Date de retour attendue : elle ne vaut que pour un ACTIF loué dans
+                  // le panier. Un produit vendu au comptoir n'en porte pas, et lui en
+                  // inventer une ferait apparaître l'actif dans un agenda de retour.
+                  ...(lines.some((l) => products.find((p) => p.id === l.product_id)?.is_asset) &&
+                  returnDate
+                    ? { expected_return_date: new Date(returnDate).getTime() }
+                    : {}),
+                })
+              }
             >
               <CheckCircle2 className="h-5 w-5" />
               Valider l'encaissement
