@@ -617,12 +617,16 @@ export function computeRentalOccupancy(
   };
 }
 
-// ── Ventes au poids (cluster 'weight') ─────────────────────────────────────────────
+// ── Ventes au poids ──────────────────────────────────────────────────────────────
 //
 // Pour la boucherie, la ligne de vente porte le POIDS vendu dans `quantity` (kg). Un
 // article n'est compté que s'il référence un produit du catalogue vendu au poids
-// (`unitType: "weight"`) : une ligne libre ou un produit à l'unité n'a pas de poids
-// mérité. Le montant est le prix au poids × poids (`price_at_sale` × `quantity`).
+// (`unit: "kg"`) : une ligne libre ou un produit à l'unité n'a pas de poids mérité.
+// Le montant est le prix au poids × poids (`price_at_sale` × `quantity`).
+//
+// V23 : le test porta sur `unitType === "weight"`, un champ supprimé. Il lit `unit`
+// désormais — sans ce changement, la boucherie entière disparaissait des rapports de
+// poids en silence (0 kg, 0 FCFA) alors que les ventes continuaient d'être encaissées.
 
 export interface WeightSalesBucket {
   product_id: string;
@@ -648,7 +652,7 @@ export interface WeightSalesStats {
  *  sont ignorés. */
 export function computeWeightSales(
   items: SaleItem[],
-  products: Pick<Product, "id" | "name" | "unitType">[],
+  products: Pick<Product, "id" | "name" | "unit">[],
 ): WeightSalesStats {
   const byProduct = new Map<string, WeightSalesBucket>();
   let weightKg = 0;
@@ -658,7 +662,7 @@ export function computeWeightSales(
   for (const item of items) {
     if (!item.product_id) continue;
     const product = products.find((p) => p.id === item.product_id);
-    if (product?.unitType !== "weight") continue;
+    if (product?.unit !== "kg") continue;
     const w = item.quantity;
     const rev = w * item.price_at_sale;
     weightKg += w;

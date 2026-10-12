@@ -46,7 +46,6 @@ export function ProductForm({
   const qc = useQueryClient();
   const {
     hasSerialNumber,
-    unitType,
     hasExpiryDate,
     isLocation,
     hasVariants,
@@ -67,7 +66,7 @@ export function ProductForm({
   const [category, setCategory] = useState<Category>(
     editing?.category ?? defaultCategory ?? "Boisson",
   );
-  const [unit, setUnit] = useState<"piece" | "meter" | "liter">(editing?.unit ?? "piece");
+  const [unit, setUnit] = useState<NonNullable<Product["unit"]>>(editing?.unit ?? "piece");
   // Période tarifaire retenue pour l'ACTIF. Le prix saisi va dans `rental_pricing[periode]`
   // (cf. `Product`), donc un même actif porte un prix différent par heure / jour / semaine.
   const [pricingUnit, setPricingUnit] = useState<"hour" | "day" | "week" | "month" | "year">("day");
@@ -208,9 +207,12 @@ export function ProductForm({
         category,
         type: productType,
         serialNumber: serialNumber.trim() || undefined,
-        // L'unité n'est posée que là où elle a un sens : kg pour la vente au poids,
-        // pièce/mètre/litre pour les clusters `mixed`. Jamais pour `unit` simple.
-        unit: unitType === "mixed" || unitType === "weight" ? unit : undefined,
+        // V23 : l'unité est posée partout, plus seulement sur les clusters `mixed`/`weight`.
+        // Le sélecteur est désormais visible pour TOUT produit, donc un produit qui
+        // n'en choisit pas explicitement doit rester à "piece" — l'absence de `unit`
+        // et la valeur "piece" signifieraient la même chose pour l'affichage, mais
+        // `analytics` teste `unit === "kg"` : un produit au kilo doit être explicite.
+        unit,
         expiryDate: expiryDate ? new Date(expiryDate).getTime() : undefined,
         photo,
         ...(variantsOut ? { variants: variantsOut } : {}),
@@ -568,39 +570,34 @@ export function ProductForm({
             </div>
           </>
         )}
-        {!isAsset &&
-          (unitType === "mixed" || unitType === "weight") &&
-          productType === "product" && (
-            <div>
-              <Label>Unité de vente</Label>
-              <div className="flex gap-2 mt-1">
+        {!isAsset && productType === "product" && (
+          <div>
+            <Label>Unité de vente</Label>
+            {/* Les quatre unités sont proposees partout : le kilo n'appartient plus au
+                  seul cluster boucherie (V23). Un epicier vend du riz au kg sans avoir
+                  choisi `weight`. Le selecteur est donc redegrade en 4 choix neutres. */}
+            <div className="flex flex-wrap gap-2 mt-1">
+              {(
+                [
+                  ["piece", "Pièce"],
+                  ["kg", "Kg"],
+                  ["liter", "Litre"],
+                  ["meter", "Mètre"],
+                ] as const
+              ).map(([value, label]) => (
                 <Button
+                  key={value}
                   type="button"
-                  variant={unit === "piece" ? "default" : "outline"}
+                  variant={unit === value ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setUnit("piece")}
+                  onClick={() => setUnit(value)}
                 >
-                  Pièce
+                  {label}
                 </Button>
-                <Button
-                  type="button"
-                  variant={unit === "meter" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setUnit("meter")}
-                >
-                  Mètre
-                </Button>
-                <Button
-                  type="button"
-                  variant={unit === "liter" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setUnit("liter")}
-                >
-                  Litre
-                </Button>
-              </div>
+              ))}
             </div>
-          )}
+          </div>
+        )}
         {hasExpiryDate && productType === "product" && (
           <div>
             <Label htmlFor="expiryDate">Date de péremption</Label>

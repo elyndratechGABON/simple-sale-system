@@ -83,16 +83,22 @@ export interface Product extends SyncFields {
   /** Type métier : 'product' = bien physique (défaut), 'service' = prestation. */
   type?: "product" | "service";
   // ── V2 : champs pré-configurés (V10) ──────────────────────────────────
-  /** Unité de stock : 'unit' = pièces (défaut), 'weight' = kg. */
-  unitType?: "unit" | "weight";
-  /** Libellé de l'unité de poids : 'kg', 'g', 'L'… Défaut : 'kg'. */
-  weightUnit?: string;
-  /** Timestamp de date de péremption (produits périssables). Absent = pas de suivi. */
+  /**
+   * Timestamp de date de péremption (produits périssables). Absent = pas de suivi.
+   * @deprecated Champ mort : la lecture des indices est supplantée par le rapport de stock.
+   */
   expiryDate?: number;
   /** Numéro de série / IMEI (électronique, SAV). Absent = pas de suivi. */
   serialNumber?: string;
-  /** Unité de vente (quincaillerie) : pièce, mètre, litre, etc. Absent = pièce par défaut. */
-  unit?: "piece" | "meter" | "liter";
+  /**
+   * Unité de vente. Absent = pièce par défaut.
+   *
+   * V23 fusionne les trois champs qui se partageaient cette information : `unitType`
+   * ("weight" = vendu au poids) + `weightUnit` (toujours "kg") + `unit` (quincaillerie).
+   * Une seule valeur les remplace désormais — le poids n'est plus une orthographe
+   * séparée du conditionnement mais UNE unité parmi les autres, saisissable partout.
+   */
+  unit?: "piece" | "kg" | "liter" | "meter";
   /**
    * Photo du produit ou service, en dataURL (webp réduit). Champ optionnel sans index :
    * aucun upgrade(), les fiches existantes le lisent `undefined`. Reste local — la
@@ -971,6 +977,67 @@ export class PosDatabase extends Dexie {
       catalogue_requests:
         "id, shop_id, requester_id, status, created_at, confirmed_at, denied_at, snapshot_sent",
     });
+
+    // Version 23 — UNIFICATION DES UNITÉS. `unitType` + `weightUnit` + `unit` (trois
+    // champs pour une seule information) deviennent `unit`, qui gagne la valeur "kg".
+    //
+    // Règle de migration, dans cet ordre :
+    //  - un produit déjà `weight` → "kg" (C'EST LE POIDS QUI PASSE, pas le
+    //    conditionnement) ;
+    //  - sinon on CONSERVE l'unité de vente existante (meter/liter), qu'un produit
+    //    au poids pouvait porter pour un cylindre, une étagère, etc. ;
+    //  - sinon "piece".
+    // `weightUnit` est SUPPRIMÉ sans être migré : sa seule valeur écrite dans tout le
+    // dépôt était "kg", déjà portée par `unitType === "weight"`. Le migrer créerait un
+    // doublon, pas une information.
+    //
+    // AUCUN `updated_at` n'est touché : les produits modifiés ici sont des FICHES, pas
+    // des ventes. Les toucher ferait remonter tout le catalogue en synchronisation P2P
+    // pour un simple changement d'orthographe.
+    this.version(23)
+      .stores({
+        products: "id, name, category, updated_at",
+        sales: "id, timestamp, status, client_name, client_id, updated_at",
+        sale_items: "id, sale_id, updated_at",
+        settings: "key",
+        subscriptions: "id, updated_at",
+        shop_profiles: "id, updated_at",
+
+        clients: "id, name, phone, updated_at",
+        product_expenses: "++id, product_id, period_from, [product_id+period_from]",
+        stock_movements: "id, product_id, created_at, [product_id+created_at]",
+        day_closures: "id, closed_at",
+        rentals: "id, asset_id, status, start_date, expected_end_date, updated_at",
+
+        sync_ops: "id, shop_id, device_id, seq, [device_id+seq], status, created_at",
+        processed_ops: "id",
+        paired_devices: "id, updated_at, shop_id",
+
+        monthly_overviews: "id, updated_at",
+
+        closings: "id, imported_at, employee_device_id, period_from, updated_at",
+
+        employee_history: "id, employeeId, shopId, [employeeId+startedAt]",
+
+        catalogue_requests:
+          "id, shop_id, requester_id, status, created_at, confirmed_at, denied_at, snapshot_sent",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("products")
+          .toCollection()
+          .modify((p) => {
+            const legacy = p as {
+              unitType?: "unit" | "weight";
+              weightUnit?: string;
+              unit?: string;
+            };
+            if (legacy.unitType === "weight") legacy.unit ??= "kg";
+            else if (!legacy.unit) legacy.unit = "piece";
+            delete legacy.unitType;
+            delete legacy.weightUnit;
+          });
+      });
   }
 }
 

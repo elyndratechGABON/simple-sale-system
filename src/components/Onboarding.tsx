@@ -905,9 +905,9 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
         productCategory.trim() || (addingProduct ? "Beauté" : tutorialConfig.defaultCategory),
       stock: Number(productStock) || 0,
       type: tutorialConfig.isService && serviceMode === "prestation" ? "service" : "product",
-      unit: "piece",
-      unitType: sellsByWeight ? "weight" : "unit",
-      weightUnit: sellsByWeight ? "kg" : undefined,
+      // V23 : `unitType`/`weightUnit` laissent la place à l'unité unique. Un produit
+      // vendu au kilo s'écrit `unit: "kg"`, tout le reste vaut "piece".
+      unit: sellsByWeight ? "kg" : "piece",
       serialNumber: undefined,
       expiryDate: undefined,
       variants: variants

@@ -15,11 +15,11 @@ const item = (over: Partial<SaleItem> & { id: string }): SaleItem => ({
   ...over,
 });
 
-const weightProduct = (id: string, name: string): Product =>
-  ({ id, name, unitType: "weight" }) as Product;
+// V23 : un produit vendu au kilo se reconnaît à `unit: "kg"`. Avant c'était
+// `unitType: "weight"`, champ supprimé au profit de l'unité unique.
+const weightProduct = (id: string, name: string): Product => ({ id, name, unit: "kg" }) as Product;
 
-const unitProduct = (id: string, name: string): Product =>
-  ({ id, name, unitType: "unit" }) as Product;
+const unitProduct = (id: string, name: string): Product => ({ id, name, unit: "piece" }) as Product;
 
 describe("computeWeightSales", () => {
   it("compte le poids total et le montant (prix au poids × poids), par produit", () => {

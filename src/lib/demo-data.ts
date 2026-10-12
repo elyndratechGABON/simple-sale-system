@@ -1,4 +1,4 @@
-import type { ClusterId, SubCategory } from "./settings";
+﻿import type { ClusterId, SubCategory } from "./settings";
 import { addProduct } from "./db";
 
 type DemoProduct = {
@@ -7,8 +7,7 @@ type DemoProduct = {
   stock: number;
   category: string;
   type?: "product" | "service";
-  unitType?: "unit" | "weight";
-  weightUnit?: string;
+  unit?: "piece" | "kg" | "liter" | "meter";
   variants?: Array<{
     id: string;
     name: string;
@@ -25,16 +24,16 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
   retail: [
     { name: "Regab 33cl", price: 500, stock: 48, category: "Boissons" },
     { name: "Sukusa 500g", price: 1500, stock: 20, category: "Alimentation" },
-    { name: "Savon Noir", price: 300, stock: 30, category: "Hygiène" },
+    { name: "Savon Noir", price: 300, stock: 30, category: "HygiÃ¨ne" },
     { name: "Biscotin", price: 200, stock: 60, category: "Snacks" },
-    { name: "Eau minérale 1.5L", price: 500, stock: 36, category: "Boissons" },
-    { name: "Bouillon Cube", price: 100, stock: 100, category: "Épicerie" },
+    { name: "Eau minÃ©rale 1.5L", price: 500, stock: 36, category: "Boissons" },
+    { name: "Bouillon Cube", price: 100, stock: 100, category: "Ã‰picerie" },
     { name: "Pain 1kg", price: 750, stock: 15, category: "Boulangerie" },
     { name: "Lait en poudre 400g", price: 2500, stock: 12, category: "Alimentation" },
   ],
   restaurant: [
-    { name: "Poulet braisé", price: 5000, stock: Number.POSITIVE_INFINITY, category: "Plats" },
-    { name: "Poisson grillé", price: 4000, stock: Number.POSITIVE_INFINITY, category: "Plats" },
+    { name: "Poulet braisÃ©", price: 5000, stock: Number.POSITIVE_INFINITY, category: "Plats" },
+    { name: "Poisson grillÃ©", price: 4000, stock: Number.POSITIVE_INFINITY, category: "Plats" },
     { name: "Riz sauce arachide", price: 2000, stock: Number.POSITIVE_INFINITY, category: "Plats" },
     {
       name: "Sauce tomate poulet",
@@ -42,7 +41,7 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       stock: Number.POSITIVE_INFINITY,
       category: "Plats",
     },
-    { name: "Ndolé banane", price: 2500, stock: Number.POSITIVE_INFINITY, category: "Plats" },
+    { name: "NdolÃ© banane", price: 2500, stock: Number.POSITIVE_INFINITY, category: "Plats" },
     { name: "Regab 33cl", price: 500, stock: 48, category: "Boissons" },
     {
       name: "Jus de gingembre",
@@ -50,17 +49,17 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       stock: Number.POSITIVE_INFINITY,
       category: "Boissons",
     },
-    { name: "Eau minérale", price: 500, stock: 36, category: "Boissons" },
+    { name: "Eau minÃ©rale", price: 500, stock: 36, category: "Boissons" },
   ],
   bar: [
-    { name: "Regab 33cl", price: 500, stock: 48, category: "Bières" },
-    { name: "Beaufort 33cl", price: 1000, stock: 24, category: "Bières" },
-    { name: "Tempus 33cl", price: 1000, stock: 24, category: "Bières" },
-    { name: "Heineken 33cl", price: 1500, stock: 12, category: "Bières" },
+    { name: "Regab 33cl", price: 500, stock: 48, category: "BiÃ¨res" },
+    { name: "Beaufort 33cl", price: 1000, stock: 24, category: "BiÃ¨res" },
+    { name: "Tempus 33cl", price: 1000, stock: 24, category: "BiÃ¨res" },
+    { name: "Heineken 33cl", price: 1500, stock: 12, category: "BiÃ¨res" },
     { name: "Vin rouge 75cl", price: 5000, stock: 6, category: "Vins" },
     { name: "Pastis 51", price: 3000, stock: 4, category: "Spiritueux" },
     { name: "Whisky Halla", price: 4000, stock: 4, category: "Spiritueux" },
-    { name: "Eau minérale", price: 500, stock: 36, category: "Boissons" },
+    { name: "Eau minÃ©rale", price: 500, stock: 36, category: "Boissons" },
   ],
   service: [
     {
@@ -92,7 +91,7 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       type: "service",
     },
     {
-      name: "Défrisage",
+      name: "DÃ©frisage",
       price: 5000,
       stock: Number.POSITIVE_INFINITY,
       category: "Coiffure",
@@ -109,7 +108,7 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       name: "Manucure",
       price: 3000,
       stock: Number.POSITIVE_INFINITY,
-      category: "Beauté",
+      category: "BeautÃ©",
       type: "service",
     },
   ],
@@ -183,7 +182,7 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       ],
     },
     {
-      name: "Sac à main",
+      name: "Sac Ã  main",
       price: 6000,
       stock: 6,
       category: "Accessoires",
@@ -195,56 +194,51 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
   ],
   weight: [
     {
-      name: "Viande de bœuf",
+      name: "Viande de bÅ“uf",
       price: 4000,
       stock: 30,
       category: "Viandes",
-      unitType: "weight",
-      weightUnit: "kg",
+      unit: "kg",
     },
     {
       name: "Poulet entier",
       price: 2500,
       stock: 20,
       category: "Volailles",
-      unitType: "weight",
-      weightUnit: "kg",
+      unit: "kg",
     },
     {
-      name: "Poisson congelé",
+      name: "Poisson congelÃ©",
       price: 3000,
       stock: 15,
       category: "Poissons",
-      unitType: "weight",
-      weightUnit: "kg",
+      unit: "kg",
     },
     {
       name: "Crevettes",
       price: 6000,
       stock: 8,
       category: "Fruits de mer",
-      unitType: "weight",
-      weightUnit: "kg",
+      unit: "kg",
     },
     {
       name: "Foie de boeuf",
       price: 2000,
       stock: 10,
       category: "Abats",
-      unitType: "weight",
-      weightUnit: "kg",
+      unit: "kg",
     },
   ],
   magasin: [
-    { name: "Téléphone Samsung A14", price: 85000, stock: 5, category: "Téléphones" },
+    { name: "TÃ©lÃ©phone Samsung A14", price: 85000, stock: 5, category: "TÃ©lÃ©phones" },
     { name: "Chargeur universel", price: 3000, stock: 20, category: "Accessoires" },
-    { name: "Écouteurs Bluetooth", price: 5000, stock: 10, category: "Accessoires" },
-    { name: 'Ventilateur 12"', price: 15000, stock: 4, category: "Électroménager" },
-    { name: "Fer à repasser", price: 12000, stock: 6, category: "Électroménager" },
+    { name: "Ã‰couteurs Bluetooth", price: 5000, stock: 10, category: "Accessoires" },
+    { name: 'Ventilateur 12"', price: 15000, stock: 4, category: "Ã‰lectromÃ©nager" },
+    { name: "Fer Ã  repasser", price: 12000, stock: 6, category: "Ã‰lectromÃ©nager" },
     { name: "Marteau", price: 2000, stock: 15, category: "Quincaillerie" },
     { name: "Tournevis", price: 1500, stock: 20, category: "Quincaillerie" },
   ],
-  // Cluster Personnalisé : activité libre, les démos génériques font l'affaire.
+  // Cluster PersonnalisÃ© : activitÃ© libre, les dÃ©mos gÃ©nÃ©riques font l'affaire.
   personnalise: [
     { name: "Article exemple A", price: 1000, stock: 20, category: "Divers" },
     { name: "Article exemple B", price: 2500, stock: 12, category: "Divers" },
@@ -258,28 +252,28 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
     },
   ],
   location: [
-    { name: "Chaise en plastique", price: 0, stock: 50, category: "Événementiel" },
-    { name: "Tente 6×12m", price: 0, stock: 5, category: "Événementiel" },
-    { name: "Table ronde", price: 0, stock: 20, category: "Événementiel" },
-    { name: "Sonorisation portable", price: 0, stock: 3, category: "Équipement" },
-    { name: "Groupe électrogène 5kVA", price: 0, stock: 2, category: "Équipement" },
-    { name: "Voiture berline", price: 0, stock: 2, category: "Véhicules" },
+    { name: "Chaise en plastique", price: 0, stock: 50, category: "Ã‰vÃ©nementiel" },
+    { name: "Tente 6Ã—12m", price: 0, stock: 5, category: "Ã‰vÃ©nementiel" },
+    { name: "Table ronde", price: 0, stock: 20, category: "Ã‰vÃ©nementiel" },
+    { name: "Sonorisation portable", price: 0, stock: 3, category: "Ã‰quipement" },
+    { name: "Groupe Ã©lectrogÃ¨ne 5kVA", price: 0, stock: 2, category: "Ã‰quipement" },
+    { name: "Voiture berline", price: 0, stock: 2, category: "VÃ©hicules" },
   ],
 };
 
 const MAGASIN_DEMO: Record<SubCategory, DemoProduct[]> = {
   electronics: [
-    { name: "Téléphone Samsung A14", price: 85000, stock: 5, category: "Téléphones" },
-    { name: "Téléphone Tecno Spark", price: 65000, stock: 4, category: "Téléphones" },
+    { name: "TÃ©lÃ©phone Samsung A14", price: 85000, stock: 5, category: "TÃ©lÃ©phones" },
+    { name: "TÃ©lÃ©phone Tecno Spark", price: 65000, stock: 4, category: "TÃ©lÃ©phones" },
     { name: "Chargeur universel", price: 3000, stock: 20, category: "Accessoires" },
-    { name: "Écouteurs Bluetooth", price: 5000, stock: 10, category: "Accessoires" },
-    { name: "Coque téléphone", price: 1500, stock: 25, category: "Accessoires" },
+    { name: "Ã‰couteurs Bluetooth", price: 5000, stock: 10, category: "Accessoires" },
+    { name: "Coque tÃ©lÃ©phone", price: 1500, stock: 25, category: "Accessoires" },
     { name: "Powerbank 10000mAh", price: 8000, stock: 8, category: "Accessoires" },
   ],
   appliance: [
-    { name: "Réfrigérateur TVS 130L", price: 180000, stock: 2, category: "Froid" },
+    { name: "RÃ©frigÃ©rateur TVS 130L", price: 180000, stock: 2, category: "Froid" },
     { name: 'Ventilateur 12"', price: 15000, stock: 4, category: "Ventilation" },
-    { name: "Fer à repasser", price: 12000, stock: 6, category: "Repassage" },
+    { name: "Fer Ã  repasser", price: 12000, stock: 6, category: "Repassage" },
     { name: "Mixeur 2L", price: 18000, stock: 3, category: "Cuisine" },
     { name: "Micro-ondes", price: 45000, stock: 2, category: "Cuisine" },
   ],
@@ -314,8 +308,7 @@ export async function loadDemoData(cluster: ClusterId, subCategory?: SubCategory
       stock: p.stock,
       category: p.category,
       type: p.type,
-      unitType: p.unitType,
-      weightUnit: p.weightUnit,
+      unit: p.unit,
       ...(p.variants ? { variants: p.variants } : {}),
     });
   }
