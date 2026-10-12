@@ -254,7 +254,7 @@ function KpiCell({
 }
 
 type StatusFilter = "all" | "service" | "low" | "out";
-type SortKey = "name" | "stock" | "price" | "updated" | "bestsellers";
+type SortKey = "name" | "stock" | "stock_desc" | "price" | "updated" | "bestsellers";
 
 function StocksPage() {
   return (
@@ -380,6 +380,10 @@ function StocksPageContent() {
     });
     list = [...list].sort((a, b) => {
       switch (sortBy) {
+        case "stock_desc":
+          if (!Number.isFinite(a.stock)) return 1;
+          if (!Number.isFinite(b.stock)) return -1;
+          return b.stock - a.stock;
         case "stock":
           if (!Number.isFinite(a.stock)) return 1;
           if (!Number.isFinite(b.stock)) return -1;
@@ -850,10 +854,11 @@ function StocksPageContent() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="name">Trier : Nom</SelectItem>
+              <SelectItem value="stock_desc">Trier : Stock décroissant</SelectItem>
               <SelectItem value="stock">Trier : Stock</SelectItem>
               <SelectItem value="price">Trier : Prix</SelectItem>
               <SelectItem value="updated">Trier : Dernière modification</SelectItem>
-              <SelectItem value="bestsellers">Trier : Plus vendus</SelectItem>
+              <SelectItem value="bestsellers">Trier : Plus vendus (30j)</SelectItem>
             </SelectContent>
           </Select>
         </div>
