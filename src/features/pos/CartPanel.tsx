@@ -1,10 +1,11 @@
-import { ShoppingCart, Utensils, X } from "lucide-react";
+import { ShoppingCart, Utensils, X, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartShell } from "@/components/pos";
 import { PreviousRounds } from "./PreviousRounds";
 import { CartLines } from "./CartLines";
 import { TableCashing } from "./TableCashing";
 import { CartActions } from "./CartActions";
+import { cn } from "@/lib/utils";
 import type { PosController } from "./usePos";
 
 /**
@@ -27,7 +28,18 @@ export function CartPanel({ pos }: { pos: PosController }) {
             </>
           )}
         </h2>
-        {pos.activeTable ? (
+        {pos.activeTable && pos.mode === "tables" && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => pos.setMode("comptoir")}
+          >
+            <CreditCard className="h-4 w-4" />
+            Encaisser → Comptoir
+          </Button>
+        )}
+        {pos.activeTable && pos.mode !== "tables" && (
           <Button
             size="sm"
             variant="ghost"
@@ -36,8 +48,8 @@ export function CartPanel({ pos }: { pos: PosController }) {
           >
             <X className="h-4 w-4 mr-1" /> Annuler la table
           </Button>
-        ) : (
-          // « Vider » et non « Annuler » : ce bouton ne fait que remettre le panier à zéro.
+        )}
+        {!pos.activeTable && (
           <Button
             size="sm"
             variant="ghost"
