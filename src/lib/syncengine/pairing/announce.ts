@@ -1,83 +1,8 @@
-// Appairage entre appareils du même compte — le « code de paire » coopératif.
-//
-// Le QR téléphone+mot de passe (src/lib/pairing.ts) rattache un écran au COMPTE côté
-// orchestrateur. Le code de paire, lui, fait se RENCONTRER les appareils sur le canal
-// d'ops P2P : il n'ouvre pas de session serveur, il prouve l'intention. Un employé
-// tape le code affiché par le principal → son appareil émet `device.announce` (nom,
-// rôle, clé publique, code). Le principal applique l'annonce et vérifie le code
-// LOCALEMENT (celui qu'il a généré, jamais envoyé) ; s'il correspond, le pair est
-// `paired` d'office. Sinon le pair reste `pending` et le principal peut approuver à
-// la main (`device.approve`).
-//
-// Le code a une durée de vie courte (10 min) : la preuve s'use, pas le pairing.
-// Un appareil se présente au groupe UNE SEULE fois (drapeau `announced`) : rejouer
-// l'onboarding (re-saisir un code) ne re-émet donc pas d'op.
-import { getDB, getShopProfile } from "../db";
-import { emitOp } from "./ops";
-import { ensureIdentity, getDeviceKeys, getIdentity, isSharedGroup } from "./identity";
-import type { DeviceRole, PairedDevice } from "./types";
-import { PAIRING_KEYS } from "./types";
-
-/** 6 caractères sans ambiguité visuelle (pas de 0/O, 1/I, ni de lettres à géométrie proche). */
-const CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const PAIR_CODE_LENGTH = 6;
-const PAIR_CODE_TTL_MS = 10 * 60_000;
-
-export const ROLE_LABELS: Record<DeviceRole, string> = {
-  owner: "Propriétaire",
-  employee: "Employé",
-};
-
-/** Rôle local. Par défaut `owner` : c'est le principal qui affiche le code. */
-export function getIdentityRole(): DeviceRole {
-  return getIdentity().role;
-}
-
-export function isOwnerIdentity(): boolean {
-  return getIdentity().role === "owner";
-}
-
-function randomCode(): string {
-  const out = new Array<string>(PAIR_CODE_LENGTH);
-  for (let i = 0; i < PAIR_CODE_LENGTH; i++) {
-    out[i] = CHARSET[crypto.getRandomValues(new Uint32Array(1))[0] % CHARSET.length];
-  }
-  return out.join("");
-}
-
-/** Génère un code de paire frais (10 min) et le retient localement. */
-export async function generatePairingCode(): Promise<string> {
-  await ensureIdentity();
-  const code = randomCode();
-  const expiresAt = Date.now() + PAIR_CODE_TTL_MS;
-  await getDB().settings.bulkPut([
-    { key: PAIRING_KEYS.code, value: code },
-    { key: PAIRING_KEYS.codeExpiresAt, value: expiresAt },
-  ]);
-  return code;
-}
-
-/** Le code encore valide, ou `null` s'il n'y en a pas / est expiré. */
-export async function getPairingToken(): Promise<string | null> {
-  const db = getDB();
-  const row = await db.settings.get(PAIRING_KEYS.code);
-  const raw = row?.value as string | undefined;
-  if (!raw) return null;
-  const expRow = await db.settings.get(PAIRING_KEYS.codeExpiresAt);
-  const exp = typeof expRow?.value === "number" ? expRow.value : 0;
-  return exp > Date.now() ? raw : null;
-}
-
-/** Fin de validité du code courant (ms), pour l'UI « reste 8 min ». */
-export async function pairCodeExpiry(): Promise<number | null> {
-  const row = await getDB().settings.get(PAIRING_KEYS.codeExpiresAt);
-  return typeof row?.value === "number" ? row.value : null;
-}
-
-/** Retire le code courant : le principal n'expose plus rien à saisir. */
-export async function clearPairingCode(): Promise<void> {
-  await getDB().settings.bulkDelete([PAIRING_KEYS.code, PAIRING_KEYS.codeExpiresAt]);
-}
+import { getDB, getShopProfile } from "../../db";
+import { emitOp } from "../ops";
+import { ensureIdentity, getDeviceKeys, isSharedGroup } from "../identity";
+import { PAIRING_KEYS } from "../types";
+import type { DeviceRole, PairedDevice } from "../types";
 
 /** Les deux champs de fiche que le patriarche voit dans « Activité du personnel ». */
 function profileFingerprint(name: string, phone: string): string {
@@ -151,36 +76,6 @@ export async function reannounceProfile(): Promise<void> {
   // une première annonce et afficherait l'écran « à approuver » chez le patron.
   if ((await db.settings.get(PAIRING_KEYS.announced))?.value !== true) return;
   await announceDevice();
-}
-
-/**
- * Un écran rejoint le groupe en saisissant le code affiché par le principal.
- * Le format est vérifié ici ; la preuve, elle, est administrée chez le principal
- * à l'application de l'annonce (code local, comparé sans jamais être envoyé net).
- */
-export async function enterPairingCode(input: string): Promise<"invalid" | "sent" | "error"> {
-  const identity = await ensureIdentity();
-  const code = normPairCode(input);
-  // 6 caractères exacts : une saisie plus courte (un "0/1/I/O" tombé hors du jeu de
-  // caractères) ne peut PAS être une vraie preuve — refuser plutôt que d'annoncer un
-  // code tronqué qui laisserait l'appareil `pending` sans erreur.
-  if (code.length !== PAIR_CODE_LENGTH || !isSharedGroup(identity.shopId)) return "invalid";
-
-  try {
-    await announceDevice(code);
-    return "sent";
-  } catch (err) {
-    console.error("[enterPairingCode] Failed to announce device:", err);
-    return "error";
-  }
-}
-
-/** Normalise une saisie : majuscules, seuls les caractères du jeu restent. */
-export function normPairCode(input: string): string {
-  const chars = new Set(CHARSET);
-  return Array.from(input.toUpperCase())
-    .filter((c) => chars.has(c))
-    .join("");
 }
 
 /**
