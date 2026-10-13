@@ -1,9 +1,4 @@
-import {
-  FORMAT_VERSION,
-  SCHEMA_APP,
-  TYPE_RESTITUTION,
-  type RestitutionRequest,
-} from "./types";
+import { FORMAT_VERSION, SCHEMA_APP, TYPE_RESTITUTION, type RestitutionRequest } from "./types";
 import { tryParseObj } from "./utils";
 
 /**

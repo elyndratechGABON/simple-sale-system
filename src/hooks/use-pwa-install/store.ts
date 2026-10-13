@@ -89,8 +89,7 @@ export function consume(e: BeforeInstallPromptEvent): Promise<InstallOutcome> {
  *  dialogue natif. Les clics sur un bouton « Installer » pendant que ce prompt
  *  est ouvert récupèrent SA promesse (`pending`) plutôt qu'un faux échec. */
 function armAutoGesture() {
-  if (store.autoArmed || !store.captured || store.installed || store.ios || store.autoShown)
-    return;
+  if (store.autoArmed || !store.captured || store.installed || store.ios || store.autoShown) return;
   store.autoArmed = true;
   const onGesture = () => {
     store.autoArmed = false;

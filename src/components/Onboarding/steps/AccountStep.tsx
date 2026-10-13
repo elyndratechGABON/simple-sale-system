@@ -19,11 +19,7 @@ export function AccountStep({ w }: { w: SetupWizardApi }) {
       <div className="space-y-3">
         {w.accountMode === "join" && (
           <>
-            <Button
-              type="button"
-              className="w-full gap-2"
-              onClick={() => void w.scanPairingQr()}
-            >
+            <Button type="button" className="w-full gap-2" onClick={() => void w.scanPairingQr()}>
               <ScanLine className="h-4 w-4" /> Scanner le QR du propriétaire
             </Button>
             <Input

@@ -61,17 +61,12 @@ export function ActivityStep({ w }: { w: SetupWizardApi }) {
               type="button"
               onClick={() => w.setSelectedCluster(c.id)}
               aria-pressed={active}
-              className={cn(
-                base,
-                "flex flex-col items-center gap-1.5 p-3 text-center text-sm",
-              )}
+              className={cn(base, "flex flex-col items-center gap-1.5 p-3 text-center text-sm")}
             >
               <span
                 className={cn(
                   "rounded-lg p-1.5",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground",
+                  active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
                 )}
               >
                 <Icon className="h-4 w-4" />

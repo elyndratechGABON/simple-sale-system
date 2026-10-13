@@ -1,10 +1,5 @@
 import { toast } from "sonner";
-import {
-  addEmployeeHistory,
-  ensureEmployeeId,
-  setShopAccount,
-  saveShopProfile,
-} from "@/lib/db";
+import { addEmployeeHistory, ensureEmployeeId, setShopAccount, saveShopProfile } from "@/lib/db";
 import { joinByKeyword } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
 import { enterPairingCode } from "@/lib/syncengine/pairing";
