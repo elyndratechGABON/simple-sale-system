@@ -77,5 +77,6 @@ export function CartActions({ pos }: { pos: PosController }) {
     );
   }
 
+  // Table branch: target.kind === "table" → action is handled by TableActions/CartPanel header
   return null;
 }
