@@ -262,3 +262,34 @@ git reset --hard HEAD                       # ✅ tout
 **Occurrences** : 1
 
 ---
+
+## ERR-TS-004 — Ternaire utilisé comme statement
+
+**Signature** : `@typescript-eslint/no-unused-expressions` — `x ? a() : b()` utilisé seul sans assignation.
+
+**Contexte** : Dans une fonction, un ternaire est écrit comme instruction au lieu d'expression.
+
+**Cause** : Confusion entre expression (qui rend une valeur) et instruction (qui effectue une action). `x ? a() : b()` est une expression qui rend `a()` ou `b()`, mais écrit seul comme `x ? a() : b();` il est traité comme une expression statement et ESLint le rejette.
+
+**Solution** :
+```ts
+// ❌
+next.has(id) ? next.delete(id) : next.add(id);
+
+// ✅
+if (next.has(id)) {
+  next.delete(id);
+} else {
+  next.add(id);
+}
+```
+
+**Prévention** : Ternaire = expression (rend une valeur). Instruction = if/else/switch. Ne jamais écrire un ternaire sans l'assigner ou le retourner.
+
+**Fichiers impactés** : `CostBatch.tsx`
+
+**Date** : 2026-10-13
+
+**Occurrences** : 1
+
+---
