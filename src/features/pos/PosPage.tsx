@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { Utensils } from "lucide-react";
 import { FreeLineDialog } from "@/components/pos";
 import { PinDialog } from "@/components/PinDialog";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { FloorPlan } from "./FloorPlan";
-import { ContextBadge } from "./ContextBadge";
 import { CategoriesColumn } from "./CategoriesColumn";
 import { ProductPanel } from "./ProductPanel";
 import { CartPanel } from "./CartPanel";
@@ -14,6 +15,9 @@ import { OrdersDrawer } from "./OrdersDrawer";
 import { CheckoutDialog } from "./CheckoutDialog";
 import { SaleFlash } from "./SaleFlash";
 import { usePos } from "./usePos";
+import { TableActions } from "./TableActions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { usePreferences } from "@/hooks/use-preferences";
 
 /**
  * La page ouvre directement sur la grille et le panier. Un écran d'attente précédait chaque
@@ -22,31 +26,89 @@ import { usePos } from "./usePos";
  */
 export function PosPage() {
   const pos = usePos();
+  const { mode, setMode } = pos;
+  const { features } = usePreferences();
+  const showTables = features?.tables ?? false;
+  const isTablesMode = mode === "tables";
+  const [addProductOpen, setAddProductOpen] = useState(false);
+
   return (
-    // `pb-20` dès qu'il y a quelque chose à encaisser : la barre de résumé est en `fixed`
-    // et ne pousse rien, elle recouvrirait sinon le dernier produit de la grille.
     <div
       className={cn(
         "app-container space-y-4 py-4",
         pos.compact && (pos.activeTable !== null || pos.lines.length > 0) && "pb-20",
       )}
     >
-      <ContextBadge
-        target={pos.target}
-        total={pos.activeTable?.total ?? pos.total}
-        onBackToCounter={() => pos.selectTarget({ kind: "direct" })}
-      />
-      <FloorPlan pos={pos} />
+      <header className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="min-w-0">
+          <h1 className="text-page-title flex items-center gap-2 font-bold">
+            <Utensils className="h-6 w-6 shrink-0 text-primary" /> Caisse
+          </h1>
+        </div>
+        {showTables && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("comptoir")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                mode === "comptoir"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80",
+              )}
+            >
+              Comptoir
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("tables")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                mode === "tables"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80",
+              )}
+            >
+              Tables
+            </button>
+          </div>
+        )}
+      </header>
 
-      {/* Largeurs par palier (§21, §22) :
-          - ≥1024 : produits ~70 %, panier 30 % (360 px).
-          - ≥1280 : 3 colonnes Catégories | Produits | Panier (20 / 52 / 28).
-          - ≥1536 : la grille de produits gagne de la place, le panier ne grossit pas. */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
-        <CategoriesColumn pos={pos} />
-        <ProductPanel pos={pos} />
-        <CartPanel pos={pos} />
-      </div>
+      {mode === "tables" ? (
+        // Mode Tables : 2 colonnes (FloorPlan | CartPanel + TableActions)
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
+          <div className="space-y-4">
+            <FloorPlan pos={pos} />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMode("comptoir")}
+                className="flex items-center gap-1.5 rounded-lg border bg-muted px-3 py-1.5 text-sm font-medium cursor-pointer"
+              >
+                <span className="h-4 w-4" aria-hidden="true">
+                  🏠
+                </span>
+                Comptoir
+              </button>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <CartPanel pos={pos} />
+            <TableActions pos={pos} />
+          </div>
+        </div>
+      ) : (
+        // Mode Comptoir : layout 3 colonnes (Categories | Products | Cart)
+        <>
+          <FloorPlan pos={pos} />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
+            <CategoriesColumn pos={pos} />
+            <ProductPanel pos={pos} />
+            <CartPanel pos={pos} />
+          </div>
+        </>
+      )}
 
       <MobileCartBar pos={pos} />
 
@@ -72,6 +134,16 @@ export function PosPage() {
       <CheckoutDialog pos={pos} />
       <ManualQtyDialog pos={pos} />
       <SaleFlash saleFlash={pos.saleFlash} />
+
+      {/* Dialog pour ajouter un produit en mode Tables */}
+      <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Ajouter un produit</DialogTitle>
+          </DialogHeader>
+          <ProductPanel pos={pos} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
