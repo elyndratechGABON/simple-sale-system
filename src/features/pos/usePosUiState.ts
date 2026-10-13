@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Category, PaymentMethod, Product, Sale } from "@/lib/db";
+import type { Category, PaymentMethod, Product } from "@/lib/db";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { Cashing, Target } from "@/lib/pos/types";
 
@@ -32,11 +32,6 @@ export function usePosUiState() {
   const [createOpen, setCreateOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [ordersOpen, setOrdersOpen] = useState(false);
-  const [tablePopupOpen, setTablePopupOpen] = useState(false);
-  const [tablePopupTable, setTablePopupTable] = useState<{
-    label: string;
-    sale: Sale | null;
-  } | null>(null);
   // Onglet Prestations/Produits (cluster service uniquement)
   const [serviceTab, setServiceTab] = useState<"prestations" | "produits">("prestations");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
@@ -97,9 +92,5 @@ export function usePosUiState() {
     setManualQtyValue,
     variantPicker,
     setVariantPicker,
-    tablePopupOpen,
-    setTablePopupOpen,
-    tablePopupTable,
-    setTablePopupTable,
   };
 }

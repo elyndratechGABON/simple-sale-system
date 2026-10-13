@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { nextTableLabel, type Target } from "@/lib/pos/types";
-import type { Product, Sale } from "@/lib/db";
+import type { Product } from "@/lib/db";
 import type { ParseResult } from "@/lib/voice/parser";
 import { savePreferences } from "@/lib/settings";
 import { useCart } from "@/lib/pos/use-cart";
@@ -148,16 +148,6 @@ export function usePos() {
     }
   }
 
-  function openTablePopup(label: string, sale: Sale | null) {
-    ui.setTablePopupTable({ label, sale });
-    ui.setTablePopupOpen(true);
-  }
-
-  function closeTablePopup() {
-    ui.setTablePopupOpen(false);
-    ui.setTablePopupTable(null);
-  }
-
   return {
     ...ui,
     ...data,
@@ -171,7 +161,5 @@ export function usePos() {
     resetCart,
     onProductClick,
     applyVoice,
-    openTablePopup,
-    closeTablePopup,
   };
 }
