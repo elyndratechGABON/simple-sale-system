@@ -87,7 +87,6 @@ export function HistoryPage() {
       setExporting(false);
     }
   }
-
   const buckets = useMemo(() => {
     const map = new Map<number, { total: number; count: number; profit: number }>();
     for (const s of filtered) {
@@ -109,7 +108,6 @@ export function HistoryPage() {
   }, [filtered, period, profitBySale]);
 
   const active = buckets.find((b) => b.start === picked) ?? buckets[0] ?? null;
-
   const days = useMemo(() => {
     if (!active) return [];
     const map = new Map<number, Sale[]>();
