@@ -1,54 +1,4 @@
-// Transport des opérations entre appareils — le relais PC Master comme rendez-vous.
-//
-// Contrat du relais (simple-sale-orchestrateur, dépôt Séparé — PAS implémenté ici) :
-//   POST /api/v1/ops  { shop_id, ops: SyncOp[] }    → stocke. Idempotent par `id` : un
-//                                                     appareil qui re-pousse les mêmes ops
-//                                                     (échec d'acquittement local) ne fait
-//                                                     pas de doublon.
-//   GET  /api/v1/ops?shop_id=…&device_id=…          → { ops: SyncOp[] } : TOUTES les ops du
-//                                                     groupe, y compris celles de l'appelant.
-//                                                     `device_id` = l'appareil QUI TIRE : le
-//                                                     relais suit la fraîcheur par appareil
-//                                                     et ne libère jamais de place tant
-//                                                     qu'un appareil présent n'a pas tiré.
-// En production le relais exige le secret `x-ops-token` (VITE_OPS_TOKEN à l'emploi) ; un
-// relais sans jeton configuré (dev, orchestrateur historique) reste ouvert.
-//
-// Le relais ne connait pas les ops : il les stocke et les rend sans les interpréter, sans
-// les agréger, sans les trier. « Internet sert à se rencontrer, pas à être la base de
-// données ». L'appareil, lui, filtre ses propres ops au pull et déduplique par
-// `processed_ops` — l'ordre d'application reste local et déterministe.
-//
-// Règle d'or offline-first : RIEN ici ne jette. Push en échec (hors ligne, 5xx, absence de
-// l'endpoint) → outbox conservée, l'appareil réessaiera au prochain tick. Pull en échec →
-// on n'applique rien. Un relais muet n'a aucun effet sur la caisse.
-
-import type {
-  CatalogueRequestPayload,
-  DeviceAnnouncePayload,
-  DeviceApprovePayload,
-  SyncIdentity,
-  SyncOp,
-  PairedDevice,
-  ProcessedOp,
-} from "../types";
-
-/** Interface du repository de synchronisation — DI friendly, testable. */
-export interface SyncRepository {
-  // paired_devices
-  getPairedDevice(deviceId: string): Promise<PairedDevice | undefined>;
-  getPairedDevicesByShop(shopId: string): Promise<PairedDevice[]>;
-  putSettings(key: string, value: number | string): Promise<void>;
-  getSettings(key: string): Promise<{ key: string; value: number | string } | undefined>;
-
-  // processed_ops
-  getProcessedOp(opId: string): Promise<ProcessedOp | undefined>;
-
-  // products (pour signature catalogue)
-  listProducts(): Promise<
-    Array<{ id: string; name: string; stock: number; price: number; category: string }>
-  >;
-}
+import type { SyncOp } from "../types";
 
 /** Une caisse qui importe le stock propriétaire ne doit pas faire répondre le propriétaire
  *  plus d'une fois par fenêtre : le relais rend la dernière op de toute façon, un rebouclage
@@ -85,13 +35,3 @@ export interface SyncState {
   /** Ops étrangères présentes chez le relais (dont celles déjà appliquées). */
   remote: number;
 }
-
-export type {
-  CatalogueRequestPayload,
-  DeviceAnnouncePayload,
-  DeviceApprovePayload,
-  SyncIdentity,
-  SyncOp,
-  PairedDevice,
-  ProcessedOp,
-};

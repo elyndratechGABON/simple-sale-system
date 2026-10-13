@@ -1,10 +1,10 @@
-// Adaptateur HTTP du relais PC Master.
-// Échec = `false` / `[]`, jamais de throw — le relais est un accessoire, pas un goulot.
-// Un time-out annule la requête : un réseau à moitié ouvert ne doit pas laisser la
-// promesse de synchro pendre indéfiniment.
+import type { SyncOp } from "../types";
+import type { TransportClient } from "./types";
 
-import type { TransportClient, SyncOp } from "./types";
-
+/** Adaptateur du relais PC Master en HTTP. `fetchImpl` injectable pour les tests.
+ *  Échec = `false` / `[]`, jamais de throw — le relais est un accessoire, pas un goulot.
+ *  Un time-out annule la requête : un réseau à moitié ouvert ne doit pas laisser la
+ *  promesse de synchro pendre indéfiniment. */
 const FETCH_TIMEOUT_MS = 10_000;
 
 export function relayTransport(

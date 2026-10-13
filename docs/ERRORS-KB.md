@@ -142,6 +142,19 @@ this.version(N).stores({
 
 ---
 
+## ERR-DB-002 — Number() sur un réglage string casse la comparaison
+
+**Signature** : Une comparaison `lastSig?.value === sig` (signature JSON) est toujours fausse → republication à chaque cycle, bruit inutile.
+**Contexte** : un accesseur `getSettings(key)` qui coerce `value` en `Number()`
+**Cause** : `db.settings` stocke des valeurs mixtes (`number` OU `string` JSON). `Number(sig)` = `NaN` → `NaN === sig` = `false`.
+**Solution** : Ne jamais coercer `setting.value` aveuglément. Lire la valeur brute (`(await db.settings.get(key))?.value`) et comparer au type attendu.
+**Fichiers impactés** : `src/lib/syncengine/transport/repository.ts` (dossier mort, supprimé le 2026-10-13) — `getSettings` retournait `{ value: Number(setting.value) }`, cassant la garde de `publishFreshCatalog` sur `KEY_LAST_CATALOG_SIG`.
+**Prévention** : Un accesseur de réglage typé PAR CLÉ, jamais une coercition globale. Tester avec une valeur string.
+**Date** : 2026-10-13
+**Occurrences** : 1
+
+---
+
 ## ERR-JSX-002 — JSX mal fermé après refactor
 
 **Signature** : `')' expected` + `Unexpected token` sur lignes consécutives

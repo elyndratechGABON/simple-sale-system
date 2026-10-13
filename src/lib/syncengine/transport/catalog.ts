@@ -1,22 +1,23 @@
-// Signature et publication du catalogue (sous-catalogue par employé).
-// Le propriétaire maintient pour CHAQUE écran employé un instantané ABSOLU au relais.
+import { getDB, listProducts } from "../../db";
+import { getPreferences } from "../../settings";
+import { emitOp, signAll } from "../ops";
+import { listPendingOps, markOpsSynced } from "../outbox";
+import { emitShareOps, markSharePublished, pairedEmployees } from "../sharing";
+import type { CatalogueRequestPayload, SyncIdentity } from "../types";
+import { KEY_LAST_CATALOG_SIG, type TransportClient } from "./types";
 
-import type { SyncRepository, TransportClient, SyncIdentity, PairedDevice, SyncOp } from "./types";
-
-const KEY_LAST_CATALOG_SIG = "syncengine_last_catalog_sig";
-
-/** Signature stable du catalogue local : les champs qui suffisent à décider
- *  « le stock (et le catalogue) des autres a-t-il changé ? » — pas la photo (binaire, locale). */
-export async function catalogSignature(repo: SyncRepository): Promise<string> {
-  const products = (await repo.listProducts())
-    .map((p: { id: string; name: string; stock: number; price: number; category: string }) => ({
+/** Signature stable du catalogue local : les champs qui suffisent à décider « le stock
+ *  (et le catalogue) des autres a-t-il changé ? » — pas la photo (binaire, locale). */
+async function catalogSignature(): Promise<string> {
+  const products = (await listProducts())
+    .map((p) => ({
       id: p.id,
       name: p.name,
       stock: p.stock,
       price: p.price,
       category: p.category,
     }))
-    .sort((a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return JSON.stringify(products);
 }
 
@@ -30,27 +31,16 @@ export async function catalogSignature(repo: SyncRepository): Promise<string> {
 export async function publishFreshCatalog(
   client: TransportClient,
   identity: SyncIdentity,
-  repo: SyncRepository,
-  emitShareOps: (
-    peer: PairedDevice,
-    opts?: { force?: boolean },
-  ) => Promise<{ signature: string; count: number; at: number } | null>,
-  markSharePublished: (peerId: string, signature: string, at: number) => Promise<void>,
-  pairedEmployees: (shopId: string) => Promise<PairedDevice[]>,
-  listPendingOps: (shopId: string) => Promise<SyncOp[]>,
-  signAll: (ops: SyncOp[]) => Promise<SyncOp[]>,
-  markOpsSynced: (opIds: string[]) => Promise<void>,
 ): Promise<void> {
   if (identity.role === "employee") return;
-
-  const sig = await catalogSignature(repo);
+  const db = getDB();
+  const sig = await catalogSignature();
   // Catalogue vide → rien à redistribuer, et aucune trace : un republier avec zéro produit
   // n'apporterait que du bruit au relais (et ferait « voir » un appareil sans catalogue).
   if (!sig || sig === "[]") return;
-
-  const lastSig = await repo.getSettings(KEY_LAST_CATALOG_SIG);
+  const lastSig = await db.settings.get(KEY_LAST_CATALOG_SIG);
   // Catalogue inchangé : inutile de calculer une part par employé.
-  if (lastSig && typeof lastSig.value === "string" && lastSig.value === sig) return;
+  if (lastSig?.value === sig) return;
 
   // Une seule passe : on prépare les parts à envoyer, puis on ne pousse que si au moins
   // un écran a effectivement changé de sous-catalogue. Le délai anti-spam est celui du
@@ -58,7 +48,6 @@ export async function publishFreshCatalog(
   // part d'UN employé vient de changer — précisément le cas qu'on veut voir passer.
   const peers = await pairedEmployees(identity.shopId);
   const parts: { peerId: string; signature: string; at: number }[] = [];
-
   for (const peer of peers) {
     const part = await emitShareOps(peer);
     if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
@@ -70,8 +59,39 @@ export async function publishFreshCatalog(
     const signed = await signAll(pending);
     if (await client.push(identity.shopId, signed)) {
       await markOpsSynced(pending.map((o) => o.id));
-      await repo.putSettings(KEY_LAST_CATALOG_SIG, sig);
+      await db.settings.put({ key: KEY_LAST_CATALOG_SIG, value: sig });
       for (const part of parts) await markSharePublished(part.peerId, part.signature, part.at);
     }
   }
+}
+
+/**
+ * Un écran demande l'instantané FRIS du catalogue du groupe : l'import du stock du
+ *  propriétaire de son côté (« Importer le stock du propriétaire »). Article jetable —
+ *  même `entity_id` (deviceId demandeur) — transporté par le relais, jamais l'orchestrateur ;
+ *  le principal répond à son prochain cycle d'échange (20 s). */
+export async function emitCatalogRequest(identity: SyncIdentity): Promise<void> {
+  const db = getDB();
+  const payload: CatalogueRequestPayload = { requester_id: identity.deviceId };
+  await db.transaction("rw", db.sync_ops, db.settings, async () => {
+    await emitOp(db, identity, {
+      type: "catalogue.request",
+      entity_id: identity.deviceId,
+      payload,
+    });
+  });
+}
+
+/** Le meilleur nom de boutique disponible : `prefs.workspaceName` (enseigne validée à
+ *  l'onboarding) devant la fiche profil — la fiche a pu rester sur le fallback « Ma boutique »
+ *  si l'onboarding ne l'avait jamais écrite. Une fiche née avec le fallback n'est pas un nom. */
+async function snapshotShopName(): Promise<string | undefined> {
+  const db = getDB();
+  const profile = await db.shop_profiles.get("me");
+  const prefs = getPreferences();
+  for (const name of [prefs.workspaceName, profile?.storeName]) {
+    const trimmed = name?.trim();
+    if (trimmed && trimmed !== "Ma boutique") return trimmed;
+  }
+  return undefined;
 }
