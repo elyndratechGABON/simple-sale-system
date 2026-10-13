@@ -17,7 +17,7 @@ import { getShopProfile, saveShopProfile } from "@/lib/db";
 import { getOrchestratorUrl, getOpsRelayUrl } from "@/lib/sync";
 import { getPairingToken } from "@/lib/syncengine/pairing";
 import type { DeviceRole } from "@/lib/syncengine/types";
-import { getPreferences, savePreferences, type ClusterId, type BusinessType } from "@/lib/settings";
+import { getPreferences, savePreferences, type ClusterId } from "@/lib/settings";
 
 /** Configuration métier de la boutique (le « type de boutique » de l'onboarding).
  *  Copiée telle quelle d'une fiche à l'autre : la nouvelle caisse s'ouvre identique à
@@ -29,8 +29,6 @@ export interface PairingShopConfig {
   customDomain: string;
   /** Stock au kilo ou à l'unité (cluster Personnalisé). */
   customUnitType?: "unit" | "weight";
-  /** Snack/bar ou restaurant/fastfood. */
-  businessType: BusinessType;
   /** Système de tables activé ou non (commande puis encaissement). */
   tablesEnabled: boolean;
   /** Identité de la boutique. */
@@ -106,7 +104,6 @@ export async function buildPairingPayload(role?: DeviceRole): Promise<string | n
       cluster: prefs.cluster,
       customDomain: prefs.customDomain,
       customUnitType: prefs.customUnitType,
-      businessType: prefs.businessType,
       tablesEnabled: prefs.tablesEnabled,
     },
   };
@@ -242,7 +239,6 @@ export async function applyPairingShop(shop?: Partial<PairingShopConfig>): Promi
     cluster: shop.cluster ?? prefs.cluster,
     customDomain: shop.customDomain ?? prefs.customDomain,
     customUnitType: shop.customUnitType ?? prefs.customUnitType,
-    businessType: shop.businessType ?? prefs.businessType,
     tablesEnabled: shop.tablesEnabled ?? prefs.tablesEnabled,
   });
   return true;

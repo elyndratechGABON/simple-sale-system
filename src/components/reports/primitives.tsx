@@ -44,7 +44,7 @@ export function DayStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Ligne de classement du panneau sectorisé (service / boucherie). */
+/** Ligne de classement du panneau sectorisé. */
 export function RankRow({
   index,
   name,

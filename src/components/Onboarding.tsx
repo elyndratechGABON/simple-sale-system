@@ -2,14 +2,12 @@
 // ROUTE DÉDIÉE /welcome (page indépendante : aucun chrome applicatif derrière).
 //
 // 1. **SetupWizard** : confidentialité, nom, compte marchand (téléphone + mot de
-//    passe, ou scan du QR d'une caisse abonnée), secteur d'activité, sous-catégorie
+//    passe, ou scan du QR d'une caisse abonnée), secteur d'activité
 // 2. **ClusterTutorial** : tutoriel adaptatif qui ajoute des produits/prestations selon le cluster
 //
 // Le tutoriel s'adapte au cluster choisi :
-//   - retail → "Ajoutez vos produits"   - restaurant → "Créez votre menu"
-//   - bar → "Ajoutez vos boissons"      - service → "Ajoutez vos prestations"
-//   - clothing → "Ajoutez vos vêtements" - weight → "Produits au poids"
-//   - magasin → "Ajoutez vos produits" (avec sous-cat)
+//   - restaurant → "Créez votre menu"     - bar → "Ajoutez vos boissons"
+//   - service → "Ajoutez vos prestations" - personnalise → "Ajoutez vos produits"
 //
 // Les produits ajoutés pendant le tutoriel sont enregistrés en base.
 import { motion } from "framer-motion";
@@ -341,7 +339,6 @@ export function SetupWizard({
       customDomain: selectedCluster === "personnalise" ? customDomain.trim() : "",
       customUnitType:
         selectedCluster === "personnalise" ? (customStockChoice ?? "unit") : undefined,
-      businessType: selectedCluster === "restaurant" ? "restaurant" : "snack",
       tablesEnabled: clusterConfig?.workflow.hasTables ?? false,
       onboarded: true,
       privacyAccepted,
@@ -386,7 +383,7 @@ export function SetupWizard({
   }
 
   // Étapes : 0 conf, 1 nom, 2 compte (identifiants + mode), 3 infos optionnelles,
-  // 4 coordonnées (dynamique), 5 secteur, 6 sous-cat magasin.
+  // 4 secteur d'activité.
   function renderStep() {
     return step;
   }
@@ -670,8 +667,7 @@ export function SetupWizard({
             {selectedCluster && clusterConfig && (
               /* Carte de confirmation PERSONNALISÉE : le libellé, la description et les
                  étapes du workflow sont ceux du cluster choisi — l'utilisateur voit dès ici
-                 ce que l'application fera pour lui (coiffure → "réalisez la prestation",
-                 boucherie → "saisissez le poids"…). */
+                 ce que l'application fera pour lui. */
               <div className="mt-2 space-y-2 rounded-xl border bg-accent/40 p-3 text-xs text-muted-foreground">
                 <p className="font-medium text-foreground">{clusterConfig.label}</p>
                 <p>{clusterConfig.description}</p>
@@ -783,7 +779,7 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const prefs = getPreferences();
   const cluster = prefs.cluster;
   const config = CLUSTER_MAP[cluster];
-  // Personnalisé + stock au kilo = même comportement que le cluster boucherie.
+  // Personnalisé + stock au kilo : la vente se fait au poids.
   const sellsByWeight = cluster === "personnalise" && prefs.customUnitType === "weight";
 
   const [subStep, setSubStep] = useState<TutorialStep>("confirm");

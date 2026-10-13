@@ -373,9 +373,9 @@ export function ProductForm({
         {productType === "product" && (
           <div>
             <Label>Unité de vente</Label>
-            {/* Les quatre unités sont proposees partout : le kilo n'appartient plus au
-                  seul cluster boucherie (V23). Un epicier vend du riz au kg sans avoir
-                  choisi `weight`. Le selecteur est donc redegrade en 4 choix neutres. */}
+            {/* Les quatre unités sont proposees partout : le kilo n'appartient plus à
+                  un cluster précis. Un epicier vend du riz au kg sans avoir choisi
+                  `weight`. Le selecteur est donc redegrade en 4 choix neutres. */}
             <div className="flex flex-wrap gap-2 mt-1">
               {(
                 [

@@ -225,10 +225,6 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                     cluster: prefs.cluster ?? "restaurant",
                     customDomain: prefs.customDomain ?? "",
                     customUnitType: prefs.customUnitType ?? "unit",
-                    businessType:
-                      prefs.businessType ??
-                      (prefs.cluster === "restaurant" ? "restaurant" : "snack"),
-
                     tablesEnabled: prefs.tablesEnabled ?? false,
                   },
                 }

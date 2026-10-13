@@ -14,10 +14,6 @@ import { CARD_PRESETS, normalizeCardFields, type ProductCardField } from "@/lib/
 
 const KEY = "pos_preferences";
 
-/** Nature du commerce. Oriente le mode de service proposé à l'onboarding : un restaurant
- * commande avant d'encaisser, un snack encaisse sur-le-champ. */
-export type BusinessType = "snack" | "restaurant";
-
 /** Identifiant unique d'un cluster métier. */
 export type ClusterId = "restaurant" | "bar" | "service" | "personnalise";
 
@@ -76,8 +72,6 @@ export interface Preferences {
   workspaceName: string;
   /** Passe à true une fois l'assistant de premier lancement terminé ou passé. */
   onboarded: boolean;
-  /** Snack/bar — service direct — ou restaurant/fastfood — commande puis encaissement. */
-  businessType: BusinessType;
   /** Profil métier déterminant le comportement de l'interface. */
   cluster: ClusterId;
   /** Domaine d'activité libre saisi pour le cluster Personnalisé. */
@@ -134,7 +128,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   onboarded: false,
   // Restaurant + tables = le comportement historique de l'application (plan de salle
   // toujours affiché) : les comptes déjà enregistrés ne changent pas de mode.
-  businessType: "restaurant",
   cluster: "restaurant",
   customDomain: "",
   tablesEnabled: false,
@@ -256,7 +249,6 @@ export function getPreferences(): Preferences {
     return {
       workspaceName: parsed.workspaceName?.trim() || DEFAULT_PREFERENCES.workspaceName,
       onboarded: parsed.onboarded === true,
-      businessType: normalizeBusinessType(parsed.businessType),
       cluster: normalizeCluster(parsed.cluster),
       customDomain: typeof parsed.customDomain === "string" ? parsed.customDomain.trim() : "",
       customUnitType: normalizeCustomUnitType(parsed.customUnitType),
@@ -312,10 +304,6 @@ function normalizeTables(value: unknown): string[] {
     .filter(Boolean);
   const unique = Array.from(new Set(cleaned));
   return unique.length > 0 ? unique : DEFAULT_PREFERENCES.tables;
-}
-
-function normalizeBusinessType(value: unknown): BusinessType {
-  return value === "snack" || value === "restaurant" ? value : DEFAULT_PREFERENCES.businessType;
 }
 
 function normalizeCluster(value: unknown): ClusterId {
