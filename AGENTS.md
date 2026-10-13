@@ -19,7 +19,7 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
 
 | Chemin                               | Contenu                                                          |
 | ------------------------------------ | ---------------------------------------------------------------- |
-| `src/lib/db.ts`                      | **seul** module qui touche IndexedDB                             |
+| `src/lib/db/`                        | **seul** module qui touche IndexedDB (barrel, `getDB`)           |
 | `src/lib/analytics.ts`               | agrégations, fonctions **pures** (ni DB ni React)                |
 | `src/lib/settings.ts`                | préférences localStorage + thème                                 |
 | `src/lib/gatekeeper.ts`              | handshake, verrou suspend, messages — appliqués avant toute sync |
@@ -138,7 +138,7 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
   Le bouton d'installation de `/` navigue donc vers `/pos` **avant** d'afficher la marche
   à suivre. Inverser cet ordre produit une icône qui rouvre la page marketing.
 - **Les suppressions sont logiques**, jamais physiques (`deleted_at`). Toute nouvelle
-  lecture dans `db.ts` doit filtrer via `alive()`, sinon les enregistrements supprimés
+  lecture dans `src/lib/db/` doit filtrer via `alive()`, sinon les enregistrements supprimés
   ressortent.
 - **Une vente `status: "open"` n'est PAS du chiffre d'affaires.** C'est une addition de
   table en cours : l'argent n'est pas dans la caisse. Elle vit dans le même store que les
