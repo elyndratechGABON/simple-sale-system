@@ -3,6 +3,7 @@ import { FreeLineDialog } from "@/components/pos";
 import { PinDialog } from "@/components/PinDialog";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
 import { FloorPlan } from "./FloorPlan";
+import { ContextBadge } from "./ContextBadge";
 import { CategoriesColumn } from "./CategoriesColumn";
 import { ProductPanel } from "./ProductPanel";
 import { CartPanel } from "./CartPanel";
@@ -30,6 +31,11 @@ export function PosPage() {
         pos.compact && (pos.activeTable !== null || pos.lines.length > 0) && "pb-20",
       )}
     >
+      <ContextBadge
+        target={pos.target}
+        total={pos.activeTable?.total ?? pos.total}
+        onBackToCounter={() => pos.selectTarget({ kind: "direct" })}
+      />
       <FloorPlan pos={pos} />
 
       {/* Largeurs par palier (§21, §22) :
