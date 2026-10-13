@@ -12,8 +12,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { startOfDay, startOfMonth } from "date-fns";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { formatFCFA } from "@/lib/format";
+import { usePreferences } from "@/hooks/use-preferences";
 import {
   NAV_LABEL,
   REVENUE_LABEL,
@@ -52,7 +52,10 @@ function ReportsPage() {
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const { isService, hasWeightInput } = useClusterFeatures();
+  const prefs = usePreferences();
+  const cluster = prefs.cluster;
+  const isService = cluster === "service";
+  const hasWeightInput = cluster === "personnalise" && prefs.customUnitType === "weight";
 
   const { stats, days, months, weightSales, assetEvents, assetAgenda, bestLabel } = useReportData(
     focusedDay,

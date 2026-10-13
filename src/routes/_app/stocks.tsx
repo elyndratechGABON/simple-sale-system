@@ -87,7 +87,6 @@ import { Badge } from "@/components/ui/badge";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ProductForm } from "@/components/ProductForm";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { usePreferences } from "@/hooks/use-preferences";
 import { ProductCard } from "@/components/ProductCard";
 import { cn } from "@/lib/utils";
@@ -261,7 +260,9 @@ function StocksPage() {
 
 function StocksPageContent() {
   const qc = useQueryClient();
-  const { isService } = useClusterFeatures();
+  const prefs = usePreferences();
+  const cluster = prefs.cluster;
+  const isService = cluster === "service";
   // Champs visibles sur les cards (§10). La liste est ordonnée : l'ordre du tableau
   // est l'ordre d'affichage. Relue de localStorage via les préférences, donc le
   // réglage survit à un redémarrage (§29).

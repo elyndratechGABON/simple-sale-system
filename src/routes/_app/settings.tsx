@@ -187,7 +187,7 @@ function SettingsPage() {
         </TabsList>
 
         <TabsContent value="boutique" className="mt-3 space-y-3">
-          <BusinessCard cluster={cluster ?? "retail"} />
+          <BusinessCard cluster={cluster ?? "restaurant"} />
           <AppearanceCard />
           <ClientsCard />
           {clusterConfig?.workflow.hasTables && <TablesCard />}
@@ -1105,7 +1105,7 @@ function ClientsCard() {
     },
   });
 
-  if (cluster !== "service" && cluster !== "clothing" && cluster !== "magasin") return null;
+  if (cluster !== "service") return null;
 
   return (
     <Card>

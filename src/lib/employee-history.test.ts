@@ -66,7 +66,7 @@ describe("carnet d'expérience employé", () => {
       deviceId: identity.deviceId,
       shopId: "s_other",
       storeName: "Boucherie B",
-      cluster: "weight",
+      cluster: "restaurant",
     });
 
     await closeEmployeeHistory(identity.shopId);

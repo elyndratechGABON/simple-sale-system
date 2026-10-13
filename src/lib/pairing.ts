@@ -17,22 +17,14 @@ import { getShopProfile, saveShopProfile } from "@/lib/db";
 import { getOrchestratorUrl, getOpsRelayUrl } from "@/lib/sync";
 import { getPairingToken } from "@/lib/syncengine/pairing";
 import type { DeviceRole } from "@/lib/syncengine/types";
-import {
-  getPreferences,
-  savePreferences,
-  type ClusterId,
-  type BusinessType,
-  type SubCategory,
-} from "@/lib/settings";
+import { getPreferences, savePreferences, type ClusterId, type BusinessType } from "@/lib/settings";
 
 /** Configuration métier de la boutique (le « type de boutique » de l'onboarding).
  *  Copiée telle quelle d'une fiche à l'autre : la nouvelle caisse s'ouvre identique à
  *  la boutique scannée (secteur, tables, unités, domaine personnalisé…). */
 export interface PairingShopConfig {
-  /** Profil métier : retail, restaurant, bar, service, clothing, magasin… */
+  /** Profil métier : restaurant, bar, service, personnalise… */
   cluster: ClusterId;
-  /** Sous-catégorie du cluster Magasin, le cas échéant. */
-  subCategory?: SubCategory;
   /** Domaine d'activité libre saisi pour le cluster Personnalisé. */
   customDomain: string;
   /** Stock au kilo ou à l'unité (cluster Personnalisé). */
@@ -112,7 +104,6 @@ export async function buildPairingPayload(role?: DeviceRole): Promise<string | n
       phone: profile.phone || prefs.phone,
       quarter: profile.location || prefs.quarter,
       cluster: prefs.cluster,
-      subCategory: prefs.subCategory,
       customDomain: prefs.customDomain,
       customUnitType: prefs.customUnitType,
       businessType: prefs.businessType,
@@ -249,7 +240,6 @@ export async function applyPairingShop(shop?: Partial<PairingShopConfig>): Promi
     phone: shop.phone ?? prefs.phone,
     quarter: shop.quarter ?? prefs.quarter,
     cluster: shop.cluster ?? prefs.cluster,
-    subCategory: shop.subCategory ?? prefs.subCategory,
     customDomain: shop.customDomain ?? prefs.customDomain,
     customUnitType: shop.customUnitType ?? prefs.customUnitType,
     businessType: shop.businessType ?? prefs.businessType,

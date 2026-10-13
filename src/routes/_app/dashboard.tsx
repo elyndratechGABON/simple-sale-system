@@ -44,7 +44,6 @@ import { SaleItemChips } from "@/components/SaleItemChips";
 import { formatFCFA, formatPercent, formatDayShort, formatRelative, formatKg } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
 import { Card } from "@/components/Card";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { useAccess } from "@/hooks/use-access";
 import { ensureIdentity } from "@/lib/syncengine/identity";
 import { useSaleTrigger } from "@/hooks/use-sale-trigger";
@@ -222,7 +221,11 @@ function DashboardPage() {
   // DONNÉES CONSERVÉES — logique métier inchangée (scopeByDevice, today/fortnight)
   const { notifyOwner } = useSaleTrigger();
   const { workspaceName, ownerName } = usePreferences();
-  const features = useClusterFeatures();
+  const prefs = usePreferences();
+  const cluster = prefs.cluster;
+  const isService = cluster === "service";
+  const hasWeightInput = cluster === "personnalise" && prefs.customUnitType === "weight";
+  const hasTables = cluster === "restaurant" || cluster === "bar";
   const access = useAccess();
   // L'IDENTITÉ de l'écran (SES ventes) : un employé ne voit que ses encaissements sur
   // son tableau de bord — jamais le cumul du groupe, qui n'appartient qu'au propriétaire.
@@ -367,7 +370,7 @@ function DashboardPage() {
   };
   const quickActions: QuickAction[] = [
     { label: "Nouvelle vente", icon: ShoppingCart, to: "/pos" },
-    features.isService
+    isService
       ? { label: "Nouvelle prestation", icon: Plus, to: "/stocks" }
       : { label: "Nouveau produit", icon: Plus, to: "/stocks" },
     { label: "Historique", icon: History, to: "/history" },
@@ -462,9 +465,7 @@ function DashboardPage() {
               </div>
               <div>
                 <p className="font-medium text-lg">
-                  {features.isService
-                    ? "Créez votre première prestation"
-                    : "Créez votre premier produit"}
+                  {isService ? "Créez votre première prestation" : "Créez votre premier produit"}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Ajoutez vos articles au catalogue pour commencer à encaisser.
@@ -590,7 +591,7 @@ function DashboardPage() {
               <Card>
                 <div className="border-b px-4 py-3">
                   <p className="text-base font-semibold">
-                    Top {features.isService ? "prestations" : "produits"} — 7 jours
+                    Top {isService ? "prestations" : "produits"} — 7 jours
                   </p>
                 </div>
                 <div className="space-y-1 p-2">
@@ -606,7 +607,7 @@ function DashboardPage() {
                         {product.name}
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {product.quantity} {features.isService ? "prestations" : "ventes"}
+                        {product.quantity} {isService ? "prestations" : "ventes"}
                       </span>
                       <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
                         {formatFCFA(product.revenue)}
@@ -619,7 +620,7 @@ function DashboardPage() {
           )}
         </div>
 
-        {features.hasWeightInput && weightSales && weightSales.weightKg > 0 && (
+        {hasWeightInput && weightSales && weightSales.weightKg > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}

@@ -1,0 +1,231 @@
+# ERRORS-KB — Catalogue des erreurs et solutions
+
+> Consulter AVANT toute correction. Enrichir APRÈS chaque nouvelle erreur.
+> Format : ERR-XXX — Signature / Cause / Solution / Prévention.
+
+---
+
+## ERR-JSX-001 — Adjacent JSX elements must be wrapped
+
+**Signature** : `Adjacent JSX elements must be wrapped in an enclosing tag`
+**Contexte** : Deux éléments JSX côte à côte dans un `return` ou un `.map()`
+**Cause** : Pas de fragment `<>...</>` ou de `<div>` englobant
+**Solution** :
+```tsx
+// ❌
+return (
+  <Dialog>...</Dialog>
+  <Autre />
+);
+
+// ✅
+return (
+  <>
+    <Dialog>...</Dialog>
+    <Autre />
+  </>
+);
+```
+**Fichiers impactés** : `TeamDialog.tsx`, `reports.tsx`, `pos.tsx`
+**Prévention** : Toujours ouvrir par `<>` si le composant retourne 2+ racines
+**Date** : 2026-10-12
+**Occurrences** : 3
+
+---
+
+## ERR-TS-001 — Identifier 'X' has already been declared
+
+**Signature** : `Identifier '<name>' has already been declared`
+**Contexte** : Deux déclarations de la même variable dans le même scope
+**Cause** : Copier-coller, ou fusion de fichiers
+**Solution** : Supprimer la 2ᵉ déclaration OU renommer
+**Fichiers impactés** : `transport.ts` (db), `reports.tsx` (formatFCFA)
+**Prévention** : Un import par symbole. Un `const` par variable.
+**Date** : 2026-10-12
+**Occurrences** : 4
+
+---
+
+## ERR-TS-002 — Cannot find name 'X' after deletion
+
+**Signature** : `Cannot find name '<name>'`
+**Contexte** : Après suppression d'un fichier ou d'une fonction
+**Cause** : Un consommateur importe encore le symbole supprimé
+**Solution** :
+```powershell
+# 1. Trouver tous les consommateurs
+grep -rn "<name>" src --include="*.ts" --include="*.tsx"
+
+# 2. Supprimer les fichiers consommateurs D'ABORD
+# 3. Supprimer la source EN DERNIER
+```
+**Ordre imposé** : feuilles → racine, JAMAIS l'inverse
+**Fichiers impactés** : `analytics.ts`, `alerts.ts`, `dashboard.tsx`, `pos.tsx`
+**Prévention** : Ordre feuilles → racine obligatoire pour toute suppression
+**Date** : 2026-10-12
+**Occurrences** : 2
+
+---
+
+## ERR-IMPORT-001 — Failed to resolve import
+
+**Signature** : `Failed to resolve import "@/<chemin>" from "<fichier>"`
+**Contexte** : Après déplacement ou suppression d'un fichier
+**Cause** : Import non mis à jour
+**Solution** :
+```powershell
+# 1. Où est le fichier maintenant ?
+Get-ChildItem -Path src -Recurse -Filter "<nom>*"
+
+# 2. Lister les imports cassés
+grep -rn "<ancien-chemin>" src
+
+# 3. Corriger TOUS les imports dans LE MÊME commit
+```
+**Fichiers impactés** : `Header.tsx`, `_app.tsx`
+**Prévention** : Déplacement = fichier + tous ses imports dans le même commit
+**Date** : 2026-10-12
+**Occurrences** : 2
+
+---
+
+## ERR-PS-001 — Fichiers corrompus par PowerShell
+
+**Signature** : Fichier `.ts` rejeté "File appears to be binary"
+**Contexte** : Utilisation de `git show HEAD:fichier > cible` ou `Set-Content`
+**Cause** : PowerShell écrit en UTF-16 (avec BOM) → illisible par tsc
+**Solution** :
+```powershell
+# Jamais :
+git show HEAD:src/old.ts > src/new.ts     # ❌
+
+# Toujours :
+git checkout HEAD -- src/old.ts            # ✅
+```
+**Règles** :
+- ❌ Jamais `>`, `Set-Content`, `WriteAllText` pour écrire du `.ts`
+- ✅ Utiliser les outils d'édition de code (Write/Edit)
+- ✅ Utiliser `git checkout` pour restaurer
+**Prévention** : PowerShell = commandes (`git`, `npm`), pas éditeur de code
+**Date** : 2026-10-12
+**Occurrences** : 3
+
+---
+
+## ERR-BUILD-001 — PARSE_ERROR JSON / module
+
+**Signature** : `[PARSE_ERROR] ...`
+**Contexte** : Fichier `.ts` corrompu ou syntaxe cassée
+**Cause** : Édition non-testée, fichier mal encodé, éditeur inadapté
+**Solution** : `git checkout HEAD -- <fichier>` puis recommencer l'édition
+**Prévention** : Une seule modification à la fois, `check` après chaque
+**Date** : 2026-10-12
+**Occurrences** : 2
+
+---
+
+## ERR-DB-001 — Store Dexie fantôme
+
+**Signature** : Store `rentals` reste après suppression du code
+**Contexte** : Migration Dexie sans `storeName: null`
+**Cause** : Dexie ne supprime pas un store avec `.stores({})` — il faut le déclarer explicitement null
+**Solution** :
+```ts
+this.version(N).stores({
+  ...existingStores,
+  rentals: null,  // ← déclaration explicite
+});
+```
+**Prévention** : Toute suppression de store = nouveau numéro de version + `null`
+**Date** : 2026-10-12
+**Occurrences** : 1
+
+---
+
+## ERR-JSX-002 — JSX mal fermé après refactor
+
+**Signature** : `')' expected` + `Unexpected token` sur lignes consécutives
+**Contexte** : Après remplacement d'un bloc JSX complexe par un bloc simple
+**Cause** : Tokens orphelins de l'ancien bloc (`}`, `)`, `</div>` en trop)
+**Solution** :
+```powershell
+# 1. Lire le bloc entier autour de l'erreur
+Get-Content src/fichier.tsx | Select-Object -Skip <N-30> -First 60
+
+# 2. Vérifier l'équilibre des parenthèses/accolades
+# 3. Compter les ouvertures et fermetures de la zone
+```
+**Prévention** : Ne jamais remplacer un bloc sans avoir lu les 20 lignes AVANT et APRÈS
+**Date** : 2026-10-12
+**Occurrences** : 2
+
+---
+
+## ERR-GIT-001 — git checkout partiel laisse des consommateurs cassés
+
+**Signature** : `Cannot find module` après `git checkout` d'un seul fichier
+**Contexte** : Restaurer la source sans restaurer ses consommateurs
+**Cause** : Le fichier restauré n'a plus les exports attendus par les consommateurs modifiés
+**Solution** :
+```powershell
+# Jamais un seul fichier :
+git checkout HEAD -- src/lib/pairing.ts    # ❌
+
+# Toujours l'ensemble cohérent :
+git checkout HEAD -- src/lib/pairing.ts src/components/Onboarding.tsx
+# Ou mieux :
+git reset --hard HEAD                       # ✅ tout
+```
+**Prévention** : `git checkout` partiel interdit si plusieurs fichiers modifiés ensemble
+**Date** : 2026-10-12
+**Occurrences** : 2
+
+---
+
+## ERR-JSX-003 — Ternaire JSX mal fermé (pos.tsx)
+
+**Signature** : `')' expected` + `Unexpected token` sur lignes consécutives
+**Contexte** : Après remplacement d'un bloc JSX complexe par un bloc simple dans un ternaire `.map()`
+**Cause** : Tokens orphelins de l'ancien bloc (`}`, `)`, `</div>` en trop), fermetures ternaires déséquilibrées
+**Solution** :
+```powershell
+# 1. Lire le bloc entier autour de l'erreur (+30 lignes avant/après)
+Get-Content src/routes/_app/pos.tsx | Select-Object -Skip 1195 -First 60
+
+# 2. Vérifier l'équilibre : .map((t) => (  ...  ))  →  chaque ( ouvert = ) fermé
+# 3. Compter les ouvertures/fermetures dans la zone ternaire : ternaire = (cond ? (a) : (b))
+```
+**Prévention** : Ne jamais remplacer un bloc sans avoir lu les 20 lignes AVANT et APRÈS
+**Date** : 2026-10-12
+**Occurrences** : 1
+
+---
+
+## ERR-GIT-001 — git checkout partiel laisse des consommateurs cassés
+
+**Signature** : `Cannot find module` après `git checkout` d'un seul fichier
+**Contexte** : Restaurer la source sans restaurer ses consommateurs
+**Cause** : Le fichier restauré n'a plus les exports attendus par les consommateurs modifiés
+**Solution** :
+```powershell
+# Jamais un seul fichier :
+git checkout HEAD -- src/lib/pairing.ts    # ❌
+
+# Toujours l'ensemble cohérent :
+git checkout HEAD -- src/lib/pairing.ts src/components/Onboarding.tsx
+# Ou mieux :
+git reset --hard HEAD                       # ✅ tout
+```
+**Prévention** : `git checkout` partiel interdit si plusieurs fichiers modifiés ensemble
+**Date** : 2026-10-12
+**Occurrences** : 2
+
+---
+
+## Comment utiliser cette base
+
+**Avant** de corriger : `Select-String -Path docs/ERRORS-KB.md -Pattern "<mot-clé>"`
+
+**Après** une nouvelle erreur : ajouter une entrée (numéro suivant dans la catégorie).
+
+**Si l'erreur existe déjà** : incrémenter `Occurrences` et vérifier que la solution a marché.

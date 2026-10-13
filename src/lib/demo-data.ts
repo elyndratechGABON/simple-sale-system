@@ -1,4 +1,4 @@
-﻿import type { ClusterId, SubCategory } from "./settings";
+﻿import type { ClusterId } from "./settings";
 import { addProduct } from "./db";
 
 type DemoProduct = {
@@ -21,16 +21,6 @@ type DemoProduct = {
 };
 
 const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
-  retail: [
-    { name: "Regab 33cl", price: 500, stock: 48, category: "Boissons" },
-    { name: "Sukusa 500g", price: 1500, stock: 20, category: "Alimentation" },
-    { name: "Savon Noir", price: 300, stock: 30, category: "HygiÃ¨ne" },
-    { name: "Biscotin", price: 200, stock: 60, category: "Snacks" },
-    { name: "Eau minÃ©rale 1.5L", price: 500, stock: 36, category: "Boissons" },
-    { name: "Bouillon Cube", price: 100, stock: 100, category: "Ã‰picerie" },
-    { name: "Pain 1kg", price: 750, stock: 15, category: "Boulangerie" },
-    { name: "Lait en poudre 400g", price: 2500, stock: 12, category: "Alimentation" },
-  ],
   restaurant: [
     { name: "Poulet braisÃ©", price: 5000, stock: Number.POSITIVE_INFINITY, category: "Plats" },
     { name: "Poisson grillÃ©", price: 4000, stock: Number.POSITIVE_INFINITY, category: "Plats" },
@@ -112,132 +102,6 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       type: "service",
     },
   ],
-  clothing: [
-    {
-      name: "Pagne wax 6 yards",
-      price: 3000,
-      stock: 21,
-      category: "Pagnes",
-      variants: [
-        { id: "pw-vert", name: "Vert", color: "Vert", price: 3000, stock: 7 },
-        { id: "pw-rouge", name: "Rouge", color: "Rouge", price: 3000, stock: 7 },
-        { id: "pw-bleu", name: "Bleu", color: "Bleu", price: 3000, stock: 7 },
-      ],
-    },
-    {
-      name: "Pagne Bazin 6 yards",
-      price: 8000,
-      stock: 9,
-      category: "Pagnes",
-      variants: [
-        { id: "pb-or", name: "Or", color: "Or", price: 8000, stock: 3 },
-        { id: "pb-marron", name: "Marron", color: "Marron", price: 8000, stock: 3 },
-        { id: "pb-noir", name: "Noir", color: "Noir", price: 8000, stock: 3 },
-      ],
-    },
-    {
-      name: "T-shirt homme",
-      price: 5000,
-      stock: 16,
-      category: "Homme",
-      variants: [
-        { id: "th-s", name: "T-shirt homme S", size: "S", price: 5000, stock: 4 },
-        { id: "th-m", name: "T-shirt homme M", size: "M", price: 5000, stock: 4 },
-        { id: "th-l", name: "T-shirt homme L", size: "L", price: 5000, stock: 4 },
-        { id: "th-xl", name: "T-shirt homme XL", size: "XL", price: 5000, stock: 4 },
-      ],
-    },
-    {
-      name: "Pantalon jean",
-      price: 10000,
-      stock: 9,
-      category: "Homme",
-      variants: [
-        { id: "pj-38", name: "Jean 38", size: "38", price: 10000, stock: 3 },
-        { id: "pj-40", name: "Jean 40", size: "40", price: 10000, stock: 3 },
-        { id: "pj-42", name: "Jean 42", size: "42", price: 10000, stock: 3 },
-      ],
-    },
-    {
-      name: "Robe wax",
-      price: 8000,
-      stock: 9,
-      category: "Femme",
-      variants: [
-        { id: "rw-s", name: "Robe wax S", size: "S", price: 8000, stock: 3 },
-        { id: "rw-m", name: "Robe wax M", size: "M", price: 8000, stock: 3 },
-        { id: "rw-l", name: "Robe wax L", size: "L", price: 8000, stock: 3 },
-      ],
-    },
-    {
-      name: "Chaussures femme",
-      price: 12000,
-      stock: 8,
-      category: "Chaussures",
-      variants: [
-        { id: "cf-36", name: "Chaussures 36", size: "36", price: 12000, stock: 2 },
-        { id: "cf-37", name: "Chaussures 37", size: "37", price: 12000, stock: 2 },
-        { id: "cf-38", name: "Chaussures 38", size: "38", price: 12000, stock: 2 },
-        { id: "cf-39", name: "Chaussures 39", size: "39", price: 12000, stock: 2 },
-      ],
-    },
-    {
-      name: "Sac Ã  main",
-      price: 6000,
-      stock: 6,
-      category: "Accessoires",
-      variants: [
-        { id: "s-noir", name: "Sac noir", color: "Noir", price: 6000, stock: 3 },
-        { id: "s-marron", name: "Sac marron", color: "Marron", price: 6000, stock: 3 },
-      ],
-    },
-  ],
-  weight: [
-    {
-      name: "Viande de bÅ“uf",
-      price: 4000,
-      stock: 30,
-      category: "Viandes",
-      unit: "kg",
-    },
-    {
-      name: "Poulet entier",
-      price: 2500,
-      stock: 20,
-      category: "Volailles",
-      unit: "kg",
-    },
-    {
-      name: "Poisson congelÃ©",
-      price: 3000,
-      stock: 15,
-      category: "Poissons",
-      unit: "kg",
-    },
-    {
-      name: "Crevettes",
-      price: 6000,
-      stock: 8,
-      category: "Fruits de mer",
-      unit: "kg",
-    },
-    {
-      name: "Foie de boeuf",
-      price: 2000,
-      stock: 10,
-      category: "Abats",
-      unit: "kg",
-    },
-  ],
-  magasin: [
-    { name: "TÃ©lÃ©phone Samsung A14", price: 85000, stock: 5, category: "TÃ©lÃ©phones" },
-    { name: "Chargeur universel", price: 3000, stock: 20, category: "Accessoires" },
-    { name: "Ã‰couteurs Bluetooth", price: 5000, stock: 10, category: "Accessoires" },
-    { name: 'Ventilateur 12"', price: 15000, stock: 4, category: "Ã‰lectromÃ©nager" },
-    { name: "Fer Ã  repasser", price: 12000, stock: 6, category: "Ã‰lectromÃ©nager" },
-    { name: "Marteau", price: 2000, stock: 15, category: "Quincaillerie" },
-    { name: "Tournevis", price: 1500, stock: 20, category: "Quincaillerie" },
-  ],
   // Cluster PersonnalisÃ© : activitÃ© libre, les dÃ©mos gÃ©nÃ©riques font l'affaire.
   personnalise: [
     { name: "Article exemple A", price: 1000, stock: 20, category: "Divers" },
@@ -251,54 +115,10 @@ const DEMO_DATA: Record<ClusterId, DemoProduct[]> = {
       type: "service",
     },
   ],
-  location: [
-    { name: "Chaise en plastique", price: 0, stock: 50, category: "Ã‰vÃ©nementiel" },
-    { name: "Tente 6Ã—12m", price: 0, stock: 5, category: "Ã‰vÃ©nementiel" },
-    { name: "Table ronde", price: 0, stock: 20, category: "Ã‰vÃ©nementiel" },
-    { name: "Sonorisation portable", price: 0, stock: 3, category: "Ã‰quipement" },
-    { name: "Groupe Ã©lectrogÃ¨ne 5kVA", price: 0, stock: 2, category: "Ã‰quipement" },
-    { name: "Voiture berline", price: 0, stock: 2, category: "VÃ©hicules" },
-  ],
 };
 
-const MAGASIN_DEMO: Record<SubCategory, DemoProduct[]> = {
-  electronics: [
-    { name: "TÃ©lÃ©phone Samsung A14", price: 85000, stock: 5, category: "TÃ©lÃ©phones" },
-    { name: "TÃ©lÃ©phone Tecno Spark", price: 65000, stock: 4, category: "TÃ©lÃ©phones" },
-    { name: "Chargeur universel", price: 3000, stock: 20, category: "Accessoires" },
-    { name: "Ã‰couteurs Bluetooth", price: 5000, stock: 10, category: "Accessoires" },
-    { name: "Coque tÃ©lÃ©phone", price: 1500, stock: 25, category: "Accessoires" },
-    { name: "Powerbank 10000mAh", price: 8000, stock: 8, category: "Accessoires" },
-  ],
-  appliance: [
-    { name: "RÃ©frigÃ©rateur TVS 130L", price: 180000, stock: 2, category: "Froid" },
-    { name: 'Ventilateur 12"', price: 15000, stock: 4, category: "Ventilation" },
-    { name: "Fer Ã  repasser", price: 12000, stock: 6, category: "Repassage" },
-    { name: "Mixeur 2L", price: 18000, stock: 3, category: "Cuisine" },
-    { name: "Micro-ondes", price: 45000, stock: 2, category: "Cuisine" },
-  ],
-  furniture: [
-    { name: "Chaise en plastique", price: 8000, stock: 20, category: "Salon" },
-    { name: "Table basse", price: 35000, stock: 3, category: "Salon" },
-    { name: "Bureau ordinateur", price: 60000, stock: 2, category: "Bureau" },
-    { name: "Lit 2 places", price: 90000, stock: 2, category: "Chambre" },
-    { name: "Armoire 4 portes", price: 120000, stock: 1, category: "Chambre" },
-  ],
-  hardware_store: [
-    { name: "Marteau", price: 2000, stock: 15, category: "Outillage" },
-    { name: "Tournevis", price: 1500, stock: 20, category: "Outillage" },
-    { name: "Tenailles", price: 3000, stock: 10, category: "Outillage" },
-    { name: "Peigne", price: 500, stock: 50, category: "Coiffure" },
-    { name: "Fil de fer", price: 1000, stock: 30, category: "Quincaillerie" },
-    { name: "Vis assortmenties", price: 200, stock: 100, category: "Quincaillerie" },
-  ],
-};
-
-export async function loadDemoData(cluster: ClusterId, subCategory?: SubCategory): Promise<number> {
-  const products =
-    cluster === "magasin" && subCategory ? MAGASIN_DEMO[subCategory] : DEMO_DATA[cluster];
-
-  if (!products) return 0;
+export async function loadDemoData(cluster: ClusterId): Promise<number> {
+  const products = DEMO_DATA[cluster];
 
   for (const p of products) {
     await addProduct({

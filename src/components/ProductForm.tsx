@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
+import { usePreferences } from "@/hooks/use-preferences";
 
 // Brouillon de variante dans le formulaire : prix/stock gardés en texte pour la saisie,
 // convertis en `price?`/`stock?` (productVariant) à l'enregistrement.
@@ -42,8 +42,12 @@ export function ProductForm({
   defaultType?: "product" | "service";
 }) {
   const qc = useQueryClient();
-  const { hasSerialNumber, hasVariants, hasWeightInput, allowServiceBooking } =
-    useClusterFeatures();
+  const prefs = usePreferences();
+  const cluster = prefs.cluster;
+  const hasVariants = false; // Only clothing cluster had variants, now removed
+  const hasWeightInput = cluster === "personnalise" && prefs.customUnitType === "weight";
+  const hasSerialNumber = false;
+  const allowServiceBooking = cluster === "service";
   const [name, setName] = useState(editing?.name ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);

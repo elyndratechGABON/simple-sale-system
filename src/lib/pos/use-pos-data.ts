@@ -9,12 +9,15 @@ import {
 } from "@/lib/db";
 import { MONTHS, rangeFor, type CalendarView } from "@/lib/reports/period";
 import { usePeriodData } from "@/hooks/use-period-data";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
+import { usePreferences } from "@/hooks/use-preferences";
 import { computePeriodStats, computeWeightSales, computeAssetAgenda } from "@/lib/analytics";
 import type { PeriodStats, DayBucket, WeightSalesStats, AssetReminder } from "@/lib/analytics";
 
 export function usePosQueries(focusedDay: number, view: CalendarView, activeTableId?: string) {
-  const { isService, hasWeightInput } = useClusterFeatures();
+  const prefs = usePreferences();
+  const cluster = prefs.cluster;
+  const isService = cluster === "service";
+  const hasWeightInput = cluster === "personnalise" && prefs.customUnitType === "weight";
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,

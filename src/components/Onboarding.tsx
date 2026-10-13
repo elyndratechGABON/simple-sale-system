@@ -19,29 +19,19 @@ import {
   ArrowRight,
   Beer,
   Check,
-  Check as CheckIcon,
   ChefHat,
   ChevronLeft,
   ChevronRight,
   CloudOff,
   Coffee,
   EyeOff,
-  FileText,
   HardDrive,
-  Key,
-  KeyRound,
   Package,
   Palette,
   PartyPopper,
   Plus,
-  Scale,
   ScanLine,
-  Scissors,
   Shield,
-  Shirt,
-  ShoppingBag,
-  ShoppingBasket,
-  Sparkles,
   Store,
   Users,
   UtensilsCrossed,
@@ -52,10 +42,8 @@ import {
   CLUSTER_MAP,
   getPreferences,
   savePreferences,
-  SUB_CATEGORY_LABELS,
   WORKFLOW_DESCRIPTIONS,
   type ClusterId,
-  type SubCategory,
 } from "@/lib/settings";
 import {
   addProduct,
@@ -83,15 +71,10 @@ import { cn } from "@/lib/utils";
 /* ── Icon map ────────────────────────────────────────────────────────────── */
 
 const ICON_MAP: Record<string, typeof Store> = {
-  ShoppingBag: ShoppingBasket,
   ChefHat: UtensilsCrossed,
   Coffee: Beer,
   Scissors: Palette,
-  Shirt: Shirt,
-  Weight: Scale,
-  Store: Store,
   Sparkles: Wand2,
-  KeyRound: Key,
 };
 
 function resolveIcon(name: string): typeof Store {
@@ -99,11 +82,6 @@ function resolveIcon(name: string): typeof Store {
 }
 
 /* ── Phase 1 : SetupWizard ───────────────────────────────────────────────── */
-
-const MAGASIN_SUBS = Object.entries(SUB_CATEGORY_LABELS).map(([id, v]) => ({
-  id: id as SubCategory,
-  ...v,
-}));
 
 export function SetupWizard({
   onComplete,
@@ -145,7 +123,6 @@ export function SetupWizard({
     }
     return null;
   });
-  const [selectedSubCategory, setSelectedSubCategory] = useState<SubCategory | null>(null);
   // Cluster Personnalisé : domaine d'activité libre + mode de stock choisi.
   const [customDomain, setCustomDomain] = useState("");
   const [customStockChoice, setCustomStockChoice] = useState<"unit" | "weight" | null>(null);
@@ -229,7 +206,6 @@ export function SetupWizard({
         setQuarter(shop.quarter ?? "");
         if (shop.cluster) {
           setSelectedCluster(shop.cluster);
-          setSelectedSubCategory(shop.subCategory ?? null);
           setCustomDomain(shop.customDomain ?? "");
           setCustomStockChoice(shop.customUnitType ?? null);
         }
@@ -250,7 +226,6 @@ export function SetupWizard({
   }
 
   const clusterConfig = selectedCluster ? CLUSTER_MAP[selectedCluster] : null;
-  const isMagasin = selectedCluster === "magasin";
 
   useEffect(() => {
     const prefs = getPreferences();
@@ -351,7 +326,7 @@ export function SetupWizard({
         deviceId: identity.deviceId,
         shopId: identity.shopId,
         storeName: store,
-        cluster: selectedCluster ?? "retail",
+        cluster: selectedCluster ?? "restaurant",
       });
     }
 
@@ -362,8 +337,7 @@ export function SetupWizard({
       phone: phone.trim(),
       quarter: quarter.trim(),
       ownerName: ownerName.trim(),
-      cluster: selectedCluster ?? "retail",
-      subCategory: isMagasin ? (selectedSubCategory ?? undefined) : undefined,
+      cluster: selectedCluster ?? "restaurant",
       customDomain: selectedCluster === "personnalise" ? customDomain.trim() : "",
       customUnitType:
         selectedCluster === "personnalise" ? (customStockChoice ?? "unit") : undefined,
@@ -377,8 +351,8 @@ export function SetupWizard({
   }
 
   // Étapes visuelles : 0=confidentialité, 1=nom, 2=compte (create/join + identifiants),
-  // 3=coordonnées commerce, 4=secteur, 5=sous-cat magasin (si besoin).
-  const totalSteps = isMagasin ? 6 : 5;
+  // 3=coordonnées du commerce, 4=secteur.
+  const totalSteps = 5;
 
   function canNext(): boolean {
     if (step === 0) return privacyAccepted;
@@ -400,7 +374,6 @@ export function SetupWizard({
         return customDomain.trim().length > 0 && customStockChoice !== null;
       return true;
     }
-    if (step === 5 && isMagasin) return selectedSubCategory !== null;
     return true;
   }
 
@@ -627,22 +600,10 @@ export function SetupWizard({
             title="Quel type d'activité gérez-vous ?"
             description="Choisissez votre secteur. L'application s'adaptera automatiquement."
           >
-            {/* Candidats regroupés par affinité : alimentation à gauche de la
-                restauration, bar à gauche des coiffeurs, boutique à gauche du magasin,
-                boucherie à gauche de la location d'actifs. Personnalisé occupe TOUTE la
-                largeur en bas — une vraie carte pleine, pas une case isolée. */}
+            {/* Les 4 clusters actifs. Personnalisé occupe TOUTE la largeur en bas —
+                une vraie carte pleine, pas une case isolée. */}
             <div className="grid grid-cols-2 gap-2">
-              {[
-                "retail",
-                "restaurant",
-                "bar",
-                "service",
-                "clothing",
-                "magasin",
-                "weight",
-                "location",
-                "personnalise",
-              ].map((id) => {
+              {["restaurant", "bar", "service", "personnalise"].map((id) => {
                 const c = CLUSTER_MAP[id as ClusterId];
                 const Icon = resolveIcon(c.icon);
                 const active = selectedCluster === c.id;
@@ -778,36 +739,6 @@ export function SetupWizard({
             )}
           </StepShell>
         )}
-
-        {/* Étape 5 : Sous-catégorie magasin (conditionnel) */}
-        {step === 5 && isMagasin && (
-          <StepShell
-            icon={ShoppingBasket}
-            title="Type de magasin"
-            description="Précisez votre activité pour adapter les champs."
-          >
-            <div className="grid grid-cols-2 gap-2">
-              {MAGASIN_SUBS.map((sub) => (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={() => setSelectedSubCategory(sub.id)}
-                  aria-pressed={selectedSubCategory === sub.id}
-                  className={cn(
-                    "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
-                    selectedSubCategory === sub.id
-                      ? "border-primary bg-accent ring-1 ring-primary"
-                      : "bg-card hover:border-primary/50",
-                  )}
-                >
-                  <span className="text-lg">{sub.emoji}</span>
-                  <span className="font-medium">{sub.label}</span>
-                  <span className="text-xs text-muted-foreground">{sub.description}</span>
-                </button>
-              ))}
-            </div>
-          </StepShell>
-        )}
       </div>
 
       {/* Navigation */}
@@ -853,8 +784,7 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const cluster = prefs.cluster;
   const config = CLUSTER_MAP[cluster];
   // Personnalisé + stock au kilo = même comportement que le cluster boucherie.
-  const sellsByWeight =
-    cluster === "weight" || (cluster === "personnalise" && prefs.customUnitType === "weight");
+  const sellsByWeight = cluster === "personnalise" && prefs.customUnitType === "weight";
 
   const [subStep, setSubStep] = useState<TutorialStep>("confirm");
   const [addedCount, setAddedCount] = useState(0);
@@ -865,11 +795,10 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const isServiceCluster = cluster === "service";
   const addingProduct = isServiceCluster && serviceMode === "produit";
 
-  // Variantes dynamiques — applicable à tout produit (vêtements, régables, etc.).
-  // `hasVariants` vient du cluster : seul `clothing` l'active aujourd'hui. Le bloc était
-  // sans condition — l'épicier voyait « taille, couleur » sur sa sauce.
+  // Variantes dynamiques — applicable à tout produit (tailles, couleurs, etc.).
+  // `hasVariants` vient du cluster ; tous les clusters actuels le laissent à false.
   const [variants, setVariants] = useState<{ name: string; price: string; stock: string }[]>([]);
-  const showVariants = cluster === "clothing";
+  const showVariants = config.stock.hasVariants;
 
   // Formulaire produit
   const [productName, setProductName] = useState("");
@@ -878,12 +807,12 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   const [productCategory, setProductCategory] = useState("");
 
   // Configuration du tutoriel selon le cluster
-  const tutorialConfig = getTutorialConfig(cluster, prefs.subCategory);
+  const tutorialConfig = getTutorialConfig(cluster);
 
   async function handleLoadDemo() {
     setLoadingDemo(true);
     try {
-      const count = await loadDemoData(cluster, prefs.subCategory);
+      const count = await loadDemoData(cluster);
       setAddedCount((c) => c + count);
       toast.success(`${count} produits de démo chargés`);
       setSubStep("done");
@@ -963,16 +892,14 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
   // Ajout de produits
   if (subStep === "add") {
     // Copie entièrement pilotée par le cluster — et par le mode choisi dans un salon :
-    //   - bar → boissons, boucherie → prix au kg, coiffeur → prestation sans stock,
+    //   - bar → boissons, prix au kg si stock au poids, coiffeur → prestation sans stock,
     //     puis produit de beauté avec stock si le salon vend aussi en boutique.
     const priceLabel =
-      cluster === "location"
-        ? "Prix de location (FCFA)"
-        : isServiceCluster && !addingProduct
-          ? "Prix de la prestation"
-          : sellsByWeight
-            ? "Prix au kg (FCFA)"
-            : "Prix de vente (FCFA)";
+      isServiceCluster && !addingProduct
+        ? "Prix de la prestation"
+        : sellsByWeight
+          ? "Prix au kg (FCFA)"
+          : "Prix de vente (FCFA)";
     const showStockField = !tutorialConfig.isService || addingProduct;
     const showCategoryField = tutorialConfig.showCategory || addingProduct;
     const productLabel = addingProduct ? "Nom du produit" : tutorialConfig.productLabel;
@@ -1224,7 +1151,7 @@ export function ClusterTutorial({ onComplete }: { onComplete: () => void }) {
 
 /* ── Configuration du tutoriel par cluster ───────────────────────────────── */
 
-function getTutorialConfig(cluster: ClusterId, subCategory?: SubCategory) {
+function getTutorialConfig(cluster: ClusterId) {
   const base = {
     defaultCategory: "",
     productLabel: "Nom du produit",
@@ -1273,55 +1200,6 @@ function getTutorialConfig(cluster: ClusterId, subCategory?: SubCategory) {
         isService: true,
         finalCtaLabel: "Enregistrer ma première prestation",
       };
-    case "location":
-      return {
-        ...base,
-        welcomeMessage: "Enregistrez les actifs que vous louez (chaises, tentes, véhicules…).",
-        ctaLabel: "Ajouter mes actifs",
-        addTitle: "Ajoutez un actif à louer",
-        addDescription: "Nom, prix de location et nombre d'exemplaires disponibles.",
-        productLabel: "Nom de l'actif",
-        productPlaceholder: "Ex : Chaise en plastique, Tente 6×12m",
-        categoryPlaceholder: "Ex : Événementiel, Équipement, Véhicules",
-        finalCtaLabel: "Faire ma première location",
-      };
-    case "clothing":
-      return {
-        ...base,
-        welcomeMessage: "Ajoutez vos vêtements et accessoires.",
-        ctaLabel: "Ajouter mes produits",
-        addTitle: "Ajoutez un vêtement ou accessoire",
-        addDescription: "Nom, prix et catégorie.",
-        productLabel: "Nom du produit",
-        productPlaceholder: "Ex : Pagne wax",
-        categoryPlaceholder: "Ex : Vêtements, Accessoires, Chaussures",
-        finalCtaLabel: "Faire ma première vente",
-      };
-    case "weight":
-      return {
-        ...base,
-        welcomeMessage: "Enregistrez vos produits et leurs prix au kilogramme.",
-        ctaLabel: "Ajouter mes produits",
-        addTitle: "Ajoutez un produit",
-        addDescription: "Nom, prix au kg et stock initial.",
-        productLabel: "Nom du produit",
-        productPlaceholder: "Ex : Viande de bœuf",
-        categoryPlaceholder: "Ex : Viandes, Poissons",
-        finalCtaLabel: "Faire ma première vente",
-      };
-    case "magasin":
-      return {
-        ...base,
-        welcomeMessage: `Ajoutez vos produits${subCategory ? ` (${SUB_CATEGORY_LABELS[subCategory]?.label})` : ""}.`,
-        ctaLabel: "Ajouter mes produits",
-        addTitle: "Ajoutez un produit",
-        addDescription: "Nom, prix et stock.",
-        productLabel: "Nom du produit",
-        productPlaceholder: subCategory === "electronics" ? "Ex : iPhone 15" : "Ex : Canapé cuir",
-        categoryPlaceholder: "Ex : Électronique, Meubles",
-        finalCtaLabel: "Faire ma première vente",
-      };
-    case "retail":
     default:
       return {
         ...base,

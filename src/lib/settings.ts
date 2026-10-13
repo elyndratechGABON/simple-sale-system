@@ -19,31 +19,17 @@ const KEY = "pos_preferences";
 export type BusinessType = "snack" | "restaurant";
 
 /** Identifiant unique d'un cluster métier. */
-export type ClusterId =
-  | "retail"
-  | "restaurant"
-  | "bar"
-  | "service"
-  | "clothing"
-  | "weight"
-  | "magasin"
-  | "personnalise"
-  | "location";
-
-/** Sous-catégorie du cluster "Magasin" — détermine les champs spécifiques dans le formulaire produit. */
-export type SubCategory = "electronics" | "appliance" | "furniture" | "hardware_store";
+export type ClusterId = "restaurant" | "bar" | "service" | "personnalise";
 
 /**
- * Les 6 grands workflows métier qui pilotent l'expérience utilisateur.
+ * Les 4 grands workflows métier qui pilotent l'expérience utilisateur.
  * Le cluster choisi au onboarding active un workflow spécifique.
  */
 export type WorkflowType =
-  | "direct" // Épicerie, boutique, magasin → Produit → Panier → Paiement → Terminé
+  | "direct" // Personnalisé → Produit → Panier → Paiement → Terminé
   | "order-prep" // Restaurant, fast-food → Commande → Préparation → Servie → Encaissé
   | "open-tab" // Bar avec addition → Ouvrir → Ajouter → Encaisser → Clôturer
-  | "service" // Coiffeur, salon → Prestation → Réalisation → Paiement → Terminé
-  | "weight" // Boucherie → Produit → Poids/Quantité → Calcul → Paiement → Terminé
-  | "rental"; // Location d'actifs → Actif → Période → Caution → Retour
+  | "service"; // Coiffeur, salon → Prestation → Réalisation → Paiement → Terminé
 
 /* ─── Configuration d'un cluster ──────────────────────────────────────────── */
 
@@ -69,12 +55,6 @@ export interface ClusterStock {
 export interface ClusterFlags {
   allowServiceBooking: boolean;
   hasWeightInput: boolean;
-  /** Location : actifs avec disponibilité, caution, pénalités de retard. */
-  hasRentalBooking: boolean;
-  /** Location : caution obligatoire au moment de la réservation. */
-  hasDeposit: boolean;
-  /** Location : vue calendrier de disponibilité en temps réel. */
-  hasAvailability: boolean;
 }
 
 export interface ClusterConfig {
@@ -100,8 +80,6 @@ export interface Preferences {
   businessType: BusinessType;
   /** Profil métier déterminant le comportement de l'interface. */
   cluster: ClusterId;
-  /** Sous-catégorie du cluster Magasin (optionnel). */
-  subCategory?: SubCategory;
   /** Domaine d'activité libre saisi pour le cluster Personnalisé. */
   customDomain: string;
   /** Stock au kilo ou à l'unité, choisi à l'onboarding pour le cluster Personnalisé. */
@@ -157,7 +135,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   // Restaurant + tables = le comportement historique de l'application (plan de salle
   // toujours affiché) : les comptes déjà enregistrés ne changent pas de mode.
   businessType: "restaurant",
-  cluster: "retail",
+  cluster: "restaurant",
   customDomain: "",
   tablesEnabled: false,
   tables: ["1", "2", "3", "4", "5", "6"],
@@ -175,36 +153,13 @@ export const DEFAULT_PREFERENCES: Preferences = {
 };
 
 /**
- * Registre complet des 8 clusters métier.
+ * Registre complet des 4 clusters métier.
  *
- * Les 8 sont `active: true` : retail, restaurant, bar, service, clothing, weight,
- * magasin, personnalise. Tous apparaissent dans l'UI d'onboarding et de réglages.
+ * Les 4 sont `active: true` : restaurant, bar, service, personnalise.
+ * Tous apparaissent dans l'UI d'onboarding et de réglages.
  */
 export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
-  /* ── V1 : clusters actifs ─────────────────────────────────────────────── */
-  retail: {
-    id: "retail",
-    label: "Épicerie / Alimentation",
-    icon: "ShoppingBag",
-    description:
-      "Produits du quotidien, stocks, ventes directes. Encaissez et suivez votre activité.",
-    workflowType: "direct",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
-    stock: {
-      unitType: "unit",
-      hasVariants: false,
-      showCostPrice: true,
-      hasSerialNumber: false,
-    },
-    flags: {
-      allowServiceBooking: false,
-      hasWeightInput: false,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
-    },
-    active: true,
-  },
+  /* ── Clusters actifs ─────────────────────────────────────────────── */
   restaurant: {
     id: "restaurant",
     label: "Restaurant / Fast-food",
@@ -222,9 +177,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     flags: {
       allowServiceBooking: false,
       hasWeightInput: false,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
     },
     active: true,
   },
@@ -244,9 +196,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     flags: {
       allowServiceBooking: false,
       hasWeightInput: false,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
     },
     active: true,
   },
@@ -267,76 +216,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     flags: {
       allowServiceBooking: true,
       hasWeightInput: false,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
-    },
-    active: true,
-  },
-  clothing: {
-    id: "clothing",
-    label: "Boutique (Vêtements)",
-    icon: "Shirt",
-    description: "Vêtements, pagnes, chaussures, accessoires. Variantes taille et couleur.",
-    workflowType: "direct",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
-    stock: {
-      unitType: "unit",
-      hasVariants: true,
-      showCostPrice: true,
-      hasSerialNumber: false,
-    },
-    flags: {
-      allowServiceBooking: false,
-      hasWeightInput: false,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
-    },
-    active: true,
-  },
-  magasin: {
-    id: "magasin",
-    label: "Magasin spécialisé",
-    icon: "Store",
-    description: "Électronique, meubles, quincaillerie. Choisissez votre sous-catégorie.",
-    workflowType: "direct",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
-    stock: {
-      unitType: "mixed",
-      hasVariants: false,
-      showCostPrice: true,
-      hasSerialNumber: false,
-    },
-    flags: {
-      allowServiceBooking: false,
-      hasWeightInput: false,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
-    },
-    active: true,
-  },
-  weight: {
-    id: "weight",
-    label: "Boucherie / Charcuterie",
-    icon: "Weight",
-    description:
-      "Vente au poids, stock en kg. Saisissez le poids, le prix se calcule automatiquement.",
-    workflowType: "weight",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
-    stock: {
-      unitType: "weight",
-      hasVariants: false,
-      showCostPrice: true,
-      hasSerialNumber: false,
-    },
-    flags: {
-      allowServiceBooking: false,
-      hasWeightInput: true,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
     },
     active: true,
   },
@@ -358,32 +237,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     flags: {
       allowServiceBooking: false,
       hasWeightInput: false,
-      hasRentalBooking: false,
-      hasDeposit: false,
-      hasAvailability: false,
-    },
-    active: true,
-  },
-  location: {
-    id: "location",
-    label: "Location d'actifs",
-    icon: "KeyRound",
-    description:
-      "Location de chaises, tentes, voitures, maisons. Gérez les actifs, les périodes et les cautions.",
-    workflowType: "rental",
-    workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
-    stock: {
-      unitType: "unit",
-      hasVariants: false,
-      showCostPrice: true,
-      hasSerialNumber: false,
-    },
-    flags: {
-      allowServiceBooking: true,
-      hasWeightInput: false,
-      hasRentalBooking: true,
-      hasDeposit: true,
-      hasAvailability: true,
     },
     active: true,
   },
@@ -404,8 +257,7 @@ export function getPreferences(): Preferences {
       workspaceName: parsed.workspaceName?.trim() || DEFAULT_PREFERENCES.workspaceName,
       onboarded: parsed.onboarded === true,
       businessType: normalizeBusinessType(parsed.businessType),
-      cluster: migrateCluster(parsed.cluster, parsed.businessType),
-      subCategory: normalizeSubCategory(parsed.subCategory),
+      cluster: normalizeCluster(parsed.cluster),
       customDomain: typeof parsed.customDomain === "string" ? parsed.customDomain.trim() : "",
       customUnitType: normalizeCustomUnitType(parsed.customUnitType),
       // `!== false` et non `=== true` : un enregistrement écrit avant l'introduction de
@@ -471,54 +323,9 @@ function normalizeCluster(value: unknown): ClusterId {
   return DEFAULT_PREFERENCES.cluster;
 }
 
-/** Migre l'ancien `businessType` vers le nouveau `cluster`. */
-function migrateCluster(cluster: unknown, businessType: unknown): ClusterId {
-  if (cluster !== undefined) return normalizeCluster(cluster);
-  // Migration depuis l'ancien système
-  if (businessType === "snack") return "retail";
-  if (businessType === "restaurant") return "restaurant";
-  return DEFAULT_PREFERENCES.cluster;
-}
-
-const VALID_SUB_CATEGORIES: SubCategory[] = [
-  "electronics",
-  "appliance",
-  "furniture",
-  "hardware_store",
-];
-
-function normalizeSubCategory(value: unknown): SubCategory | undefined {
-  if (typeof value === "string" && (VALID_SUB_CATEGORIES as string[]).includes(value))
-    return value as SubCategory;
-  return undefined;
-}
-
 function normalizeCustomUnitType(value: unknown): "unit" | "weight" | undefined {
   return value === "unit" || value === "weight" ? value : undefined;
 }
-
-/** Libellés des sous-catégories Magasin pour l'onboarding. */
-export const SUB_CATEGORY_LABELS: Record<
-  SubCategory,
-  { label: string; emoji: string; description: string }
-> = {
-  electronics: {
-    label: "Électronique",
-    emoji: "📱",
-    description: "Téléphones, ordinateurs, tablettes",
-  },
-  appliance: {
-    label: "Électroménager",
-    emoji: "🧊",
-    description: "Réfrigérateurs, micro-ondes, ventilateurs",
-  },
-  furniture: { label: "Meubles", emoji: "🛋️", description: "Canapés, tables, lits, rangements" },
-  hardware_store: {
-    label: "Quincaillerie",
-    emoji: "🔧",
-    description: "Outils, tenailles, ciseaux, peignes",
-  },
-};
 
 /** Description du workflow pour le tutoriel onboarding. */
 export const WORKFLOW_DESCRIPTIONS: Record<WorkflowType, { title: string; steps: string[] }> = {
@@ -537,17 +344,5 @@ export const WORKFLOW_DESCRIPTIONS: Record<WorkflowType, { title: string; steps:
   service: {
     title: "Prestation",
     steps: ["Choisissez le client", "Sélectionnez la prestation", "Réalisez, puis encaissez"],
-  },
-  weight: {
-    title: "Vente au poids",
-    steps: ["Choisissez le produit", "Saisissez le poids", "Le prix se calcule, encaissez"],
-  },
-  rental: {
-    title: "Location d'actifs",
-    steps: [
-      "Sélectionnez l'actif",
-      "Définissez la période et la caution",
-      "Remettez et encaissez, puis gérez le retour",
-    ],
   },
 };

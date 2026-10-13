@@ -37,7 +37,6 @@ import {
 import { isWeightProduct, filterQtyInput, parseQty } from "@/lib/pos-quantity";
 import { formatFCFA, formatTime } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
-import { useClusterFeatures } from "@/hooks/use-cluster-features";
 import { savePreferences } from "@/lib/settings";
 import { PinDialog } from "@/components/PinDialog";
 import { playSuccessChime } from "@/lib/success-sound";
@@ -110,7 +109,13 @@ function PosPage() {
   const { notifyOwner } = useSaleTrigger();
   const qc = useQueryClient();
   const { tables: tableLabels } = usePreferences();
-  const features = useClusterFeatures();
+  const prefs = usePreferences();
+  const cluster = prefs.cluster;
+  const isService = cluster === "service";
+  const hasTables = cluster === "restaurant" || cluster === "bar";
+  // Le cycle de service « Préparer / Prêt / Servir » ne concerne que les cuisines :
+  // une addition de bar est servie dès qu'elle est versée, sans étape intermédiaire.
+  const isOrderPrep = cluster === "restaurant";
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
@@ -300,13 +305,13 @@ function PosPage() {
   const filtered = useMemo(() => {
     let list = products;
     // Cluster service : filtrer par type (prestations vs produits)
-    if (features.isService) {
+    if (isService) {
       list = products.filter((p) =>
         serviceTab === "prestations" ? p.type === "service" : p.type !== "service",
       );
     }
     // Filtre par catégorie (tous clusters sauf service)
-    if (!features.isService && filter !== "Tous") {
+    if (!isService && filter !== "Tous") {
       list = list.filter((p) => p.category === filter);
     }
     // Recherche par nom : la grille se resserre pendant la frappe, sans toucher aux états.
@@ -315,7 +320,7 @@ function PosPage() {
       list = list.filter((p) => p.name.toLowerCase().includes(q));
     }
     return list;
-  }, [products, filter, search, features.isService, serviceTab]);
+  }, [products, filter, search, isService, serviceTab]);
 
   /** Change de destination et remet à zéro tout ce qui n'a de sens que pour la précédente. */
   function selectTarget(next: Target) {
@@ -457,7 +462,7 @@ function PosPage() {
           directement, un appui long sur une table occupée la libère.
           Masqué pour un commerce sans système de tables (snack/bar) : la caisse se réduit
           alors au comptoir et à l'encaissement immédiat. */}
-      {features.hasTables && (
+      {hasTables && (
         <div className="space-y-2">
           <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-8">
             {floorPlan.map(({ label, table }) => (
@@ -536,7 +541,7 @@ function PosPage() {
             `sticky` + `max-h` + défilement interne : la colonne suit le défilement de la
             page et la liste reste lisible sans faire défiler toute la fenêtre. */}
         <aside className="hidden xl:block">
-          {!features.isService && categories.length > 0 && (
+          {!isService && categories.length > 0 && (
             <section className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-4">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Catégories
@@ -567,13 +572,9 @@ function PosPage() {
               titre ou de s'empiler en salade de puces. */}
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-bold sm:text-xl">
-              {features.isService
-                ? serviceTab === "prestations"
-                  ? "Prestations"
-                  : "Produits"
-                : "Articles"}
+              {isService ? (serviceTab === "prestations" ? "Prestations" : "Produits") : "Articles"}
             </h2>
-            {features.isService && (
+            {isService && (
               <div className="flex gap-1">
                 <FilterChip
                   active={serviceTab === "prestations"}
@@ -605,7 +606,7 @@ function PosPage() {
           {/* Catégories : grille de cartes sous 1280 px. Au-dessus, elles vivent dans la
               colonne de gauche (xl:block) — sinon ce sont deux fois les mêmes boutons à
               l'écran. Mêmes `filter`, mêmes catégories, mêmes handlers : visuel seul. */}
-          {!features.isService && categories.length > 0 && (
+          {!isService && categories.length > 0 && (
             <section className="mt-4 xl:hidden">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Catégories
@@ -635,7 +636,7 @@ function PosPage() {
             <div className="chip-row bleed-x mt-5 py-1">
               {popular
                 .filter((p) =>
-                  features.isService
+                  isService
                     ? serviceTab === "prestations"
                       ? p.type === "service"
                       : p.type !== "service"
@@ -680,7 +681,7 @@ function PosPage() {
               // avant. Au-dessus, elle vit dans la colonne centrale entre Catégories et
               // Panier — donc elle perd une colonne de largeur réelle, et il faut la
               // décompter sinon les cartes tombent sous 150 px.
-              features.hasTables
+              hasTables
                 ? "grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4"
                 : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5",
             )}
@@ -731,8 +732,8 @@ function PosPage() {
                   <ProductForm
                     editing={null}
                     onClose={() => setCreateOpen(false)}
-                    defaultCategory={features.isService ? "Service" : undefined}
-                    defaultType={features.isService ? "service" : undefined}
+                    defaultCategory={isService ? "Service" : undefined}
+                    defaultType={isService ? "service" : undefined}
                   />
                 </Dialog>
                 <p className="text-sm text-muted-foreground">
@@ -870,7 +871,7 @@ function PosPage() {
                       <PosLine
                         key={l.key}
                         line={l}
-                        isService={features.isService}
+                        isService={isService}
                         onRemoveOne={removeOne}
                         onAddOne={addOneByKey}
                         onRemove={removeLineByKey}
@@ -990,7 +991,7 @@ function PosPage() {
               une tournée n'engage pas d'argent, encaisser clôt l'addition. */}
           {!activeTable ? (
             <>
-              {features.isService && lines.length > 0 && (
+              {isService && lines.length > 0 && (
                 <div className="space-y-1">
                   <label className="text-sm font-medium" htmlFor="client-name">
                     Nom du client

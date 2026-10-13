@@ -222,8 +222,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
                     ownerName: profile?.ownerName ?? prefs.ownerName ?? "",
                     phone: profile?.phone || prefs.phone || "",
                     quarter: profile?.location ?? prefs.quarter ?? "",
-                    cluster: prefs.cluster ?? "retail",
-                    subCategory: prefs.subCategory ?? undefined,
+                    cluster: prefs.cluster ?? "restaurant",
                     customDomain: prefs.customDomain ?? "",
                     customUnitType: prefs.customUnitType ?? "unit",
                     businessType:
