@@ -22,7 +22,6 @@ export type SaleInput = {
   payment_method: "cash" | "card" | "mobile_money";
   client_name?: string;
   client_id?: string;
-  expected_return_date?: number;
 };
 
 export function useSaleMutations(hooks: {

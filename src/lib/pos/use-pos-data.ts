@@ -10,8 +10,8 @@ import {
 import { MONTHS, rangeFor, type CalendarView } from "@/lib/reports/period";
 import { usePeriodData } from "@/hooks/use-period-data";
 import { usePreferences } from "@/hooks/use-preferences";
-import { computePeriodStats, computeWeightSales, computeAssetAgenda } from "@/lib/analytics";
-import type { PeriodStats, DayBucket, WeightSalesStats, AssetReminder } from "@/lib/analytics";
+import { computePeriodStats, computeWeightSales } from "@/lib/analytics";
+import type { PeriodStats, DayBucket, WeightSalesStats } from "@/lib/analytics";
 
 export function usePosQueries(focusedDay: number, view: CalendarView, activeTableId?: string) {
   const prefs = usePreferences();
@@ -82,11 +82,6 @@ export function usePosQueries(focusedDay: number, view: CalendarView, activeTabl
       ? (weightSales?.weightKg ?? 0) > 0
       : false;
 
-  const { byDay: assetEvents, agenda: assetAgenda } = useMemo(
-    () => computeAssetAgenda(products ?? [], Date.now()),
-    [products],
-  );
-
   const { data: tableItems = [] } = useQuery({
     queryKey: ["sale_items", activeTableId],
     queryFn: () => (activeTableId ? getSaleItems(activeTableId) : []),
@@ -110,7 +105,5 @@ export function usePosQueries(focusedDay: number, view: CalendarView, activeTabl
     weightSales,
     bestLabel,
     showSector,
-    assetEvents,
-    assetAgenda,
   };
 }

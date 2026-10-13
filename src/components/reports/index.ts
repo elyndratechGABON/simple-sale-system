@@ -3,7 +3,6 @@
 
 export { MonthGrid } from "./MonthGrid";
 export { WeekStrip, YearGrid } from "./grids";
-export { AssetReminders } from "./AssetReminders";
 export { SelectedDayCard } from "./SelectedDayCard";
 export { DayDetailContent } from "./DayDetailContent";
 export { Kpi, DayStat, RankRow } from "./primitives";

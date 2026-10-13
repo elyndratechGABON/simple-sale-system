@@ -106,27 +106,6 @@ export interface Product extends SyncFields {
    * le lisent `undefined`.
    */
   min_stock?: number;
-  // ── Location d'actifs (cluster 'location') ─────────────────────────────
-  /** true = actif de location, pas produit consommable. */
-  is_asset?: boolean;
-  /** Tarifs de location par unité de temps. Absent = pas de location. */
-  rental_pricing?: {
-    hour?: number;
-    day?: number;
-    week?: number;
-    month?: number;
-    year?: number;
-  };
-  /** Montant de caution par défaut pour cet actif. */
-  deposit_amount?: number;
-  /** Nombre total d'unités physiques de cet actif. */
-  total_units?: number;
-  /** Date de retour prévue (timestamp) pour l'actif loué. Absent = pas de suivi. */
-  return_date?: number;
-  /** Date de reprise prévue pour l'actif loué (retour du client). */
-  expected_return_date?: number;
-  /** Date de rappel pour le propriétaire (location/maintenance/révision). */
-  reminderDate?: number;
 }
 
 /**
@@ -297,50 +276,6 @@ export interface MonthlyOverview {
   stock_override: number | null;
   /** Complément de coût non suivi (achats dont le coût n'a jamais été renseigné). */
   cost_complement: number | null;
-  updated_at: number;
-}
-
-/**
- * Location d'actifs (cluster 'location'). Chaque enregistrement représente une location
- * en cours ou terminée. Le lien avec le produit (actif) est `asset_id` → `Product.id`.
- */
-export interface Rental {
-  id: string;
-  /** Référence vers le produit/actif (Product.id). */
-  asset_id: string;
-  /** Nom de l'actif au moment de la location (snapshot, résiste aux renommages). */
-  asset_name: string;
-  /** Nom du client. */
-  client_name: string;
-  /** Téléphone du client (optionnel). */
-  client_phone?: string;
-  /** Unité de tarification choisie par le vendeur. */
-  pricing_unit: "hour" | "day" | "week" | "month" | "year";
-  /** Tarif unitaire choisi (FCFA). */
-  price_per_unit: number;
-  /** Nombre d'unités louées (ex: 5 chaises). */
-  quantity: number;
-  /** Montant de la caution perçue (FCFA). */
-  deposit: number;
-  /** Timestamp début de la location. */
-  start_date: number;
-  /** Timestamp fin prévue de la location. */
-  expected_end_date: number;
-  /** Timestamp fin réelle (retour). Absent tant que pas retourné. */
-  actual_end_date?: number;
-  /** État de la location. */
-  status: "active" | "returned" | "overdue" | "cancelled";
-  /** État de l'actif au retour. */
-  condition_at_return?: "good" | "damaged" | "lost";
-  /** Pénalité de retard calculée (FCFA). */
-  late_fee?: number;
-  /** Montant de caution rendu au client (FCFA). */
-  deposit_refund?: number;
-  /** Notes libres. */
-  notes?: string;
-  /** Timestamp de création. */
-  created_at: number;
-  /** Timestamp de dernière mise à jour. */
   updated_at: number;
 }
 
@@ -546,7 +481,6 @@ export class PosDatabase extends Dexie {
   product_expenses!: Table<ProductExpense, number>;
   stock_movements!: Table<StockMovement, string>;
   day_closures!: Table<DayClosure, string>;
-  rentals!: Table<Rental, string>;
   closings!: Table<ClosingImport, string>;
   employee_history!: Table<EmployeeHistory, string>;
   catalogue_requests!: Table<CatalogueRequestPending, string>;
@@ -808,9 +742,10 @@ export class PosDatabase extends Dexie {
       day_closures: "id, closed_at",
     });
 
-    // Version 17 — location d'actifs (cluster 'location'). Le store `rentals` est neuf,
-    // rien à migrer. Indexé sur `asset_id` (查询某 actif 的 locations), `status` (查询
-    // 活跃/逾期 locations), et `start_date` / `expected_end_date` (calendrier).
+    // Version 17 — location d'actifs (abandonnée en v25). Le store `rentals` était neuf,
+    // rien à migrer. Il était indexé sur `asset_id`, `status`, `start_date` et
+    // `expected_end_date` (calendrier). Bloc conservé tel quel : le schéma d'une install
+    // neuve rejoue l'historique ; c'est `version(25)` qui retire le store.
     this.version(17).stores({
       products: "id, name, category, barcode, updated_at",
       sales: "id, timestamp, status, client_name, client_id, updated_at",
@@ -1091,6 +1026,18 @@ export class PosDatabase extends Dexie {
             delete (p as { expiryDate?: number }).expiryDate;
           });
       });
+
+    // Version 25 — SUPPRESSION DE LA LOCATION D'ACTIFS.
+    //
+    // Décision produit : le cluster 'location' disparaît. Le store `rentals` est purement
+    // abandonné — `null` le retire de Dexie (ses enregistrements avec). Aucun upgrade :
+    // il n'y a rien à reprendre, la location n'alimentait ni ventes, ni bénéfices.
+    //
+    // On ne touche PAS aux blocs de versions antérieures (une install neuve doit rejouer
+    // l'historique exact) ; c'est cette version terminale qui fait foi.
+    this.version(25).stores({
+      rentals: null,
+    });
   }
 }
 
@@ -1201,14 +1148,12 @@ export async function listProducts(): Promise<Product[]> {
  *
  * Sans cette normalisation, un produit dont le stock n'a été saisi que dans les variantes
  * reste à 0 : l'alerte « rupture de stock » se déclenche alors que ses variantes sont en
- * rayon, et la pastille « stock faible » colle sur la carte en caisse. Un bien de location
- * (`is_asset`) fait exception : son stock est le nombre d'unités physiques (`total_units`),
- * pas une somme de variantes.
+ * rayon, et la pastille « stock faible » colle sur la carte en caisse.
  */
-export function normalizeVariantStock<
-  T extends { stock: number; is_asset?: boolean; variants?: ProductVariant[] },
->(p: T): T {
-  if (!p.variants?.length || p.is_asset) return p;
+export function normalizeVariantStock<T extends { stock: number; variants?: ProductVariant[] }>(
+  p: T,
+): T {
+  if (!p.variants?.length) return p;
   return { ...p, stock: p.variants.reduce((total, v) => total + (v.stock ?? 0), 0) };
 }
 
@@ -1540,7 +1485,6 @@ export async function createSale(input: {
   customers_count?: number;
   client_name?: string;
   client_id?: string;
-  expected_return_date?: number;
   payment_method?: PaymentMethod;
   /** Réduction en FCFA, bornée au sous-total. */
   discount?: number;
@@ -1577,7 +1521,6 @@ export async function createSale(input: {
     payment_method: method,
     ...(input.client_name ? { client_name: input.client_name } : {}),
     ...(input.client_id ? { client_id: input.client_id } : {}),
-    ...(input.expected_return_date ? { expected_return_date: input.expected_return_date } : {}),
     ...(sellerLabel ? { seller_name: sellerLabel, seller_device_id: identity.deviceId } : {}),
     ...touch(),
   };
@@ -2268,89 +2211,6 @@ export async function deleteSubscription(id: string): Promise<void> {
   const sub = await db.subscriptions.get(id);
   if (!sub) return;
   await db.subscriptions.put({ ...sub, ...touch(), deleted_at: Date.now() });
-}
-
-// ---------- Locations d'actifs (cluster 'location') ----------
-// CRUD pour les locations : création, mise à jour (retour), suppression logique.
-
-export async function addRental(
-  r: Omit<Rental, "id" | "created_at" | "updated_at">,
-): Promise<Rental> {
-  const now = Date.now();
-  const rental: Rental = { ...r, id: uid(), created_at: now, updated_at: now };
-  await getDB().rentals.put(rental);
-  return rental;
-}
-
-export async function updateRental(r: Rental): Promise<void> {
-  await getDB().rentals.put({ ...r, updated_at: Date.now() });
-}
-
-export async function getRental(id: string): Promise<Rental | undefined> {
-  return getDB().rentals.get(id);
-}
-
-export async function listActiveRentals(): Promise<Rental[]> {
-  return getDB().rentals.where("status").equals("active").sortBy("expected_end_date");
-}
-
-export async function listOverdueRentals(): Promise<Rental[]> {
-  return getDB().rentals.where("status").equals("overdue").sortBy("expected_end_date");
-}
-
-export async function listAllRentals(): Promise<Rental[]> {
-  return getDB().rentals.orderBy("created_at").reverse().toArray();
-}
-
-/** Locations qui COMMENCENT dans la fenêtre [`from`, `to[ — le revenu d'une location
- *  compte le jour où elle est prise, pas celui où elle se termine. */
-export async function listRentals(from: number, to: number): Promise<Rental[]> {
-  return getDB().rentals.where("start_date").between(from, to, true, false).toArray();
-}
-
-/**
- * Vérifie la disponibilité d'un actif sur une période donnée.
- * Renvoie le nombre d'unités encore disponibles.
- */
-export async function getAssetAvailability(
-  assetId: string,
-  startDate: number,
-  endDate: number,
-): Promise<{ available: number; total: number; conflicting: number }> {
-  const db = getDB();
-  const product = await db.products.get(assetId);
-  const total = product?.total_units ?? product?.stock ?? 0;
-  if (!Number.isFinite(total)) return { available: Infinity, total: Infinity, conflicting: 0 };
-
-  // Locations qui se chevauchent avec la période demandée
-  const overlapping = await db.rentals
-    .where("asset_id")
-    .equals(assetId)
-    .filter(
-      (r) => r.status === "active" && r.start_date < endDate && r.expected_end_date > startDate,
-    )
-    .toArray();
-
-  const conflicting = overlapping.reduce((sum, r) => sum + r.quantity, 0);
-  return { available: Math.max(0, total - conflicting), total, conflicting };
-}
-
-/**
- * Marque comme overdue les locations dont la date de fin prévue est dépassée
- * et qui ne sont pas encore retournées. Appelée au démarrage de l'app.
- */
-export async function markOverdueRentals(): Promise<number> {
-  const db = getDB();
-  const now = Date.now();
-  const active = await db.rentals.where("status").equals("active").toArray();
-  const overdue = active.filter((r) => r.expected_end_date < now);
-  if (overdue.length === 0) return 0;
-  await db.transaction("rw", db.rentals, async () => {
-    for (const r of overdue) {
-      await db.rentals.put({ ...r, status: "overdue", updated_at: now });
-    }
-  });
-  return overdue.length;
 }
 
 /** Profil boutique (licence) -------------------------

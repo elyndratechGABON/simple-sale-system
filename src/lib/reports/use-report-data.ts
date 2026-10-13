@@ -8,10 +8,8 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listProducts, type Product } from "@/lib/db";
 import {
-  computeAssetAgenda,
   computePeriodStats,
   computeWeightSales,
-  type AssetReminder,
   type DayBucket,
   type PeriodStats,
   type WeightSalesStats,
@@ -83,15 +81,6 @@ export function useReportData(focusedDay: number, view: CalendarView) {
     [data, products],
   );
 
-  /* Rappel des actifs : deux dates distinctes sur un même produit —
-   * `expected_return_date` (retour du client) et `reminderDate` (note du
-   * propriétaire). `computeAssetAgenda` est la source unique : le calendrier et
-   * la liste ne peuvent donc pas diverger sur ce qui compte comme échéance. */
-  const { byDay: assetEvents, agenda: assetAgenda } = useMemo(
-    () => computeAssetAgenda(products ?? [], Date.now()),
-    [products],
-  );
-
   // Le secteur affiché dépend du CLUSTER (`isService` / `hasWeightInput`), que ce hook
   // ignore volontairement : il ne connaît que les données. Le shell tranche avec sa
   // règle d'origine — service s'affiche s'il y a eu une vente, boucherie s'il y a eu du
@@ -102,8 +91,6 @@ export function useReportData(focusedDay: number, view: CalendarView) {
     months,
     weightSales: weightSales as WeightSalesStats | null,
     products: (products ?? []) as Product[],
-    assetEvents: assetEvents as Map<number, AssetReminder[]>,
-    assetAgenda,
     bestLabel: bestLabelOf(view, stats, months),
   };
 }

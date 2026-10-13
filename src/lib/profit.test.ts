@@ -68,10 +68,9 @@ describe("estimateStockValue", () => {
     expect(estimateStockValue(products)).toEqual({ value: 800, known: 2, total: 2 });
   });
 
-  it("exclut services, actifs et stock illimité", () => {
+  it("exclut services et stock illimité", () => {
     const products = [
       prod({ id: "svc", type: "service", cost: 999, stock: 5 }),
-      prod({ id: "asset", is_asset: true, cost: 999, stock: 2 }),
       prod({ id: "open", cost: 100, stock: Number.POSITIVE_INFINITY }),
     ];
     expect(estimateStockValue(products)).toEqual({ value: 0, known: 0, total: 0 });

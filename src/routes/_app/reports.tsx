@@ -28,7 +28,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  AssetReminders,
   DayDetailContent,
   DayDetailDialog,
   Kpi,
@@ -57,10 +56,7 @@ function ReportsPage() {
   const isService = cluster === "service";
   const hasWeightInput = cluster === "personnalise" && prefs.customUnitType === "weight";
 
-  const { stats, days, months, weightSales, assetEvents, assetAgenda, bestLabel } = useReportData(
-    focusedDay,
-    view,
-  );
+  const { stats, days, months, weightSales, bestLabel } = useReportData(focusedDay, view);
 
   // Règle d'origine, conservée mot pour mot : service s'affiche s'il y a eu une vente
   // sur la période, boucherie s'il y a eu du poids, rien sinon. Une carte vide
@@ -148,7 +144,6 @@ function ReportsPage() {
             <MonthGrid
               month={startOfMonth(focusedDay).getTime()}
               days={days}
-              assetEvents={assetEvents}
               selected={focusedDay}
               onSelect={setFocusedDay}
             />
@@ -179,10 +174,6 @@ function ReportsPage() {
             />
           )}
         </div>
-
-        {/* Retours d'actifs : en retard d'abord, donc le plus urgent en haut.
-            Passe avant le détail du jour, c'est une échéance, pas une stat. */}
-        {assetAgenda.length > 0 && <AssetReminders rows={assetAgenda} onSelect={setFocusedDay} />}
 
         {/* Détail de la journée : sous le calendrier sur mobile, à sa droite dès que
             la largeur le permet (§18/§19 — une seule interface, pas deux). */}

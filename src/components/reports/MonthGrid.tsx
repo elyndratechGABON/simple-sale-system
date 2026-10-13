@@ -5,8 +5,7 @@
 
 import { useMemo } from "react";
 import { startOfDay } from "date-fns";
-import type { AssetReminder, DayBucket } from "@/lib/analytics";
-import { dayKey } from "@/lib/analytics";
+import type { DayBucket } from "@/lib/analytics";
 import { formatDay, formatFCFA, formatFCFACompact } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,13 +14,11 @@ import { WEEKDAYS } from "@/lib/reports/period";
 export function MonthGrid({
   month,
   days,
-  assetEvents,
   selected,
   onSelect,
 }: {
   month: number;
   days: Map<number, DayBucket>;
-  assetEvents: Map<number, AssetReminder[]>;
   selected: number;
   onSelect: (ts: number) => void;
 }) {
@@ -60,23 +57,12 @@ export function MonthGrid({
             const isSel = ts === selected;
             const ratio = max > 0 ? revenue / max : 0;
             const hot = ratio > 0.75;
-            const asset = assetEvents.get(ts);
-            const retours = asset?.filter((r) => r.kind === "retour").length ?? 0;
-            const rappels = asset?.filter((r) => r.kind === "rappel").length ?? 0;
-            const overdue = (retours > 0 || rappels > 0) && ts < dayKey(Date.now());
-            // Un libellé parlant : la pastille ne se résume pas à une couleur.
-            const assetLabel = [
-              retours > 0 && (retours > 1 ? `${retours} retours d'actifs` : "1 retour d'actif"),
-              rappels > 0 && (rappels > 1 ? `${rappels} rappels` : "1 rappel"),
-            ]
-              .filter(Boolean)
-              .join(", ");
             return (
               <button
                 key={ts}
                 onClick={() => onSelect(ts)}
                 aria-pressed={isSel}
-                aria-label={`${formatDay(ts)} — ${revenue > 0 ? formatFCFA(revenue) : "aucune vente"}${assetLabel ? ` — ${assetLabel}${overdue ? ", en retard" : ""}` : ""}`}
+                aria-label={`${formatDay(ts)} — ${revenue > 0 ? formatFCFA(revenue) : "aucune vente"}`}
                 className={cn(
                   "flex h-[58px] flex-col justify-between rounded-xl border p-1 text-left transition-colors sm:h-16 sm:p-1.5",
                   isSel
@@ -85,19 +71,14 @@ export function MonthGrid({
                       ? "border-border bg-card hover:border-primary/50 hover:bg-accent/50"
                       : "border-transparent bg-muted/40",
                   hot && !isSel && "ring-1 ring-primary/25",
-                  overdue && !isSel && "border-destructive/60 bg-destructive/5",
                 )}
               >
                 <div className="flex items-start justify-between">
                   <span className="text-[11px] font-medium leading-none tabular-nums">
                     {new Date(ts).getDate()}
                   </span>
-                  {/* Deux pastilles distinctes : le CA (vert, ou l'inverse
-                      quand le jour est sélectionné) et l'échéance actif. Les
-                      confondre en une seule pastille ferait disparaître le CA
-                      d'un jour d'échéance — l'information la moins visible
-                      disparaîtrait, ce qui est l'inverse de l'usage d'un
-                      calendrier. */}
+                  {/* Pastille de CA : verte, ou l'inverse quand le jour est
+                      sélectionné. */}
                   <span className="flex items-center gap-0.5">
                     {revenue > 0 && (
                       <span
@@ -105,20 +86,6 @@ export function MonthGrid({
                         className={cn(
                           "h-1.5 w-1.5 rounded-full",
                           isSel ? "bg-primary-foreground" : "bg-primary",
-                        )}
-                      />
-                    )}
-                    {(retours > 0 || rappels > 0) && (
-                      <span
-                        aria-hidden
-                        title={assetLabel}
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          isSel
-                            ? "bg-primary-foreground"
-                            : overdue
-                              ? "bg-destructive"
-                              : "bg-amber-500",
                         )}
                       />
                     )}

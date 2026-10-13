@@ -34,17 +34,6 @@ describe("normalizeVariantStock", () => {
     );
   });
 
-  it("ne touche pas au stock physique d'un bien de location", () => {
-    // Le bien loué compte ses unités physiques ; une taille épuisée ne réduit pas le
-    // parc total disponible à la location.
-    // `stock` porte ici le nombre d'unités physiques — c'est le formulaire qui l'écrit,
-    // depuis `total_units`. La fonction doit surtout ne PAS le remplacer par une somme.
-    const p = normalizeVariantStock(
-      produit({ is_asset: true, stock: 4, variants: [v("S", 0), v("M", 1)] }),
-    );
-    expect(p.stock).toBe(4);
-  });
-
   it("une variante sans stock saisi compte pour zéro", () => {
     expect(normalizeVariantStock(produit({ variants: [v("S", 2), v("M")] })).stock).toBe(2);
   });

@@ -47,9 +47,9 @@ export function monthLabel(key: string): string {
 }
 
 /** Produit consommable, soigné par le calcul de la valeur de stock : ni service, ni
- *  actif de location, stock borné. */
+ *  stock illimité. */
 export function isConsumableStock(p: Product): boolean {
-  return p.type !== "service" && !p.is_asset && Number.isFinite(p.stock);
+  return p.type !== "service" && Number.isFinite(p.stock);
 }
 
 export interface StockEstimate {
