@@ -136,3 +136,36 @@ export async function deleteProduct(id: string): Promise<void> {
     });
   });
 }
+
+/**
+ * Mise à jour en lot du prix d'acquisition (coût) de plusieurs produits.
+ * Utilisé depuis Comptabilité → onglet "Coûts d'achat" : l'utilisateur coche plusieurs
+ * produits et applique un coût commun.
+ *
+ * Règles :
+ * - Ne touche JAMAIS à cost_at_sale (figé dans les ventes passées, AGENTS.md).
+ * - Met à jour updated_at (Date.now()) : action volontaire → propagation P2P.
+ * - Atomicité : UNE SEULE transaction Dexie pour tout le batch.
+ * - Overwrite : tous les produits sélectionnés reçoivent le coût (même s'ils en avaient un).
+ */
+export async function bulkUpdateCost(ids: string[], cost: number): Promise<number> {
+  await ensureIdentity();
+  const db = getDB();
+  const now = Date.now();
+  let updated = 0;
+  await db.transaction("rw", db.products, db.sync_ops, db.settings, async () => {
+    for (const id of ids) {
+      const existing = await db.products.get(id);
+      if (!existing || existing.deleted_at) continue;
+      const next = { ...existing, cost, ...touch() };
+      await db.products.put(next);
+      await emitOp(db, getIdentity(), {
+        type: "product.updated",
+        entity_id: id,
+        payload: { product_id: id, fields: { cost, updated_at: now } },
+      });
+      updated++;
+    }
+  });
+  return updated;
+}
