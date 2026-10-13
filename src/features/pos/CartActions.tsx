@@ -11,7 +11,7 @@ import type { PosController } from "./usePos";
  * encaissement en cours, ou table ouverte.
  */
 export function CartActions({ pos }: { pos: PosController }) {
-  if (!pos.activeTable) {
+  if (pos.target.kind === "direct") {
     return (
       <>
         {pos.isService && pos.lines.length > 0 && (
@@ -77,46 +77,19 @@ export function CartActions({ pos }: { pos: PosController }) {
     );
   }
 
+  // Table branch: target.kind === "table" → activeTable is guaranteed
+  const table = pos.activeTable!;
   return (
     <div className="space-y-2">
-      <Button
-        size="lg"
-        className="w-full h-16 text-lg gap-2"
-        disabled={pos.lines.length === 0 || pos.roundMut.isPending}
-        onClick={() =>
-          pos.roundMut.mutate({
-            saleId: pos.activeTable!.id,
-            lines: pos.lines.map(({ key: _key, ...line }): CartLine => line),
-          })
-        }
-      >
-        <Plus className="h-5 w-5" />
-        Prendre la commande
-      </Button>
-      {/* « Servir » n'apparaît que si la table n'est pas encore marquée servie.
-          C'est le verrou : tant que le plat n'a pas quitté la cuisine, le
-          paiement reste bloqué. */}
-      {!pos.activeTable.served_at && pos.activeTable.total > 0 && (
-        <Button
-          variant="outline"
-          size="lg"
-          className="w-full h-12 gap-2 border-orange-400 text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-400/50 dark:hover:bg-orange-950/30"
-          disabled={pos.serveMut.isPending}
-          onClick={() => pos.serveMut.mutate(pos.activeTable!.id)}
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          Servir la commande
-        </Button>
-      )}
       <Button
         variant="outline"
         size="lg"
         className="w-full h-12 gap-2"
-        disabled={!pos.activeTable.served_at || pos.activeTable.total <= 0}
+        disabled={!table.served_at || table.total <= 0}
         onClick={() => pos.setCashing({ kind: "table" })}
       >
         <CheckCircle2 className="h-4 w-4" />
-        Payer {formatFCFA(pos.activeTable.total)}
+        Payer {formatFCFA(table.total)}
       </Button>
     </div>
   );
