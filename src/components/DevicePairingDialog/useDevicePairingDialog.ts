@@ -1,41 +1,16 @@
-// Appairage d'un écran supplémentaire : le QR affiché contient les identifiants du
-// compte marchand. La nouvelle caisse le scanne (bouton « Scanner le QR » du mode
-// « Rejoindre » à l'onboarding) et rejoint le compte au premier handshake.
-//
-// Le QR est généré à la demande (import dynamique de `qrcode`) : rien dans le bundle
-// principal, rien en réseau — tout reste local. Le payload embarquant le mot de passe,
-// le dialogue le rappelle explicitement : à ne montrer qu'à ses propres appareils.
-//
-// Ce fichier n'est plus qu'un aiguillage : le QR vit dans `QRBlock`, l'affichage du code
-// temporaire dans `PairingCodeDisplay`, la liste des écrans dans `PairedDevicesPanel`.
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MonitorSmartphone } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { getAccountQuota, refreshAccountQuota, blessEmployeeDevice } from "@/lib/gatekeeper";
 import { getDB, getShopProfile, listProducts } from "@/lib/db";
 import { ensureIdentity } from "@/lib/syncengine/identity";
 import { invalidateDeviceQueries, listPairedDevices } from "@/lib/syncengine/peers";
-import { ShareStockDialog } from "@/components/ShareStockDialog";
 import { approveDevice, getPairingToken, pairCodeExpiry } from "@/lib/syncengine/pairing";
 import type { PairedDevice } from "@/lib/syncengine/types";
-import { QRBlock } from "@/components/pairing/QRBlock";
-import { PairingCodeDisplay } from "@/components/pairing/PairingCodeDisplay";
-import { PairedDevicesPanel } from "@/components/pairing/PairedDevicesPanel";
 
-interface DevicePairingDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}
-
-export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogProps) {
+// État et logique du dialogue d'appairage : requêtes, dérivés, effets et approbation.
+// Le composant ne garde que le rendu.
+export function useDevicePairingDialog(open: boolean) {
   const qc = useQueryClient();
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [codeExpiry, setCodeExpiry] = useState<number | null>(null);
@@ -151,85 +126,29 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
     if (approuve) setSharePeer(approuve);
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <MonitorSmartphone className="h-5 w-5" />
-            Ajouter un appareil
-          </DialogTitle>
-          <DialogDescription>
-            L'employé scanne ce code, entre son nom, et reçoit le stock, les ventes et la caisse du
-            propriétaire via le relais.
-          </DialogDescription>
-        </DialogHeader>
-
-        {hasNamePhone ? (
-          <QRBlock
-            open={open}
-            hasNamePhone={hasNamePhone}
-            identity={identity}
-            profile={profile}
-            quota={quota}
-            localDeviceCount={localDeviceCount}
-            atCapacity={atCapacity}
-            isOwner={isOwner}
-            pairCode={pairCode}
-            setPairCode={setPairCode}
-            setCodeExpiry={setCodeExpiry}
-          />
-        ) : profile?.accountKeyword ? (
-          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Cet écran a rejoint le compte{" "}
-            <span className="font-medium text-foreground">par mot clé de récupération</span> : il
-            n'a pas le téléphone ni le nom du compte, que le QR transporte. Depuis un écran qui
-            détient le compte (téléphone + mot de passe), ouvrez ici « Ajouter un appareil » pour
-            partager le code QR.
-          </p>
-        ) : (
-          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Cet appareil n'a pas encore d'identité marchande : renseignez le nom de la{" "}
-            <span className="font-medium text-foreground">boutique</span> et son{" "}
-            <span className="font-medium text-foreground">téléphone</span> (Réglages → Boutique)
-            avant d'afficher un code QR.
-          </p>
-        )}
-
-        {hasAnyAccount && (
-          <div className="space-y-3 rounded-xl border p-4">
-            {isOwner && <PairingCodeDisplay pairCode={pairCode} minutesLeft={minutesLeft} />}
-
-            <PairedDevicesPanel
-              isOwner={isOwner}
-              pending={pending}
-              paired={paired}
-              pairedCount={pairedCount}
-              peers={peers}
-              identity={identity}
-              produitsCount={produitsCount ?? 0}
-              onApprove={approve}
-              onChangeShare={setSharePeer}
-            />
-          </div>
-        )}
-      </DialogContent>
-
-      {/* Le choix du stock : une modale au-dessus de l'appairage, pour qu'un partage ne
-          puisse pas rester coincé derrière ce dialogue. */}
-      <ShareStockDialog
-        open={sharePeer !== null}
-        onOpenChange={(v) => {
-          if (!v) {
-            setSharePeer(null);
-            void qc.invalidateQueries({ queryKey: ["paired_devices"] });
-          }
-        }}
-        peer={sharePeer}
-        onShared={(count) =>
-          toast.success("Stock partagé — l'employé le reçoit à sa prochaine connexion.")
-        }
-      />
-    </Dialog>
-  );
+  return {
+    qc,
+    profile,
+    quota,
+    identity,
+    peers,
+    produitsCount,
+    hasNamePhone,
+    hasAnyAccount,
+    localDeviceCount,
+    atCapacity,
+    isOwner,
+    pending,
+    paired,
+    pairedCount,
+    minutesLeft,
+    pairCode,
+    setPairCode,
+    setCodeExpiry,
+    sharePeer,
+    setSharePeer,
+    approve,
+  };
 }
+
+export type DevicePairingState = ReturnType<typeof useDevicePairingDialog>;

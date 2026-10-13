@@ -1,0 +1,1 @@
+export { DevicePairingDialog } from "./DevicePairingDialog";
