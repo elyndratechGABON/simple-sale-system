@@ -10,7 +10,16 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { cancelSale, closeTable, openTable, payRound, payTable, type Sale } from "@/lib/db";
+import {
+  cancelSale,
+  closeTable,
+  openTable,
+  payRound,
+  payTable,
+  addRound,
+  type CartLine,
+  type Sale,
+} from "@/lib/db";
 import { formatFCFA } from "@/lib/format";
 import { useSaleTrigger } from "@/hooks/use-sale-trigger";
 
@@ -19,8 +28,8 @@ export function useTableMutations(hooks: {
   onTableOpened: (sale: Sale) => void;
   /** Après libération : revenir au comptoir UNIQUEMENT si c'était la table visée. */
   onTableReleased: (saleId: string) => void;
-  /** Après une tournée : vider le panier, l'addition reste ouverte. */
-  onRoundAdded: (sale: Sale) => void;
+  /** Après ajout d'articles à une addition : vider le panier, l'addition reste ouverte. */
+  onItemsAdded: (sale: Sale) => void;
   /** Après un encaissement de table : revenir au comptoir. */
   onTableSettled: () => void;
   /** Après une tournée encaissée : fermer le panneau de rendu de monnaie. */
@@ -33,7 +42,7 @@ export function useTableMutations(hooks: {
   const {
     onTableOpened,
     onTableReleased,
-    onRoundAdded,
+    onItemsAdded,
     onTableSettled,
     onRoundPaid,
     onTableCancelled,
@@ -78,6 +87,22 @@ export function useTableMutations(hooks: {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Ajout de lignes à une addition ouverte (utilisé par le ProductPicker)
+  const addToSaleMut = useMutation({
+    mutationFn: ({ saleId, lines }: { saleId: string; lines: CartLine[] }) =>
+      addRound(saleId, lines),
+    onSuccess: (sale) => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["sale_items", sale.id] });
+      toast.success(`Articles ajoutés à la table ${sale.table}`, {
+        description: `Addition en cours : ${formatFCFA(sale.total)}`,
+      });
+      onItemsAdded(sale);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   // Encaissement d'une TOURNÉE : la table reste ouverte, seules les lignes de cette
   // tournée passent en vente réglée (cf. payRound). L'invalidation du préfixe ["sales"]
   // rafraîchit le plan de salle, l'addition et l'historique d'un coup.
@@ -118,6 +143,7 @@ export function useTableMutations(hooks: {
     closeMut,
     payMut,
     payRoundMut,
+    addToSaleMut,
     cancelTableMut,
   };
 }

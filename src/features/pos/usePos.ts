@@ -88,7 +88,7 @@ export function usePos() {
       if (ui.target.kind === "table" && ui.target.saleId === saleId)
         selectTarget({ kind: "direct" });
     },
-    onRoundAdded: () => resetCart(),
+    onItemsAdded: () => resetCart(),
     onTableSettled: () => selectTarget({ kind: "direct" }),
     onRoundPaid: () => {
       ui.setCashing(null);
