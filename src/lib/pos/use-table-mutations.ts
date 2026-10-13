@@ -17,9 +17,6 @@ import {
   openTable,
   payRound,
   payTable,
-  prepareTable,
-  readyTable,
-  serveTable,
   type CartLine,
   type Sale,
 } from "@/lib/db";
@@ -69,36 +66,6 @@ export function useTableMutations(hooks: {
       qc.invalidateQueries({ queryKey: ["sales"] });
       onTableReleased(saleId);
       toast.success("Table libérée");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  // Marquer une table comme servie (restaurant) : le paiement est débloqué.
-  const serveMut = useMutation({
-    mutationFn: (saleId: string) => serveTable(saleId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Commande servie — paiement débloqué");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  // Cycle de service (restaurant) : « Préparer » puis « Prêt » avancent la commande en
-  // cuisine, sans toucher au paiement — seul `serveTable` le débloque.
-  const prepareMut = useMutation({
-    mutationFn: (saleId: string) => prepareTable(saleId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Commande en préparation");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const readyMut = useMutation({
-    mutationFn: (saleId: string) => readyTable(saleId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Commandes prêtes à servir");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -173,9 +140,6 @@ export function useTableMutations(hooks: {
   return {
     openMut,
     closeMut,
-    serveMut,
-    prepareMut,
-    readyMut,
     roundMut,
     payMut,
     payRoundMut,
