@@ -57,7 +57,7 @@ export function SettingsPage() {
           <BusinessCard />
           <AppearanceCard />
           <ClientsCard />
-          {tablesFeature && <TablesCard />}
+          <TablesCard disabled={!tablesFeature} />
         </TabsContent>
 
         {/* Affichage des cards produit : réglage séparé du thème (§22). */}

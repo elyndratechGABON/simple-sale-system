@@ -15,7 +15,7 @@ import { toast } from "sonner";
  * La liste s'étend aussi toute seule : ouvrir une table sous un nom inconnu depuis la
  * caisse l'ajoute ici. Cet écran sert à la mettre en ordre, pas à la construire.
  */
-export function TablesCard() {
+export function TablesCard({ disabled = false }: { disabled?: boolean }) {
   const qc = useQueryClient();
   const { tables } = usePreferences();
   const [draft, setDraft] = useState("");
@@ -26,7 +26,7 @@ export function TablesCard() {
   }
 
   return (
-    <Card>
+    <Card className={disabled ? "opacity-50" : ""}>
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <Utensils className="h-4 w-4" /> Tables
@@ -36,6 +36,13 @@ export function TablesCard() {
           déjà enregistrée.
         </CardDescription>
       </CardHeader>
+      {disabled && (
+        <div className="mb-2 px-1 py-1.5 rounded-lg bg-muted/50 border text-sm text-muted-foreground flex items-center gap-2">
+          <span>Plan de salle désactivé — </span>
+          <span className="font-medium">Activez-le dans « Type de commerce »</span> pour gérer les
+          tables.
+        </div>
+      )}
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {tables.map((t) => (
@@ -52,6 +59,7 @@ export function TablesCard() {
                 className="-mr-2 -my-2.5 h-11 w-11 rounded-full text-muted-foreground hover:text-destructive sm:-mr-1.5 sm:-my-1 sm:h-8 sm:w-8"
                 aria-label={`Retirer la table ${t}`}
                 onClick={() => commit(tables.filter((x) => x !== t))}
+                disabled={disabled}
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -70,9 +78,12 @@ export function TablesCard() {
               onKeyDown={(e) => {
                 if (e.key === "Enter") addTable();
               }}
+              disabled={disabled}
             />
           </div>
-          <Button onClick={addTable}>Ajouter</Button>
+          <Button onClick={addTable} disabled={disabled}>
+            Ajouter
+          </Button>
         </div>
       </CardContent>
     </Card>
