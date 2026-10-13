@@ -99,7 +99,7 @@ export async function finishSetup(w: SetupWizardApi): Promise<void> {
     customDomain: w.selectedCluster === "personnalise" ? w.customDomain.trim() : "",
     customUnitType:
       w.selectedCluster === "personnalise" ? (w.customStockChoice ?? "unit") : undefined,
-    tablesEnabled: w.clusterConfig?.workflow.hasTables ?? false,
+    features: { tables: w.clusterConfig?.workflow.hasTables ?? false },
     onboarded: true,
     privacyAccepted: w.privacyAccepted,
   });

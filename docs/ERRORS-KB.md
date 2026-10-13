@@ -235,10 +235,30 @@ git reset --hard HEAD                       # ✅ tout
 
 ---
 
-## Comment utiliser cette base
+## ERR-COMPAT-001 — Contrat P2P à versionner
 
-**Avant** de corriger : `Select-String -Path docs/ERRORS-KB.md -Pattern "<mot-clé>"`
+**Signature** : Champ présent dans QR entre appareils de versions différentes (ex: `tablesEnabled` dans `PairingShopConfig`).
 
-**Après** une nouvelle erreur : ajouter une entrée (numéro suivant dans la catégorie).
+**Contexte** : Le QR de pairing transporte la config boutique (cluster, tables, etc.). Une vieille version envoie `tablesEnabled`, la nouvelle a `features.tables`.
 
-**Si l'erreur existe déjà** : incrémenter `Occurrences` et vérifier que la solution a marché.
+**Cause** : Renommage local sans prévoir la compatibilité ascendante du contrat P2P.
+
+**Solution** :
+- Garder le nom d'origine dans le contrat (`PairingShopConfig.tablesEnabled`).
+- Mapper vers le nouveau nom en local : `features.tables = shop.tablesEnabled ?? prefs.features?.tables ?? false`.
+- **Dual-write temporaire** dans `applyPairingShop` :
+  ```ts
+  features: { tables: shop.tablesEnabled ?? prefs.features?.tables ?? false },
+  tablesEnabled: shop.tablesEnabled ?? prefs.tablesEnabled,  // compat
+  ```
+- Commenter le dual-write avec la condition de retrait.
+
+**Prévention** : Toujours commenter le dual-write avec la condition de retrait exacte (ex: "retirer quand plus aucun QR v1 en circulation"). Ne jamais renommer un champ de contrat sans mapper.
+
+**Fichiers impactés** : `src/lib/pairing/types.ts`, `build.ts`, `apply.ts`, `useQrPayload.ts`, `finishSetup.ts`
+
+**Date** : 2026-10-13
+
+**Occurrences** : 1
+
+---

@@ -142,7 +142,7 @@ export function useQrPayload({
                     cluster: prefs.cluster ?? "restaurant",
                     customDomain: prefs.customDomain ?? "",
                     customUnitType: prefs.customUnitType ?? "unit",
-                    tablesEnabled: prefs.tablesEnabled ?? false,
+                    tablesEnabled: prefs.features?.tables ?? prefs.tablesEnabled ?? false,
                   },
                 }
               : {}),

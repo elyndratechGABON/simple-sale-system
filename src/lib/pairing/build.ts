@@ -29,7 +29,7 @@ export async function buildPairingPayload(role?: DeviceRole): Promise<string | n
       cluster: prefs.cluster,
       customDomain: prefs.customDomain,
       customUnitType: prefs.customUnitType,
-      tablesEnabled: prefs.tablesEnabled,
+      tablesEnabled: prefs.features?.tables ?? prefs.tablesEnabled,
     },
   };
   return JSON.stringify(payload);

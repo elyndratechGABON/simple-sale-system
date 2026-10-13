@@ -59,6 +59,9 @@ export async function applyPairingShop(shop?: Partial<PairingShopConfig>): Promi
     cluster: shop.cluster ?? prefs.cluster,
     customDomain: shop.customDomain ?? prefs.customDomain,
     customUnitType: shop.customUnitType ?? prefs.customUnitType,
+    // DUAL-WRITE (compat QR anciennes versions) — retirer quand
+    // plus aucun QR v1 n'est en circulation.
+    features: { tables: shop.tablesEnabled ?? prefs.features?.tables ?? false },
     tablesEnabled: shop.tablesEnabled ?? prefs.tablesEnabled,
   });
   return true;
