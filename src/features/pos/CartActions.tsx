@@ -7,8 +7,8 @@ import type { PosController } from "./usePos";
 
 /**
  * Action principale du panneau. Son libellé dit exactement ce qui va se passer : ajouter
- * une tournée n'engage pas d'argent, encaisser clôt l'addition. Trois branches — comptoir,
- * encaissement en cours, ou table ouverte.
+ * une tournée n'engage pas d'argent, encaisser clôt l'addition. Deux branches — comptoir,
+ * encaissement en cours.
  */
 export function CartActions({ pos }: { pos: PosController }) {
   if (pos.target.kind === "direct") {
@@ -77,20 +77,5 @@ export function CartActions({ pos }: { pos: PosController }) {
     );
   }
 
-  // Table branch: target.kind === "table" → activeTable is guaranteed
-  const table = pos.activeTable!;
-  return (
-    <div className="space-y-2">
-      <Button
-        variant="outline"
-        size="lg"
-        className="w-full h-12 gap-2"
-        disabled={!table.served_at || table.total <= 0}
-        onClick={() => pos.setCashing({ kind: "table" })}
-      >
-        <CheckCircle2 className="h-4 w-4" />
-        Payer {formatFCFA(table.total)}
-      </Button>
-    </div>
-  );
+  return null;
 }
