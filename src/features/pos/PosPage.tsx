@@ -13,6 +13,8 @@ import { OrdersDrawer } from "./OrdersDrawer";
 import { CheckoutDialog } from "./CheckoutDialog";
 import { SaleFlash } from "./SaleFlash";
 import { usePos } from "./usePos";
+import { TablesView } from "./TablesView";
+import { usePreferences } from "@/hooks/use-preferences";
 
 /**
  * La page ouvre directement sur la grille et le panier. Un écran d'attente précédait chaque
@@ -21,6 +23,9 @@ import { usePos } from "./usePos";
  */
 export function PosPage() {
   const pos = usePos();
+  const { mode, setMode } = pos;
+  const { features } = usePreferences();
+  const showTables = features?.tables ?? false;
 
   return (
     <div
@@ -35,13 +40,47 @@ export function PosPage() {
             <Utensils className="h-6 w-6 shrink-0 text-primary" /> Caisse
           </h1>
         </div>
+        {features?.tables && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => pos.setMode("comptoir")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                pos.mode === "comptoir"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80",
+              )}
+            >
+              Comptoir
+            </button>
+            <button
+              type="button"
+              onClick={() => pos.setMode("tables")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                pos.mode === "tables"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80",
+              )}
+            >
+              Tables
+            </button>
+          </div>
+        )}
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
-        <CategoriesColumn pos={pos} />
-        <ProductPanel pos={pos} />
-        <CartPanel pos={pos} />
-      </div>
+      {pos.mode === "tables" ? (
+        <TablesView pos={pos} />
+      ) : (
+        <>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
+            <CategoriesColumn pos={pos} />
+            <ProductPanel pos={pos} />
+            <CartPanel pos={pos} />
+          </div>
+        </>
+      )}
 
       <MobileCartBar pos={pos} />
 
