@@ -1,10 +1,8 @@
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Utensils } from "lucide-react";
 import { FreeLineDialog } from "@/components/pos";
 import { PinDialog } from "@/components/PinDialog";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
-import { FloorPlan } from "./FloorPlan";
 import { CategoriesColumn } from "./CategoriesColumn";
 import { ProductPanel } from "./ProductPanel";
 import { CartPanel } from "./CartPanel";
@@ -15,9 +13,6 @@ import { OrdersDrawer } from "./OrdersDrawer";
 import { CheckoutDialog } from "./CheckoutDialog";
 import { SaleFlash } from "./SaleFlash";
 import { usePos } from "./usePos";
-import { TableActions } from "./TableActions";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { usePreferences } from "@/hooks/use-preferences";
 
 /**
  * La page ouvre directement sur la grille et le panier. Un écran d'attente précédait chaque
@@ -26,9 +21,6 @@ import { usePreferences } from "@/hooks/use-preferences";
  */
 export function PosPage() {
   const pos = usePos();
-  const { mode, setMode } = pos;
-  const { features } = usePreferences();
-  const showTables = features?.tables ?? false;
 
   return (
     <div
@@ -43,53 +35,13 @@ export function PosPage() {
             <Utensils className="h-6 w-6 shrink-0 text-primary" /> Caisse
           </h1>
         </div>
-        {showTables && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMode("comptoir")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                mode === "comptoir"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80",
-              )}
-            >
-              Comptoir
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("tables")}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                mode === "tables"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80",
-              )}
-            >
-              Tables
-            </button>
-          </div>
-        )}
       </header>
 
-      {mode === "tables" ? (
-        // Mode Tables : 3 colonnes (FloorPlan | ProductPanel | CartPanel)
-        <div className="grid gap-4 lg:grid-cols-[minmax(250px,20%)_minmax(0,1fr)_minmax(320px,28%)] xl:grid-cols-[minmax(250px,18%)_minmax(0,1fr)_minmax(340px,26%)] 2xl:grid-cols-[minmax(280px,16%)_minmax(0,1fr)_minmax(360px,24%)]">
-          <FloorPlan pos={pos} />
-          <ProductPanel pos={pos} />
-          <CartPanel pos={pos} />
-        </div>
-      ) : (
-        // Mode Comptoir : layout 3 colonnes (Categories | Products | Cart)
-        <>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
-            <CategoriesColumn pos={pos} />
-            <ProductPanel pos={pos} />
-            <CartPanel pos={pos} />
-          </div>
-        </>
-      )}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
+        <CategoriesColumn pos={pos} />
+        <ProductPanel pos={pos} />
+        <CartPanel pos={pos} />
+      </div>
 
       <MobileCartBar pos={pos} />
 
