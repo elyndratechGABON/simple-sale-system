@@ -8,6 +8,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   // toujours affiché) : les comptes déjà enregistrés ne changent pas de mode.
   cluster: "restaurant",
   customDomain: "",
+  features: {
+    tables: false,
+  },
   tablesEnabled: false,
   tables: ["1", "2", "3", "4", "5", "6"],
   phone: "",

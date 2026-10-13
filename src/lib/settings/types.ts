@@ -64,11 +64,17 @@ export interface Preferences {
   customDomain: string;
   /** Stock au kilo ou à l'unité, choisi à l'onboarding pour le cluster Personnalisé. */
   customUnitType?: "unit" | "weight";
+  /** Fonctionnalités activées pour cette boutique — découplées du cluster. */
+  features: {
+    /** Plan de salle (tables) : ajoute le système de tables à la caisse. */
+    tables: boolean;
+  };
   /**
    * Système de tables : commande servie puis encaissée en fin de service (restaurant) vs
    * service direct au comptoir (snack/bar). Faux → la caisse n'affiche que le comptoir.
+   * @deprecated Utiliser features.tables à la place.
    */
-  tablesEnabled: boolean;
+  tablesEnabled?: boolean;
   /**
    * Libellés des tables proposés à la caisse. La liste s'étend à la volée quand on ouvre
    * une table qui n'y figure pas encore.

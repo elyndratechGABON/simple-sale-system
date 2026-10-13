@@ -1,4 +1,4 @@
-import { ACTIVE_CLUSTERS } from "@/lib/settings";
+import { ACTIVE_CLUSTERS, type Preferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { ROLE_LABELS } from "@/lib/syncengine/pairing";
 import { useAccess } from "@/hooks/use-access";
@@ -21,10 +21,11 @@ import { SubscriptionCard } from "./SubscriptionCard";
 import { AboutCard } from "./AboutCard";
 
 export function SettingsPage() {
-  const { cluster } = usePreferences();
+  const { cluster, features } = usePreferences();
   const clusterConfig = ACTIVE_CLUSTERS.find((c) => c.id === cluster);
   const { role } = useAccess();
   const accountLabel = `Compte ${ROLE_LABELS[role]}`;
+  const tablesFeature = features?.tables ?? false;
 
   return (
     <div className="mx-auto max-w-3xl px-[var(--page-gutter)] py-4 space-y-3">
@@ -56,7 +57,7 @@ export function SettingsPage() {
           <BusinessCard />
           <AppearanceCard />
           <ClientsCard />
-          {clusterConfig?.workflow.hasTables && <TablesCard />}
+          {tablesFeature && <TablesCard />}
         </TabsContent>
 
         {/* Affichage des cards produit : réglage séparé du thème (§22). */}

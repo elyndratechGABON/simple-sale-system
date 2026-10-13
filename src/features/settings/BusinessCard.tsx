@@ -47,17 +47,17 @@ function resolveIcon(name: string): typeof Store {
 }
 
 /**
- * Type de commerce (cluster) et système de tables — les choix faits à l'onboarding.
+ * Type de commerce (cluster) et fonctionnalités boutique — découplées du cluster.
  *
- * L'interrupteur de tables vit ici et non dans la carte « Tables » : une carte masquée
- * ne peut pas rendre son propre interrupteur. La carte « Tables » (gestion des libellés)
- * n'apparaît, elle, que lorsque le système est actif.
+ * Le plan de salle (tables) est maintenant une fonctionnalité activable pour tout
+ * type de commerce. Le cluster reste cosmétique (icône, labels, workflow par défaut).
  */
 export function BusinessCard() {
   const qc = useQueryClient();
-  const { cluster, tablesEnabled, customDomain } = usePreferences();
+  const { cluster, features, customDomain } = usePreferences();
   const clusterConfig = ACTIVE_CLUSTERS.find((c) => c.id === cluster);
   const ClusterIcon = clusterConfig ? resolveIcon(clusterConfig.icon) : Store;
+  const tablesEnabled = features?.tables ?? false;
 
   function commit(patch: Partial<Preferences>) {
     savePreferences(patch);
@@ -78,8 +78,8 @@ export function BusinessCard() {
 
   function onTablesToggle(v: boolean) {
     if (v) {
-      commit({ tablesEnabled: true });
-      toast.success("Système de tables activé");
+      commit({ features: { tables: true } });
+      toast.success("Plan de salle activé");
       return;
     }
     if (openTables.length > 0) {
@@ -93,17 +93,17 @@ export function BusinessCard() {
     setDisabling(true);
     try {
       for (const t of openTables) await cancelSale(t.id);
-      commit({ tablesEnabled: false, tables: [] });
+      commit({ features: { tables: false }, tables: [] });
       qc.invalidateQueries({ queryKey: ["sales", "open"] });
       qc.invalidateQueries({ queryKey: ["open_tables"] });
       qc.invalidateQueries({ queryKey: ["products"] });
       toast.success(
         openTables.length > 0
           ? `${openTables.length} table(s) annulée(s) — articles retournés en rayon.`
-          : "Système de tables désactivé",
+          : "Plan de salle désactivé",
       );
     } catch {
-      toast.error("Impossible de désactiver les tables — réessayez.");
+      toast.error("Impossible de désactiver le plan de salle — réessayez.");
     } finally {
       setDisabling(false);
       setConfirmingDisable(false);
@@ -133,28 +133,26 @@ export function BusinessCard() {
           </div>
         )}
 
-        {clusterConfig?.workflow.hasTables && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-            <div>
-              <div className="flex items-center gap-2 font-medium">
-                <Utensils className="h-4 w-4" /> Système de tables
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {tablesEnabled
-                  ? "Commandes par table, encaissées en fin de service."
-                  : "Service direct : chaque vente est encaissée à la commande."}
-              </p>
+        <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+          <div>
+            <div className="flex items-center gap-2 font-medium">
+              <Utensils className="h-4 w-4" /> Plan de salle
             </div>
-            <Switch
-              checked={tablesEnabled}
-              onCheckedChange={onTablesToggle}
-              disabled={disabling}
-              aria-label="Activer le système de tables"
-            />
+            <p className="text-sm text-muted-foreground">
+              {tablesEnabled
+                ? "Commandes par table, encaissées en fin de service."
+                : "Service direct : chaque vente est encaissée à la commande."}
+            </p>
           </div>
-        )}
+          <Switch
+            checked={tablesEnabled}
+            onCheckedChange={onTablesToggle}
+            disabled={disabling}
+            aria-label="Activer le plan de salle"
+          />
+        </div>
 
-        {clusterConfig?.workflow.hasTables && (
+        {tablesEnabled && (
           <AlertDialog
             open={confirmingDisable}
             onOpenChange={(v) => !v && setConfirmingDisable(false)}
@@ -163,7 +161,7 @@ export function BusinessCard() {
               <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-destructive" />
-                  Désactiver le système de tables ?
+                  Désactiver le plan de salle ?
                 </AlertDialogTitle>
                 <AlertDialogDescription asChild>
                   <div className="flex flex-col gap-2">
@@ -175,7 +173,7 @@ export function BusinessCard() {
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Les tables configurées dans « Tables » seront aussi retirées ; réactiver le
-                      système de tables ne les restaurera pas.
+                      plan de salle ne les restaurera pas.
                     </p>
                   </div>
                 </AlertDialogDescription>

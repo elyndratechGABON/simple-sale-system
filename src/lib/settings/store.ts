@@ -11,17 +11,23 @@ export function getPreferences(): Preferences {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return DEFAULT_PREFERENCES;
     const parsed = JSON.parse(raw) as Partial<Preferences>;
+    const cluster = normalizeCluster(parsed.cluster);
+    // Migration : features.tables prend le relais de tablesEnabled.
+    // Si absent, on migre depuis l'ancien cluster : restaurant/bar → true, autres → false.
+    const tablesFromCluster = cluster === "restaurant" || cluster === "bar";
+    const featuresTables = parsed.features?.tables ?? parsed.tablesEnabled ?? tablesFromCluster;
     // Fusion avec les défauts, jamais remplacement : une version future qui ajoute une
     // préférence doit pouvoir lire un enregistrement écrit par la version d'avant.
     return {
       workspaceName: parsed.workspaceName?.trim() || DEFAULT_PREFERENCES.workspaceName,
       onboarded: parsed.onboarded === true,
-      cluster: normalizeCluster(parsed.cluster),
+      cluster,
       customDomain: typeof parsed.customDomain === "string" ? parsed.customDomain.trim() : "",
       customUnitType: normalizeCustomUnitType(parsed.customUnitType),
-      // `!== false` et non `=== true` : un enregistrement écrit avant l'introduction de
-      // cette préférence ne porte pas la clé, et le comportement historique est tables
-      // activées — la lire comme fausse ferait basculer tous les comptes existants.
+      features: {
+        tables: featuresTables,
+      },
+      // `tablesEnabled` conservé pour compat (vieux enregistrements), lu mais plus écrit.
       tablesEnabled: parsed.tablesEnabled !== false,
       tables: normalizeTables(parsed.tables),
       phone: parsed.phone?.trim() || "",
