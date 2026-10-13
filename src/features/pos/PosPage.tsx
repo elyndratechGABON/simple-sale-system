@@ -83,7 +83,6 @@ export function PosPage() {
       ) : (
         // Mode Comptoir : layout 3 colonnes (Categories | Products | Cart)
         <>
-          <FloorPlan pos={pos} />
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
             <CategoriesColumn pos={pos} />
             <ProductPanel pos={pos} />
