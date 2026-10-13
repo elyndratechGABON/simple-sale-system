@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Calculator } from "lucide-react";
 import { startOfDay, startOfMonth } from "date-fns";
 import { formatFCFA } from "@/lib/format";
 import { usePreferences } from "@/hooks/use-preferences";
@@ -27,11 +27,13 @@ import {
   WeekStrip,
   YearGrid,
 } from "@/components/reports";
+import { ProfitSheet } from "@/components/ProfitSheet";
 
 export function ReportsPage() {
   const [view, setView] = useState<CalendarView>("month");
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
   const [detailOpen, setDetailOpen] = useState(false);
+  const [profitOpen, setProfitOpen] = useState(false);
 
   const prefs = usePreferences();
   const cluster = prefs.cluster;
@@ -51,13 +53,18 @@ export function ReportsPage() {
 
   return (
     <div className="app-container space-y-4 py-4">
-      <header>
-        <h1 className="text-page-title flex items-center gap-2 font-bold">
-          <BarChart3 className="h-6 w-6 shrink-0 text-primary" /> Comptabilité
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Montants par période — touchez une date pour ouvrir le détail.
-        </p>
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-page-title flex items-center gap-2 font-bold">
+            <BarChart3 className="h-6 w-6 shrink-0 text-primary" /> Comptabilité
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Montants par période — touchez une date pour ouvrir le détail.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => setProfitOpen(true)}>
+          <Calculator className="h-4 w-4 mr-1.5" /> CA & bénéfices
+        </Button>
       </header>
 
       {/* Granularité : quatre choix, l'actif au vert principal. */}
@@ -188,6 +195,8 @@ export function ReportsPage() {
         isService={isService}
         hasWeightInput={hasWeightInput}
       />
+
+      <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
     </div>
   );
 }
