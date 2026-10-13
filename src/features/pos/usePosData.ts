@@ -18,9 +18,9 @@ import type { Target } from "@/lib/pos/types";
  * `target` ne sert qu'à résoudre la table active — jamais recopiée dans l'état local.
  */
 export function usePosData(target: Target) {
-  const { cluster, tables: tableLabels } = usePreferences();
+  const { cluster, tables: tableLabels, features } = usePreferences();
   const isService = cluster === "service";
-  const hasTables = cluster === "restaurant" || cluster === "bar";
+  const hasTables = features?.tables ?? (cluster === "restaurant" || cluster === "bar");
 
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
