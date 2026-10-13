@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import {
   ALL_CARD_FIELDS,
   CARD_FIELD_LABELS,
@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { FieldOrderList } from "./FieldOrderList";
 
 const CONTEXT_LABEL: Record<CardContext, string> = {
   stocks: "Page Stocks",
@@ -155,50 +156,10 @@ export function ProductCardSettings({ context }: { context: CardContext }) {
         </div>
 
         {/* ── Ordre (§12) ── */}
-        {fields.length > 1 && (
-          <div className="space-y-1.5">
-            <Label className="text-xs">Ordre d&apos;affichage</Label>
-            <p className="text-[11px] text-muted-foreground">
-              Les flèches déplacent le champ d&apos;un cran — plus simple au doigt qu&apos;un
-              glisser-déposer.
-            </p>
-            <div className="space-y-1">
-              {fields.map((field, i) => (
-                <div
-                  key={field}
-                  className="flex items-center gap-2 rounded-lg border bg-card px-2 py-1.5"
-                >
-                  <span className="w-4 shrink-0 text-center text-[11px] tabular-nums text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 truncate text-sm">{CARD_FIELD_LABELS[field]}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    aria-label={`Monter ${CARD_FIELD_LABELS[field]}`}
-                    disabled={i === 0}
-                    onClick={() => write(moveField(fields, field, -1))}
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    aria-label={`Descendre ${CARD_FIELD_LABELS[field]}`}
-                    disabled={i === fields.length - 1}
-                    onClick={() => write(moveField(fields, field, 1))}
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <FieldOrderList
+          fields={fields}
+          onMove={(field, delta) => write(moveField(fields, field, delta))}
+        />
 
         {/* ── Aperçu temps réel (§13) ── */}
         <div className="space-y-1.5">
