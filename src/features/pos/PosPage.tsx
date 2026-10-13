@@ -29,7 +29,6 @@ export function PosPage() {
   const { mode, setMode } = pos;
   const { features } = usePreferences();
   const showTables = features?.tables ?? false;
-  const isTablesMode = mode === "tables";
   const [addProductOpen, setAddProductOpen] = useState(false);
 
   return (
@@ -77,22 +76,8 @@ export function PosPage() {
 
       {mode === "tables" ? (
         // Mode Tables : 2 colonnes (FloorPlan | CartPanel + TableActions)
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
-          <div className="space-y-4">
-            <FloorPlan pos={pos} />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("comptoir")}
-                className="flex items-center gap-1.5 rounded-lg border bg-muted px-3 py-1.5 text-sm font-medium cursor-pointer"
-              >
-                <span className="h-4 w-4" aria-hidden="true">
-                  🏠
-                </span>
-                Comptoir
-              </button>
-            </div>
-          </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <FloorPlan pos={pos} />
           <div className="space-y-4">
             <CartPanel pos={pos} />
             <TableActions pos={pos} />
