@@ -1,7 +1,6 @@
 import { Plus, Store, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TableCard, TargetChip } from "@/components/pos";
-import { TablePopup } from "@/components/pos/TablePopup";
 import type { PosController } from "./usePos";
 
 /**
@@ -22,7 +21,11 @@ export function FloorPlan({ pos }: { pos: PosController }) {
             table={table}
             active={pos.activeTable?.table === label}
             disabled={pos.openMut.isPending || pos.closeMut.isPending}
-            onClick={() => pos.openTablePopup(label, table)}
+            onClick={() =>
+              table
+                ? pos.selectTarget({ kind: "table", saleId: table.id })
+                : pos.openMut.mutate(label)
+            }
             onLongPress={table ? () => pos.closeMut.mutate(table.id) : undefined}
           />
         ))}
@@ -70,13 +73,6 @@ export function FloorPlan({ pos }: { pos: PosController }) {
           </span>
         </Button>
       )}
-      <TablePopup
-        open={pos.tablePopupOpen}
-        onOpenChange={pos.setTablePopupOpen}
-        tableLabel={pos.tablePopupTable?.label ?? ""}
-        sale={pos.tablePopupTable?.sale ?? null}
-        pos={pos}
-      />
     </div>
   );
 }

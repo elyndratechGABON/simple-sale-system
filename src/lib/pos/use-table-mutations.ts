@@ -10,16 +10,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  addRound,
-  cancelSale,
-  closeTable,
-  openTable,
-  payRound,
-  payTable,
-  type CartLine,
-  type Sale,
-} from "@/lib/db";
+import { cancelSale, closeTable, openTable, payRound, payTable, type Sale } from "@/lib/db";
 import { formatFCFA } from "@/lib/format";
 import { useSaleTrigger } from "@/hooks/use-sale-trigger";
 
@@ -66,21 +57,6 @@ export function useTableMutations(hooks: {
       qc.invalidateQueries({ queryKey: ["sales"] });
       onTableReleased(saleId);
       toast.success("Table libérée");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const roundMut = useMutation({
-    mutationFn: ({ saleId, lines }: { saleId: string; lines: CartLine[] }) =>
-      addRound(saleId, lines),
-    onSuccess: (sale) => {
-      qc.invalidateQueries({ queryKey: ["products"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["sale_items", sale.id] });
-      toast.success(`Tournée ajoutée à la table ${sale.table}`, {
-        description: `Addition en cours : ${formatFCFA(sale.total)}`,
-      });
-      onRoundAdded(sale);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -140,7 +116,6 @@ export function useTableMutations(hooks: {
   return {
     openMut,
     closeMut,
-    roundMut,
     payMut,
     payRoundMut,
     cancelTableMut,
