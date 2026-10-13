@@ -3,6 +3,8 @@ import type { Category, PaymentMethod, Product } from "@/lib/db";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { Cashing, Target } from "@/lib/pos/types";
 
+export type CaisseMode = "comptoir" | "tables";
+
 /** Voile « Vente validée » : son + animation, auto-effacé. `null` = caché. */
 export type SaleFlash = { total: number; change: number; method: PaymentMethod } | null;
 
@@ -34,6 +36,8 @@ export function usePosUiState() {
   const [ordersOpen, setOrdersOpen] = useState(false);
   // Onglet Prestations/Produits (cluster service uniquement)
   const [serviceTab, setServiceTab] = useState<"prestations" | "produits">("prestations");
+  // Mode UI : comptoir (défaut) ou tables
+  const [mode, setMode] = useState<CaisseMode>("comptoir");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
   // Étape d'encaissement ouverte (comptoir uniquement) : le total est figé, on saisit
   // l'argent donné avant de confirmer.
@@ -92,5 +96,7 @@ export function usePosUiState() {
     setManualQtyValue,
     variantPicker,
     setVariantPicker,
+    mode,
+    setMode,
   };
 }
