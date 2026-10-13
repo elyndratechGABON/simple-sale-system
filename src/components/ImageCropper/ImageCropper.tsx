@@ -19,8 +19,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Slider } from "@/components/ui/slider";
-import { Move, ZoomIn, Check, X as XIcon } from "lucide-react";
+import { Check, X as XIcon } from "lucide-react";
+import { CropStage } from "./CropStage";
+import { ZoomControls } from "./ZoomControls";
 
 /** Zoom maxi (× le recadrage de couverture) : suffisant pour resserrer sur un
  *  détail, sans naviguer dans une image de 4000 px à l'aveugle. */
@@ -164,53 +165,20 @@ export function ImageCropper({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div
-            ref={boxRef}
+          <CropStage
+            boxRef={boxRef}
+            source={source}
+            natural={natural}
+            offset={offset}
+            scale={scale}
+            imgW={imgW}
+            imgH={imgH}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            className="relative mx-auto aspect-square w-full max-w-[300px] touch-none select-none overflow-hidden rounded-xl border bg-muted/40"
-          >
-            {natural ? (
-              <img
-                src={source}
-                alt=""
-                draggable={false}
-                className="absolute max-w-none"
-                style={{
-                  left: -offset.x * scale,
-                  top: -offset.y * scale,
-                  width: imgW,
-                  height: imgH,
-                }}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-                Chargement…
-              </div>
-            )}
-            {/* Coins sombres hors-cadre : le carré apparaît comme une fenêtre sur l'image. */}
-            <div className="pointer-events-none absolute inset-0 rounded-xl shadow-[inset_0_0_0_2px_rgb(255_255_255/0.5)]" />
-          </div>
+          />
 
-          <div className="flex items-center gap-3 px-1">
-            <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <Slider
-              min={1}
-              max={MAX_ZOOM}
-              step={0.05}
-              value={[zoom]}
-              onValueChange={([v]) => handleZoom(v)}
-              aria-label="Zoom de recadrage"
-            />
-            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-              {Math.round(zoom * 100)} %
-            </span>
-          </div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Move className="h-3.5 w-3.5" /> Touchez l'image pour la repositionner.
-          </p>
+          <ZoomControls zoom={zoom} maxZoom={MAX_ZOOM} onZoomChange={handleZoom} />
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
