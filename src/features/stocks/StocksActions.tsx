@@ -10,11 +10,13 @@ export function StocksActions({
   isService,
   onAdd,
   onJournal,
+  onCreate,
   onPrestation,
 }: {
   isService: boolean;
   onAdd: () => void;
   onJournal: () => void;
+  onCreate: () => void;
   onPrestation: () => void;
 }) {
   return (
@@ -58,6 +60,12 @@ export function StocksActions({
           aria-hidden
         />
       </button>
+
+      <div className="flex md:col-span-2 md:justify-end">
+        <Button variant="outline" className="w-full sm:w-auto" onClick={onCreate}>
+          <Plus className="h-4 w-4 mr-1.5" /> Créer un produit
+        </Button>
+      </div>
 
       {isService && (
         <div className="flex md:col-span-2 md:justify-end">

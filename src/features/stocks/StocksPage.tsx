@@ -55,6 +55,7 @@ export function StocksPage() {
           isService={isService}
           onAdd={() => dialogs.openAddStock(null)}
           onJournal={dialogs.openJournal}
+          onCreate={dialogs.openCreate}
           onPrestation={dialogs.openPrestation}
         />
 

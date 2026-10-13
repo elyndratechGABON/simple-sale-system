@@ -39,6 +39,10 @@ export function useStocksDialogs() {
     setEditing(p);
     setEditOpen(true);
   }
+  function openCreate() {
+    setEditing(null);
+    setEditOpen(true);
+  }
   function closeEdit() {
     setEditOpen(false);
     setEditing(null);
@@ -75,6 +79,7 @@ export function useStocksDialogs() {
     openJournal,
     openMovements,
     openEdit,
+    openCreate,
     closeEdit,
     openPrestation,
     closePrestation,
