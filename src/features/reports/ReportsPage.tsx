@@ -16,6 +16,7 @@ import { useReportData } from "@/lib/reports/use-report-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DayDetailContent,
   DayDetailDialog,
@@ -28,12 +29,14 @@ import {
   YearGrid,
 } from "@/components/reports";
 import { ProfitSheet } from "@/components/ProfitSheet";
+import { CostBatch } from "./CostBatch";
 
 export function ReportsPage() {
   const [view, setView] = useState<CalendarView>("month");
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
   const [detailOpen, setDetailOpen] = useState(false);
   const [profitOpen, setProfitOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
 
   const prefs = usePreferences();
   const cluster = prefs.cluster;
@@ -64,6 +67,9 @@ export function ReportsPage() {
         </div>
         <Button variant="outline" onClick={() => setProfitOpen(true)}>
           <Calculator className="h-4 w-4 mr-1.5" /> CA & bénéfices
+        </Button>
+        <Button variant="outline" onClick={() => setCostOpen(true)}>
+          Coûts d'achat
         </Button>
       </header>
 
@@ -197,6 +203,15 @@ export function ReportsPage() {
       />
 
       <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
+
+      <Dialog open={costOpen} onOpenChange={setCostOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Coûts d'achat</DialogTitle>
+          </DialogHeader>
+          <CostBatch />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
