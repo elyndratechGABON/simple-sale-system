@@ -29,7 +29,6 @@ export function PosPage() {
   const { mode, setMode } = pos;
   const { features } = usePreferences();
   const showTables = features?.tables ?? false;
-  const [addProductOpen, setAddProductOpen] = useState(false);
 
   return (
     <div
@@ -75,13 +74,11 @@ export function PosPage() {
       </header>
 
       {mode === "tables" ? (
-        // Mode Tables : 2 colonnes (FloorPlan | CartPanel + TableActions)
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        // Mode Tables : 3 colonnes (FloorPlan | ProductPanel | CartPanel)
+        <div className="grid gap-4 lg:grid-cols-[minmax(250px,20%)_minmax(0,1fr)_minmax(320px,28%)] xl:grid-cols-[minmax(250px,18%)_minmax(0,1fr)_minmax(340px,26%)] 2xl:grid-cols-[minmax(280px,16%)_minmax(0,1fr)_minmax(360px,24%)]">
           <FloorPlan pos={pos} />
-          <div className="space-y-4">
-            <CartPanel pos={pos} />
-            <TableActions pos={pos} />
-          </div>
+          <ProductPanel pos={pos} />
+          <CartPanel pos={pos} />
         </div>
       ) : (
         // Mode Comptoir : layout 3 colonnes (Categories | Products | Cart)
@@ -119,16 +116,6 @@ export function PosPage() {
       <CheckoutDialog pos={pos} />
       <ManualQtyDialog pos={pos} />
       <SaleFlash saleFlash={pos.saleFlash} />
-
-      {/* Dialog pour ajouter un produit en mode Tables */}
-      <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Ajouter un produit</DialogTitle>
-          </DialogHeader>
-          <ProductPanel pos={pos} />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
