@@ -7,66 +7,65 @@ import { StepShell } from "./StepShell";
 import type { ClusterTutorialApi } from "./useClusterTutorial";
 
 export function TutorialProductForm({ t }: { t: ClusterTutorialApi }) {
-  // Copie entièrement pilotée par le cluster — et par le mode choisi dans un salon :
-  //   - bar → boissons, prix au kg si stock au poids, coiffeur → prestation sans stock,
-  //     puis produit de beauté avec stock si le salon vend aussi en boutique.
+  // Choix universel Prestation (sans stock) / Produit (avec stock) pour tous clusters.
+  // Le mode actif change les champs affichés, pas seulement les mots.
   const priceLabel =
-    t.isServiceCluster && !t.addingProduct
+    t.serviceMode === "prestation"
       ? "Prix de la prestation"
       : t.sellsByWeight
         ? "Prix au kg (FCFA)"
         : "Prix de vente (FCFA)";
-  const showStockField = !t.tutorialConfig.isService || t.addingProduct;
-  const showCategoryField = t.tutorialConfig.showCategory || t.addingProduct;
-  const productLabel = t.addingProduct ? "Nom du produit" : t.tutorialConfig.productLabel;
-  const productPlaceholder = t.addingProduct
-    ? "Ex : Huile de coco, Shampooing"
-    : t.tutorialConfig.productPlaceholder;
-  const addDescription = t.addingProduct
-    ? "Shampooings, huiles, cosmétiques… vendus en boutique, avec stock."
-    : t.tutorialConfig.addDescription;
-  const categoryPlaceholder = t.addingProduct
-    ? "Ex : Produits de beauté, Accessoires"
-    : t.tutorialConfig.categoryPlaceholder;
+  const showStockField = t.serviceMode === "produit";
+  const showCategoryField = t.tutorialConfig.showCategory || t.serviceMode === "produit";
+  const productLabel =
+    t.serviceMode === "produit" ? "Nom du produit" : t.tutorialConfig.productLabel;
+  const productPlaceholder =
+    t.serviceMode === "produit"
+      ? "Ex : Huile de coco, Shampooing"
+      : t.tutorialConfig.productPlaceholder;
+  const addDescription =
+    t.serviceMode === "produit"
+      ? "Shampooings, huiles, cosmétiques… vendus en boutique, avec stock."
+      : t.tutorialConfig.addDescription;
+  const categoryPlaceholder =
+    t.serviceMode === "produit"
+      ? "Ex : Produits de beauté, Accessoires"
+      : t.tutorialConfig.categoryPlaceholder;
 
   return (
     <StepShell icon={Package} title={t.addTitle} description={addDescription}>
       <div className="space-y-3">
-        {/* Salon de coiffure : choisir ce qu'on ajoute — une prestation (pas de
-            stock) ou un produit de beauté (avec stock). L'onglet actif change les
-            champs, pas seulement les mots. */}
-        {t.isServiceCluster && (
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => t.setServiceMode("prestation")}
-              aria-pressed={t.serviceMode === "prestation"}
-              className={cn(
-                "flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left text-xs transition-all",
-                t.serviceMode === "prestation"
-                  ? "border-primary bg-accent ring-1 ring-primary"
-                  : "bg-card hover:border-primary/50",
-              )}
-            >
-              <span className="font-medium text-sm">Prestation</span>
-              <span className="text-muted-foreground">Coiffure, soin, manucure…</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => t.setServiceMode("produit")}
-              aria-pressed={t.serviceMode === "produit"}
-              className={cn(
-                "flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left text-xs transition-all",
-                t.serviceMode === "produit"
-                  ? "border-primary bg-accent ring-1 ring-primary"
-                  : "bg-card hover:border-primary/50",
-              )}
-            >
-              <span className="font-medium text-sm">Produit à vendre</span>
-              <span className="text-muted-foreground">Produits de beauté, avec stock</span>
-            </button>
-          </div>
-        )}
+        {/* Choix Prestation (sans stock) / Produit (avec stock) — universel. */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => t.setServiceMode("prestation")}
+            aria-pressed={t.serviceMode === "prestation"}
+            className={cn(
+              "flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left text-xs transition-all",
+              t.serviceMode === "prestation"
+                ? "border-primary bg-accent ring-1 ring-primary"
+                : "bg-card hover:border-primary/50",
+            )}
+          >
+            <span className="font-medium text-sm">Prestation</span>
+            <span className="text-muted-foreground">Coiffure, soin, livraison…</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => t.setServiceMode("produit")}
+            aria-pressed={t.serviceMode === "produit"}
+            className={cn(
+              "flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left text-xs transition-all",
+              t.serviceMode === "produit"
+                ? "border-primary bg-accent ring-1 ring-primary"
+                : "bg-card hover:border-primary/50",
+            )}
+          >
+            <span className="font-medium text-sm">Produit à vendre</span>
+            <span className="text-muted-foreground">Boissons, plats, articles…</span>
+          </button>
+        </div>
         <div>
           <Label htmlFor="tut-name">{productLabel}</Label>
           <Input

@@ -18,7 +18,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     workflow: { mode: "order-first", hasTables: true, hasKitchenPrint: false },
     stock: {
       unitType: "unit",
-      hasVariants: false,
       showCostPrice: false,
       hasSerialNumber: false,
     },
@@ -37,7 +36,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     workflow: { mode: "direct", hasTables: true, hasKitchenPrint: false },
     stock: {
       unitType: "unit",
-      hasVariants: false,
       showCostPrice: true,
       hasSerialNumber: false,
     },
@@ -57,7 +55,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
     stock: {
       unitType: "unit",
-      hasVariants: false,
       showCostPrice: true,
       hasSerialNumber: false,
     },
@@ -78,7 +75,6 @@ export const CLUSTER_MAP: Record<ClusterId, ClusterConfig> = {
     workflow: { mode: "direct", hasTables: false, hasKitchenPrint: false },
     stock: {
       unitType: "unit",
-      hasVariants: false,
       showCostPrice: true,
       hasSerialNumber: false,
     },

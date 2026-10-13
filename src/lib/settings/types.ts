@@ -29,7 +29,7 @@ export interface ClusterWorkflow {
 export interface ClusterStock {
   /** `unit` = pièces ; `weight` = kg ; `mixed` = les deux (quincaillerie). */
   unitType: "unit" | "weight" | "mixed";
-  hasVariants: boolean;
+  hasVariants?: boolean;
   showCostPrice: boolean;
   hasSerialNumber: boolean;
 }

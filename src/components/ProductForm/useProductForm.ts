@@ -32,7 +32,6 @@ export function useProductForm({
   const qc = useQueryClient();
   const prefs = usePreferences();
   const cluster = prefs.cluster;
-  const hasVariants = false; // Only clothing cluster had variants, now removed
   const hasWeightInput = cluster === "personnalise" && prefs.customUnitType === "weight";
   const hasSerialNumber = false;
   const allowServiceBooking = cluster === "service";
@@ -69,13 +68,9 @@ export function useProductForm({
       })) ?? [],
   );
 
-  // Affiche le bloc variantes quand le produit EST un produit, OU quand il en porte déjà
-  // (édition d'une fiche existante). Le deuxième terme est un garde-fou de DONNÉES : des
-  // variantes ont pu être créées hors `clothing` (l'onboarding ne les bloquait pas), la
-  // caisse les vend toujours (`pos.tsx` variant picker). Masquer le bloc sur ces fiches
-  // les rendrait invisibles ET non modifiables. Un commerçant qui n'a jamais eu de
-  // variantes ne voit toujours rien.
-  const showVariants = productType === "product" && (hasVariants || variants.length > 0);
+  // Affiche le bloc variantes pour tout produit (pas seulement ceux qui en ont déjà).
+  // Le bouton "+ Ajouter une variante" permet d'en créer la première.
+  const showVariants = productType === "product";
 
   function addVariant() {
     setVariants((vs) => [...vs, { id: draftId(), name: "", price: "", stock: "" }]);

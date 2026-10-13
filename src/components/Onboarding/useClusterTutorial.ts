@@ -17,11 +17,11 @@ export function useClusterTutorial(onComplete: () => void) {
   const [subStep, setSubStep] = useState<TutorialStep>("confirm");
   const [addedCount, setAddedCount] = useState(0);
   const [loadingDemo, setLoadingDemo] = useState(false);
-  // Salons (coiffure/beauté) : deux natures d'article — prestation SANS stock vs produit
-  // de beauté AVEC stock.
-  const [serviceMode, setServiceMode] = useState<"prestation" | "produit">("prestation");
+  // Tous clusters : choix Prestation (sans stock) vs Produit (avec stock).
+  // Défaut "produit" car la majorité des clusters sont orientés produits.
+  const [serviceMode, setServiceMode] = useState<"prestation" | "produit">("produit");
   const isServiceCluster = cluster === "service";
-  const addingProduct = isServiceCluster && serviceMode === "produit";
+  const addingProduct = serviceMode === "produit";
 
   // Variantes dynamiques — applicable à tout produit (tailles, couleurs, etc.).
   const [variants, setVariants] = useState<{ name: string; price: string; stock: string }[]>([]);
