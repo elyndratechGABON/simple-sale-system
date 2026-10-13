@@ -1,9 +1,8 @@
-// Tests du moteur de synchronisation local-first.
+// Convergence entre deux appareils du MÊME compte (même `shopId`).
 //
-// Scénario commun : deux appareils du MÊME compte (même `accountPhone` + `accountName`,
-// donc même `shopId`). L'appareil A émet des ops dans son outbox, l'appareil B — une base
-// neuve — les lit et les rejoue via `applyRemoteOps`. Le transport (WebRTC, relais) n'est
-// pas dans la boucle : il n'est que la copie des ops, que ces tests simulent directement.
+// L'appareil A émet des ops dans son outbox, l'appareil B — une base neuve — les lit et
+// les rejoue via `applyRemoteOps`. Le transport (WebRTC, relais) n'est pas dans la
+// boucle : il n'est que la copie des ops, que ces tests simulent directement.
 import { describe, it, expect } from "vitest";
 import {
   addClient,
@@ -15,113 +14,11 @@ import {
   listClients,
   listProducts,
   listSales,
-  resetDBForTests,
   setShopAccount,
 } from "../db";
 import { applyRemoteOpsSigned, captureSigned } from "./__tests__/setup";
-import {
-  ensureIdentity,
-  getDeviceKeys,
-  getIdentity,
-  resetDeviceIdentity,
-  resetIdentityForTests,
-} from "./identity";
-import { listPendingOps, markOpsSynced } from "./outbox";
-
-const ACCOUNT = { name: "Boutique Test", phone: "+24100000000", password: "secret" };
-const LINE = (productId: string) => ({
-  product_id: productId,
-  name: "Coca 1L",
-  price: 600,
-  cost: 300,
-  category: "Boisson" as const,
-  quantity: 2,
-});
-
-/** Réinitialise la base + le cache d'identité : simule un appareil neuf. */
-async function freshDevice(): Promise<void> {
-  await resetDBForTests();
-  resetIdentityForTests();
-}
-
-describe("identité", () => {
-  it("crée une identité stable par appareil (deviceId + clé de signature)", async () => {
-    await ensureIdentity();
-    const a = getIdentity();
-    expect(a.deviceId.length).toBeGreaterThan(0);
-    // Pas de compte en base → groupe isolé, rien à partager.
-    expect(a.shopId.startsWith("d_")).toBe(true);
-
-    // ECDSA P-256 : la paire signe les opérations, c'est elle la preuve d'origine.
-    const keys = getDeviceKeys();
-    expect(JSON.parse(keys.publicKey).kty).toBe("EC");
-    expect(JSON.parse(keys.publicKey).crv).toBe("P-256");
-    expect(keys.privateKey.length).toBeGreaterThan(0);
-
-    // Rechargement : l'identité persiste et ne change pas.
-    resetIdentityForTests();
-    const b = await ensureIdentity();
-    expect(b.deviceId).toBe(a.deviceId);
-    expect(b.shopId).toBe(a.shopId);
-  });
-
-  it("deux appareils du même compte partagent le même shopId", async () => {
-    await setShopAccount(ACCOUNT);
-    const idA = await ensureIdentity();
-    // resetDeviceIdentity simule un second mobile.
-    const idB = await resetDeviceIdentity();
-    expect(idB.deviceId).not.toBe(idA.deviceId);
-    expect(idA.shopId).toBe(idB.shopId);
-    expect(idA.shopId.startsWith("s_")).toBe(true);
-  });
-});
-
-describe("outbox", () => {
-  it("émet une op par écriture et décrémente le stock local", async () => {
-    const identity = await ensureIdentity();
-    const product = await addProduct({
-      name: "Coca 1L",
-      cost: 300,
-      price: 600,
-      stock: 10,
-      category: "Boisson",
-    });
-
-    let ops = await listPendingOps(identity.shopId);
-    const created = ops.find((o) => o.type === "product.created" && o.entity_id === product.id);
-    expect(created).toBeDefined();
-    // Le stock ABSOLU part dans la création, jamais un delta.
-    expect((created!.payload as { product: { stock: number } }).product.stock).toBe(10);
-
-    const sale = await createSale({ lines: [LINE(product.id)], cash_given: 1200 });
-    ops = await listPendingOps(identity.shopId);
-    const saleOp = ops.find((o) => o.type === "sale.created" && o.entity_id === sale.id);
-    expect(saleOp).toBeDefined();
-    const payload = saleOp!.payload as { sale: { id: string }; items: unknown[] };
-    expect(payload.sale.id).toBe(sale.id);
-    expect(payload.items).toHaveLength(1);
-
-    const stock = (await listProducts()).find((p) => p.id === product.id)!.stock;
-    expect(stock).toBe(8);
-  });
-
-  it("acquitte les ops transmises", async () => {
-    const identity = await ensureIdentity();
-    await addProduct({
-      name: "Coca 1L",
-      cost: 300,
-      price: 600,
-      stock: 10,
-      category: "Boisson",
-    });
-    const ops = await listPendingOps(identity.shopId);
-    expect(ops.length).toBeGreaterThan(0);
-
-    await markOpsSynced(ops.map((o) => o.id));
-    const remaining = await listPendingOps(identity.shopId);
-    expect(remaining).toHaveLength(0);
-  });
-});
+import { ensureIdentity } from "./identity";
+import { ACCOUNT, LINE, freshDevice } from "./sync-engine-helpers";
 
 describe("convergence entre deux appareils du même compte", () => {
   it("rejoue création + vente et aboutit aux mêmes ventes et au même stock", async () => {
