@@ -17,14 +17,20 @@ import type { ServiceChargeLine } from "@/lib/reports/charges-by-period";
  * « Supprimer » a disparu : vider le montant suffit, le dialogue efface les charges à 0 à
  * la fermeture. Un bouton de plus qui fait la même chose.
  *
- * PRESENTATION pure — la sauvegarde passe en props ; la périodicité et l'accès base
- * appartiennent au dialogue.
+ * PRESENTATION pure — la sauvegarde et la suppression passent en props ; la périodicité
+ * et l'accès base appartiennent au dialogue.
+ *
+ * Le nettoyage des charges à 0 À LA FERMETURE subsiste côté dialogue, mais il ne sert plus
+ * qu'un autre cas : les lignes vides abandonnées par le « + Ajouter » de la section
+ * business. Ici, vider un champ SUPPRIME immédiatement — il n'y a pas de bouton
+ * « + Ajouter », et donc pas de ligne vide à nettoyer.
  */
 export function ServiceChargesSection({
   allCategories,
   services,
   categoryRevenue,
   onSave,
+  onRemove,
 }: {
   /** Catégories du catalogue portant au moins un produit `type: "service"`. */
   allCategories: string[];
@@ -33,6 +39,7 @@ export function ServiceChargesSection({
   /** CA de la période par catégorie — même source que les noms, donc le recoupement tient. */
   categoryRevenue: Record<string, number>;
   onSave: (category: string, amount: number, id?: string) => void;
+  onRemove: (id: string) => void;
 }) {
   // Ce qui pèse d'abord ; une catégorie sans vente passe en fin de liste.
   const rows = [...allCategories].sort(
@@ -75,11 +82,12 @@ export function ServiceChargesSection({
               onBlur={(e) => {
                 const raw = e.target.value.trim();
 
-                // Champ VIDÉ : intention de supprimer. On enregistre 0, et le dialogue
-                // efface les charges à 0 à la fermeture. Le traiter comme une faute de
-                // frappe rendait la suppression IMPOSSIBLE — c'est ce qui est arrivé.
+                // Champ VIDÉ : suppression IMMÉDIAITE de la charge. Enregistrer 0 et
+                // laisser le dialogue nettoyer à la fermeture créait une course — `close()`
+                // lit l'état figé du rendu précédent, la refetch du blur n'est pas
+                // terminée, et la charge réapparaît à 0. Un geste, un effet.
                 if (raw === "") {
-                  if (existante && existante.amount !== 0) onSave(category, 0, existante.id);
+                  if (existante) onRemove(existante.id);
                   return;
                 }
 
