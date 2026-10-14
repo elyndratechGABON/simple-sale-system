@@ -16,6 +16,7 @@ import type { QueryClient } from "@tanstack/react-query";
  *
  * - `products` : stock, catalogue, variantes.
  * - `sales` et `sale_items` : historique, rapports, tableau de bord.
+ * - `charges` : charges de service et d'exploitation (saisies, donc synchronisées).
  * - `paired_devices` / `sync_identity` / `account_quota` : appareils et rôles.
  *
  * Un préfixe suffit : React Query invalide aussi toutes les clés qui commencent par
@@ -31,6 +32,7 @@ export const SYNC_INVALIDATED_QUERIES = [
   "sync_identity",
   "account_quota",
   "clients",
+  "charges",
 ] as const;
 
 let cachedClient: QueryClient | null = null;
