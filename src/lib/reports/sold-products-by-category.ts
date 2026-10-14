@@ -24,8 +24,15 @@ export interface SoldProduct {
  *
  * Deux exclusions, délibérées :
  *  - une ligne LIBRE (pas de `product_id`) n'a pas de fiche : pas de coût à saisir ;
- *  - un produit SUPPRIMÉ reste ignoré — impossible d'y écrire un coût.
- * Dans les deux cas, l'alerte « produits sans coût » de la page couvre le risque.
+ *  - un produit dont l'id ne figure plus au catalogue est ignoré — impossible d'y écrire
+ *    un coût (produit supprimé, ou identifiant orphelin).
+ * Les produits SUPPRIMÉS ne sont pas filtrés ici : `listProducts()` applique déjà
+ * `alive()` (cf. `products.ts`), donc cette fonction n'en voit jamais. Le filtre de
+ * suppression vit à UN seul endroit — la lecture.
+ *
+ * Et une conséquence à connaître : une ligne dont le `product_id` ne correspond à aucun
+ * produit disparaît SANS.trace. Son coût ne sera jamais saisissable ; seule l'alerte
+ * « produits sans coût » de la page signale le trou.
  *
  * Tri : catégories par CA décroissant (reste à faire à l'appelant), lignes d'une
  * catégorie par quantité décroissante.
