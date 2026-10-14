@@ -99,6 +99,7 @@ export function ChargesDialog({
             services={services}
             categoryRevenue={categoryRevenue}
             onSave={(category, amount, id) => void save("service", category, amount, id)}
+            onRemove={(id) => void remove(id)}
           />
 
           <BusinessChargesSection
