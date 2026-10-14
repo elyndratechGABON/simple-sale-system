@@ -1,4 +1,4 @@
-import { ShoppingCart, Utensils, X, CreditCard } from "lucide-react";
+import { ShoppingCart, Utensils, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartShell } from "@/components/pos";
 import { PreviousRounds } from "./PreviousRounds";
@@ -10,8 +10,9 @@ import type { PosController } from "./usePos";
 
 /**
  * Panier / encaissement. Panneau latéral collant sur grand écran, feuille coulissante
- * sur téléphone (cf. CartShell). Assemble l'addition déjà servie, la saisie de la
- * tournée, l'encaissement sur table et l'action principale.
+ * sur téléphone (cf. CartShell). N'est monté qu'en mode Comptoir — mais y sert aussi à
+ * l'encaissement d'une table, que le plan de salle vient de viser (`kind: "table"`) :
+ * d'où l'addition déjà servie, les tournées précédentes et le paiement de la table.
  */
 export function CartPanel({ pos }: { pos: PosController }) {
   return (
@@ -28,18 +29,7 @@ export function CartPanel({ pos }: { pos: PosController }) {
             </>
           )}
         </h2>
-        {pos.activeTable && pos.mode === "tables" && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5"
-            onClick={() => pos.setMode("comptoir")}
-          >
-            <CreditCard className="h-4 w-4" />
-            Encaisser → Comptoir
-          </Button>
-        )}
-        {pos.activeTable && pos.mode !== "tables" && (
+        {pos.activeTable ? (
           <Button
             size="sm"
             variant="ghost"
@@ -48,8 +38,7 @@ export function CartPanel({ pos }: { pos: PosController }) {
           >
             <X className="h-4 w-4 mr-1" /> Annuler la table
           </Button>
-        )}
-        {!pos.activeTable && (
+        ) : (
           <Button
             size="sm"
             variant="ghost"
