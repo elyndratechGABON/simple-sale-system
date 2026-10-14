@@ -46,10 +46,7 @@ export function ReportsPage() {
           <p className="text-sm text-muted-foreground">Montants par période.</p>
         </div>
         <Button variant="outline" onClick={() => setProfitOpen(true)}>
-          <Calculator className="h-4 w-4 mr-1.5" /> CA & bénéfices
-        </Button>
-        <Button variant="outline" onClick={() => openCostBatch([])}>
-          Coûts d'achat
+          <Calculator className="h-4 w-4 mr-1.5" /> Bilan mensuel
         </Button>
       </header>
 
@@ -126,8 +123,13 @@ export function ReportsPage() {
         </div>
       )}
 
-      {/* Les deux seuls gestes de la page : le bilan et les coûts d'achat. Le détail
-          ligne par ligne vit dans ProfitSheet, la saisie des coûts dans CostBatch. */}
+      {/* Deux dialogues restants, chacun avec UN déclencheur :
+          — « Bilan mensuel » (bouton du titre) : la vue profonde, stock valorisé et
+            calculette. Son nom le disait « CA & bénéfices », ce qui ne distinguait plus rien
+            depuis que « Bénéfice » est aussi un KPI de l'onglet.
+          — le saisie des coûts en lot : ouverte par l'alerte « produits sans coût », qui
+            lui passe les produits à traiter PRÉSÉLECTIONNÉS. Un bouton dans le titre
+            l'ouvrirait vide, donc en doublon. */}
       <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
 
       <Dialog open={costOpen} onOpenChange={setCostOpen}>
