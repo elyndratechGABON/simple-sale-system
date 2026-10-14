@@ -35,10 +35,15 @@ export async function announceSigned(deviceId: string, shopId: string): Promise<
 }
 
 /**
- * Op d'archive pour CE groupe. Le `shop_id` doit être celui de l'appareil courant :
- * `applyRemoteOps` ne retient que les ops du groupe courant, une archiveconstruite avec
- * un `shop_id` inventé serait ignorée — silencieusement, ce qui est exactement le piège
- * qu'un test de restauration doit attraper.
+ * Op d'archive pour CE groupe. Le `shop_id` doit être celui de l'appareil courant.
+ *
+ * `applyRemoteOps` ne filtre PAS sur `shop_id` — un op signé dont le `shop_id` est
+ * étranger s'applique normalement (constaté par test). L'isolation est AILLEURS :
+ *   (a) le relais filtre au pull (`adapter.ts` — `?shop_id=…`) ;
+ *   (b) `applyRemoteOps` refuse toute op dont la signature ne vérifie pas contre une clé
+ *       présente dans le registre local (`trust.ts` — `verifyAgainst`).
+ * Une clé n'existant que dans la boutique où son appareil a été appairé, les deux se
+ * combinent. Ne pas ajouter une nouvelle op SANS signature en croyant que `shop_id` suffit.
  */
 export const archived = (
   identity: { shopId: string; deviceId: string },
