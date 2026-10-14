@@ -1,6 +1,7 @@
 import type { PosDatabase } from "../../db";
 import type { SyncOp } from "../types";
 import { applyCatalogueSnapshot } from "./catalogue";
+import { applyChargeDeleted, applyChargeSaved } from "./charges";
 import { applyClientCreated, applyClientDeleted, applyClientUpdated } from "./clients";
 import { applyDeviceAnnounce, applyDeviceApprove } from "./devices";
 import {
@@ -39,6 +40,12 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       break;
     case "client.deleted":
       await applyClientDeleted(db, op);
+      break;
+    case "charge.saved":
+      await applyChargeSaved(db, op);
+      break;
+    case "charge.deleted":
+      await applyChargeDeleted(db, op);
       break;
     case "device.announce":
       await applyDeviceAnnounce(db, op);
