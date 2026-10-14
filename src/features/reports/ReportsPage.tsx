@@ -18,14 +18,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Kpi } from "@/components/reports";
 import { ProfitSheet } from "@/components/ProfitSheet";
 import { CostBatch } from "./CostBatch";
+import { CostAlerts } from "./CostAlerts";
+import { useCostAlerts } from "./useCostAlerts";
 
 export function ReportsPage() {
   const [view, setView] = useState<CalendarView>("month");
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
   const [profitOpen, setProfitOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
+  const [costSelection, setCostSelection] = useState<string[]>([]);
 
-  const { stats, bestLabel } = useReportData(focusedDay, view);
+  const { stats, items, products } = useReportData(focusedDay, view);
+  const { sold, global } = useCostAlerts(items, products);
 
   return (
     <div className="app-container space-y-4 py-4">
@@ -89,19 +93,44 @@ export function ReportsPage() {
               value={stats && stats.salesCount > 0 ? formatFCFA(stats.averageBasket) : "—"}
             />
             <Kpi
-              label={view === "year" ? "Meilleur mois" : "Meilleur jour"}
-              value={bestLabel}
+              label="Bénéfice"
+              value={stats ? formatFCFA(stats.profit) : "—"}
               hint={
-                view === "year"
-                  ? undefined
-                  : stats?.bestDay
-                    ? formatFCFA(stats.bestDay.revenue)
-                    : undefined
+                sold.length > 0
+                  ? `⚠ ${sold.length} vendu${sold.length > 1 ? "s" : ""} sans coût`
+                  : undefined
               }
             />
           </CardContent>
         </Card>
       </div>
+
+      <CostAlerts
+        sold={sold}
+        global={global}
+        onOpenCostBatch={(ids) => {
+          setCostSelection(ids);
+          setCostOpen(true);
+        }}
+      />
+
+      {stats && stats.topProducts.length > 0 && (
+        <Card>
+          <CardContent className="space-y-1.5 p-3 sm:p-4">
+            <h2 className="text-sm font-semibold">Top produits</h2>
+            {stats.topProducts.slice(0, 5).map((p, i) => (
+              <div key={p.product_id} className="flex items-center gap-2 text-sm">
+                <span className="w-4 shrink-0 text-muted-foreground tabular-nums">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                <span className="shrink-0 text-muted-foreground tabular-nums">{p.quantity}×</span>
+                <span className="w-24 shrink-0 text-right font-semibold tabular-nums">
+                  {formatFCFA(p.revenue)}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Les deux seuls gestes de la page : le bilan et les coûts d'achat. Le détail
           ligne par ligne vit dans ProfitSheet, la saisie des coûts dans CostBatch. */}
@@ -112,7 +141,8 @@ export function ReportsPage() {
           <DialogHeader>
             <DialogTitle>Coûts d'achat</DialogTitle>
           </DialogHeader>
-          <CostBatch />
+          {/* La clé force le remontage : la sélection pré-cochée n'est lue qu'au montage. */}
+          <CostBatch key={costSelection.join("|")} initialSelected={costSelection} />
         </DialogContent>
       </Dialog>
     </div>
