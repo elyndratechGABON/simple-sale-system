@@ -10,6 +10,8 @@ export { IDENTITY_KEYS, IDENTITY_ADOPTED_SHOP_ID, PAIRING_KEYS, SEQUENCE_KEY } f
 export type { DeviceKeys, DeviceRole, SyncIdentity } from "./identity";
 export type { OpType, ProcessedOp, SyncOp } from "./ops";
 export type {
+  ChargeDeletedPayload,
+  ChargeSavedPayload,
   DeviceAnnouncePayload,
   CatalogueRequestPayload,
   CatalogueSnapshotPayload,
