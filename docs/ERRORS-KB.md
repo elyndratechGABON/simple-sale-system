@@ -382,3 +382,55 @@ Le code se lit comme protégé, et le `?? null` visible rassure : c'est ce qui r
 **Occurrences** : 2 clés (`shop_logo`, `monthly_overview`), 3 fichiers
 
 ---
+
+## ERR-SYNC-001 — Garde `!existing` copiée d'une entité qui a un `created`
+
+**Signature** : un handler `apply`正確 sur le papier, qui n'applique jamais rien. Aucun message : l'op est comptée « appliquée », l'écriture est silencieusement sautée.
+
+**Contexte** : `applyChargeSaved`, premier handler d'une entité nouvelle (`charges`). Écrit en copiant `applyProductUpdated` ligne pour ligne, comme demandé — « le pattern EXACT du projet ».
+
+**Cause** : `applyProductUpdated` porte `if (!existing || existing.deleted_at) return;` parce qu'un **`product.created` a déjà posé la ligne** : l'update ne fait que la modifier. Les charges n'ont qu'un seul op (`charge.saved`), il n'y a pas de `charge.created` — donc cette garde annule la **création** :
+```ts
+// ❌ copié de product.updated : correct là-bas, destructeur ici
+const existing = await db.products.get(pl.product_id);
+if (!existing || existing.deleted_at) return;
+
+// ✅ source de la ligne AVANT ce handler ? Personne → on crée
+const existing = await db.charges.get(pl.charge_id);
+if (existing?.deleted_at) return;   // pas de réanimation, mais création permise
+```
+Le scénario détruit était celui qui avait justifié toute la synchronisation : *le patron saisit « Loyer » sur sa caisse → l'autre poste doit le voir*.
+
+**Solution** : la garde dépend du graphe d'opérations, pas de l'entité. `saved` crée et met à jour (un seul op) ; `deleted` exige `existing` — on ne crée pas une ligne pour la supprimer. Effet de bord de type : `ChargeSavedPayload.fields` ne peut plus être `Partial`, le handler n'ayant plus de ligne existante à compléter.
+
+**Prévention** : avant de copier une garde, se demander *« qu'est-ce qui a posé cette ligne, avant moi ? »*. Réponse « une autre op du même type » → garde `!existing` ; réponse « personne » → pas de garde. Verrouiller par un test comportemental (création + mise à jour), pas par une relecture : `charges-sync.test.ts` passe au vert, et passe au ROUGE en 4 tests sur 5 si on remet la garde.
+
+**Note de sécurité** : l'`Omit<Charge, keyof SyncFields>` du payload est une garantie **de compilation**, pas d'exécution. Un op forgé qui porterait `deleted_at` dans `fields` serait honoré par le spread `{ ...pl.fields }`. C'est assumé et cohérent avec `product.updated` — mais ce n'est **pas** une barrière de sécurité, et il ne faut pas le présenter comme telle.
+
+**Fichiers impactés** : `src/lib/syncengine/apply/charges.ts`, `src/lib/syncengine/types/payloads.ts`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 1
+
+---
+
+## ERR-DB-004 — Table écrite par un handler, absente de la transaction d'application
+
+**Signature** : le handler écrit, la transaction ne couvre pas la table → `NotFoundError`, ou commit qui se ferme (`PrematureCommitError`) sous les pieds de l'appelant.
+
+**Contexte** : `applyChargeSaved` écrit dans `db.charges`. `applyRemoteOps` ouvre sa PROPRE liste de tables (`orchestrate.ts:27-38`) — distincte de celle de `snapshot.ts`, avec les mêmes tables dedans et les mêmes omissions possibles.
+
+**Cause** : même famille que `ERR-DB-003`, liste différente. Ajouter une table au schéma puis à son handler ne demande rien à `orchestrate.ts`, et rien ne signale l'oubli. Le symptôme n'apparaît qu'à la **réception** d'une op distante par un pair — donc en production, chez le client, pas en développement.
+
+**Solution** : `db.charges` ajouté à la liste de la transaction d'application.
+
+**Prévention** : `charges-sync.test.ts` attrape le cas de figure par le comportement (une `charge.saved` reçue doit se poser) — c'est le filet. Reste un TODO : un test d'exhaustivité sur la liste de `orchestrate.ts`, comme `snapshot-exhaustivity.test.ts` pour `snapshot.ts`.
+
+**Fichiers impactés** : `src/lib/syncengine/apply/orchestrate.ts`, `src/lib/charges-sync.test.ts`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 1
+
+---
