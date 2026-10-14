@@ -322,3 +322,31 @@ const { items: localItems } = useItemsToAdd(initialItems ?? []);
 **Occurrences** : 1 (10 tentatives de correction)
 
 ---
+
+## ERR-QUERY-001 — `?? null` appliqué à une Promise, pas à sa valeur
+
+**Signature** : `Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["…"]`
+
+**Contexte** : Une requête dont la valeur est simplement absente — un réglage jamais saisi, un bilan mensuel pas encore enregistré. TanStack Query refuse `undefined` comme donnée résolue et fait basculer la requête en erreur.
+
+**Cause** : **Le `??` ne s'applique pas à la valeur d'une Promise, mais à la Promise elle-même.** Une Promesse n'est jamais `null` ni `undefined`, donc le garde-fou est silencieusement inerte et la fonction résout plus tard vers `undefined` :
+```ts
+// ❌ le `??` teste la PROMISE, pas son résultat : inerte
+queryFn: () => getSetting<string>("shop_logo") ?? null,
+
+// ✅ il faut AWAITER avant de donner une valeur de repli
+queryFn: async () => (await getSetting<string>("shop_logo")) ?? null,
+```
+Le code se lit comme protégé, et le `?? null` visible rassure : c'est ce qui rend l'erreur si longue à trouver. `TypeScript` ne dit rien non plus — la fonction reste bien typée.
+
+**Solution** : `(await getX()) ?? repli`, ou faire renvoyer `null` par la fonction DB si plusieurs appelants sont concernés.
+
+**Prévention** : devant `() => db.get(...) ?? defaut`, se demander « est-ce que je teste une valeur ou un objet ? ». Convention du dépôt : toute fonction DB « peut être absente » (`getSetting`, `getMonthlyOverview`) garde `undefined`, et **l'appelant** fait `(await …) ?? repli` — c'est déjà le cas de 15 appelsants sur 16. React Query n'accepte jamais `undefined` : la valeur de repli est obligatoire.
+
+**Fichiers impactés** : `src/components/Header.tsx`, `src/features/settings/AppearanceCard.tsx`, `src/components/ProfitSheet/ProfitSheet.tsx`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 2 clés (`shop_logo`, `monthly_overview`), 3 fichiers
+
+---
