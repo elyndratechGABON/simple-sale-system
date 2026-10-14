@@ -6,9 +6,17 @@ import { cn } from "@/lib/utils";
 import { PopularStrip } from "./PopularStrip";
 import { EmptyCatalog } from "./EmptyCatalog";
 import type { PosController } from "./usePos";
+import type { Product } from "@/lib/db";
 
 /** Colonne centrale : titre, recherche, catégories, produits du jour, grille. */
-export function ProductPanel({ pos }: { pos: PosController }) {
+export function ProductPanel({
+  pos,
+  onProductSelect,
+}: {
+  pos: PosController;
+  /** Tap alternatif : le sélecteur de table ajoute au panier de la table, pas à celui du comptoir. */
+  onProductSelect?: (product: Product) => void;
+}) {
   return (
     <div className="flex min-w-0 flex-col">
       {/* Titre seul sur sa ligne en mobile ; les catégories passent dans leur propre
@@ -73,7 +81,7 @@ export function ProductPanel({ pos }: { pos: PosController }) {
           </div>
         </section>
       )}
-      <PopularStrip pos={pos} />
+      <PopularStrip pos={pos} onProductSelect={onProductSelect} />
       <div
         className={cn(
           "mt-5 grid gap-2.5 xs:gap-3",
@@ -93,7 +101,7 @@ export function ProductPanel({ pos }: { pos: PosController }) {
               key={p.id}
               product={p}
               inCart={inCart}
-              onAdd={pos.onProductClick}
+              onAdd={onProductSelect ?? pos.onProductClick}
               // Appui long = saisie manuelle de la quantité. C'est le seul geste de
               // « gestion » que la caisse garde : ouvrir une fiche ferait perdre la vente.
               onLongPress={(prod) => {

@@ -1,13 +1,20 @@
 import { formatFCFA } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PosController } from "./usePos";
+import type { Product } from "@/lib/db";
 
 /**
  * Les produits du jour, en un tap : le serveur re-commande sans chercher dans la grille.
  * Masquée dès qu'on cherche ou qu'on filtre — sinon la bande contredirait la sélection
  * courante. Cluster service : respecte l'onglet Prestations/Produits.
  */
-export function PopularStrip({ pos }: { pos: PosController }) {
+export function PopularStrip({
+  pos,
+  onProductSelect,
+}: {
+  pos: PosController;
+  onProductSelect?: (product: Product) => void;
+}) {
   if (pos.search.trim() !== "" || pos.filter !== "Tous" || pos.popular.length === 0) return null;
   const items = pos.popular.filter((p) =>
     pos.isService
@@ -25,7 +32,7 @@ export function PopularStrip({ pos }: { pos: PosController }) {
             key={p.id}
             type="button"
             disabled={out}
-            onClick={() => pos.onProductClick(p)}
+            onClick={() => (onProductSelect ?? pos.onProductClick)(p)}
             className={cn(
               "flex min-h-11 shrink-0 items-center gap-2 rounded-xl border bg-card pl-1.5 pr-3 text-sm shadow-sm",
               "hover:border-primary active:scale-[0.98]",
