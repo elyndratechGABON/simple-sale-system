@@ -73,8 +73,19 @@ export function ServiceChargesSection({
               aria-label={`Coût de la catégorie ${category}`}
               className="h-9 w-32 text-right tabular-nums"
               onBlur={(e) => {
-                const amount = Number(e.target.value);
-                if (e.target.value.trim() === "" || Number.isNaN(amount) || amount < 0) {
+                const raw = e.target.value.trim();
+
+                // Champ VIDÉ : intention de supprimer. On enregistre 0, et le dialogue
+                // efface les charges à 0 à la fermeture. Le traiter comme une faute de
+                // frappe rendait la suppression IMPOSSIBLE — c'est ce qui est arrivé.
+                if (raw === "") {
+                  if (existante && existante.amount !== 0) onSave(category, 0, existante.id);
+                  return;
+                }
+
+                const amount = Number(raw);
+                if (Number.isNaN(amount) || amount < 0) {
+                  // Frappe illisible : on restaure, on ne détruit rien.
                   e.target.value = existante?.amount ? String(existante.amount) : "";
                   return;
                 }
