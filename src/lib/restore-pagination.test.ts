@@ -19,6 +19,12 @@ test("la pagination couvre l'archive entière, pas seulement la première page",
   // 1 200 mouvements > page de 500. Un client qui s'arrête à la première page dirait
   // « terminé » avec un tiers du stock reconstruit : le bug le plus probable et le plus
   // discret de toute la restauration.
+  //
+  // Timeout élargi à 20 s : ce test signe puis applique 1 200 opérations (1 200
+  // signatures RSA + 1 200 vérifications) sur `fake-indexeddb`. Seul il prend 0,8 s,
+  // mais en suite complète il sebat à plus de 5 s face aux 45 autres fichiers et se
+  // faisait tuer par le timeout PAR DÉFAUT de Vitest — un échec aléatoire qui masque
+  // les vraies régressions. Les assertions restent déterministes.
   const identity = await ensureIdentity();
   const announce = await announceSigned(identity.deviceId, identity.shopId);
   const announcePage = [announce];
@@ -79,4 +85,4 @@ test("la pagination couvre l'archive entière, pas seulement la première page",
   expect(pageSizes).toEqual([500, 500, 201]);
   expect(cursor).toBe(full.length);
   expect(rounds).toBeLessThan(10);
-});
+}, 20_000);
