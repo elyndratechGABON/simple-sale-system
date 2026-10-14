@@ -45,8 +45,11 @@ export function ProfitTab({
 
   return (
     <div className="space-y-6">
+      {/* Titre choisi pour ce qu'on y FAIT, pas pour ce que c'est : c'est le passage en lot
+            pour les produits vendus dont le coût d'achat manque. La saisie individuelle se
+            fait au formulaire produit — deux portes pour la même donnée, deux usages. */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold">Coûts des produits</h2>
+        <h2 className="mb-2 text-sm font-semibold">Compléter les coûts manquants</h2>
         <ProductCostsSection products={products} items={items} />
       </section>
 
