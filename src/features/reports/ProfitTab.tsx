@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { formatFCFA } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { listCharges, type Product, type SaleItem } from "@/lib/db";
+import { Card, CardContent } from "@/components/ui/card";
 import { groupChargesByKind } from "@/lib/reports/charges-by-period";
 import { soldProductsByCategory } from "@/lib/reports/sold-products-by-category";
 import { rangeFor, type CalendarView } from "@/lib/reports/period";
 import { ProductCostsSection } from "./ProductCostsSection";
-import { ChargeSection } from "./ChargeSection";
+import { ChargeSection, NetLine } from "./ChargeSection";
 import { ChargesDialog } from "./ChargesDialog";
 
 /**
@@ -21,11 +24,19 @@ export function ProfitTab({
   items,
   focusedDay,
   view,
+  profit,
 }: {
   products: Product[];
   items: SaleItem[];
   focusedDay: number;
   view: CalendarView;
+  /**
+   * Bénéfice de la période, PRIS TEL QUEL de `computePeriodStats` — jamais recalculé ici.
+   * C'est cette valeur que tous les autres écrans (accueil, historique, exports, clôture)
+   * affichent ; la recomposer à partir de `products.cost` donnerait un second bénéfice,
+   * différent du premier, sur le même écran. Voir `ERR-DATA-001`.
+   */
+  profit: number;
 }) {
   const { from, to } = rangeFor(focusedDay, view);
   const [chargesOpen, setChargesOpen] = useState(false);
@@ -56,6 +67,21 @@ export function ProfitTab({
     return out;
   }, [products, items]);
 
+  // Une seule soustraction : les charges d'exploitation que le commerçant vient de saisir.
+  // Les charges de SERVICE sont DÉJÀ dans `profit` (via `cost_at_sale`) — les retrancher
+  // une seconde fois les compterait deux fois.
+  const totalBusiness = business.reduce((s, c) => s + c.amount, 0);
+  const net = profit - totalBusiness;
+
+  // Le coût d'achat reste facultatif : sans lui, la marge vaut le prix de revente entier.
+  // On le dit sous le chiffre plutôt que de le gonfler en silence (cf. ERR-DATA-001).
+  const sansCout = soldProductsByCategory(products, items);
+  const totalSansCout = [...sansCout.values()].flat().filter((p) => !p.product.cost).length;
+  const soldHint =
+    totalSansCout > 0
+      ? `Bénéfice surestimé : ${totalSansCout} produit${totalSansCout > 1 ? "s" : ""} vendu${totalSansCout > 1 ? "s" : ""} sans coût d'achat saisi.`
+      : undefined;
+
   return (
     <div className="space-y-6">
       {/* Titre choisi pour ce qu'on y FAIT, pas pour ce que c'est : c'est le passage en lot
@@ -76,11 +102,40 @@ export function ProfitTab({
 
       <ChargeSection
         title="Charges du business"
-        total={business.reduce((s, c) => s + c.amount, 0)}
+        total={totalBusiness}
         empty="Aucune charge d'exploitation sur la période"
         lines={business.map((c) => ({ id: c.id, label: c.label, amount: c.amount }))}
         onEdit={() => setChargesOpen(true)}
+        // Le total est énoncé dans le bloc final : le répéter ici afficherait deux fois
+        // le même nombre à l'écran.
+        showTotal={false}
       />
+
+      {/* La conclusion de l'onglet. `profit` vient de `computePeriodStats`, comme tous les
+          autres écrans ; on ne le RECALCULE pas, on ne fait qu'y soustraire ce que le
+          commerçant vient de saisir et que les ventes ne contiennent pas. */}
+      <Card>
+        <CardContent className="space-y-1.5 p-3 sm:p-4">
+          <h2 className="text-sm font-semibold">Bénéfice net</h2>
+          <NetLine label="Marge totale" value={formatFCFA(profit)} />
+          <NetLine
+            label="Charges du business"
+            value={totalBusiness > 0 ? `− ${formatFCFA(totalBusiness)}` : "—"}
+          />
+          <div className="flex items-center justify-between border-t pt-1.5">
+            <span className="text-sm font-semibold">Bénéfice net</span>
+            <span
+              className={cn(
+                "text-base font-bold tabular-nums",
+                net >= 0 ? "text-primary" : "text-destructive",
+              )}
+            >
+              {formatFCFA(net)}
+            </span>
+          </div>
+          {soldHint && <p className="pt-1 text-xs text-muted-foreground">{soldHint}</p>}
+        </CardContent>
+      </Card>
 
       <ChargesDialog
         open={chargesOpen}
