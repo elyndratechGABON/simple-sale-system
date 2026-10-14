@@ -8,6 +8,8 @@ export type OpType =
   | "client.created"
   | "client.updated"
   | "client.deleted"
+  | "charge.saved"
+  | "charge.deleted"
   | "category.created"
   | "device.announce"
   | "device.approve"
