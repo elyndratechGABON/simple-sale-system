@@ -131,4 +131,18 @@ export function applyLateBVersions(db: Dexie): void {
   db.version(25).stores({
     rentals: null,
   });
+
+  // Version 26 — CHARGES.
+  //
+  // Store neuf, aucun `upgrade()` : il n'y a rien à reprendre (même raison que les trois
+  // stores de la version 18). `charges` porte les charges de service (rattachées à une
+  // catégorie) et les charges d'exploitation, saisies sur une période.
+  //
+  // Index : `id, kind, period_start` — la seule lecture du moteur est « toutes les
+  // charges de cette période », le filtrage par `kind` se fait ensuite en mémoire sur
+  // quelques lignes. Un index composé `[kind+period_start]` ne servirait à rien tant
+  // qu'aucune lecture ne demande un seul `kind` seul.
+  db.version(26).stores({
+    charges: "id, kind, period_start",
+  });
 }
