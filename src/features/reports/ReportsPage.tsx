@@ -127,15 +127,15 @@ export function ReportsPage() {
           — « Bilan mensuel » (bouton du titre) : la vue profonde, stock valorisé et
             calculette. Son nom le disait « CA & bénéfices », ce qui ne distinguait plus rien
             depuis que « Bénéfice » est aussi un KPI de l'onglet.
-          — le saisie des coûts en lot : ouverte par l'alerte « produits sans coût », qui
-            lui passe les produits à traiter PRÉSÉLECTIONNÉS. Un bouton dans le titre
-            l'ouvrirait vide, donc en doublon. */}
+          — le saisie des coûts EN LOT : ouverte par l'alerte « produits sans coût », qui lui
+            passe les produits à traiter PRÉSÉLECTIONNÉS. Un bouton dans le titre l'ouvrirait
+            vide, donc en doublon — d'où l'absence de « Coûts d'achat » dans l'en-tête. */}
       <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
 
       <Dialog open={costOpen} onOpenChange={setCostOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Coûts d'achat</DialogTitle>
+            <DialogTitle>Compléter les coûts manquants</DialogTitle>
           </DialogHeader>
           {/* La clé force le remontage : la sélection pré-cochée n'est lue qu'au montage. */}
           <CostBatch key={costSelection.join("|")} initialSelected={costSelection} />
