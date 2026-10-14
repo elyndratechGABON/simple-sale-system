@@ -3,6 +3,18 @@ import type { Product, SaleItem } from "@/lib/db";
 import { soldProductsByCategory } from "@/lib/reports/sold-products-by-category";
 import { ProductCostRow } from "./ProductCostRow";
 
+/**
+ * Passage EN LOT pour les produits vendus dont le coût d'achat manque.
+ *
+ * Ce n'est PAS la porte principale de la saisie : le formulaire produit la porte
+ * individuelle (je crée un article, je connais son prix d'achat). Ici, c'est le cas de
+ * masse — un catalogue de 200 articles dont aucun coût n'est renseigné ne se remplit pas
+ * avec 200 allers-retours vers l'écran Stocks. L'alerte « produits sans coût » ouvre cette
+ * liste avec les articles concernés déjà cochés.
+ *
+ * Le regroupement vient de `soldProductsByCategory` : uniquement ce qui a été VENDU sur la
+ * période (cf. ce fichier pour les exclusions : ligne libre, produit absent du catalogue).
+ */
 export function ProductCostsSection({
   products,
   items,
