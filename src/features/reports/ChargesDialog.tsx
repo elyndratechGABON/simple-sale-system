@@ -28,6 +28,12 @@ interface ChargesDialogProps {
  *
  * La query est invalidée par le préfixe `charges` de `invalidateSyncQueries` : une charge
  * reçue d'un autre écran pendant que le dialogue est ouvert s'affiche sans rechargement.
+ *
+ * NETTOYAGE : une ligne créée reste à 0 tant que le vendeur ne l'a pas remplie, faute de quoi
+ * le bouton « + Ajouter » aurait pu créer une charge sans `id`, inenregistrable au blur
+ * ensuite. À la fermeture, les charges à 0 sont donc supprimées : une ligne abandonnée
+ * disparaît au lieu de s'accumuler. Conséquence assumée : une charge legitimately mise à
+ * 0 disparaît aussi à la fermeture.
  */
 export function ChargesDialog({
   open,
@@ -70,8 +76,16 @@ export function ChargesDialog({
     }
   }
 
+  /** Seule porte de sortie : croix, Échap et clic extérieur arrivent tous par là. */
+  function close() {
+    for (const charge of charges) {
+      if (charge.amount === 0) void remove(charge.id);
+    }
+    onOpenChange(false);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => !next && close()}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Charges de la période</DialogTitle>
