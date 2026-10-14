@@ -4,6 +4,7 @@ import type { Sale, SaleItem } from "../types/sales";
 import type { ShopProfile, ClosingImport } from "../types/shop";
 import type {
   CatalogueRequestPending,
+  Charge,
   Client,
   DayClosure,
   EmployeeHistory,
@@ -33,6 +34,8 @@ export class PosDatabase extends Dexie {
   closings!: Table<ClosingImport, string>;
   employee_history!: Table<EmployeeHistory, string>;
   catalogue_requests!: Table<CatalogueRequestPending, string>;
+  /** Charges de service et charges d'exploitation, saisies par période (migration v26). */
+  charges!: Table<Charge, string>;
   sync_ops!: Table<SyncOp, string>;
   monthly_overviews!: Table<MonthlyOverview, string>;
   processed_ops!: Table<ProcessedOp, string>;
