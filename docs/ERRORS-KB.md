@@ -434,3 +434,55 @@ Le scénario détruit était celui qui avait justifié toute la synchronisation 
 **Occurrences** : 1
 
 ---
+
+## ERR-DATA-001 — Trois sources de coût coexistent pour le même chiffre
+
+**Signature** : un bénéfice calculé depuis trois chemins différents, selon la table qu'on lit. L'écran peut afficher un chiffre qui ne correspond à aucun autre écran.
+
+**Contexte** : transition en cours vers un coût d'acquisition saisi sur la fiche produit. Trois mechanisms portant le même nom « coût » coexistent :
+
+| Source | Où | Quand elle alimente le bénéfice |
+|---|---|---|
+| `cost_at_sale` | figé dans la ligne de vente | quand `product_expenses` est **vide** (`period.ts:98`, `usingLineCosts`) |
+| `product_expenses` | store, par `(product_id, period_from)` | quand la table contient **au moins une ligne** |
+| `products.cost` | fiche catalogue | **jamais**, aujourd'hui |
+
+**Cause** : `computePeriodStats` bascule entre les deux premières sémantiques sur la seule présence d'une ligne dans `product_expenses`. ⚠ **Ce n'est pas une transition progressive : le seuil est binaire.** Une seule ligne d'historique suffit à faire basculer TOUS les rapports de la boutique, d'un coup, sans migration ni avertissement.
+
+**Impact connu** : l'alerte « produits sans coût » lit `cost_at_sale === 0`, le bénéfice lit `product_expenses`, la saisie écrit `products.cost`. Trois lectures, un chiffre affiché.
+
+**Statut** : **connu, non tranché.** Décision attendue en Phase 5 — (i) `products.cost` devient source unique et `computePeriodStats` cesse de lire `product_expenses`, ou (ii) migration des `product_expenses` existantes vers `products.cost` puis table vidée, ou (iii) statut quo assumé et documenté.
+
+**Pourquoi ce n'est pas corrigé maintenant** : le basculement touche `analytics/period.ts`, le dashboard, l'export de restitution (`restitution/closing.ts:108` fige la signature de clôture dans son `id`) et les rapports orchestrateur — 6 fichiers et plus, pour un chantier d'interface. Une décision de fond mérite son propre plan, pas un patch au milieu d'un écran.
+
+**Fichiers impactés** : `src/lib/analytics/period.ts`, `src/lib/db/reports.ts`, `src/features/reports/CostBatch.tsx`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 1 (documenté, non corrigé)
+
+---
+
+## ERR-UI-001 — Debounce sur un champ monétaire
+
+**Signature** : un coût d'achat enregistré à 20 F au lieu de 20 000 F. Le chiffre faux est écrit, synchronisé aux pairs, et affiché dans un rapport.
+
+**Contexte** : saisie inline du coût unitaire dans les écrans Comptabilité.
+
+**Cause** : un debounce de 500 ms enregistre **pendant** la frappe, à chaque pause. Un vendeur qui tape « 20000 » produit trois écritures — « 2 », « 20 », puis « 20000 » — et les deux premières sont des coûts réels, pas des brouillons. Rien ne les distingue d'une saisie terminée.
+
+**Solution** : enregistrer au **blur** — le geste qui signifie « j'ai fini ». Le blur est aussi la convention déjà en place (`CostBatchRow`, `CostBatch.saveCost`).
+```tsx
+onBlur={commit}                       // ✅ l'utilisateur a fini de taper
+onChange={debouncedSave}               // ❌ sauvegarde des frappes intermédiaires
+```
+
+**Prévention** : ne jamais débouncer un champ financier sans confirmation visuelle explicite. Un debounce est un bon réflexe pour un champ de recherche ; pour un montant, c'est une source de données corrompues. Si l'enregistrement doit être automatique, il lui faut un indicateur « enregistré » — sinon on écrit des valeurs que personne n'a fini de saisir.
+
+**Fichiers impactés** : `src/features/reports/ProductCostRow.tsx`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 1
+
+---
