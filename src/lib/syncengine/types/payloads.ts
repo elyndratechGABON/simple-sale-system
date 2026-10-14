@@ -31,6 +31,21 @@ export interface ProductUpdatedPayload {
 export interface ClientCreatedPayload {
   client: import("@/lib/db").Client;
 }
+/**
+ * Charge enregistrée ou modifiée. MONTEE DE CHAMPS, pas d'objet entier : comme
+ * `ProductUpdatedPayload`, seul ce qui change voyage, donc deux appareils qui corrigent
+ * la même charge en même temps ne s'écrasent pas intégralement l'un l'autre.
+ */
+export interface ChargeSavedPayload {
+  charge_id: string;
+  fields: Partial<
+    Omit<import("@/lib/db").Charge, "id" | keyof import("@/lib/db").SyncFields | "last_op">
+  >;
+}
+/** Suppression LOGIQUE : le pair pose `deleted_at`, il n'efface rien (cf. `alive()`). */
+export interface ChargeDeletedPayload {
+  charge_id: string;
+}
 export interface ClientUpdatedPayload {
   client_id: string;
   fields: Partial<
