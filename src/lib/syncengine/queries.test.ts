@@ -95,7 +95,9 @@ describe("invalidation après écriture distante", () => {
   });
 
   test("la liste couvre les lectures d'appareils et de stock", () => {
-    for (const key of ["products", "sales", "paired_devices", "sync_identity"]) {
+    // `charges` est dans la liste depuis qu'elles sont synchronisées : sans elle, une
+    // charge reçue d'un pair s'écrit en base mais n'apparaît à l'écran qu'au rechargement.
+    for (const key of ["products", "sales", "paired_devices", "sync_identity", "charges"]) {
       expect(SYNC_INVALIDATED_QUERIES).toContain(key);
     }
   });
