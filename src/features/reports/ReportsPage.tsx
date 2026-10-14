@@ -1,15 +1,13 @@
 import { useState } from "react";
 import { BarChart3, ChevronLeft, ChevronRight, Calculator } from "lucide-react";
-import { startOfDay, startOfMonth } from "date-fns";
+import { startOfDay } from "date-fns";
 import { formatFCFA } from "@/lib/format";
-import { usePreferences } from "@/hooks/use-preferences";
 import {
   NAV_LABEL,
   REVENUE_LABEL,
   VIEWS,
   type CalendarView,
   periodTitle,
-  startOfWeekMonday,
   stepDay,
 } from "@/lib/reports/period";
 import { useReportData } from "@/lib/reports/use-report-data";
@@ -17,42 +15,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  DayDetailContent,
-  DayDetailDialog,
-  Kpi,
-  MonthGrid,
-  RangeDialog,
-  SectorPanel,
-  SelectedDayCard,
-  WeekStrip,
-  YearGrid,
-} from "@/components/reports";
+import { Kpi } from "@/components/reports";
 import { ProfitSheet } from "@/components/ProfitSheet";
 import { CostBatch } from "./CostBatch";
 
 export function ReportsPage() {
   const [view, setView] = useState<CalendarView>("month");
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
-  const [detailOpen, setDetailOpen] = useState(false);
   const [profitOpen, setProfitOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
 
-  const prefs = usePreferences();
-  const cluster = prefs.cluster;
-  const isService = cluster === "service";
-  const hasWeightInput = cluster === "personnalise" && prefs.customUnitType === "weight";
-
-  const { stats, days, months, weightSales, bestLabel } = useReportData(focusedDay, view);
-
-  // Règle d'origine, conservée mot pour mot : service s'affiche s'il y a eu une vente
-  // sur la période, boucherie s'il y a eu du poids, rien sinon. Une carte vide
-  // n'apprend rien au commerçant.
-  const showSector = isService
-    ? (stats?.salesCount ?? 0) > 0
-    : hasWeightInput
-      ? (weightSales?.weightKg ?? 0) > 0
-      : false;
+  const { stats, bestLabel } = useReportData(focusedDay, view);
 
   return (
     <div className="app-container space-y-4 py-4">
@@ -61,9 +34,7 @@ export function ReportsPage() {
           <h1 className="text-page-title flex items-center gap-2 font-bold">
             <BarChart3 className="h-6 w-6 shrink-0 text-primary" /> Comptabilité
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Montants par période — touchez une date pour ouvrir le détail.
-          </p>
+          <p className="text-sm text-muted-foreground">Montants par période.</p>
         </div>
         <Button variant="outline" onClick={() => setProfitOpen(true)}>
           <Calculator className="h-4 w-4 mr-1.5" /> CA & bénéfices
@@ -132,76 +103,8 @@ export function ReportsPage() {
         </Card>
       </div>
 
-      {/* ── Corps : calendrier / bande de semaine / journée / année ── */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-        <div className="space-y-3">
-          {view === "month" && (
-            <MonthGrid
-              month={startOfMonth(focusedDay).getTime()}
-              days={days}
-              selected={focusedDay}
-              onSelect={setFocusedDay}
-            />
-          )}
-          {view === "week" && (
-            <WeekStrip
-              weekStart={startOfWeekMonday(focusedDay)}
-              days={days}
-              selected={focusedDay}
-              onSelect={setFocusedDay}
-            />
-          )}
-          {view === "day" && (
-            <DayDetailContent
-              day={focusedDay}
-              isService={isService}
-              hasWeightInput={hasWeightInput}
-            />
-          )}
-          {view === "year" && (
-            <YearGrid
-              months={months}
-              selectedMonth={new Date(focusedDay).getMonth()}
-              onSelect={(m) => {
-                setFocusedDay(new Date(new Date(focusedDay).getFullYear(), m, 1).getTime());
-                setView("month");
-              }}
-            />
-          )}
-        </div>
-
-        {/* Détail de la journée : sous le calendrier sur mobile, à sa droite dès que
-            la largeur le permet (§18/§19 — une seule interface, pas deux). */}
-        {view !== "day" && (
-          <SelectedDayCard
-            day={focusedDay}
-            onOpenDetail={() => setDetailOpen(true)}
-            showHint={view === "month" || view === "week"}
-          />
-        )}
-      </div>
-
-      {showSector && (
-        <SectorPanel
-          isService={isService}
-          title={periodTitle(focusedDay, view)}
-          stats={stats}
-          weightSales={weightSales}
-        />
-      )}
-
-      {/* ── Période personnalisée : repliée derrière un bouton (§20) ── */}
-      <RangeDialog />
-
-      {/* Détail complet : mécanisme existant, réutilisé tel quel. */}
-      <DayDetailDialog
-        day={focusedDay}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        isService={isService}
-        hasWeightInput={hasWeightInput}
-      />
-
+      {/* Les deux seuls gestes de la page : le bilan et les coûts d'achat. Le détail
+          ligne par ligne vit dans ProfitSheet, la saisie des coûts dans CostBatch. */}
       <ProfitSheet open={profitOpen} onOpenChange={setProfitOpen} />
 
       <Dialog open={costOpen} onOpenChange={setCostOpen}>
