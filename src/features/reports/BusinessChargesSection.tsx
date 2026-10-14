@@ -58,8 +58,18 @@ export function BusinessChargesSection({
             aria-label={`Montant de la charge ${line.label}`}
             className="h-9 w-32 text-right tabular-nums"
             onBlur={(e) => {
-              const amount = Number(e.target.value);
-              if (e.target.value.trim() === "" || Number.isNaN(amount) || amount < 0) {
+              const raw = e.target.value.trim();
+
+              // Champ VIDÉ : même convention que la charge de service — 0 enregistré, le
+              // dialogue efface les charges à 0 à la fermeture. Le bouton 🗑 reste le geste
+              // explicite, mais vider doit signifier la même chose ici qu'ailleurs.
+              if (raw === "") {
+                if (line.amount !== 0) onSave(line.label, 0, line.id);
+                return;
+              }
+
+              const amount = Number(raw);
+              if (Number.isNaN(amount) || amount < 0) {
                 e.target.value = line.amount > 0 ? String(line.amount) : "";
                 return;
               }
