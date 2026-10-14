@@ -32,15 +32,19 @@ export interface ClientCreatedPayload {
   client: import("@/lib/db").Client;
 }
 /**
- * Charge enregistrée ou modifiée. MONTEE DE CHAMPS, pas d'objet entier : comme
- * `ProductUpdatedPayload`, seul ce qui change voyage, donc deux appareils qui corrigent
- * la même charge en même temps ne s'écrasent pas intégralement l'un l'autre.
+ * Charge enregistrée ou modifiée — UN SEUL op pour les deux, sans `charge.created`
+ * distinct. Conséquence directe : l'op porte les 6 champs métier COMPLETS, pas un
+ * `Partial`. L'émetteur (`saveCharge`) les envoie tous à chaque écriture, donc le
+ * `Partial` était une fiction ; et surtout il rendait le handler incapable de CRÉER la
+ * ligne, faute de quoi une charge nouvelle n'arriverait jamais chez le pair.
+ *
+ * La montée reste bornée : seuls ces 6 champs voyagent. Ni `deleted_at` ni `sync_status`
+ * ne sont transmissibles — un pair ne peut donc pas ressusciter une charge effacée ni
+ * corrompre le moteur (même garantie que `ProductUpdatedPayload`).
  */
 export interface ChargeSavedPayload {
   charge_id: string;
-  fields: Partial<
-    Omit<import("@/lib/db").Charge, "id" | keyof import("@/lib/db").SyncFields | "last_op">
-  >;
+  fields: Omit<import("@/lib/db").Charge, "id" | keyof import("@/lib/db").SyncFields | "last_op">;
 }
 /** Suppression LOGIQUE : le pair pose `deleted_at`, il n'efface rien (cf. `alive()`). */
 export interface ChargeDeletedPayload {
