@@ -1,5 +1,5 @@
 import type { ClusterId } from "../../settings";
-import type { SyncFields } from "./sync";
+import type { Category, SyncFields } from "./sync";
 
 /**
  * Abonnement d'un client : formule payée périodiquement (abonnement de bar/salle de
@@ -80,6 +80,43 @@ export interface MonthlyOverview {
   /** Complément de coût non suivi (achats dont le coût n'a jamais été renseigné). */
   cost_complement: number | null;
   updated_at: number;
+}
+
+/**
+ * Charge saisie à la main sur une période : soit un besoin de service rattaché à une
+ * catégorie, soit une charge d'exploitation globale (« Loyer », « Salaire »).
+ *
+ * SYNCHRONISÉE, contrairement à `ProductExpense` et `MonthlyOverview` qui restent
+ * locaux. Raison : une charge est une SAISIE, pas un calcul. Un bilan se reconstruit,
+ * une charge perdue ne se rattrape pas — la laisser hors du moteur produirait la
+ * situation décrite par `charge.saved` : le patron saisit le loyer sur sa caisse,
+ * l'autre poste ne l'affiche jamais.
+ *
+ * `kind` décide de la forme : `service` → `category`, `business` → `label` (poste
+ * libre). Un enregistrement ne doit en porter qu'un des deux, mais le type ne peut pas
+ * l'exprimer — `kind` est une donnée saisie, pas une garantie.
+ *
+ * Suppression LOGIQUE (`deleted_at`) : une suppression physique ne peut pas se propager
+ * à un autre appareil — il n'y a plus rien à propager. Toute lecture filtre via `alive()`.
+ */
+export interface Charge extends SyncFields {
+  id: string;
+  /** `service` = besoin récurrent d'une activité ; `business` = charge d'exploitation. */
+  kind: "service" | "business";
+  /**
+   * Catégorie porteuse du besoin (`kind: "service"`). Un LIBELLÉ de `Category`, comme
+   * `Product.category` et `SaleItem.category_at_sale` — pas un identifiant : il n'existe
+   * aucune table de catégories (cf. `categories.ts`), les catégories sont des chaînes.
+   */
+  category?: Category;
+  /** Poste libre (`kind: "business"`) : « Loyer », « Électricité », « Salaire »… */
+  label?: string;
+  /** Début de période (minuit local). */
+  period_start: number;
+  /** Fin de période, exclusive. */
+  period_to: number;
+  /** Montant en FCFA, sur toute la période. */
+  amount: number;
 }
 
 /**
