@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CategorySelect } from "@/components/CategorySelect";
 import { PhotoAndPricing } from "./PhotoAndPricing";
+import { ProductTypeSelector } from "./ProductTypeSelector";
 import { VariantEditor } from "./VariantEditor";
 import { useProductForm } from "./useProductForm";
 
@@ -60,33 +61,16 @@ export function ProductForm({
 
         <PhotoAndPricing form={form} />
 
-        {/* Un seul enfant : une grille 2 colonnes laissait une moitié vide. */}
-        <div>
-          <Label>Type</Label>
-          <div className="flex gap-2 mt-1">
-            <Button
-              type="button"
-              variant={productType === "product" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setProductType("product")}
-              className="flex-1"
-            >
-              Produit
-            </Button>
-            <Button
-              type="button"
-              variant={productType === "service" ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setProductType("service");
-                setUnlimited(true);
-              }}
-              className="flex-1"
-            >
-              Prestation
-            </Button>
-          </div>
-        </div>
+        {/* Le type commande le stock, les variantes et le champ coût : les cartes disent
+            ce que l'application fera du choix. Une prestation n'a pas de stock, donc le
+            sélecteur le force à illimité — le toggle nu le faisait aussi. */}
+        <ProductTypeSelector
+          value={productType}
+          onChange={(type) => {
+            setProductType(type);
+            if (type === "service") setUnlimited(true);
+          }}
+        />
 
         {showVariants && <VariantEditor form={form} />}
 
