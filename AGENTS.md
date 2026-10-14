@@ -154,3 +154,22 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
 - **Prix, coûts et catégories sont figés dans la ligne de vente** (`price_at_sale`,
   `cost_at_sale`, `category_at_sale`). Ne jamais recalculer un bénéfice par jointure sur
   la fiche produit : cela réécrirait l'historique.
+
+## Discipline de livraison
+
+- **Après validation d'un plan, on exécute la chaîne entière** : `Read → code → check →
+test → build → commit`, **dans la même séquence**. L'autorisation couvre l'ENSEMBLE
+  (écriture + commit), pas chaque étape intermédiaire.
+  - Ne jamais s'arrêter entre le check et le commit pour redemander une permission.
+  - Ne jamais chaîner `check` et `commit` par `;` : le commit se lancerait même si le
+    check échouait. Utiliser `if ($?) { git commit … }`.
+  - Vérifier `git status` après le commit : un fichier écrit, validé, puis laissé en
+    attente est un fichier **perdu** au prochain changement de branche.
+- **Un test qui ne tombe pas sous mutation n'est pas une preuve.** Le muter quand même :
+  s'il reste vert, le comportement testé est _structurel_ (il ne dépend pas de la ligne
+  qu'on a retirée). Le garder comme filet, mais le dire — ne pas le compter comme
+  couverture. Cf. `ERR-TEST-001`.
+- **Les fonctions pures vivent hors des composants.** Un calcul de regroupement dans un
+  `.tsx` est intestable et finit en règle non documentée ; il appartient à `src/lib/`,
+  avec son test à côté. Un composant qui exporte autre chose qu'un composant déclenche
+  `react-refresh/only-export-components`.
