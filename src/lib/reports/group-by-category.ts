@@ -30,6 +30,11 @@ export interface CategoryGroup {
  * reste sur UNE ligne : c'est `product_id`, stable, qui sert de clé. Grouper par le nom
  * figé produirait deux lignes « Eau » là où Top produits n'en montre qu'une.
  *
+ * CONTRE-INTUITIF, à connaître avant de « corriger » : deux lignes libres homonymes
+ * (ni l'une ni l'autre de `product_id`, même `name`) **fusionnent en une seule ligne** —
+ * la clé retombe sur le nom. C'est le comportement de `computePeriodStats`, donc-aligné ;
+ * un produit AVEC `product_id` reste en revanche séparé d'une ligne libre de même nom.
+ *
  * `lineCategory` fournit le repli « Autre » des ventes antérieures au suivi de la
  * catégorie — encore une fois, la même fonction que les rapports.
  *
