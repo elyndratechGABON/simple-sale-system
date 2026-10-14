@@ -1,50 +1,77 @@
 import { useState } from "react";
+import { getSaleItems, type Sale } from "@/lib/db";
 import { TablesGrid } from "./TablesGrid";
 import { InProgressBills } from "./InProgressBills";
 import { TableMenuDialog } from "./TableMenuDialog";
-// import { ProductPickerDialog } from "./ProductPickerDialog"; // TODO: FICHIER 4
+import { ProductPickerDialog } from "./ProductPickerDialog";
+import type { PickerItem } from "./picker/useItemsToAdd";
 import type { PosController } from "./usePos";
-import type { Sale } from "@/lib/db";
 
 interface TablesViewProps {
   pos: PosController;
 }
 
+type Menu = { label: string; sale: Sale | null };
+type Picker = Menu & { items: PickerItem[] };
+
 export function TablesView({ pos }: TablesViewProps) {
-  const [tableMenu, setTableMenu] = useState<{ label: string; sale: Sale | null } | null>(null);
-  const [picker, setPicker] = useState<{ sale: Sale | null } | null>(null);
+  const [tableMenu, setTableMenu] = useState<Menu | null>(null);
+  const [picker, setPicker] = useState<Picker | null>(null);
+
+  /** L'addition déjà servie est lue AVANT d'ouvrir le sélecteur : le dialogue prend ses
+   *  articles en UNE seule fois à l'ouverture, les charger après ne les ferait jamais
+   *  apparaître (son état local est figé au montage). */
+  async function openPicker(label: string, sale: Sale | null) {
+    const rows = sale ? await getSaleItems(sale.id) : [];
+    setPicker({
+      label,
+      sale,
+      items: rows.map((i) => ({
+        id: i.id,
+        productId: i.product_id,
+        name: i.name,
+        quantity: i.quantity,
+        price: i.price_at_sale,
+        cost: i.cost_at_sale,
+      })),
+    });
+  }
+
+  /** Encaisser une addition : on vise la table, on ouvre le panneau de paiement et on
+   *  revient au comptoir — c'est là que le paiement se fait, pas dans le plan de salle. */
+  function checkout(sale: Sale) {
+    pos.setTarget({ kind: "table", saleId: sale.id });
+    pos.setCashing({ kind: "table" });
+    pos.setMode("comptoir");
+  }
 
   return (
-    <div className="h-full flex flex-col">
-      <TablesGrid
-        pos={pos}
-        onTableTap={(label, sale) => {
-          if (sale) {
-            setTableMenu({ label: sale.table ?? "", sale });
-          } else {
-            setPicker({ sale: null });
-          }
-        }}
-      />
-      <InProgressBills pos={pos} onCheckout={() => {}} />
+    <div className="h-full flex flex-col gap-6">
+      <TablesGrid pos={pos} onTableTap={(label, sale) => setTableMenu({ label, sale })} />
+
+      <InProgressBills pos={pos} onCheckout={checkout} />
+
       <TableMenuDialog
         open={!!tableMenu}
         onOpenChange={(open) => !open && setTableMenu(null)}
         tableLabel={tableMenu?.label ?? ""}
         sale={tableMenu?.sale ?? null}
-        onCreateBill={() => setPicker({ sale: null })}
-        onDeleteTable={() => {}}
-        onAddProducts={() => setPicker({ sale: tableMenu?.sale ?? null })}
-        onCheckout={() => {}}
+        onCreateBill={() => tableMenu && openPicker(tableMenu.label, null)}
+        onAddProducts={() => tableMenu && openPicker(tableMenu.label, tableMenu.sale)}
+        onCheckout={() => tableMenu?.sale && checkout(tableMenu.sale)}
       />
-      {/* <ProductPickerDialog
-        open={!!picker}
-        onOpenChange={(open) => !open && setPicker(null)}
-        sale={picker?.sale ?? null}
-        items={[]}
-        pos={pos as any}
-        onClose={() => setPicker(null)}
-      /> */}
+
+      {picker && (
+        <ProductPickerDialog
+          open
+          onOpenChange={(open) => !open && setPicker(null)}
+          sale={picker.sale}
+          tableLabel={picker.label}
+          initialItems={picker.items}
+          pos={pos}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   );
 }

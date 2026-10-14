@@ -1,4 +1,3 @@
-import { Plus, Trash2, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,7 +16,6 @@ interface TableMenuDialogProps {
   tableLabel: string;
   sale: Sale | null;
   onCreateBill: () => void;
-  onDeleteTable: () => void;
   onAddProducts: () => void;
   onCheckout: () => void;
 }
@@ -28,7 +26,6 @@ export function TableMenuDialog({
   tableLabel,
   sale,
   onCreateBill,
-  onDeleteTable,
   onAddProducts,
   onCheckout,
 }: TableMenuDialogProps) {
@@ -55,29 +52,16 @@ export function TableMenuDialog({
 
         <div className="space-y-3">
           {sale === null ? (
-            <>
-              <Button
-                className="w-full h-12 gap-2"
-                onClick={() => {
-                  onOpenChange(false);
-                  onCreateBill();
-                }}
-              >
-                <span className="h-5 w-5">+</span>
-                Créer une facture
-              </Button>
-              <Button
-                variant="destructive"
-                className="w-full h-12 gap-2"
-                onClick={() => {
-                  onOpenChange(false);
-                  onDeleteTable();
-                }}
-              >
-                <span className="h-5 w-5 mr-2">🗑</span>
-                Supprimer la table
-              </Button>
-            </>
+            <Button
+              className="w-full h-12 gap-2"
+              onClick={() => {
+                onOpenChange(false);
+                onCreateBill();
+              }}
+            >
+              <span className="h-5 w-5">+</span>
+              Créer une facture
+            </Button>
           ) : (
             <>
               <Button
