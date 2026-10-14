@@ -1,24 +1,17 @@
 import { useState } from "react";
-import { BarChart3, ChevronLeft, ChevronRight, Calculator } from "lucide-react";
+import { BarChart3, Calculator } from "lucide-react";
 import { startOfDay } from "date-fns";
 import { formatFCFA } from "@/lib/format";
-import {
-  NAV_LABEL,
-  REVENUE_LABEL,
-  VIEWS,
-  type CalendarView,
-  periodTitle,
-  stepDay,
-} from "@/lib/reports/period";
+import { REVENUE_LABEL, type CalendarView } from "@/lib/reports/period";
 import { useReportData } from "@/lib/reports/use-report-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Kpi } from "@/components/reports";
 import { ProfitSheet } from "@/components/ProfitSheet";
 import { CostBatch } from "./CostBatch";
 import { CostAlerts } from "./CostAlerts";
+import { PeriodNav } from "./PeriodNav";
 import { useCostAlerts } from "./useCostAlerts";
 
 export function ReportsPage() {
@@ -48,41 +41,17 @@ export function ReportsPage() {
         </Button>
       </header>
 
-      {/* Granularité : quatre choix, l'actif au vert principal. */}
-      <Tabs value={view} onValueChange={(v) => setView(v as CalendarView)}>
-        <TabsList className="grid w-full grid-cols-4">
-          {VIEWS.map((v) => (
-            <TabsTrigger key={v.value} value={v.value} className="text-xs sm:text-sm">
-              {v.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      {/* La période est partagée par tous les onglets : une seule source, sinon deux
+          écrans pourraient afficher deux périodes différentes. */}
+      <PeriodNav
+        view={view}
+        onViewChange={setView}
+        focusedDay={focusedDay}
+        onFocusedDayChange={setFocusedDay}
+      />
 
-      {/* ── Tête de période + KPI ─────────────────────────────── */}
+      {/* ── KPI ────────────────────────────────────────────────── */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`${NAV_LABEL[view]} précédent`}
-            onClick={() => setFocusedDay(stepDay(focusedDay, view, -1))}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <h2 className="text-base font-semibold tabular-nums sm:text-lg">
-            {periodTitle(focusedDay, view)}
-          </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={`${NAV_LABEL[view]} suivant`}
-            onClick={() => setFocusedDay(stepDay(focusedDay, view, 1))}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        </div>
-
         {/* Un seul bloc, quatre zones. Deux lignes sur mobile, une sur grand écran. */}
         <Card>
           <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3 p-3 sm:grid-cols-4 sm:p-4">
