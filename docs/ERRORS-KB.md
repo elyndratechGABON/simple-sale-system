@@ -323,6 +323,38 @@ const { items: localItems } = useItemsToAdd(initialItems ?? []);
 
 ---
 
+## ERR-DB-003 — Store déclaré au schéma, oublié dans `snapshot.ts`
+
+**Signature** : un store existe dans `db.version(n).stores()` et dans `PosDatabase`, mais pas dans `snapshot.ts` : ni export, ni restauration, ni purge.
+
+**Contexte** : Ajout de la table `charges` (migration v26). Une table neuve se déclare à un endroit et s'oublie à neuf autres.
+
+**Cause** : `snapshot.ts` n'a pas de source unique — la même liste de tables est répétée à **9 emplacements** : `DatabaseSnapshot`, le `Promise.all` de l'export, la transaction de restauration, son `clear()`, son `bulkPut()`, puis la transaction de purge et son `clear()`. Un store ajouté en oublie un seul, et **rien ne signale l'erreur**.
+
+Le pire : la table n'est ni exportée (perte à la sauvegarde), ni vidée à la restauration (une sauvegarde « vide » se mélange au lieu de remplacer), ni purgée (les charges ressuscitent après « Supprimer la boutique »). Erreur différée de six mois, découverte par un client.
+
+**Solution** : `snapshot-exhaustivity.test.ts` verrouille les deux sens.
+```ts
+// 1. aller-retour, clear(), purge : comportemental, attrape l'oubli
+for (const table of TABLES_SNAPSHOT) { /* put → export → purge → restore → expect 1 ligne */ }
+
+// 2. couverture du schéma : chaque store est SAUVEGARDÉ oulisté dans EXCLUES
+const orphelines = getDB().tables.map((t) => t.name)
+  .filter((n) => !TABLES_SNAPSHOT.includes(n) && !(n in EXCLUES));
+expect(orphelines).toEqual([]);
+```
+`EXCLUES` porte la raison de chaque exclusion (10 stores sur 18) : un store non listé fait échouer le test, donc la décision « sauvegardé ou non » devient explicite à chaque nouveau store.
+
+**Prévention** : le nombre de listes dupliquées est le vrai risque — les réduire (constante unique partagée par les trois fonctions) est la vraie correction de fond ; le test est le filet. Vérifier l'exhaustivité **avant** de committer une migration de schéma.
+
+**Fichiers impactés** : `src/lib/db/snapshot.ts`, `src/lib/db/snapshot-exhaustivity.test.ts`, `src/lib/db/schema/versions/late-b.ts`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 1 (table `charges`, v26)
+
+---
+
 ## ERR-QUERY-001 — `?? null` appliqué à une Promise, pas à sa valeur
 
 **Signature** : `Query data cannot be undefined. Please make sure to return a value other than undefined from your query function. Affected query key: ["…"]`
