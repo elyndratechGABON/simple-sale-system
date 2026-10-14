@@ -11,6 +11,7 @@
 **Contexte** : Deux éléments JSX côte à côte dans un `return` ou un `.map()`
 **Cause** : Pas de fragment `<>...</>` ou de `<div>` englobant
 **Solution** :
+
 ```tsx
 // ❌
 return (
@@ -26,6 +27,7 @@ return (
   </>
 );
 ```
+
 **Fichiers impactés** : `TeamDialog.tsx`, `reports.tsx`, `pos.tsx`
 **Prévention** : Toujours ouvrir par `<>` si le composant retourne 2+ racines
 **Date** : 2026-10-12
@@ -52,6 +54,7 @@ return (
 **Contexte** : Après suppression d'un fichier ou d'une fonction
 **Cause** : Un consommateur importe encore le symbole supprimé
 **Solution** :
+
 ```powershell
 # 1. Trouver tous les consommateurs
 grep -rn "<name>" src --include="*.ts" --include="*.tsx"
@@ -59,6 +62,7 @@ grep -rn "<name>" src --include="*.ts" --include="*.tsx"
 # 2. Supprimer les fichiers consommateurs D'ABORD
 # 3. Supprimer la source EN DERNIER
 ```
+
 **Ordre imposé** : feuilles → racine, JAMAIS l'inverse
 **Fichiers impactés** : `analytics.ts`, `alerts.ts`, `dashboard.tsx`, `pos.tsx`
 **Prévention** : Ordre feuilles → racine obligatoire pour toute suppression
@@ -73,6 +77,7 @@ grep -rn "<name>" src --include="*.ts" --include="*.tsx"
 **Contexte** : Après déplacement ou suppression d'un fichier
 **Cause** : Import non mis à jour
 **Solution** :
+
 ```powershell
 # 1. Où est le fichier maintenant ?
 Get-ChildItem -Path src -Recurse -Filter "<nom>*"
@@ -82,6 +87,7 @@ grep -rn "<ancien-chemin>" src
 
 # 3. Corriger TOUS les imports dans LE MÊME commit
 ```
+
 **Fichiers impactés** : `Header.tsx`, `_app.tsx`
 **Prévention** : Déplacement = fichier + tous ses imports dans le même commit
 **Date** : 2026-10-12
@@ -95,6 +101,7 @@ grep -rn "<ancien-chemin>" src
 **Contexte** : Utilisation de `git show HEAD:fichier > cible` ou `Set-Content`
 **Cause** : PowerShell écrit en UTF-16 (avec BOM) → illisible par tsc
 **Solution** :
+
 ```powershell
 # Jamais :
 git show HEAD:src/old.ts > src/new.ts     # ❌
@@ -102,13 +109,15 @@ git show HEAD:src/old.ts > src/new.ts     # ❌
 # Toujours :
 git checkout HEAD -- src/old.ts            # ✅
 ```
+
 **Règles** :
+
 - ❌ Jamais `>`, `Set-Content`, `WriteAllText` pour écrire du `.ts`
 - ✅ Utiliser les outils d'édition de code (Write/Edit)
 - ✅ Utiliser `git checkout` pour restaurer
-**Prévention** : PowerShell = commandes (`git`, `npm`), pas éditeur de code
-**Date** : 2026-10-12
-**Occurrences** : 3
+  **Prévention** : PowerShell = commandes (`git`, `npm`), pas éditeur de code
+  **Date** : 2026-10-12
+  **Occurrences** : 3
 
 ---
 
@@ -130,12 +139,14 @@ git checkout HEAD -- src/old.ts            # ✅
 **Contexte** : Migration Dexie sans `storeName: null`
 **Cause** : Dexie ne supprime pas un store avec `.stores({})` — il faut le déclarer explicitement null
 **Solution** :
+
 ```ts
 this.version(N).stores({
   ...existingStores,
-  rentals: null,  // ← déclaration explicite
+  rentals: null, // ← déclaration explicite
 });
 ```
+
 **Prévention** : Toute suppression de store = nouveau numéro de version + `null`
 **Date** : 2026-10-12
 **Occurrences** : 1
@@ -161,6 +172,7 @@ this.version(N).stores({
 **Contexte** : Après remplacement d'un bloc JSX complexe par un bloc simple
 **Cause** : Tokens orphelins de l'ancien bloc (`}`, `)`, `</div>` en trop)
 **Solution** :
+
 ```powershell
 # 1. Lire le bloc entier autour de l'erreur
 Get-Content src/fichier.tsx | Select-Object -Skip <N-30> -First 60
@@ -168,6 +180,7 @@ Get-Content src/fichier.tsx | Select-Object -Skip <N-30> -First 60
 # 2. Vérifier l'équilibre des parenthèses/accolades
 # 3. Compter les ouvertures et fermetures de la zone
 ```
+
 **Prévention** : Ne jamais remplacer un bloc sans avoir lu les 20 lignes AVANT et APRÈS
 **Date** : 2026-10-12
 **Occurrences** : 2
@@ -180,6 +193,7 @@ Get-Content src/fichier.tsx | Select-Object -Skip <N-30> -First 60
 **Contexte** : Restaurer la source sans restaurer ses consommateurs
 **Cause** : Le fichier restauré n'a plus les exports attendus par les consommateurs modifiés
 **Solution** :
+
 ```powershell
 # Jamais un seul fichier :
 git checkout HEAD -- src/lib/pairing.ts    # ❌
@@ -189,6 +203,7 @@ git checkout HEAD -- src/lib/pairing.ts src/components/Onboarding.tsx
 # Ou mieux :
 git reset --hard HEAD                       # ✅ tout
 ```
+
 **Prévention** : `git checkout` partiel interdit si plusieurs fichiers modifiés ensemble
 **Date** : 2026-10-12
 **Occurrences** : 2
@@ -201,6 +216,7 @@ git reset --hard HEAD                       # ✅ tout
 **Contexte** : Après remplacement d'un bloc JSX complexe par un bloc simple dans un ternaire `.map()`
 **Cause** : Tokens orphelins de l'ancien bloc (`}`, `)`, `</div>` en trop), fermetures ternaires déséquilibrées
 **Solution** :
+
 ```powershell
 # 1. Lire le bloc entier autour de l'erreur (+30 lignes avant/après)
 Get-Content src/routes/_app/pos.tsx | Select-Object -Skip 1195 -First 60
@@ -208,6 +224,7 @@ Get-Content src/routes/_app/pos.tsx | Select-Object -Skip 1195 -First 60
 # 2. Vérifier l'équilibre : .map((t) => (  ...  ))  →  chaque ( ouvert = ) fermé
 # 3. Compter les ouvertures/fermetures dans la zone ternaire : ternaire = (cond ? (a) : (b))
 ```
+
 **Prévention** : Ne jamais remplacer un bloc sans avoir lu les 20 lignes AVANT et APRÈS
 **Date** : 2026-10-12
 **Occurrences** : 1
@@ -220,6 +237,7 @@ Get-Content src/routes/_app/pos.tsx | Select-Object -Skip 1195 -First 60
 **Contexte** : Restaurer la source sans restaurer ses consommateurs
 **Cause** : Le fichier restauré n'a plus les exports attendus par les consommateurs modifiés
 **Solution** :
+
 ```powershell
 # Jamais un seul fichier :
 git checkout HEAD -- src/lib/pairing.ts    # ❌
@@ -229,6 +247,7 @@ git checkout HEAD -- src/lib/pairing.ts src/components/Onboarding.tsx
 # Ou mieux :
 git reset --hard HEAD                       # ✅ tout
 ```
+
 **Prévention** : `git checkout` partiel interdit si plusieurs fichiers modifiés ensemble
 **Date** : 2026-10-12
 **Occurrences** : 2
@@ -244,6 +263,7 @@ git reset --hard HEAD                       # ✅ tout
 **Cause** : Renommage local sans prévoir la compatibilité ascendante du contrat P2P.
 
 **Solution** :
+
 - Garder le nom d'origine dans le contrat (`PairingShopConfig.tablesEnabled`).
 - Mapper vers le nouveau nom en local : `features.tables = shop.tablesEnabled ?? prefs.features?.tables ?? false`.
 - **Dual-write temporaire** dans `applyPairingShop` :
@@ -272,6 +292,7 @@ git reset --hard HEAD                       # ✅ tout
 **Cause** : Confusion entre expression (qui rend une valeur) et instruction (qui effectue une action). `x ? a() : b()` est une expression qui rend `a()` ou `b()`, mais écrit seul comme `x ? a() : b();` il est traité comme une expression statement et ESLint le rejette.
 
 **Solution** :
+
 ```ts
 // ❌
 next.has(id) ? next.delete(id) : next.add(id);
@@ -303,10 +324,11 @@ if (next.has(id)) {
 **Cause** : `.map()` à l'intérieur d'un `useState` initial cumule trois niveaux de parenthèses imbriquées (`useState(` → `map(` → `({`). Une seule suffit à mal fermer la chaîne, et le message `TS1005` ne désigne que le point de rupture, jamais le déséquilibre réel. **Un `useState` dont l'initialiseur contient un `.map` est le premier fichier à réécrire, pas le premier à retoucher.**
 
 **Solution** : déplacer l'initialisation dans un hook dédié qui reçoit la liste ; le `useState` ne contient plus qu'une valeur déjà construite.
+
 ```ts
 // ❌ trois niveaux de parenthèses dans l'initialiseur
-const [localItems, setLocalItems] = useState<LocalItem[]>(() =>
-  items?.map((item) => ({ id: item.id, name: item.name })) ?? []
+const [localItems, setLocalItems] = useState<LocalItem[]>(
+  () => items?.map((item) => ({ id: item.id, name: item.name })) ?? [],
 );
 
 // ✅ le hook porte la conversion, le useState reste plat
@@ -334,15 +356,20 @@ const { items: localItems } = useItemsToAdd(initialItems ?? []);
 Le pire : la table n'est ni exportée (perte à la sauvegarde), ni vidée à la restauration (une sauvegarde « vide » se mélange au lieu de remplacer), ni purgée (les charges ressuscitent après « Supprimer la boutique »). Erreur différée de six mois, découverte par un client.
 
 **Solution** : `snapshot-exhaustivity.test.ts` verrouille les deux sens.
+
 ```ts
 // 1. aller-retour, clear(), purge : comportemental, attrape l'oubli
-for (const table of TABLES_SNAPSHOT) { /* put → export → purge → restore → expect 1 ligne */ }
+for (const table of TABLES_SNAPSHOT) {
+  /* put → export → purge → restore → expect 1 ligne */
+}
 
 // 2. couverture du schéma : chaque store est SAUVEGARDÉ oulisté dans EXCLUES
-const orphelines = getDB().tables.map((t) => t.name)
+const orphelines = getDB()
+  .tables.map((t) => t.name)
   .filter((n) => !TABLES_SNAPSHOT.includes(n) && !(n in EXCLUES));
 expect(orphelines).toEqual([]);
 ```
+
 `EXCLUES` porte la raison de chaque exclusion (10 stores sur 18) : un store non listé fait échouer le test, donc la décision « sauvegardé ou non » devient explicite à chaque nouveau store.
 
 **Prévention** : le nombre de listes dupliquées est le vrai risque — les réduire (constante unique partagée par les trois fonctions) est la vraie correction de fond ; le test est le filet. Vérifier l'exhaustivité **avant** de committer une migration de schéma.
@@ -362,6 +389,7 @@ expect(orphelines).toEqual([]);
 **Contexte** : Une requête dont la valeur est simplement absente — un réglage jamais saisi, un bilan mensuel pas encore enregistré. TanStack Query refuse `undefined` comme donnée résolue et fait basculer la requête en erreur.
 
 **Cause** : **Le `??` ne s'applique pas à la valeur d'une Promise, mais à la Promise elle-même.** Une Promesse n'est jamais `null` ni `undefined`, donc le garde-fou est silencieusement inerte et la fonction résout plus tard vers `undefined` :
+
 ```ts
 // ❌ le `??` teste la PROMISE, pas son résultat : inerte
 queryFn: () => getSetting<string>("shop_logo") ?? null,
@@ -369,6 +397,7 @@ queryFn: () => getSetting<string>("shop_logo") ?? null,
 // ✅ il faut AWAITER avant de donner une valeur de repli
 queryFn: async () => (await getSetting<string>("shop_logo")) ?? null,
 ```
+
 Le code se lit comme protégé, et le `?? null` visible rassure : c'est ce qui rend l'erreur si longue à trouver. `TypeScript` ne dit rien non plus — la fonction reste bien typée.
 
 **Solution** : `(await getX()) ?? repli`, ou faire renvoyer `null` par la fonction DB si plusieurs appelants sont concernés.
@@ -390,6 +419,7 @@ Le code se lit comme protégé, et le `?? null` visible rassure : c'est ce qui r
 **Contexte** : `applyChargeSaved`, premier handler d'une entité nouvelle (`charges`). Écrit en copiant `applyProductUpdated` ligne pour ligne, comme demandé — « le pattern EXACT du projet ».
 
 **Cause** : `applyProductUpdated` porte `if (!existing || existing.deleted_at) return;` parce qu'un **`product.created` a déjà posé la ligne** : l'update ne fait que la modifier. Les charges n'ont qu'un seul op (`charge.saved`), il n'y a pas de `charge.created` — donc cette garde annule la **création** :
+
 ```ts
 // ❌ copié de product.updated : correct là-bas, destructeur ici
 const existing = await db.products.get(pl.product_id);
@@ -397,13 +427,14 @@ if (!existing || existing.deleted_at) return;
 
 // ✅ source de la ligne AVANT ce handler ? Personne → on crée
 const existing = await db.charges.get(pl.charge_id);
-if (existing?.deleted_at) return;   // pas de réanimation, mais création permise
+if (existing?.deleted_at) return; // pas de réanimation, mais création permise
 ```
-Le scénario détruit était celui qui avait justifié toute la synchronisation : *le patron saisit « Loyer » sur sa caisse → l'autre poste doit le voir*.
+
+Le scénario détruit était celui qui avait justifié toute la synchronisation : _le patron saisit « Loyer » sur sa caisse → l'autre poste doit le voir_.
 
 **Solution** : la garde dépend du graphe d'opérations, pas de l'entité. `saved` crée et met à jour (un seul op) ; `deleted` exige `existing` — on ne crée pas une ligne pour la supprimer. Effet de bord de type : `ChargeSavedPayload.fields` ne peut plus être `Partial`, le handler n'ayant plus de ligne existante à compléter.
 
-**Prévention** : avant de copier une garde, se demander *« qu'est-ce qui a posé cette ligne, avant moi ? »*. Réponse « une autre op du même type » → garde `!existing` ; réponse « personne » → pas de garde. Verrouiller par un test comportemental (création + mise à jour), pas par une relecture : `charges-sync.test.ts` passe au vert, et passe au ROUGE en 4 tests sur 5 si on remet la garde.
+**Prévention** : avant de copier une garde, se demander _« qu'est-ce qui a posé cette ligne, avant moi ? »_. Réponse « une autre op du même type » → garde `!existing` ; réponse « personne » → pas de garde. Verrouiller par un test comportemental (création + mise à jour), pas par une relecture : `charges-sync.test.ts` passe au vert, et passe au ROUGE en 4 tests sur 5 si on remet la garde.
 
 **Note de sécurité** : l'`Omit<Charge, keyof SyncFields>` du payload est une garantie **de compilation**, pas d'exécution. Un op forgé qui porterait `deleted_at` dans `fields` serait honoré par le spread `{ ...pl.fields }`. C'est assumé et cohérent avec `product.updated` — mais ce n'est **pas** une barrière de sécurité, et il ne faut pas le présenter comme telle.
 
@@ -441,11 +472,11 @@ Le scénario détruit était celui qui avait justifié toute la synchronisation 
 
 **Contexte** : transition en cours vers un coût d'acquisition saisi sur la fiche produit. Trois mechanisms portant le même nom « coût » coexistent :
 
-| Source | Où | Quand elle alimente le bénéfice |
-|---|---|---|
-| `cost_at_sale` | figé dans la ligne de vente | quand `product_expenses` est **vide** (`period.ts:98`, `usingLineCosts`) |
-| `product_expenses` | store, par `(product_id, period_from)` | quand la table contient **au moins une ligne** |
-| `products.cost` | fiche catalogue | **jamais**, aujourd'hui |
+| Source             | Où                                     | Quand elle alimente le bénéfice                                          |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------------------ |
+| `cost_at_sale`     | figé dans la ligne de vente            | quand `product_expenses` est **vide** (`period.ts:98`, `usingLineCosts`) |
+| `product_expenses` | store, par `(product_id, period_from)` | quand la table contient **au moins une ligne**                           |
+| `products.cost`    | fiche catalogue                        | **jamais**, aujourd'hui                                                  |
 
 **Cause** : `computePeriodStats` bascule entre les deux premières sémantiques sur la seule présence d'une ligne dans `product_expenses`. ⚠ **Ce n'est pas une transition progressive : le seuil est binaire.** Une seule ligne d'historique suffit à faire basculer TOUS les rapports de la boutique, d'un coup, sans migration ni avertissement.
 
@@ -472,10 +503,13 @@ Le scénario détruit était celui qui avait justifié toute la synchronisation 
 **Cause** : un debounce de 500 ms enregistre **pendant** la frappe, à chaque pause. Un vendeur qui tape « 20000 » produit trois écritures — « 2 », « 20 », puis « 20000 » — et les deux premières sont des coûts réels, pas des brouillons. Rien ne les distingue d'une saisie terminée.
 
 **Solution** : enregistrer au **blur** — le geste qui signifie « j'ai fini ». Le blur est aussi la convention déjà en place (`CostBatchRow`, `CostBatch.saveCost`).
+
 ```tsx
-onBlur={commit}                       // ✅ l'utilisateur a fini de taper
-onChange={debouncedSave}               // ❌ sauvegarde des frappes intermédiaires
+onBlur = { commit }; // ✅ l'utilisateur a fini de taper
+onChange = { debouncedSave }; // ❌ sauvegarde des frappes intermédiaires
 ```
+
+**Occurrences** : 1
 
 **Prévention** : ne jamais débouncer un champ financier sans confirmation visuelle explicite. Un debounce est un bon réflexe pour un champ de recherche ; pour un montant, c'est une source de données corrompues. Si l'enregistrement doit être automatique, il lui faut un indicateur « enregistré » — sinon on écrit des valeurs que personne n'a fini de saisir.
 
@@ -484,5 +518,27 @@ onChange={debouncedSave}               // ❌ sauvegarde des frappes intermédia
 **Date** : 2026-10-14
 
 **Occurrences** : 1
+
+---
+
+## ERR-TEST-001 — Test qui ne tombe pas sous mutation
+
+**Signature** : on retire la ligne de code que le test Pathways vérifie, le test reste VERT.
+
+**Contexte** : `soldProductsByCategory` — test « une ligne libre est ignorée ». En supprimant complètement la garde `if (!item.product_id) continue`, les 5 tests passent.
+
+**Cause** : le comportement testé est **structurel, pas conditionnel**. La ligne libre s'accumule bien dans la Map, sous la clé `""` ; elle disparaît plus loin, parce qu'aucun produit n'a d'`id` vide. Le garde-fou n'était pas _la_ raison du résultat, il n'en était qu'une. Le test vérifie le résultat, pas la ligne.
+
+**Pourquoi c'est une trouvaille, pas un échec** : la mutation répond à la seule question utile — « ce test mord-il ? ». Si elle ne mord pas, le test documente une propriété structurelle. C'est utile : il attrape une évolution future (un produit synthétique pour les lignes libres, un parcours de la Map par les items au lieu des produits), mais il ne prouve **pas** que la garde est nécessaire. Le compter comme couverture serait double.
+
+**Solution** : garder le test comme filet, et le dire. Retirer le garde-fou redondant devient alors possible ; le garder reste défendable s'il documente l'intention et empêche d'écrire une clé `""` parasite dans la Map.
+
+**Prévention** : après mutation, ne pas conclure « le test est mauvais » par réflexe. Conclure « ce comportement est structurel », le documenter, et ne pas le compter comme preuve. Ici la deuxième mutation (inverser le tri des lignes) est tombée rouge : 4 tests sur 5 mordent, un seul est un filet.
+
+**Fichiers impactés** : `src/lib/reports/sold-products-by-category.test.ts`, `src/lib/reports/sold-products-by-category.ts`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 1 (1 filet sur 5)
 
 ---
