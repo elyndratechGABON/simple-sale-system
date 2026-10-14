@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listCharges, type Product, type SaleItem } from "@/lib/db";
 import { groupChargesByKind } from "@/lib/reports/charges-by-period";
+import { soldProductsByCategory } from "@/lib/reports/sold-products-by-category";
 import { rangeFor, type CalendarView } from "@/lib/reports/period";
 import { ProductCostsSection } from "./ProductCostsSection";
 import { ChargeSection } from "./ChargeSection";
@@ -43,6 +44,18 @@ export function ProfitTab({
     [products],
   );
 
+  // CA par catégorie, classé par la catégorie du CATALOGUE — la même clé que
+  // `serviceCategories`. Prendre `category_at_sale` (figée à la vente) ferait manquer le
+  // recoupement : une prestation reclassée depuis ses ventes afficherait « 0 vente » sur une
+  // catégorie qui a bien rapporté.
+  const categoryRevenue = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const [category, list] of soldProductsByCategory(products, items)) {
+      out[category] = list.reduce((s, p) => s + p.revenue, 0);
+    }
+    return out;
+  }, [products, items]);
+
   return (
     <div className="space-y-6">
       {/* Titre choisi pour ce qu'on y FAIT, pas pour ce que c'est : c'est le passage en lot
@@ -74,7 +87,8 @@ export function ProfitTab({
         onOpenChange={setChargesOpen}
         from={from}
         to={to}
-        serviceCategories={serviceCategories}
+        allCategories={serviceCategories}
+        categoryRevenue={categoryRevenue}
       />
     </div>
   );
