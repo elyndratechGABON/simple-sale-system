@@ -1,9 +1,17 @@
 import { getDB } from "./internal";
-import type { Client, MonthlyOverview, ProductExpense, Subscription } from "./types/records";
+import type {
+  Charge,
+  Client,
+  MonthlyOverview,
+  ProductExpense,
+  Subscription,
+} from "./types/records";
 import type { Sale, SaleItem } from "./types/sales";
 import type { Product } from "./types/sync";
 
 // ---------- Sauvegarde / restauration ----------
+// Les champs optionnels sont ceux ajoutés APRÈS la première version : une sauvegarde
+// enregistrée avant leur arrivée ne les contient pas, et doit se restaurer quand même.
 export interface DatabaseSnapshot {
   products: Product[];
   sales: Sale[];
@@ -12,6 +20,7 @@ export interface DatabaseSnapshot {
   clients?: Client[];
   product_expenses?: ProductExpense[];
   monthly_overviews?: MonthlyOverview[];
+  charges?: Charge[];
 }
 
 /**
@@ -24,16 +33,25 @@ export interface DatabaseSnapshot {
  */
 export async function exportSnapshot(): Promise<DatabaseSnapshot> {
   const db = getDB();
-  const [products, sales, sale_items, subscriptions, clients, product_expenses, monthly_overviews] =
-    await Promise.all([
-      db.products.toArray(),
-      db.sales.toArray(),
-      db.sale_items.toArray(),
-      db.subscriptions.toArray(),
-      db.clients.toArray(),
-      db.product_expenses.toArray(),
-      db.monthly_overviews.toArray(),
-    ]);
+  const [
+    products,
+    sales,
+    sale_items,
+    subscriptions,
+    clients,
+    product_expenses,
+    monthly_overviews,
+    charges,
+  ] = await Promise.all([
+    db.products.toArray(),
+    db.sales.toArray(),
+    db.sale_items.toArray(),
+    db.subscriptions.toArray(),
+    db.clients.toArray(),
+    db.product_expenses.toArray(),
+    db.monthly_overviews.toArray(),
+    db.charges.toArray(),
+  ]);
   return {
     products,
     sales,
@@ -42,6 +60,7 @@ export async function exportSnapshot(): Promise<DatabaseSnapshot> {
     clients,
     product_expenses,
     monthly_overviews,
+    charges,
   };
 }
 
@@ -67,6 +86,7 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
       db.clients,
       db.product_expenses,
       db.monthly_overviews,
+      db.charges,
     ],
     async () => {
       await Promise.all([
@@ -77,6 +97,7 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
         db.clients.clear(),
         db.product_expenses.clear(),
         db.monthly_overviews.clear(),
+        db.charges.clear(),
       ]);
       await Promise.all([
         db.products.bulkPut(snapshot.products),
@@ -86,6 +107,7 @@ export async function replaceAllData(snapshot: DatabaseSnapshot): Promise<void> 
         db.clients.bulkPut(snapshot.clients ?? []),
         db.product_expenses.bulkPut(snapshot.product_expenses ?? []),
         db.monthly_overviews.bulkPut(snapshot.monthly_overviews ?? []),
+        db.charges.bulkPut(snapshot.charges ?? []),
       ]);
     },
   );
@@ -113,6 +135,7 @@ export async function purgeAllData(): Promise<void> {
       db.clients,
       db.product_expenses,
       db.monthly_overviews,
+      db.charges,
     ],
     async () => {
       await Promise.all([
@@ -125,6 +148,7 @@ export async function purgeAllData(): Promise<void> {
         db.clients.clear(),
         db.product_expenses.clear(),
         db.monthly_overviews.clear(),
+        db.charges.clear(),
       ]);
     },
   );
