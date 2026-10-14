@@ -52,8 +52,10 @@ function ProductRow({
   );
 }
 
-export function CostBatch() {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+/** `initialSelected` est lu UNE fois, au montage : l'appelant doit changer la clé du
+ *  composant quand il change la sélection, sinon l'ancienne resterait cochée. */
+export function CostBatch({ initialSelected }: { initialSelected?: string[] }) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected ?? []));
   const [search, setSearch] = useState("");
   const [applyCost, setApplyCost] = useState("");
 
