@@ -95,8 +95,10 @@ export function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Les 4 KPI vivent ici : `DataTab` porte déjà les siens dans l'autre onglet,
-              les afficher aussi au-dessus des onglets serait la même vérité deux fois. */}
+          {/* Trois KPI, pas quatre : le bénéfice est devenu la CONCLUSION de l'onglet, dans le
+              bloc final de `ProfitTab` — l'afficher aussi en haut aurait mis le même
+              chiffre deux fois sur le même écran. `DataTab` porte de même ses deux KPI
+              dans l'onglet Données. */}
           <Card>
             <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3 p-3 sm:grid-cols-4 sm:p-4">
               <Kpi label={REVENUE_LABEL[view]} value={formatFCFA(stats?.revenue ?? 0)} accent />
@@ -105,21 +107,18 @@ export function ReportsPage() {
                 label="Panier moyen"
                 value={stats && stats.salesCount > 0 ? formatFCFA(stats.averageBasket) : "—"}
               />
-              <Kpi
-                label="Bénéfice"
-                value={stats ? formatFCFA(stats.profit) : "—"}
-                hint={
-                  sold.length > 0
-                    ? `⚠ ${sold.length} vendu${sold.length > 1 ? "s" : ""} sans coût`
-                    : undefined
-                }
-              />
             </CardContent>
           </Card>
 
           <CostAlerts sold={sold} global={global} onOpenCostBatch={openCostBatch} />
 
-          <ProfitTab products={products} items={items} focusedDay={focusedDay} view={view} />
+          <ProfitTab
+            products={products}
+            items={items}
+            focusedDay={focusedDay}
+            view={view}
+            profit={stats?.profit ?? 0}
+          />
         </div>
       )}
 
