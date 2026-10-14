@@ -1,13 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  NAV_LABEL,
-  VIEWS,
-  type CalendarView,
-  periodTitle,
-  stepDay,
-} from "@/lib/reports/period";
+import { NAV_LABEL, VIEWS, type CalendarView, periodTitle, stepDay } from "@/lib/reports/period";
 
 interface PeriodNavProps {
   view: CalendarView;
@@ -24,12 +18,7 @@ interface PeriodNavProps {
  * pourraient afficher deux périodes différentes sur le même écran, et deux chiffres
  * qui ne se recoupent pas.
  */
-export function PeriodNav({
-  view,
-  onViewChange,
-  focusedDay,
-  onFocusedDayChange,
-}: PeriodNavProps) {
+export function PeriodNav({ view, onViewChange, focusedDay, onFocusedDayChange }: PeriodNavProps) {
   return (
     <div className="space-y-2">
       {/* Granularité : quatre choix, l'actif au vert principal. */}
