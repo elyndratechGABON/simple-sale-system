@@ -23,7 +23,7 @@ export function AppearanceCard() {
   const { ownerPhoto } = usePreferences();
   const { data: shopLogo } = useQuery({
     queryKey: ["shop_logo"],
-    queryFn: () => getSetting<string>(SETTING_SHOP_LOGO) ?? null,
+    queryFn: async () => (await getSetting<string>(SETTING_SHOP_LOGO)) ?? null,
   });
   const photoInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
