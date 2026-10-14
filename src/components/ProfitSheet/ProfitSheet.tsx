@@ -71,9 +71,11 @@ export function ProfitSheet({
     },
   });
 
+  // Un mois sans bilan enregistré est l'absence NORMALE : `await` avant le `??`, sinon
+  // la requête résout vers `undefined` et React Query la fait échouer (ERR-QUERY-001).
   const { data: overview } = useQuery({
     queryKey: ["monthly_overview", month],
-    queryFn: () => getMonthlyOverview(month),
+    queryFn: async () => (await getMonthlyOverview(month)) ?? null,
   });
 
   const { data: productExpenses = [] } = useQuery({
