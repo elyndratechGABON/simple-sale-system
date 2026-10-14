@@ -13,7 +13,9 @@ interface ChargesDialogProps {
   from: number;
   to: number;
   /** Catégories du catalogue portant au moins un produit `type: "service"`. */
-  serviceCategories: string[];
+  allCategories: string[];
+  /** CA de la période par catégorie — même clé que les noms, sinon le recoupement échoue. */
+  categoryRevenue: Record<string, number>;
 }
 
 /**
@@ -40,7 +42,8 @@ export function ChargesDialog({
   onOpenChange,
   from,
   to,
-  serviceCategories,
+  allCategories,
+  categoryRevenue,
 }: ChargesDialogProps) {
   const qc = useQueryClient();
   const { data: charges = [] } = useQuery({
@@ -49,7 +52,6 @@ export function ChargesDialog({
     enabled: open,
   });
   const { services, business } = groupChargesByKind(charges);
-  const dejaChargees = new Set(services.map((s) => s.category));
 
   async function save(kind: "service" | "business", key: string, amount: number, id?: string) {
     try {
@@ -93,10 +95,10 @@ export function ChargesDialog({
 
         <div className="space-y-6">
           <ServiceChargesSection
+            allCategories={allCategories}
             services={services}
-            available={serviceCategories.filter((c) => !dejaChargees.has(c))}
+            categoryRevenue={categoryRevenue}
             onSave={(category, amount, id) => void save("service", category, amount, id)}
-            onRemove={(id) => void remove(id)}
           />
 
           <BusinessChargesSection
