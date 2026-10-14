@@ -6,7 +6,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listProducts, type Product } from "@/lib/db";
+import { listProducts, type Product, type SaleItem } from "@/lib/db";
 import {
   computePeriodStats,
   computeWeightSales,
@@ -91,6 +91,9 @@ export function useReportData(focusedDay: number, view: CalendarView) {
     months,
     weightSales: weightSales as WeightSalesStats | null,
     products: (products ?? []) as Product[],
+    // Lignes de la période, telles quelles : la page en a besoin pour distinguer ce qui
+    // a été VENDU de ce qui existe au catalogue (alerte « produits sans coût »).
+    items: (data?.items ?? []) as SaleItem[],
     bestLabel: bestLabelOf(view, stats, months),
   };
 }
