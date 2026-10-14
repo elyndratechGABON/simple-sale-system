@@ -77,6 +77,10 @@ export async function deleteCharge(id: string): Promise<void> {
  * dizaines de lignes, une par poste et par mois), et un `where("period_start").between()`
  * manquerait les charges longues. `alive()` est obligatoire — une charge supprimée ne
  * doit jamais revenir dans un total.
+ *
+ * ponytail: on charge TOUT puis on filtre en mémoire, l'index `period_start` n'est pas
+ * exploité pour cette lecture. Juste parce que le volume tient dans un chargement ; au-delà
+ * de ~1000 charges : index composite `[period_start+period_to]` ou filtre Dexie natif.
  */
 export async function listCharges(from: number, to: number): Promise<Charge[]> {
   const db = getDB();
