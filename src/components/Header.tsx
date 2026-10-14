@@ -66,9 +66,11 @@ export function Header() {
   const lastClick = useRef(0);
 
   // Logo posé par le commerçant (Paramètres › Logo), sinon l'icône de l'application.
+  // `await` AVANT le `??` : sans lui, le repli s'applique à la Promise et la requête
+  // résout vers `undefined` (cf. ERR-QUERY-001).
   const { data: shopLogo } = useQuery({
     queryKey: ["shop_logo"],
-    queryFn: () => getSetting<string>("shop_logo") ?? null,
+    queryFn: async () => (await getSetting<string>("shop_logo")) ?? null,
     staleTime: 60_000,
   });
 
