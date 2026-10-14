@@ -31,6 +31,7 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
       db.sales,
       db.sale_items,
       db.clients,
+      db.charges,
       db.processed_ops,
       db.paired_devices,
       db.settings,
