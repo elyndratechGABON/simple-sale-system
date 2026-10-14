@@ -1,120 +1,93 @@
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatFCFA } from "@/lib/format";
 import type { ServiceChargeLine } from "@/lib/reports/charges-by-period";
 
 /**
- * Charges de SERVICE : une ligne par charge enregistrée, et l'ajout se fait parmis les
- * catégories du catalogue qui portent au moins un produit de type `service`.
+ * Charges de SERVICE : une ligne par catégorie de prestation du CATALOGUE.
  *
- * PRESENTATION pure — la sauvegarde et la suppression sont passées en props, la
- * périodicité et l'accès base appartiennent au dialogue. Une ligne = UN enregistrement :
- * « supprimer » retire celui-là, rien d'autre.
+ * Le commerce saisit ici ce que lui coûte une catégorie à faire tourner par période
+ * (le loyer du salon, les produits de la coiffure) — pas un coût unitaire, qu'il saisit
+ * sur la fiche quand il le connaît.
+ *
+ * La liste vient du catalogue, PAS des charges enregistrées : une catégorie sans vente sur
+ * la période s'affiche quand même, avec son input ACTIF. Le commerce peut vouloir saisir
+ * son loyer du mois avant d'avoir servi la première prestation ; l'inverse — un champ qui
+ * n'apparaît qu'après une vente — l'obligerait à revenir Plus tard et à le retrouver.
+ *
+ * « Supprimer » a disparu : vider le montant suffit, le dialogue efface les charges à 0 à
+ * la fermeture. Un bouton de plus qui fait la même chose.
+ *
+ * PRESENTATION pure — la sauvegarde passe en props ; la périodicité et l'accès base
+ * appartiennent au dialogue.
  */
 export function ServiceChargesSection({
+  allCategories,
   services,
-  available,
+  categoryRevenue,
   onSave,
-  onRemove,
 }: {
+  /** Catégories du catalogue portant au moins un produit `type: "service"`. */
+  allCategories: string[];
+  /** Charges déjà enregistrées sur la période, groupées par catégorie. */
   services: ServiceChargeLine[];
-  /** Catégories de service pas encore saisies sur la période. */
-  available: string[];
+  /** CA de la période par catégorie — même source que les noms, donc le recoupement tient. */
+  categoryRevenue: Record<string, number>;
   onSave: (category: string, amount: number, id?: string) => void;
-  onRemove: (id: string) => void;
 }) {
-  const [ajout, setAjout] = useState("");
+  // Ce qui pèse d'abord ; une catégorie sans vente passe en fin de liste.
+  const rows = [...allCategories].sort(
+    (a, b) => (categoryRevenue[b] ?? 0) - (categoryRevenue[a] ?? 0),
+  );
+  const parCategorie = new Map(services.map((s) => [s.category, s]));
 
-  function ajouter() {
-    if (!ajout) return;
-    // Réécrit s'il existe déjà : pas de doublon (cf. `groupChargesByKind`).
-    const existante = services.find((s) => s.category === ajout);
-    onSave(ajout, existante?.amount ?? 0, existante?.id);
-    setAjout("");
+  if (rows.length === 0) {
+    return (
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Charges de service</h3>
+        <p className="rounded-lg border border-dashed p-3 text-center text-sm text-muted-foreground">
+          Aucune prestation au catalogue
+        </p>
+      </section>
+    );
   }
 
   return (
     <section className="space-y-2">
       <h3 className="text-sm font-semibold">Charges de service</h3>
-
-      {services.length === 0 && (
-        <p className="rounded-lg border border-dashed p-3 text-center text-sm text-muted-foreground">
-          Aucune charge de service sur la période
-        </p>
-      )}
-
-      {services.map((line) => (
-        <ServiceChargeLineRow key={line.id} line={line} onSave={onSave} onRemove={onRemove} />
-      ))}
-
-      <div className="flex items-center gap-2 pt-1">
-        <select
-          value={ajout}
-          onChange={(e) => setAjout(e.target.value)}
-          aria-label="Catégorie à charger"
-          className="h-9 flex-1 rounded-lg border bg-background px-2 text-sm"
-        >
-          <option value="">Choisir une catégorie…</option>
-          {available.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-        <Button
-          size="sm"
-          onClick={ajouter}
-          disabled={!ajout}
-          aria-label="Ajouter une charge de service"
-        >
-          <Plus className="h-4 w-4" />
-          Ajouter
-        </Button>
-      </div>
+      {rows.map((category) => {
+        const existante = parCategorie.get(category);
+        const ca = categoryRevenue[category] ?? 0;
+        return (
+          <div key={category} className="flex items-center gap-2 text-sm">
+            <span className="min-w-0 flex-1 truncate">{category}</span>
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {ca > 0 ? `CA ${formatFCFA(ca)}` : "0 vente"}
+            </span>
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              defaultValue={existante && existante.amount > 0 ? String(existante.amount) : ""}
+              placeholder="—"
+              aria-label={`Coût de la catégorie ${category}`}
+              className="h-9 w-32 text-right tabular-nums"
+              onBlur={(e) => {
+                const amount = Number(e.target.value);
+                if (e.target.value.trim() === "" || Number.isNaN(amount) || amount < 0) {
+                  e.target.value = existante?.amount ? String(existante.amount) : "";
+                  return;
+                }
+                // Réécrit si elle existe : une seule charge par catégorie et par période,
+                // jamais une seconde ligne pour la même catégorie.
+                if (amount !== (existante?.amount ?? 0)) {
+                  onSave(category, amount, existante?.id);
+                }
+              }}
+            />
+          </div>
+        );
+      })}
     </section>
-  );
-}
-
-function ServiceChargeLineRow({
-  line,
-  onSave,
-  onRemove,
-}: {
-  line: ServiceChargeLine;
-  onSave: (category: string, amount: number, id?: string) => void;
-  onRemove: (id: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="min-w-0 flex-1 truncate text-sm">{line.category}</span>
-      <Input
-        type="number"
-        min="0"
-        step="1"
-        inputMode="numeric"
-        defaultValue={line.amount > 0 ? String(line.amount) : ""}
-        placeholder="—"
-        aria-label={`Montant de la charge ${line.category}`}
-        className="h-9 w-32 text-right tabular-nums"
-        onBlur={(e) => {
-          const amount = Number(e.target.value);
-          if (e.target.value.trim() === "" || Number.isNaN(amount) || amount < 0) {
-            e.target.value = line.amount > 0 ? String(line.amount) : "";
-            return;
-          }
-          if (amount !== line.amount) onSave(line.category, amount, line.id);
-        }}
-      />
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9 shrink-0 text-destructive"
-        aria-label={`Supprimer la charge ${line.category}`}
-        onClick={() => onRemove(line.id)}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
   );
 }
