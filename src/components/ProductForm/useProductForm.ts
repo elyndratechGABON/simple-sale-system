@@ -37,6 +37,10 @@ export function useProductForm({
   const allowServiceBooking = cluster === "service";
   const [name, setName] = useState(editing?.name ?? "");
   const [price, setPrice] = useState<string>(editing ? String(editing.price) : "");
+  // Prix d'ACHAT, pas celui de revente. `0` = inconnu — c'est la valeur par défaut de
+  // `Product.cost` et ce que les rapports lisent comme « bénéfice = CA ». Facultatif : le
+  // commerce le saisit quand il le sait, et le.Batch de Comptabilité rattrape le reste.
+  const [cost, setCost] = useState<string>(editing && editing.cost > 0 ? String(editing.cost) : "");
   const [unlimited, setUnlimited] = useState(editing ? !Number.isFinite(editing.stock) : false);
   const [stock, setStock] = useState<string>(
     editing && Number.isFinite(editing.stock) ? String(editing.stock) : "",
@@ -110,7 +114,7 @@ export function useProductForm({
           : undefined;
       const p = {
         name: name.trim(),
-        cost: editing?.cost ?? 0,
+        cost: Number(cost) || 0,
         price:
           variantsOut && variantsOut.length > 0 ? (variantsOut[0].price ?? 0) : Number(price) || 0,
         stock:
@@ -151,6 +155,8 @@ export function useProductForm({
     setName,
     price,
     setPrice,
+    cost,
+    setCost,
     unlimited,
     setUnlimited,
     stock,
