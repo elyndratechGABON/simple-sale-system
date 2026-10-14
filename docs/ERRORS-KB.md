@@ -293,3 +293,32 @@ if (next.has(id)) {
 **Occurrences** : 1
 
 ---
+
+## ERR-JSX-005 — `.map()` chaîné dans un `useState` initial
+
+**Signature** : `TS1005: ')' expected` sur un `useState(() => x?.map((i) => ({ ... })) ?? [])`.
+
+**Contexte** : Un état local est initialisé à partir d'une liste existante, dans le dialogue `ProductPickerDialog`. L'erreur a résisté à dix éditions successives du même fichier : chaque correction visait la mauvaise parenthèse, et le parseur s'arrêtait à la ligne 111 avant de dire quoi que ce soit d'autre.
+
+**Cause** : `.map()` à l'intérieur d'un `useState` initial cumule trois niveaux de parenthèses imbriquées (`useState(` → `map(` → `({`). Une seule suffit à mal fermer la chaîne, et le message `TS1005` ne désigne que le point de rupture, jamais le déséquilibre réel. **Un `useState` dont l'initialiseur contient un `.map` est le premier fichier à réécrire, pas le premier à retoucher.**
+
+**Solution** : déplacer l'initialisation dans un hook dédié qui reçoit la liste ; le `useState` ne contient plus qu'une valeur déjà construite.
+```ts
+// ❌ trois niveaux de parenthèses dans l'initialiseur
+const [localItems, setLocalItems] = useState<LocalItem[]>(() =>
+  items?.map((item) => ({ id: item.id, name: item.name })) ?? []
+);
+
+// ✅ le hook porte la conversion, le useState reste plat
+const { items: localItems } = useItemsToAdd(initialItems ?? []);
+```
+
+**Prévention** : Règle ZÉRO — avant toute correction, `grep docs/ERRORS-KB.md` sur les mots-clés de l'erreur. Si trois éditions du même fichier n'ont pas réglé la même erreur : supprimer le fichier et le recréer depuis la spécification, ne jamais tenter une quatrième édition. Règle de lint : pas de `.map()` dans un `useState` initial.
+
+**Fichiers impactés** : `src/features/pos/ProductPickerDialog.tsx`
+
+**Date** : 2026-10-14
+
+**Occurrences** : 1 (10 tentatives de correction)
+
+---
