@@ -16,6 +16,8 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
     handlePhoto,
     price,
     setPrice,
+    cost,
+    setCost,
     productType,
     variants,
     stock,
@@ -66,8 +68,10 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
         onChange={handlePhoto}
       />
       <div className="space-y-3">
-        {/* `price` seul : il occupait la moitié droite d'une grille de deux colonnes
-            partagées avec le prix d'achat. Ce champ-ci part en Comptabilité (§5.5). */}
+        {/* Prix d'achat et prix de revente côte à côte : c'est la marge qu'on calcule d'un coup
+            d'œil, donc les séparer dans deux écrans coûtait plus qu'il ne rapportait.
+            Une prestation n'a pas de coût d'achat par unité — le sien est global, saisi
+            en Comptabilité. */}
         <div>
           <Label htmlFor="price">Prix de revente (FCFA)</Label>
           <Input
@@ -78,6 +82,23 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
             placeholder="Ex : 300"
           />
         </div>
+
+        {productType === "product" && (
+          <div>
+            <Label htmlFor="cost">Coût d'achat (FCFA)</Label>
+            <Input
+              id="cost"
+              inputMode="numeric"
+              value={cost}
+              onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
+              placeholder="Optionnel — complétez plus tard"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Ce que vous payez pour l'acheter. Sans cette valeur, le bénéfice affiché vaut le prix
+              de revente entier : les rapports le signalent par une alerte.
+            </p>
+          </div>
+        )}
 
         {productType === "product" && (
           <>
