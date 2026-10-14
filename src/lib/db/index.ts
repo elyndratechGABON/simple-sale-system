@@ -22,6 +22,7 @@ export * from "./closing";
 export * from "./tables";
 export * from "./tables-order";
 export * from "./reports";
+export * from "./charges";
 export * from "./snapshot";
 export * from "./subscriptions";
 export * from "./shop";
