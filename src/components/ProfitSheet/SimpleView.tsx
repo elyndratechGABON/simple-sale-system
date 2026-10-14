@@ -36,7 +36,9 @@ export function SimpleView({
   complemented: number;
   charges: number;
   stockAlerts: ReturnType<typeof buildAlerts>;
-  overview: MonthlyOverview | undefined;
+  /** `null` = mois sans bilan enregistré, `undefined` = chargement en cours. Même
+   *  traitement plus bas (`overview?.x`) : seule la distinction « pas encore » compte. */
+  overview: MonthlyOverview | null;
   products: Product[];
 }) {
   return (

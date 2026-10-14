@@ -37,7 +37,7 @@ export function MoneyBlock({
 }: {
   month: string;
   monthData: { sales: Sale[]; items: SaleItem[] } | undefined;
-  overview: MonthlyOverview | undefined;
+  overview: MonthlyOverview | null;
   products: Product[];
 }) {
   const qc = useQueryClient();

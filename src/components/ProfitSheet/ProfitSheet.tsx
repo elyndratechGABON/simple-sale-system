@@ -170,7 +170,7 @@ export function ProfitSheet({
               complemented={complemented}
               charges={charges}
               stockAlerts={stockAlerts}
-              overview={overview}
+              overview={overview ?? null}
               products={products}
             />
           ) : (
