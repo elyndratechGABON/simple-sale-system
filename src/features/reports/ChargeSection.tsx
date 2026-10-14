@@ -14,18 +14,30 @@ export interface ChargeLine {
  * PRESENTATION pure — la même charge ne s'affiche pas forcément de la même façon partout,
  * mais la somme, elle, ne se recalcule pas dans chaque écran.
  */
+export function NetLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
+
 export function ChargeSection({
   title,
   total,
   empty,
   lines,
   onEdit,
+  showTotal = true,
 }: {
   title: string;
   total: number;
   empty: string;
   lines: ChargeLine[];
   onEdit: () => void;
+  /** Le total peut être énoncé ailleurs — le répéter afficherait deux fois le même nombre. */
+  showTotal?: boolean;
 }) {
   return (
     <section>
@@ -50,10 +62,12 @@ export function ChargeSection({
               <span className="shrink-0 tabular-nums">{formatFCFA(line.amount)}</span>
             </div>
           ))}
-          <div className="flex items-center gap-2 py-2 text-sm font-semibold">
-            <span className="min-w-0 flex-1">Total</span>
-            <span className="shrink-0 tabular-nums">{formatFCFA(total)}</span>
-          </div>
+          {showTotal && (
+            <div className="flex items-center gap-2 py-2 text-sm font-semibold">
+              <span className="min-w-0 flex-1">Total</span>
+              <span className="shrink-0 tabular-nums">{formatFCFA(total)}</span>
+            </div>
+          )}
         </div>
       )}
     </section>
