@@ -385,7 +385,7 @@ Le code se lit comme protégé, et le `?? null` visible rassure : c'est ce qui r
 
 ## ERR-SYNC-001 — Garde `!existing` copiée d'une entité qui a un `created`
 
-**Signature** : un handler `apply`正確 sur le papier, qui n'applique jamais rien. Aucun message : l'op est comptée « appliquée », l'écriture est silencieusement sautée.
+**Signature** : un handler `apply` correct sur le papier, qui n'applique jamais rien. Aucun message : l'op est comptée « appliquée », l'écriture est silencieusement sautée.
 
 **Contexte** : `applyChargeSaved`, premier handler d'une entité nouvelle (`charges`). Écrit en copiant `applyProductUpdated` ligne pour ligne, comme demandé — « le pattern EXACT du projet ».
 
