@@ -7,7 +7,7 @@ import { ProductCostRow } from "./ProductCostRow";
  * Passage EN LOT des coûts d'achat, pour les produits vendus sur la période.
  *
  * Ce n'est PAS la porte principale de la saisie : le formulaire produit la porte
- * individuelle (je crée un article, je connais son prix d'achat). Ici, c'est le cas de
+ * individuelle (je crée un article, je connais son coût d'achat). Ici, c'est le cas de
  * masse — un catalogue de 200 articles dont aucun coût n'est renseigné ne se remplit pas
  * avec 200 allers-retours vers l'écran Stocks. L'alerte « produits sans coût » ouvre cette
  * liste avec les articles concernés déjà cochés.

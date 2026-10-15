@@ -47,7 +47,7 @@ export const CARD_FIELD_LABELS: Record<ProductCardField, string> = {
   price: "Prix",
   stock: "Stock",
   category: "Catégorie",
-  cost: "Prix d'achat",
+  cost: "Coût d'achat",
   margin: "Marge",
   reference: "Référence",
   variants: "Variantes",
