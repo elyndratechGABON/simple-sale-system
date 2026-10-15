@@ -542,3 +542,51 @@ onChange = { debouncedSave }; // ❌ sauvegarde des frappes intermédiaires
 **Occurrences** : 1 (1 filet sur 5)
 
 ---
+
+## ERR-UI-002 — Vider un champ montant ne supprime pas la ligne
+
+**Signature** : l'utilisateur sélectionne le contenu d'une charge de service, efface, quitte le champ — la charge est toujours là. Le bouton 🗑 avait été retiré des services : il n'y avait plus **aucun moyen** de supprimer une charge de service.
+
+**Contexte** : dialogue « Charges de la période », section Charges de service (puis aligné sur Charges du business).
+
+**Cause** : un garde unique traitait trois intentions comme une seule.
+
+```tsx
+if (e.target.value.trim() === "" || Number.isNaN(amount) || amount < 0) {
+  e.target.value = existante?.amount ? String(existante.amount) : ""; // ← restaure
+  return;
+}
+```
+
+`""` n'est pas une frappe invalide, c'est une **intention de suppression**. La restaurer rendait l'action impossible, sans message et sans trace.
+
+**Solution** : dissocier les intentions. Vide = suppression **immédiate** ; `NaN` ou négatif = frappe illisible, on restaure et on ne détruit rien.
+
+```tsx
+if (raw === "") {
+  onRemove(line.id); // suppression immédiate
+  return;
+}
+const amount = Number(raw);
+if (Number.isNaN(amount) || amount < 0) {
+  e.target.value = existante?.amount ? String(existante.amount) : "";
+  return;
+}
+onSave(category, amount, existante?.id);
+```
+
+**⚠ Évolution — la 1ʳᵉ version était juste mais créait une course.** La première correction enregistrait `0` et confiait le ménage à `ChargesDialog.close()` (`charges.filter(c => c.amount === 0)`). Le comportement nominal était bon, mais `close()` lit `charges` depuis l'**état figé du rendu précédent** : la refetch déclenchée par le blur n'est pas terminée, donc la suppression est manquée et la charge réapparaît à 0. Le scénario est atteignable au doigt — saisir un montant, appuyer sur Échap — et chaque passage laisse une ligne fantôme qui s'accumule.
+
+Le vrai responsable n'est pas le filtrage à la fermeture, c'est le **délai** entre l'écriture et sa lecture. Supprimer au moment du geste supprime le délai, donc la course : un geste, un effet.
+
+**Ce qui reste du nettoyage à la fermeture, et pourquoi** : il garde un métier différent — les lignes vides abandonnées par le « + Ajouter » de la section business. Il ne se déclenche plus par le vidage. Dans `ServiceChargesSection` il n'a plus aucune source possible (une ligne par catégorie, pas de bouton d'ajout) : c'est un filet, et c'est documenté comme tel dans les deux composants.
+
+**Prévention** : ne jamais faire dépendre une action d'un état de lecture qui n'a pas encore convergé. Si l'effet doit être immédiat, écris-le immédiatement. Et relire les gardes `||` qui regroupent des intentions ** opposites** — « absent », « invalide » et « négatif » ne sont pas la même chose.
+
+**Fichiers impactés** : `src/features/reports/ServiceChargesSection.tsx`, `src/features/reports/BusinessChargesSection.tsx`, `src/features/reports/ChargesDialog.tsx`
+
+**Date** : 2026-10-15
+
+**Occurrences** : 2
+
+---
