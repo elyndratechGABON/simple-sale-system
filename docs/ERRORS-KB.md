@@ -590,3 +590,41 @@ Le vrai responsable n'est pas le filtrage à la fermeture, c'est le **délai** e
 **Occurrences** : 2
 
 ---
+
+## ERR-TEST-002 — Tester par l'écran plutôt que par la source
+
+**Signature** : le test « passe » mais l'état réel diverge. Un correctif annoncé vert par l'UI ne l'est pas dans la base.
+
+**Contexte** : revalidation manuelle de la suppression d'une charge de service (`/reports`, onglet Bénéfice), pilotée en JavaScript plutôt qu'à la souris.
+
+**Cause** : deux pièges du pilotage programmatique, tous deux **silencieux**.
+
+```js
+// 1. Sur un déclencheur Radix (Tabs, Select…), .click() ne remonte PAS l'onClick.
+btn("Bénéfice").click();          // aucun effet, on reste sur l'onglet précédent
+
+// 2. .blur() sur un champ DÉJÀ dé-focalisé est un no-op : aucun blur, donc aucun onBlur.
+el.blur();                        // le handler ne part jamais
+```
+
+Le second est le plus traître : les champs de montant sont **non contrôlés** (`defaultValue`). Un `blur()` sans effet laisse la valeur vide affichée — l'écran dit « champ vidé », la base dit « charge intacte ». Les deux observations sont vraies en même temps, et c'est l'écran qui ment.
+
+**Solution** : juger une mutation sur **la donnée persistée**, pas sur l'affichage.
+
+```js
+const req = indexedDB.open("pos-db");
+const all = await store("charges").getAll();
+all.filter((c) => !c.deleted_at); // ← la vérité
+```
+
+Et pour les événements, répliquer un geste utilisateur réel : `focus()` explicite avant `blur()`, outils de clic pour les composants Radix.
+
+**Prévention** : preuve DB avant preuve UI. Une mutation validée à l'écran demande une confirmation en base avant d'être annoncée verte. Écrans non contrôlés + pilotage synthétique = deux sources de mensonge qui se renforcent ; la base est la seule qui ne dépende pas du DOM.
+
+**Fichiers impactés** : aucun — erreur de protocole de test, pas de code applicatif.
+
+**Date** : 2026-10-15
+
+**Occurrences** : 2
+
+---
