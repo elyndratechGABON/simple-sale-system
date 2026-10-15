@@ -11,6 +11,10 @@ import type { BusinessChargeLine } from "@/lib/reports/charges-by-period";
  *
  * PRESENTATION pure, comme `ServiceChargesSection` : la sauvegarde et la suppression
  * passent en props. Une ligne = UN enregistrement en base.
+ *
+ * Différence avec les charges de service : ici le « + Ajouter » peut créer une ligne vide
+ * (intitulé + montant saisis dans le pied de section). C'est à CE titre que le dialogue
+ * nettoie encore les charges à 0 à la fermeture — un filet, plus le geste principal.
  */
 export function BusinessChargesSection({
   business,
@@ -60,11 +64,13 @@ export function BusinessChargesSection({
             onBlur={(e) => {
               const raw = e.target.value.trim();
 
-              // Champ VIDÉ : même convention que la charge de service — 0 enregistré, le
-              // dialogue efface les charges à 0 à la fermeture. Le bouton 🗑 reste le geste
-              // explicite, mais vider doit signifier la même chose ici qu'ailleurs.
+              // Champ VIDÉ : suppression immédiate, exactement comme le bouton 🗑 et
+              // comme la section service. Passait par « enregistrer 0 » avant — le
+              // dialogue effaçait les 0 à la fermeture, mais `close()` lit l'état figé du
+              // rendu précédent : la refetch du blur n'est pas terminée, et la ligne
+              // réapparaissait à 0. Un geste, un effet.
               if (raw === "") {
-                if (line.amount !== 0) onSave(line.label, 0, line.id);
+                onRemove(line.id);
                 return;
               }
 
