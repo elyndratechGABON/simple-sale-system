@@ -110,7 +110,7 @@ export function StockDetailsForm({
       {/* Champs optionnels du journal de mouvements */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label htmlFor="unit-cost">Prix d'achat unitaire</Label>
+          <Label htmlFor="unit-cost">Coût d'achat unitaire</Label>
           <Input
             id="unit-cost"
             inputMode="numeric"

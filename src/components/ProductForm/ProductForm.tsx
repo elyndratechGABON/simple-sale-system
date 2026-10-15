@@ -62,7 +62,7 @@ export function ProductForm({
         <PhotoAndPricing form={form} />
 
         {/* Le type commande le stock, les variantes et le champ coût : les cartes disent
-            ce que l'application fera du choix. Une prestation n'a pas de stock, donc le
+            ce que l'application fera du choix. Un service n'a pas de stock, donc le
             sélecteur le force à illimité — le toggle nu le faisait aussi. */}
         <ProductTypeSelector
           value={productType}

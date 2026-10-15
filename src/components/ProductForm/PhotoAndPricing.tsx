@@ -68,9 +68,9 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
         onChange={handlePhoto}
       />
       <div className="space-y-3">
-        {/* Prix d'achat et prix de revente côte à côte : c'est la marge qu'on calcule d'un coup
+        {/* Coût d'achat et prix de revente côte à côte : c'est la marge qu'on calcule d'un coup
             d'œil, donc les séparer dans deux écrans coûtait plus qu'il ne rapportait.
-            Une prestation n'a pas de coût d'achat par unité — le sien est global, saisi
+            Un service n'a pas de coût d'achat par unité — le sien est global, saisi
             en Comptabilité. */}
         <div>
           <Label htmlFor="price">Prix de revente (FCFA)</Label>

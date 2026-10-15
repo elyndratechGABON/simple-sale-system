@@ -55,7 +55,7 @@ export function ProductDetailDialog({
                 <InfoCell label="Catégorie" value={product.category} />
                 <InfoCell label="Prix de vente" value={formatFCFA(product.price)} />
                 <InfoCell
-                  label="Prix d'achat"
+                  label="Coût d'achat"
                   value={product.cost > 0 ? formatFCFA(product.cost) : "Non saisi"}
                 />
                 <InfoCell label="Marge" value={marginLabel(product)} />
