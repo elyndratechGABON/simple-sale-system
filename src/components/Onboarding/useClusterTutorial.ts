@@ -17,11 +17,10 @@ export function useClusterTutorial(onComplete: () => void) {
   const [subStep, setSubStep] = useState<TutorialStep>("confirm");
   const [addedCount, setAddedCount] = useState(0);
   const [loadingDemo, setLoadingDemo] = useState(false);
-  // Tous clusters : choix Prestation (sans stock) vs Produit (avec stock).
-  // Défaut "produit" car la majorité des clusters sont orientés produits.
-  const [serviceMode, setServiceMode] = useState<"prestation" | "produit">("produit");
+  // Type unifié : "product" | "service" (remplace serviceMode "prestation"|"produit")
+  const [productType, setProductType] = useState<"product" | "service">("product");
   const isServiceCluster = cluster === "service";
-  const addingProduct = serviceMode === "produit";
+  const addingProduct = productType === "product";
 
   // Variantes dynamiques — applicable à tout produit (tailles, couleurs, etc.).
   const [variants, setVariants] = useState<{ name: string; price: string; stock: string }[]>([]);
@@ -60,7 +59,7 @@ export function useClusterTutorial(onComplete: () => void) {
       category:
         productCategory.trim() || (addingProduct ? "Beauté" : tutorialConfig.defaultCategory),
       stock: Number(productStock) || 0,
-      type: tutorialConfig.isService && serviceMode === "prestation" ? "service" : "product",
+      type: productType,
       // V23 : `unitType`/`weightUnit` laissent la place à l'unité unique. Un produit
       // vendu au kilo s'écrit `unit: "kg"`, tout le reste vaut "piece".
       unit: sellsByWeight ? "kg" : "piece",
@@ -90,8 +89,8 @@ export function useClusterTutorial(onComplete: () => void) {
     setSubStep,
     addedCount,
     loadingDemo,
-    serviceMode,
-    setServiceMode,
+    productType,
+    setProductType,
     isServiceCluster,
     addingProduct,
     variants,
