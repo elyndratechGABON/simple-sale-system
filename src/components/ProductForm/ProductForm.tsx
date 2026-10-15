@@ -49,6 +49,15 @@ export function ProductForm({
         <DialogTitle>{editing ? "Modifier le produit" : "Nouveau produit"}</DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
+        {/* Le type commande quels champs existent : le choisir EN PREMIER */}
+        <ProductTypeSelector
+          value={productType}
+          onChange={(type) => {
+            setProductType(type);
+            if (type === "service") setUnlimited(true);
+          }}
+        />
+
         <div>
           <Label htmlFor="name">Nom</Label>
           <Input
@@ -60,17 +69,6 @@ export function ProductForm({
         </div>
 
         <PhotoAndPricing form={form} />
-
-        {/* Le type commande le stock, les variantes et le champ coût : les cartes disent
-            ce que l'application fera du choix. Un service n'a pas de stock, donc le
-            sélecteur le force à illimité — le toggle nu le faisait aussi. */}
-        <ProductTypeSelector
-          value={productType}
-          onChange={(type) => {
-            setProductType(type);
-            if (type === "service") setUnlimited(true);
-          }}
-        />
 
         {showVariants && <VariantEditor form={form} />}
 

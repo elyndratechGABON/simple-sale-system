@@ -94,8 +94,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
               placeholder="Optionnel — complétez plus tard"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Ce que vous payez pour l'acheter. Sans cette valeur, le bénéfice affiché vaut le prix
-              de revente entier : les rapports le signalent par une alerte.
+              Optionnel — sans cette valeur, le bénéfice sera surestimé.
             </p>
           </div>
         )}
