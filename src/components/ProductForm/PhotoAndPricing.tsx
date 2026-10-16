@@ -73,7 +73,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
             Un service n'a pas de coût d'achat par unité — le sien est global, saisi
             en Comptabilité. */}
         <div>
-          <Label htmlFor="price">Prix de revente (FCFA)</Label>
+          <Label htmlFor="price">Prix (FCFA)</Label>
           <Input
             id="price"
             inputMode="numeric"
@@ -107,7 +107,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
                 le premier venu l'écraserait. */}
             {variants.length === 0 && (
               <div>
-                <Label htmlFor="stock">Stock disponible</Label>
+                <Label htmlFor="stock">Stock</Label>
                 <Input
                   id="stock"
                   inputMode="numeric"
