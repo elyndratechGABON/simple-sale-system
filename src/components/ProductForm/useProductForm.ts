@@ -74,7 +74,7 @@ export function useProductForm({
 
   // Affiche le bloc variantes pour tout produit (pas seulement ceux qui en ont déjà).
   // Le bouton "+ Ajouter une variante" permet d'en créer la première.
-  const showVariants = productType === "product";
+  const showVariants = true;
 
   function addVariant() {
     setVariants((vs) => [...vs, { id: draftId(), name: "", price: "", stock: "" }]);
