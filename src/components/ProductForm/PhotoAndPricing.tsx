@@ -68,35 +68,48 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
         onChange={handlePhoto}
       />
       <div className="space-y-3">
-        {/* Coût d'achat et prix de revente côte à côte : c'est la marge qu'on calcule d'un coup
-            d'œil, donc les séparer dans deux écrans coûtait plus qu'il ne rapportait.
-            Un service n'a pas de coût d'achat par unité — le sien est global, saisi
-            en Comptabilité. */}
-        <div>
-          <Label htmlFor="price">Prix (FCFA)</Label>
-          <Input
-            id="price"
-            inputMode="numeric"
-            value={price}
-            onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-            placeholder="Ex : 300"
-          />
-        </div>
+        {/* Prix de revente et coût d'achat côte à côte pour les produits (marge d'un coup d'œil).
+            Pour un service, seul le prix de revente s'affiche. */}
+        {productType === "product" ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="price">Prix de revente (FCFA)</Label>
+              <Input
+                id="price"
+                inputMode="numeric"
+                value={price}
+                onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+                placeholder="Ex : 300"
+              />
+            </div>
+            <div>
+              <Label htmlFor="cost">Coût d'achat (FCFA)</Label>
+              <Input
+                id="cost"
+                inputMode="numeric"
+                value={cost}
+                onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
+                placeholder="Optionnel"
+              />
+            </div>
+          </div>
+        ) : (
+          <div>
+            <Label htmlFor="price">Prix de revente (FCFA)</Label>
+            <Input
+              id="price"
+              inputMode="numeric"
+              value={price}
+              onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+              placeholder="Ex : 300"
+            />
+          </div>
+        )}
 
         {productType === "product" && (
-          <div>
-            <Label htmlFor="cost">Coût d'achat (FCFA)</Label>
-            <Input
-              id="cost"
-              inputMode="numeric"
-              value={cost}
-              onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
-              placeholder="Optionnel — complétez plus tard"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Optionnel — sans cette valeur, le bénéfice sera surestimé.
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Optionnel — sans cette valeur, le bénéfice sera surestimé.
+          </p>
         )}
 
         {productType === "product" && (
