@@ -11,6 +11,7 @@ export type VariantDraft = {
   id: string;
   name: string;
   price: string;
+  cost: string;
   stock: string;
 };
 
@@ -68,6 +69,7 @@ export function useProductForm({
         id: v.id,
         name: v.name,
         price: v.price !== undefined ? String(v.price) : "",
+        cost: v.cost !== undefined ? String(v.cost) : "",
         stock: v.stock !== undefined ? String(v.stock) : "",
       })) ?? [],
   );
@@ -77,7 +79,7 @@ export function useProductForm({
   const showVariants = true;
 
   function addVariant() {
-    setVariants((vs) => [...vs, { id: draftId(), name: "", price: "", stock: "" }]);
+    setVariants((vs) => [...vs, { id: draftId(), name: "", price: "", cost: "", stock: "" }]);
   }
   function updateVariant(id: string, patch: Partial<VariantDraft>) {
     setVariants((vs) => vs.map((v) => (v.id === id ? { ...v, ...patch } : v)));
@@ -109,6 +111,7 @@ export function useProductForm({
               id: v.id,
               name: v.name,
               ...(v.price ? { price: Number(v.price) } : {}),
+              ...(v.cost ? { cost: Number(v.cost) } : {}),
               ...(v.stock ? { stock: Number(v.stock) } : {}),
             }))
           : undefined;
