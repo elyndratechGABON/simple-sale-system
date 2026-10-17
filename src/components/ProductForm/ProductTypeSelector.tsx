@@ -1,3 +1,4 @@
+import { Package, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ProductType = "product" | "service";
@@ -9,7 +10,7 @@ interface Props {
 }
 
 /**
- * Sélecteur unifié Produit / Service (compact, sans puces superflues).
+ * Sélecteur unifié Produit / Service (compact, sans puces superflues, icônes Lucide).
  */
 export function ProductTypeSelector({ value, onChange, disabled }: Props) {
   return (
@@ -22,7 +23,7 @@ export function ProductTypeSelector({ value, onChange, disabled }: Props) {
         selected={value === "product"}
         onClick={() => !disabled && onChange("product")}
         disabled={disabled}
-        icon="📦"
+        icon={<Package className="h-4 w-4 text-primary" />}
         title="Produit"
         subtitle="Coût d'achat & stock"
       />
@@ -30,7 +31,7 @@ export function ProductTypeSelector({ value, onChange, disabled }: Props) {
         selected={value === "service"}
         onClick={() => !disabled && onChange("service")}
         disabled={disabled}
-        icon="🛠"
+        icon={<Scissors className="h-4 w-4 text-primary" />}
         title="Service"
         subtitle="Sans stock, coût global"
       />
@@ -42,7 +43,7 @@ interface TypeCardProps {
   selected: boolean;
   onClick: () => void;
   disabled?: boolean;
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   subtitle: string;
 }
@@ -65,7 +66,10 @@ function TypeCard({ selected, onClick, disabled, icon, title, subtitle }: TypeCa
       )}
     >
       <div className="flex items-center gap-2.5">
-        <span className="flex-shrink-0 text-xl" aria-hidden="true">
+        <span
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10"
+          aria-hidden="true"
+        >
           {icon}
         </span>
         <div className="flex-1 min-w-0">
