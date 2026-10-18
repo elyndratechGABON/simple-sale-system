@@ -1,26 +1,27 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Upload, UserRound } from "lucide-react";
+import { Building2, Trash2, Upload, UserRound } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { savePreferences } from "@/lib/settings";
 import { getSetting, setSetting } from "@/lib/db";
 import { ImageCropper } from "@/components/ImageCropper";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 /**
- * Apparence : photo de profil (en-tête, à côté des réglages) et logo de la boutique
- * (icône affichée au-dessus du nom). Deux images, deux usages — une seule carte.
- * Photo et logo sont réduits au recadrage et stockés localement (préférences pour la
- * photo, IndexedDB pour le logo) : une image de plusieurs mégaoctets ne doit ni gonfler
- * la base, ni ralentir l'en-tête.
+ * Identité : nom de la boutique, photo de profil (en-tête, à côté des réglages) et
+ * logo (icône affichée au-dessus du nom). Nom et images réduits/recadrés et stockés
+ * localement : une image de plusieurs mégaoctets ne doit ni gonfler la base,
+ * ni ralentir l'en-tête.
  */
 const SETTING_SHOP_LOGO = "shop_logo";
 
 export function AppearanceCard() {
   const qc = useQueryClient();
-  const { ownerPhoto } = usePreferences();
+  const { ownerPhoto, workspaceName } = usePreferences();
   const { data: shopLogo } = useQuery({
     queryKey: ["shop_logo"],
     queryFn: async () => (await getSetting<string>(SETTING_SHOP_LOGO)) ?? null,
@@ -58,6 +59,14 @@ export function AppearanceCard() {
     qc.invalidateQueries({ queryKey: ["preferences"] });
   }
 
+  function commitName(name: string) {
+    const next = name.trim();
+    if (!next || next === workspaceName) return;
+    savePreferences({ workspaceName: next });
+    qc.invalidateQueries({ queryKey: ["preferences"] });
+    toast.success("Nom de la boutique mis à jour");
+  }
+
   function handleLogoFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -90,81 +99,102 @@ export function AppearanceCard() {
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
-          <Upload className="h-4 w-4" /> Apparence
+          <Building2 className="h-4 w-4" /> Identité
         </CardTitle>
-        <CardDescription>
-          La photo de profil et le logo de la boutique, affichés dans l'en-tête.
-        </CardDescription>
+        <CardDescription>Nom, photo de profil et logo affichés dans l'en-tête.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3">
-          <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary">
-            {ownerPhoto ? (
-              <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <UserRound className="h-5 w-5" />
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Photo de profil</p>
-            <p className="text-xs text-muted-foreground truncate">
-              Affichée dans l'en-tête, à côté des réglages.
-            </p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => photoInputRef.current?.click()}>
-            <Upload className="h-4 w-4 mr-1.5" />
-            Changer
-          </Button>
-          {ownerPhoto && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Retirer la photo de profil"
-              onClick={removePhoto}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
+        <div>
+          <Label htmlFor="shop-name">Nom de la boutique</Label>
+          <Input
+            id="shop-name"
+            defaultValue={workspaceName}
+            onBlur={(e) => commitName(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            aria-label="Nom de la boutique"
+          />
         </div>
-        <input
-          ref={photoInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => void handlePhotoFile(e)}
-        />
 
-        <div className="flex items-center gap-3">
-          <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border bg-muted/30 p-1">
-            {shopLogo ? (
-              <img src={shopLogo} alt="Logo actuel" className="h-full w-full object-contain" />
-            ) : (
-              <img
-                src="/logo-header.png"
-                alt="Logo par défaut"
-                className="h-full w-full object-contain"
-              />
-            )}
-          </span>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => logoInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" />
-              {shopLogo ? "Changer le logo" : "Choisir un logo"}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3">
+            <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-primary/10 text-sm font-semibold text-primary">
+              {ownerPhoto ? (
+                <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <UserRound className="h-5 w-5" />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Photo de profil</p>
+              <p className="text-xs text-muted-foreground truncate">
+                Affichée dans l'en-tête, à côté des réglages.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => photoInputRef.current?.click()}>
+              <Upload className="h-4 w-4 mr-1.5" />
+              Changer
             </Button>
-            {shopLogo && (
-              <Button variant="outline" onClick={removeLogo}>
-                <Trash2 className="h-4 w-4 mr-2" /> Retirer
+            {ownerPhoto && (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Retirer la photo de profil"
+                onClick={removePhoto}
+              >
+                <Trash2 className="h-4 w-4" />
               </Button>
             )}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => void handlePhotoFile(e)}
+            />
+          </div>
+
+          <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3">
+            <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border bg-card p-1">
+              {shopLogo ? (
+                <img src={shopLogo} alt="Logo actuel" className="h-full w-full object-contain" />
+              ) : (
+                <img
+                  src="/logo-header.png"
+                  alt="Logo par défaut"
+                  className="h-full w-full object-contain"
+                />
+              )}
+            </span>
+            <div className="flex flex-col items-start gap-1.5">
+              <p className="text-sm font-medium">Logo de la boutique</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
+                  <Upload className="h-4 w-4 mr-1.5" />
+                  {shopLogo ? "Changer" : "Choisir"}
+                </Button>
+                {shopLogo && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={removeLogo}
+                    aria-label="Retirer le logo"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void handleLogoFile(e)}
+              />
+            </div>
           </div>
         </div>
-        <input
-          ref={logoInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => void handleLogoFile(e)}
-        />
         <p className="text-xs text-muted-foreground">
           Images réduites au recadrage et stockées sur cet appareil.
         </p>
