@@ -24,11 +24,15 @@ export function useProductForm({
   onClose,
   defaultCategory,
   defaultType,
+  onSaved,
 }: {
   editing: Product | null;
   onClose: () => void;
   defaultCategory?: Category;
   defaultType?: "product" | "service";
+  /** Exécuté après UNE sauvegarde réussie, sans fermer : l'onboarding enchaîne les
+   *  produits dans le même écran tandis que la modale Stocks se ferme (`onClose`). */
+  onSaved?: () => void;
 }) {
   const qc = useQueryClient();
   const prefs = usePreferences();
@@ -52,7 +56,9 @@ export function useProductForm({
   const [category, setCategory] = useState<Category>(
     editing?.category ?? defaultCategory ?? "Boisson",
   );
-  const [unit, setUnit] = useState<NonNullable<Product["unit"]>>(editing?.unit ?? "piece");
+  const [unit, setUnit] = useState<NonNullable<Product["unit"]>>(
+    editing?.unit ?? (hasWeightInput ? "kg" : "piece"),
+  );
   const [productType, setProductType] = useState<"product" | "service">(
     editing?.type ?? defaultType ?? "product",
   );
@@ -149,6 +155,7 @@ export function useProductForm({
       qc.invalidateQueries({ queryKey: ["products"] });
       toast.success(editing ? "Produit mis à jour" : "Produit ajouté");
       onClose();
+      onSaved?.();
     },
     onError: (e: Error) => toast.error(e.message),
   });

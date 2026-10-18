@@ -1,158 +1,69 @@
-import { Package, Plus, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from "react";
+import { Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import type { Category } from "@/lib/db";
+import { ProductFormFields } from "@/components/ProductForm/ProductFormFields";
+import { useProductForm } from "@/components/ProductForm/useProductForm";
 import { StepShell } from "./StepShell";
 import type { ClusterTutorialApi } from "./useClusterTutorial";
-import { ProductTypeSelector } from "@/components/ProductForm/ProductTypeSelector";
 
+/**
+ * Étape « premier produit » de l'onboarding — la COQUILLE seulement.
+ * Les champs, le sélecteur produit/service et la sauvegarde sont ceux de
+ * `ProductFormFields` / `useProductForm` : identiques à l'onglet Stocks.
+ */
 export function TutorialProductForm({ t }: { t: ClusterTutorialApi }) {
-  // productType unifié : "product" | "service" (remplace serviceMode "prestation"|"produit")
-  const isProduct = t.productType === "product";
+  // Remonte après chaque sauvegarde : le hook réinitialise tous ses `useState`.
+  const [seq, setSeq] = useState(0);
+  return (
+    <TutorialProductFields
+      key={seq}
+      t={t}
+      onSaved={() => {
+        t.setAddedCount((c) => c + 1);
+        setSeq((s) => s + 1);
+      }}
+    />
+  );
+}
 
-  // Prix label dynamique selon le type — logique cluster-specific AUTOUR du sélecteur
-  const priceLabel = isProduct
-    ? t.sellsByWeight
-      ? "Prix au kg (FCFA)"
-      : "Prix de vente (FCFA)"
-    : "Prix de la prestation";
+function TutorialProductFields({ t, onSaved }: { t: ClusterTutorialApi; onSaved: () => void }) {
+  const form = useProductForm({
+    editing: null,
+    onClose: () => {},
+    defaultCategory: t.isServiceCluster ? "Beauté" : ("" as Category),
+    defaultType: "product",
+    onSaved,
+  });
 
-  const showStockField = isProduct;
-  const showCategoryField = t.tutorialConfig.showCategory || isProduct;
-
-  const productLabel = isProduct ? "Nom du produit" : t.tutorialConfig.productLabel;
-  const productPlaceholder = isProduct
-    ? "Ex : Huile de coco, Shampooing"
-    : t.tutorialConfig.productPlaceholder;
-
-  const addDescription = isProduct
-    ? "Shampooings, huiles, cosmétiques… vendus en boutique, avec stock."
-    : t.tutorialConfig.addDescription;
-
-  const categoryPlaceholder = isProduct
-    ? "Ex : Produits de beauté, Accessoires"
-    : t.tutorialConfig.categoryPlaceholder;
+  // Titre et description suivant le type choisi DANS le formulaire unifié —
+  // l'ancien `addingProduct` de l'onboarding, mis à jour par le vrai champ.
+  const isService = form.productType === "service";
+  const title = isService
+    ? t.isServiceCluster
+      ? t.tutorialConfig.addTitle
+      : "Ajoutez une prestation"
+    : t.isServiceCluster
+      ? "Ajoutez un produit à vendre"
+      : t.tutorialConfig.addTitle;
+  const description = isService
+    ? t.isServiceCluster
+      ? t.tutorialConfig.addDescription
+      : "Nom et prix de la prestation — sans stock."
+    : t.isServiceCluster
+      ? "Shampooings, huiles, cosmétiques… vendus en boutique, avec stock."
+      : t.tutorialConfig.addDescription;
 
   return (
-    <StepShell icon={Package} title={t.addTitle} description={addDescription}>
-      <div className="space-y-3">
-        {/* Sélecteur unifié Produit / Service — même design que Stocks et édition */}
-        <ProductTypeSelector value={t.productType} onChange={t.setProductType} />
-
-        <div>
-          <Label htmlFor="tut-name">{productLabel}</Label>
-          <Input
-            id="tut-name"
-            value={t.productName}
-            onChange={(e) => t.setProductName(e.target.value)}
-            placeholder={productPlaceholder}
-            className="h-11"
-            autoFocus
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="tut-price">{priceLabel}</Label>
-            <Input
-              id="tut-price"
-              inputMode="numeric"
-              value={t.productPrice}
-              onChange={(e) => t.setProductPrice(e.target.value.replace(/\D/g, ""))}
-              placeholder="0"
-              className="h-11"
-            />
-          </div>
-          {showStockField && (
-            <div>
-              <Label htmlFor="tut-stock">{t.sellsByWeight ? "Stock (kg)" : "Stock"}</Label>
-              <Input
-                id="tut-stock"
-                inputMode="numeric"
-                value={t.productStock}
-                onChange={(e) => t.setProductStock(e.target.value.replace(/\D/g, ""))}
-                placeholder="0"
-                className="h-11"
-              />
-            </div>
-          )}
-        </div>
-        {showCategoryField && (
-          <div>
-            <Label htmlFor="tut-cat">Catégorie</Label>
-            <Input
-              id="tut-cat"
-              value={t.productCategory}
-              onChange={(e) => t.setProductCategory(e.target.value)}
-              placeholder={categoryPlaceholder}
-              className="h-11"
-            />
-          </div>
-        )}
-        {/* Variantes — clothing seulement (vêtements, pointures, tailles). */}
-        {t.showVariants && (
-          <div className="space-y-2">
-            <Label>Variantes (optionnel)</Label>
-            <div className="space-y-2">
-              {t.variants.map((v, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input
-                    placeholder="Nom variante (ex: Petit, Grand, Noir, M)"
-                    value={v.name}
-                    onChange={(e) => {
-                      const next = [...t.variants];
-                      next[i].name = e.target.value;
-                      t.setVariants(next);
-                    }}
-                    className="h-11 flex-1"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Prix"
-                    value={v.price}
-                    onChange={(e) => {
-                      const next = [...t.variants];
-                      next[i].price = e.target.value;
-                      t.setVariants(next);
-                    }}
-                    className="h-11 w-24"
-                    inputMode="numeric"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Stock"
-                    value={v.stock}
-                    onChange={(e) => {
-                      const next = [...t.variants];
-                      next[i].stock = e.target.value;
-                      t.setVariants(next);
-                    }}
-                    className="h-11 w-24"
-                    inputMode="numeric"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => t.setVariants(t.variants.filter((_, j) => j !== i))}
-                    className="text-destructive"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => t.setVariants([...t.variants, { name: "", price: "", stock: "" }])}
-                className="w-full"
-              >
-                <Plus className="h-4 w-4 mr-1" /> Ajouter une variante
-              </Button>
-            </div>
-          </div>
-        )}
+    <StepShell icon={Package} title={title} description={description}>
+      <ProductFormFields form={form} />
+      <div className="flex items-center justify-between gap-2 border-t pt-4">
+        <Button variant="ghost" size="sm" onClick={() => t.setSubStep("done")}>
+          {t.addedCount > 0 ? "J'ai terminé" : "Passer"}
+        </Button>
+        <Button onClick={() => form.saveMut.mutate()} disabled={form.saveMut.isPending}>
+          <Plus className="h-4 w-4 mr-1" /> Ajouter
+        </Button>
       </div>
     </StepShell>
   );

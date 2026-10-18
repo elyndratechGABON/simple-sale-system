@@ -1,23 +1,14 @@
-import { Package, Plus } from "lucide-react";
+import { Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ClusterTutorialApi } from "./useClusterTutorial";
 import { TutorialProductForm } from "./TutorialProductForm";
 
 export function TutorialAdd({ t }: { t: ClusterTutorialApi }) {
-  const addedLabel =
-    t.addedCount === 1
-      ? !t.tutorialConfig.isService
-        ? "produit ajouté"
-        : t.addingProduct
-          ? "produit ajouté"
-          : "prestation ajoutée"
-      : !t.tutorialConfig.isService
-        ? "produits ajoutés"
-        : "prestations et produits ajoutés";
+  const addedLabel = t.addedCount === 1 ? "élément ajouté" : "éléments ajoutés";
 
   return (
     <div className="w-full max-w-lg rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-      <h1 className="sr-only">{t.addTitle}</h1>
+      <h1 className="sr-only">{t.tutorialConfig.addTitle}</h1>
       <div className="space-y-4 py-2">
         <TutorialProductForm t={t} />
 
@@ -42,18 +33,6 @@ export function TutorialAdd({ t }: { t: ClusterTutorialApi }) {
             </>
           )}
         </Button>
-
-        <div className="flex items-center justify-between gap-2 border-t pt-4">
-          <Button variant="ghost" size="sm" onClick={() => t.setSubStep("done")}>
-            {t.addedCount > 0 ? "J'ai terminé" : "Passer"}
-          </Button>
-          <Button
-            onClick={t.handleAddProduct}
-            disabled={!t.productName.trim() || !t.productPrice.trim()}
-          >
-            <Plus className="h-4 w-4 mr-1" /> Ajouter
-          </Button>
-        </div>
       </div>
     </div>
   );
