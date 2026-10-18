@@ -3,37 +3,30 @@ import { formatFCFA } from "@/lib/format";
 import type { ServiceChargeLine } from "@/lib/reports/charges-by-period";
 
 /**
- * Charges de SERVICE : une ligne par catégorie de prestation du CATALOGUE.
+ * Charges de SERVICE : une ligne par catégorie de prestation VENDUE sur la période.
  *
- * Le commerce saisit ici ce que lui coûte une catégorie à faire tourner par période
- * (le loyer du salon, les produits de la coiffure) — pas un coût unitaire, qu'il saisit
- * sur la fiche quand il le connaît.
+ * La liste vient des VENTES, plus du catalogue (redécision de l'ancien design) :
+ * une catégorie sans prestation vendue n'a rien à charger sur la période — l'onglet
+ * Bénéfice s'ouvre sur ce qui a tourné. Le commerçant saisit ici ce que lui coûte une
+ * catégorie qui a servi (le loyer du salon, les produits de la coiffure) — pas un coût
+ * unitaire, qu'il saisit sur la fiche quand il le connaît.
  *
- * La liste vient du catalogue, PAS des charges enregistrées : une catégorie sans vente sur
- * la période s'affiche quand même, avec son input ACTIF. Le commerce peut vouloir saisir
- * son loyer du mois avant d'avoir servi la première prestation ; l'inverse — un champ qui
- * n'apparaît qu'après une vente — l'obligerait à revenir Plus tard et à le retrouver.
+ * Pas de bouton « Modifier » ni de dialogue : chaque ligne est DÉJÀ un champ, la
+ * sauvegarde passe au blur. « Supprimer » non plus : vider le montant supprime la charge
+ * immédiatement — un geste, un effort ; le même geste qu'un bouton.
  *
- * « Supprimer » a disparu : vider le montant suffit, le dialogue efface les charges à 0 à
- * la fermeture. Un bouton de plus qui fait la même chose.
- *
- * PRESENTATION pure — la sauvegarde et la suppression passent en props ; la périodicité
- * et l'accès base appartiennent au dialogue.
- *
- * Le nettoyage des charges à 0 À LA FERMETURE subsiste côté dialogue, mais il ne sert plus
- * qu'un autre cas : les lignes vides abandonnées par le « + Ajouter » de la section
- * business. Ici, vider un champ SUPPRIME immédiatement — il n'y a pas de bouton
- * « + Ajouter », et donc pas de ligne vide à nettoyer.
+ * PRESENTATION pure — la sauvegarde et la suppression passent par des props ; l'accès
+ * base appartient à l'écran hôte (`ProfitTab`).
  */
 export function ServiceChargesSection({
-  allCategories,
+  categories,
   services,
   categoryRevenue,
   onSave,
   onRemove,
 }: {
-  /** Catégories du catalogue portant au moins un produit `type: "service"`. */
-  allCategories: string[];
+  /** Catégories où au moins UNE prestation a été vendue sur la période. */
+  categories: string[];
   /** Charges déjà enregistrées sur la période, groupées par catégorie. */
   services: ServiceChargeLine[];
   /** CA de la période par catégorie — même source que les noms, donc le recoupement tient. */
@@ -41,8 +34,9 @@ export function ServiceChargesSection({
   onSave: (category: string, amount: number, id?: string) => void;
   onRemove: (id: string) => void;
 }) {
-  // Ce qui pèse d'abord ; une catégorie sans vente passe en fin de liste.
-  const rows = [...allCategories].sort(
+  // Ce qui pèse d'abord ; toutes les catégories listées ont vendu, la marge est juste
+  // une question d'ordre d'affichage.
+  const rows = [...categories].sort(
     (a, b) => (categoryRevenue[b] ?? 0) - (categoryRevenue[a] ?? 0),
   );
   const parCategorie = new Map(services.map((s) => [s.category, s]));
@@ -52,7 +46,7 @@ export function ServiceChargesSection({
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Charges de service</h3>
         <p className="rounded-lg border border-dashed p-3 text-center text-sm text-muted-foreground">
-          Aucune prestation au catalogue
+          Aucune prestation vendue sur la période
         </p>
       </section>
     );
@@ -68,7 +62,7 @@ export function ServiceChargesSection({
           <div key={category} className="flex items-center gap-2 text-sm">
             <span className="min-w-0 flex-1 truncate">{category}</span>
             <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {ca > 0 ? `CA ${formatFCFA(ca)}` : "0 vente"}
+              {`CA ${formatFCFA(ca)}`}
             </span>
             <Input
               type="number"
@@ -82,10 +76,8 @@ export function ServiceChargesSection({
               onBlur={(e) => {
                 const raw = e.target.value.trim();
 
-                // Champ VIDÉ : suppression IMMÉDIAITE de la charge. Enregistrer 0 et
-                // laisser le dialogue nettoyer à la fermeture créait une course — `close()`
-                // lit l'état figé du rendu précédent, la refetch du blur n'est pas
-                // terminée, et la charge réapparaît à 0. Un geste, un effet.
+                // Champ VIDÉ : suppression immédiate de la charge. Un geste, un effet —
+                // jamais « enregistrer 0 puis nettoyer plus tard ».
                 if (raw === "") {
                   if (existante) onRemove(existante.id);
                   return;

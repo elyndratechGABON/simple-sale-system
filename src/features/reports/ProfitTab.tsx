@@ -1,86 +1,85 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { formatFCFA } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { listCharges, type Product, type SaleItem } from "@/lib/db";
+import { deleteCharge, listCharges, saveCharge, type Product, type SaleItem } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { groupChargesByKind } from "@/lib/reports/charges-by-period";
-import { soldProductsByCategory } from "@/lib/reports/sold-products-by-category";
+import { periodProfit } from "@/lib/reports/period-profit";
 import { rangeFor, type CalendarView } from "@/lib/reports/period";
+import { NetLine } from "./NetLine";
 import { ProductCostsSection } from "./ProductCostsSection";
-import { ChargeSection, NetLine } from "./ChargeSection";
-import { ChargesDialog } from "./ChargesDialog";
+import { ServiceChargesSection } from "./ServiceChargesSection";
+import { BusinessChargesSection } from "./BusinessChargesSection";
 
 /**
- * Onglet BÉNÉFICE : la saisie.
+ * Onglet BÉNÉFICE : la saisie, et le net recomposé EN DIRECT.
  *
- * Il ne CALCULE aucun bénéfice — la sémantique de `computePeriodStats` est en cours de
- * décision (`ERR-DATA-001` : trois sources de coût coexistent). Afficher ici une marge
- * calculée autrement produirait deux chiffres contradictoires sur le même écran. Les
- * sommes de charges, elles, sont de simples totaux de ce que le vendeur a saisi.
+ * Décision ERR-DATA-001, tranchée par écran : les autres écrans (accueil, historique,
+ * exports, clôture) continuent d'afficher `computePeriodStats` — le bénéfice figé au
+ * coût de la vente (`cost_at_sale`). ICI, le bloc final recompose la marge à partir des
+ * coûts ACTUELS du catalogue (`periodProfit`) : corriger un coût d'achat met le bénéfice
+ * à jour sans attendre une revente. Deux sémantiques coexistent, chacune proclamée à sa
+ * place — plus aucun écran n'affiche les deux chiffres.
+ *
+ * Les charges se saisissent SUR CET ÉCRAN (plus de dialogue intermédiaire) : la
+ * sauvegarde passe au blur, comme pour les coûts produits.
  */
 export function ProfitTab({
   products,
   items,
   focusedDay,
   view,
-  profit,
 }: {
   products: Product[];
   items: SaleItem[];
   focusedDay: number;
   view: CalendarView;
-  /**
-   * Bénéfice de la période, PRIS TEL QUEL de `computePeriodStats` — jamais recalculé ici.
-   * C'est cette valeur que tous les autres écrans (accueil, historique, exports, clôture)
-   * affichent ; la recomposer à partir de `products.cost` donnerait un second bénéfice,
-   * différent du premier, sur le même écran. Voir `ERR-DATA-001`.
-   */
-  profit: number;
 }) {
+  const qc = useQueryClient();
   const { from, to } = rangeFor(focusedDay, view);
-  const [chargesOpen, setChargesOpen] = useState(false);
 
-  // Même clé que dans `ChargesDialog` : une seule requête, deux observateurs.
   const { data: charges = [] } = useQuery({
     queryKey: ["charges", from, to],
     queryFn: () => listCharges(from, to),
   });
   const { services, business } = groupChargesByKind(charges);
 
-  // Catégories du catalogue portant au moins un produit de type « service » : c'est la
-  // seule source disponible pour proposer « Plats » sans que le commerçant l'écrive.
-  const serviceCategories = useMemo(
-    () => [...new Set(products.filter((p) => p.type === "service").map((p) => p.category))],
-    [products],
-  );
+  // Marge au coût courant, CA des prestations et catégories vendues en service : un
+  // seul passage (cf. `periodProfit`), réactif à `["products"]` via sa props.
+  const { productMargin, serviceRevenue, serviceCategories, categoryRevenue, soldWithoutCost } =
+    useMemo(() => periodProfit(products, items), [products, items]);
 
-  // CA par catégorie, classé par la catégorie du CATALOGUE — la même clé que
-  // `serviceCategories`. Prendre `category_at_sale` (figée à la vente) ferait manquer le
-  // recoupement : une prestation reclassée depuis ses ventes afficherait « 0 vente » sur une
-  // catégorie qui a bien rapporté.
-  const categoryRevenue = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const [category, list] of soldProductsByCategory(products, items)) {
-      out[category] = list.reduce((s, p) => s + p.revenue, 0);
-    }
-    return out;
-  }, [products, items]);
-
-  // Une seule soustraction : les charges d'exploitation que le commerçant vient de saisir.
-  // Les charges de SERVICE sont DÉJÀ dans `profit` (via `cost_at_sale`) — les retrancher
-  // une seconde fois les compterait deux fois.
+  const totalServices = services.reduce((s, c) => s + c.amount, 0);
   const totalBusiness = business.reduce((s, c) => s + c.amount, 0);
-  const net = profit - totalBusiness;
+  const net = productMargin + serviceRevenue - totalServices - totalBusiness;
 
   // Le coût d'achat reste facultatif : sans lui, la marge vaut le prix de revente entier.
-  // On le dit sous le chiffre plutôt que de le gonfler en silence (cf. ERR-DATA-001).
-  const sansCout = soldProductsByCategory(products, items);
-  const totalSansCout = [...sansCout.values()].flat().filter((p) => !p.product.cost).length;
+  // On le dit sous le chiffre plutôt que de le gonfler en silence.
   const soldHint =
-    totalSansCout > 0
-      ? `Bénéfice surestimé : ${totalSansCout} produit${totalSansCout > 1 ? "s" : ""} vendu${totalSansCout > 1 ? "s" : ""} sans coût d'achat saisi.`
+    soldWithoutCost > 0
+      ? `Bénéfice surestimé : ${soldWithoutCost} produit${soldWithoutCost > 1 ? "s" : ""} vendu${soldWithoutCost > 1 ? "s" : ""} sans coût d'achat saisi.`
       : undefined;
+
+  function save(kind: "service" | "business", key: string, amount: number, id?: string) {
+    void saveCharge({
+      id,
+      kind,
+      ...(kind === "service" ? { category: key } : { label: key }),
+      period_start: from,
+      period_to: to,
+      amount,
+    })
+      .then(() => qc.invalidateQueries({ queryKey: ["charges"] }))
+      .catch(() => toast.error("Charge non enregistrée."));
+  }
+
+  function remove(id: string) {
+    void deleteCharge(id)
+      .then(() => qc.invalidateQueries({ queryKey: ["charges"] }))
+      .catch(() => toast.error("Charge non supprimée."));
+  }
 
   return (
     <div className="space-y-6">
@@ -92,32 +91,31 @@ export function ProfitTab({
         <ProductCostsSection products={products} items={items} />
       </section>
 
-      <ChargeSection
-        title="Charges de service"
-        total={services.reduce((s, c) => s + c.amount, 0)}
-        empty="Aucune charge de service sur la période"
-        lines={services.map((c) => ({ id: c.id, label: c.category, amount: c.amount }))}
-        onEdit={() => setChargesOpen(true)}
+      <ServiceChargesSection
+        categories={serviceCategories}
+        services={services}
+        categoryRevenue={categoryRevenue}
+        onSave={(category, amount, id) => save("service", category, amount, id)}
+        onRemove={(id) => remove(id)}
       />
 
-      <ChargeSection
-        title="Charges du business"
-        total={totalBusiness}
-        empty="Aucune charge d'exploitation sur la période"
-        lines={business.map((c) => ({ id: c.id, label: c.label, amount: c.amount }))}
-        onEdit={() => setChargesOpen(true)}
-        // Le total est énoncé dans le bloc final : le répéter ici afficherait deux fois
-        // le même nombre à l'écran.
-        showTotal={false}
+      <BusinessChargesSection
+        business={business}
+        onSave={(label, amount, id) => save("business", label, amount, id)}
+        onRemove={(id) => remove(id)}
       />
 
-      {/* La conclusion de l'onglet. `profit` vient de `computePeriodStats`, comme tous les
-          autres écrans ; on ne le RECALCULE pas, on ne fait qu'y soustraire ce que le
-          commerçant vient de saisir et que les ventes ne contiennent pas. */}
+      {/* La conclusion de l'onglet : la marge au coût COURANT, moins ce que le commerçant
+          vient de saisir — les ventes ne contiennent ni les charges ni les coûts corrigés. */}
       <Card>
         <CardContent className="space-y-1.5 p-3 sm:p-4">
           <h2 className="text-sm font-semibold">Bénéfice net</h2>
-          <NetLine label="Marge totale" value={formatFCFA(profit)} />
+          <NetLine label="Marge produits" value={formatFCFA(productMargin)} />
+          <NetLine label="CA des prestations" value={formatFCFA(serviceRevenue)} />
+          <NetLine
+            label="Charges de service"
+            value={totalServices > 0 ? `− ${formatFCFA(totalServices)}` : "—"}
+          />
           <NetLine
             label="Charges du business"
             value={totalBusiness > 0 ? `− ${formatFCFA(totalBusiness)}` : "—"}
@@ -136,15 +134,6 @@ export function ProfitTab({
           {soldHint && <p className="pt-1 text-xs text-muted-foreground">{soldHint}</p>}
         </CardContent>
       </Card>
-
-      <ChargesDialog
-        open={chargesOpen}
-        onOpenChange={setChargesOpen}
-        from={from}
-        to={to}
-        allCategories={serviceCategories}
-        categoryRevenue={categoryRevenue}
-      />
     </div>
   );
 }
