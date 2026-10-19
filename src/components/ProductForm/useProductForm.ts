@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { addProduct, updateProduct, type Category, type Product } from "@/lib/db";
@@ -79,6 +79,36 @@ export function useProductForm({
         stock: v.stock !== undefined ? String(v.stock) : "",
       })) ?? [],
   );
+
+  // Réamorçage du brouillon à CHAQUE changement de cible. Le composant vit sous le Radix
+  // Dialog (Root rend ses enfants même le dialogue est fermé), initialisé une fois avec
+  // `editing: null` : les useState ci-dessus ne rejouent JAMAIS. Sans cet effet, Modifier
+  // un produit ouvrait les champs VIDES — d'où l'obligation de tout réécrire — puis la
+  // fermeture/le produit suivant conservaient les valeurs périmées de la cible de
+  // l'ouverture précédente. La cible change UNE fois par ouverture (l'hôte la pose dans
+  // son état), donc jamais de réamorçage pendant la frappe.
+  useEffect(() => {
+    setName(editing?.name ?? "");
+    setPrice(editing ? String(editing.price) : "");
+    setCost(editing && editing.cost > 0 ? String(editing.cost) : "");
+    setUnlimited(editing ? !Number.isFinite(editing.stock) : false);
+    setStock(editing && Number.isFinite(editing.stock) ? String(editing.stock) : "");
+    setMinStock(editing?.min_stock !== undefined ? String(editing.min_stock) : "");
+    setCategory(editing?.category ?? defaultCategory ?? "Boisson");
+    setUnit(editing?.unit ?? (hasWeightInput ? "kg" : "piece"));
+    setProductType(editing?.type ?? defaultType ?? "product");
+    setSerialNumber(editing?.serialNumber ?? "");
+    setPhoto(editing?.photo);
+    setVariants(
+      editing?.variants?.map((v) => ({
+        id: v.id,
+        name: v.name,
+        price: v.price !== undefined ? String(v.price) : "",
+        cost: v.cost !== undefined ? String(v.cost) : "",
+        stock: v.stock !== undefined ? String(v.stock) : "",
+      })) ?? [],
+    );
+  }, [editing, defaultCategory, defaultType, hasWeightInput]);
 
   // Affiche le bloc variantes pour tout produit (pas seulement ceux qui en ont déjà).
   // Le bouton "+ Ajouter une variante" permet d'en créer la première.
