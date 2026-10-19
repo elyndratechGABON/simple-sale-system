@@ -8,19 +8,20 @@ import type { Product, SaleItem } from "@/lib/db";
  * DÉRIVATION pure, aucune requête : la page charge déjà les deux listes (`useReportData`).
  * Ce hook ne fait que les trier, pour que la règle soit testable hors de l'écran.
  *
- * « Vendus » se lit sur la LIGNE de vente (`cost_at_sale`), pas sur la fiche produit : le
- * coût est figé au moment de la vente, une saisie faite aujourd'hui ne réécrit pas les
- * ventes passées. D'où deux listes distinctes — l'alerte « vendus » explique un bénéfice
- * surestimé, la saisie ne guérit que l'avenir.
+ * « Vendus » se lit sur le COÛT ACTUEL de la fiche, pas sur la ligne de vente : depuis que
+ * l'onglet Bénéfice calcule le net au coût courant (`periodProfit`), l'alerte raconte la
+ * même chose que lui — quand la saisie n'est pas faite, MÊME pour des ventes d'avant.
+ * L'ancien prédicat (`cost_at_sale`, figé à la vente) laissait le bandeau allumé à vie :
+ * la saisie n'y changeait rien, d'où son apparente erreur. Ça se déconnecte au premier
+ * enregistrement du coût — la liste des articles suit le même prédicat que
+ * `ProductCostsSection`.
  */
 export function useCostAlerts(items: SaleItem[], products: Product[]) {
   const sold = useMemo(() => {
-    // Lignes sans coût ET rattachées au catalogue : une ligne libre n'a pas de fiche à
+    // Vendus sur la période ET rattachés au catalogue. Une ligne libre n'a pas de fiche à
     // compléter, et un identifiant inconnu ne pourrait pas être mis à jour non plus.
-    const ids = new Set(
-      items.filter((i) => i.product_id && i.cost_at_sale <= 0).map((i) => i.product_id as string),
-    );
-    return products.filter((p) => ids.has(p.id));
+    const ids = new Set(items.filter((i) => i.product_id).map((i) => i.product_id as string));
+    return products.filter((p) => ids.has(p.id) && !(p.cost > 0));
   }, [items, products]);
 
   const global = useMemo(() => products.filter((p) => !p.cost || p.cost <= 0), [products]);
