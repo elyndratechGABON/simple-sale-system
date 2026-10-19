@@ -9,6 +9,11 @@ export function monthStart(): number {
   return d.getTime();
 }
 
+/** Nom humain d'un vendeur sans nom posé : jamais deviné, le repli est explicite. */
+export function sellerDisplay(name?: string, fallback: string = "Direct"): string {
+  return name?.trim() ? name : fallback;
+}
+
 /** Formate le dernier contact en texte relatif. */
 export function lastSeenLabel(ts?: number): string {
   if (!ts) return "Jamais";

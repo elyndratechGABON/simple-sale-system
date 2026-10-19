@@ -1,14 +1,20 @@
+import { formatFCFA } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { CatalogueRequestConfirmDialog } from "@/components/CatalogueRequestConfirmDialog";
 import type { PairedDevice } from "@/lib/syncengine/types";
 import type { PendingCatalogueRequest } from "@/hooks/use-pending-catalogue-requests";
+import type { RowStats } from "./TeamRow";
 import { TeamRow } from "./TeamRow";
 
-/** Volet liste : écrans approuvés, en attente d'approbation, et demandes d'import. */
+/** Volet liste : chaque écran avec son CA de période, ceux en attente d'approbation,
+ *  les demandes d'import de catalogue, et une rangée honnête pour les ventes dont
+ *  l'écran n'est plus dans le registre. */
 export function TeamListPanel({
   sorted,
   pending,
   paired,
+  perf,
+  orphans,
   pendingCatalogueRequests,
   onSelectDevice,
   approve,
@@ -22,6 +28,8 @@ export function TeamListPanel({
   sorted: PairedDevice[];
   pending: PairedDevice[];
   paired: PairedDevice[];
+  perf: Map<string, RowStats>;
+  orphans: number;
   pendingCatalogueRequests: PendingCatalogueRequest[];
   onSelectDevice: (deviceId: string) => void;
   approve: (peerId: string) => void;
@@ -42,6 +50,7 @@ export function TeamListPanel({
               key={d.id}
               device={d}
               isOwnerDevice={d.role === "owner"}
+              stats={perf.get(d.id)}
               onClick={() => onSelectDevice(d.id)}
             />
           ))}
@@ -50,6 +59,15 @@ export function TeamListPanel({
         <p className="text-sm text-muted-foreground text-center py-4">
           Aucun appareil synchronisé pour l'instant.
         </p>
+      )}
+
+      {/* Ventes dont l'écran a été retiré : invisibles dans les lignes ci-dessus mais
+          bien comptées dans le total — les faire disparaîtrait tromper le patron. */}
+      {orphans > 0 && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2.5">
+          <p className="text-sm text-muted-foreground">Ventes non attribuées (écran retiré)</p>
+          <p className="shrink-0 text-sm font-medium tabular-nums">{formatFCFA(orphans)}</p>
+        </div>
       )}
 
       {/* En attente d'approbation */}

@@ -100,10 +100,16 @@ base SQLite) est un dépôt séparé, `simple-sale-orchestrator`, consommé via 
   aucun ne remplace l'autre.
 - **Un écran n'est JAMAIS son propre pair.** `listPairedDevices` exclut l'identité
   courante, et une `device.approve` ne crée aucune fiche pour l'appareil approuveur (l'op
-  porte l'APPROUVÉ). Rompre l'un ou l'autre fait réapparaître dans « Activité du
-  personnel » une ligne « Écran sans nom » que le rôle absent fait lire « Propriétaire ».
-  Le détail d'un vendeur n'est affiché qu'une fois : `ActivityDialog` délègue à
-  `TeamDialog` (`onOpenDevice` → `initialDeviceId`) au lieu de le réimplémenter.
+  porte l'APPROUVÉ). Rompre l'un ou l'autre ferait réapparaître dans l'« Équipe » une ligne
+  « Écran sans nom » que le rôle absent fait lire « Propriétaire ».
+- **Le personnel vit dans UNE interface : le dialogue `TeamDialog`** (icône « Équipe » du
+  header). Il a absorbé les trois anciens dialogues (`TeamDialog` / `EmployeesDialog` /
+  `ActivityDialog` — aujourd'hui supprimés). Conséquences à préserver :
+  la ligne « Cette caisse » en tête de liste est reconstruite ici (`useActivityData`),
+  puisque le registre des pairs exclut l'écran courant ; le détail d'un vendeur
+  (`EmployeeResults`, calendrier mensuel) n'existe qu'en une implémentation ; l'import de
+  clôture par QR (`ImportClosing`) y vit aussi, plus de dialogue séparé. Ne pas recréer
+  d'entrée « Activité du personnel » ou « Employés » distincte au header.
 - **L'ordre des plugins Vite compte.** `tanstackStart` doit précéder `viteReact` : il
   génère les routes et les entrées client/serveur que le plugin React transforme ensuite.
   Les deux configs assemblent ces plugins à la main depuis que le wrapper qui les

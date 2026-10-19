@@ -1,31 +1,98 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Phone, Receipt, TrendingUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, Phone, Receipt } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
 import { listSales } from "@/lib/db";
 import type { PairedDevice } from "@/lib/syncengine/types";
 import { RoleBadge } from "./RoleBadge";
-import { isOwnSale, monthStart } from "./helpers";
+import { isOwnSale } from "./helpers";
+import { monthGrid } from "./calendar-days";
 
-/** Résultats d'un écran : CA et ventes sur la période, filtrés par vendeur. */
+/** Compactage d'un montant pour tenir dans une cellule de calendrier (12 500 → 12,5 k). */
+const compact = new Intl.NumberFormat("fr-FR", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+/** Fiche d'un écran : calendrier du mois (CA jour par jour), ventes du jour au clic.
+ *
+ * Un seul appel à la base — les ventes du MOIS affiché — d'où le calendrier, le
+ * récapitulatif du mois et le détail d'une journée sont dérivés du même lot. */
 export function EmployeeResults({ device }: { device: PairedDevice }) {
-  const [range, setRange] = useState<"day" | "week" | "month">("month");
+  const [cursor, setCursor] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [daySel, setDaySel] = useState<number | null>(null);
 
-  const from =
-    range === "day"
-      ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
-      : range === "week"
-        ? Date.now() - 7 * 86400_000
-        : monthStart();
+  const grid = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor]);
 
-  const { data: sales } = useQuery({
-    queryKey: ["team_activity", device.id, from],
-    queryFn: () => listSales(from, Date.now()),
+  // Étendue du mois affiché — `to` exclusif, le premier jour du mois suivant.
+  const frame = useMemo(() => {
+    const from = new Date(cursor.year, cursor.month, 1).getTime();
+    const to = new Date(
+      cursor.month === 11 ? cursor.year + 1 : cursor.year,
+      (cursor.month + 1) % 12,
+      1,
+    ).getTime();
+    return [from, to] as const;
+  }, [cursor]);
+
+  const { data: monthSales } = useQuery({
+    queryKey: ["team_month", device.id, frame[0]],
+    queryFn: () => listSales(frame[0], frame[1]),
     staleTime: 10_000,
   });
 
-  const ownSales = (sales ?? []).filter((s) => isOwnSale(s, device));
-  const revenue = ownSales.reduce((sum, s) => sum + s.total, 0);
+  const own = useMemo(
+    () => (monthSales ?? []).filter((s) => isOwnSale(s, device)),
+    [monthSales, device],
+  );
+
+  // CA jour par jour : la clé est le début du jour local de la vente.
+  const perDay = useMemo(() => {
+    const map = new Map<number, { count: number; revenue: number }>();
+    for (const s of own) {
+      const d = new Date(s.timestamp);
+      const k = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const cur = map.get(k) ?? { count: 0, revenue: 0 };
+      cur.count += 1;
+      cur.revenue += s.total;
+      map.set(k, cur);
+    }
+    return map;
+  }, [own]);
+
+  // Ventes du jour choisi : dérivées du même lot, aucun nouvel appel à la base.
+  const daySales = useMemo(
+    () =>
+      daySel === null
+        ? []
+        : own.filter((s) => s.timestamp >= daySel && s.timestamp < daySel + 86400_000),
+    [own, daySel],
+  );
+  const dayTotal = daySales.reduce((sum, s) => sum + s.total, 0);
+
+  // Un jour futur de ce mois ne se commande pas (aucun clic, en semonce grise).
+  const todayEnd = new Date(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    new Date().getDate() + 1,
+  ).getTime();
+
+  function nav(delta: -1 | 1) {
+    setDaySel(null);
+    setCursor((c) => {
+      const m = c.month + delta;
+      return { year: m < 0 ? c.year - 1 : m > 11 ? c.year + 1 : c.year, month: (m + 12) % 12 };
+    });
+  }
+
+  const monthTitle = new Date(cursor.year, cursor.month, 1).toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric",
+  });
+  const monthRevenue = own.reduce((sum, s) => sum + s.total, 0);
 
   return (
     <div className="space-y-3">
@@ -50,76 +117,105 @@ export function EmployeeResults({ device }: { device: PairedDevice }) {
         <RoleBadge role={device.role} />
       </div>
 
-      {/* Sélecteur de période */}
-      <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
-        {(
-          [
-            { k: "day", label: "Aujourd'hui" },
-            { k: "week", label: "7 jours" },
-            { k: "month", label: "Ce mois" },
-          ] as const
-        ).map(({ k, label }) => (
+      {/* Calendrier du mois : une cellule par jour, le CA réglé sous le numéro du jour */}
+      <div className="rounded-xl border bg-card p-3">
+        <div className="mb-2 flex items-center justify-between">
           <button
-            key={k}
             type="button"
-            onClick={() => setRange(k)}
-            className={[
-              "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              range === k
-                ? "bg-background shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            ].join(" ")}
+            aria-label="Mois précédent"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
+            onClick={() => nav(-1)}
           >
-            {label}
+            <ChevronLeft className="h-4 w-4" />
           </button>
-        ))}
-      </div>
-
-      {/* Total de la période */}
-      <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3">
-        <div>
-          <p className="text-sm text-muted-foreground">Total encaissé</p>
-          <p className="text-xl font-bold tabular-nums">{formatFCFA(revenue)}</p>
+          <p className="text-sm font-semibold capitalize">{monthTitle}</p>
+          <button
+            type="button"
+            aria-label="Mois suivant"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent"
+            onClick={() => nav(1)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Ventes</p>
-          <p className="text-xl font-bold tabular-nums">{ownSales.length}</p>
-        </div>
-      </div>
-
-      {/* Ventes de l'écran */}
-      {ownSales.length > 0 ? (
-        <div className="space-y-1.5">
-          {ownSales.slice(0, 10).map((s) => (
-            <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <Receipt className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span className="truncate">
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(s.timestamp).toLocaleString("fr-FR", {
-                      day: "2-digit",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  {s.client_name ? ` · ${s.client_name}` : ""}
-                </span>
-              </div>
-              <span className="shrink-0 font-medium tabular-nums">{formatFCFA(s.total)}</span>
-            </div>
+        <div className="grid grid-cols-7 text-center text-[10px] text-muted-foreground">
+          {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+            <span key={i}>{d}</span>
           ))}
-          {ownSales.length > 10 && (
-            <p className="text-xs text-muted-foreground">
-              +{ownSales.length - 10} autre{ownSales.length - 10 > 1 ? "s" : ""} vente
-              {ownSales.length - 10 > 1 ? "s" : ""} sur la période.
-            </p>
-          )}
         </div>
-      ) : (
-        <div className="rounded-xl border border-dashed py-6 text-center">
-          <TrendingUp className="mx-auto mb-1 h-5 w-5 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Aucune vente sur cette période.</p>
+        <div className="grid grid-cols-7 gap-px pt-1">
+          {grid.map((cell) => {
+            if (!cell.inMonth) return <span key={cell.ts} />;
+            const stats = perDay.get(cell.ts);
+            const future = cell.ts >= todayEnd;
+            return (
+              <button
+                key={cell.ts}
+                type="button"
+                disabled={future}
+                onClick={() => setDaySel(cell.ts)}
+                title={stats ? formatFCFA(stats.revenue) : undefined}
+                className={[
+                  "flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-md text-xs transition-colors",
+                  future ? "text-muted-foreground/40" : "hover:bg-accent",
+                  stats ? "bg-primary/5" : "",
+                  cell.ts === daySel ? "ring-2 ring-primary" : "",
+                ].join(" ")}
+              >
+                <span className={stats ? "font-semibold" : undefined}>
+                  {new Date(cell.ts).getDate()}
+                </span>
+                {stats && (
+                  <span className="text-[10px] font-medium tabular-nums text-primary">
+                    {compact.format(stats.revenue)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Récapitulatif du mois affiché */}
+      <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3">
+        <p className="text-sm text-muted-foreground">Mois affiché</p>
+        <p className="text-sm font-semibold tabular-nums">
+          {formatFCFA(monthRevenue)} · {own.length} vente{own.length > 1 ? "s" : ""}
+        </p>
+      </div>
+
+      {/* Détail du jour choisi : dérivé du lot du mois, aucun nouvel appel à la base */}
+      {daySel !== null && (
+        <div className="space-y-1.5 rounded-xl border bg-card p-3">
+          <p className="text-xs font-medium capitalize text-muted-foreground">
+            {new Date(daySel).toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}{" "}
+            — {formatFCFA(dayTotal)} · {daySales.length} vente{daySales.length > 1 ? "s" : ""}
+          </p>
+          {daySales.length > 0 ? (
+            daySales.map((s) => (
+              <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Receipt className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(s.timestamp).toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {s.client_name ? ` · ${s.client_name}` : ""}
+                  </span>
+                </div>
+                <span className="shrink-0 font-medium tabular-nums">{formatFCFA(s.total)}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground">Aucune vente ce jour-là.</p>
+          )}
         </div>
       )}
     </div>

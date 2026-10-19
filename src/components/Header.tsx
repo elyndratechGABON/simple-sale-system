@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Sun, Moon, Users } from "lucide-react";
+import { Sun, Moon, Users } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { getSetting } from "@/lib/db";
 import { TopNav } from "@/components/Nav";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 import { NotificationBell } from "@/components/NotificationBell";
 import { TeamDialog } from "@/components/TeamDialog";
-import { ActivityDialog } from "@/components/ActivityDialog";
-import { EmployeesDialog } from "@/components/EmployeesDialog";
 import { Button } from "@/components/ui/button";
 import { useAccess } from "@/hooks/use-access";
 
@@ -59,9 +57,6 @@ export function Header() {
     }
   }
   const [teamOpen, setTeamOpen] = useState(false);
-  const [teamDeviceId, setTeamDeviceId] = useState<string | null>(null);
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [employeesOpen, setEmployeesOpen] = useState(false);
   const clicks = useRef(0);
   const lastClick = useRef(0);
 
@@ -131,20 +126,9 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Activité du personnel"
-              title="Activité du personnel"
-              onClick={() => setActivityOpen(true)}
-            >
-              <Activity className="h-5 w-5" />
-            </Button>
-          )}
-          {isOwner && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Employés"
-              title="Employés"
-              onClick={() => setEmployeesOpen(true)}
+              aria-label="Équipe"
+              title="Équipe — employés et activité du personnel"
+              onClick={() => setTeamOpen(true)}
             >
               <Users className="h-5 w-5" />
             </Button>
@@ -165,26 +149,7 @@ export function Header() {
         </div>
       </div>
       <SubscriptionsDialog open={subscriptionsOpen} onOpenChange={setSubscriptionsOpen} />
-      <TeamDialog
-        open={teamOpen}
-        onOpenChange={(v) => {
-          setTeamOpen(v);
-          if (!v) setTeamDeviceId(null);
-        }}
-        initialDeviceId={teamDeviceId}
-      />
-      <EmployeesDialog open={employeesOpen} onOpenChange={setEmployeesOpen} />
-      <ActivityDialog
-        open={activityOpen}
-        onOpenChange={setActivityOpen}
-        // Un vendeur cliqué dans l'activité s'ouvre en détail dans la fiche Équipe — une
-        // seule implémentation de ce détail, pas deux écrans qui divergent.
-        onOpenDevice={(deviceId) => {
-          setActivityOpen(false);
-          setTeamDeviceId(deviceId);
-          setTeamOpen(true);
-        }}
-      />
+      <TeamDialog open={teamOpen} onOpenChange={setTeamOpen} />
     </header>
   );
 }

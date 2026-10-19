@@ -3,19 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { getSaleItemsForSales, listSales, listStockMovements } from "@/lib/db";
 import { ensureIdentity } from "@/lib/syncengine/identity";
 import { listPairedDevices } from "@/lib/syncengine/peers";
-import { monthStart, sellerDisplay } from "./helpers";
+import { monthStart } from "./helpers";
 
 export type Range = "month" | "week" | "day";
 
-export interface SellerRevenueItem {
-  key: string;
-  nom: string;
-  phone: string;
-  estMoi: boolean;
-  count: number;
-  revenue: number;
-}
-
+/**
+ * Données de la fiche Équipe — l'interface unique du personnel : le registre des pairs
+ * (ce hook n'attribue rien), les ventes de la période, les ajustements récents.
+ * `open` évite tout travail quand le dialogue est fermé. `listPairedDevices` exclut
+ * l'écran courant : la ligne « Cette caisse » est reconstruite côté `TeamDialog`.
+ */
 export function useActivityData(open: boolean) {
   const [range, setRange] = useState<Range>("month");
 
@@ -57,43 +54,14 @@ export function useActivityData(open: boolean) {
     staleTime: 30_000,
   });
 
-  // CA agrégé par ÉCRAN, trié du plus gros au plus petit. La clé est `seller_device_id`
-  // (posé à la vente par l'écran qui encaisse) : deux employés anonymes ne se confondent
-  // donc plus en une seule ligne « Employé ». Le libellé vient du registre des pairs, et
-  // le numéro d'y est aussi — c'est ce que le patron cherche ici.
-  const moi = identity?.deviceId;
-  const parVendeur = useMemo(() => {
-    const peerById = new Map((peers ?? []).map((p) => [p.id, p]));
-    const map = new Map<string, SellerRevenueItem>();
-    for (const s of sales ?? []) {
-      const key = s.seller_device_id ?? "direct";
-      const peer = peerById.get(key);
-      const cur = map.get(key) ?? {
-        key,
-        nom:
-          key === "direct"
-            ? "Ventes directes"
-            : peer?.device_name?.trim() || sellerDisplay(s.seller_name, "Employé sans nom"),
-        phone: peer?.phone?.trim() ?? "",
-        estMoi: key === moi,
-        count: 0,
-        revenue: 0,
-      };
-      cur.count += 1;
-      cur.revenue += s.total;
-      map.set(key, cur);
-    }
-    return [...map.values()].sort((a, b) => b.revenue - a.revenue);
-  }, [sales, peers, moi]);
-
   const itemsCount = useMemo(() => {
     const map = new Map<string, number>();
     for (const it of items ?? []) map.set(it.sale_id, (map.get(it.sale_id) ?? 0) + it.quantity);
     return map;
   }, [items]);
 
-  const totalRevenue = parVendeur.reduce((s, b) => s + b.revenue, 0);
-  const totalCount = parVendeur.reduce((s, b) => s + b.count, 0);
+  const totalRevenue = (sales ?? []).reduce((sum, s) => sum + s.total, 0);
+  const totalCount = (sales ?? []).length;
 
   const paired = (peers ?? []).filter((p) => p.status !== "pending");
   const pending = (peers ?? []).filter((p) => p.status === "pending");
@@ -103,15 +71,16 @@ export function useActivityData(open: boolean) {
   );
 
   return {
+    identity,
     range,
     setRange,
     sales,
     movements,
     itemsCount,
-    parVendeur,
     totalRevenue,
     totalCount,
     sortedPeers,
+    paired,
     pending,
   };
 }
