@@ -10,8 +10,8 @@
 //   - `rejected` → le propriétaire a refusé la demande : simple affichage, bouton
 //     « Compris », rien n'est effacé et la caisse continue normalement.
 //
-// Message à l'orchestrateur avant la purge locale (statut approuvé), comme le panneau
-// QR (`EmployeeAccountPanel`) : `deleteShopRemote` efface la fiche de CET écran — la
+// Message à l'orchestrateur avant la purge locale (statut approuvé) :
+// `deleteShopRemote` efface la fiche de CET écran — la
 // place qu'il occupait sur le compte se libère. Un employé qui refuse reste simplement
 // une caisse rattachée que le compte continue d'utiliser.
 import { useEffect, useState } from "react";

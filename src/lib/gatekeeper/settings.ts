@@ -13,6 +13,5 @@ export const SETTING_QUOTA = "gatekeeper_account_quota";
 export const SETTING_REQUEST = "gatekeeper_subscription_request";
 export const SETTING_GRACE_ENDS_AT = "gatekeeper_grace_ends_at";
 export const SETTING_DELETE_REQUEST = "gatekeeper_delete_request";
-export const SETTING_DELETE_PENDING = "gatekeeper_delete_online_pending";
 export const SETTING_KEYWORD_CLAIM = "gatekeeper_keyword_claim";
 export const SETTING_KEYWORD_REVEALED = "gatekeeper_keyword_revealed";

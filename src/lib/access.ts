@@ -10,9 +10,9 @@
 import type { DeviceRole } from "./syncengine/types";
 
 /** Routes ouvertes à chaque rôle. Le propriétaire n'a pas de liste : il ouvre tout.
- *  `/dashboard` (page d'accueil) est ouvert à l'employé. `/settings` est limité côté
- *  employé à UN panneau (demande de suppression de compte, cf. `EmployeeAccountPanel`) —
- *  c'est la page elle-même qui masque le reste. */
+ *  `/dashboard` (page d'accueil) est ouvert à l'employé. `/settings` est ouvert côté
+ *  employé (onglet Compte : démission, expérience) — c'est la page elle-même qui masque
+ *  le reste. */
 const EMPLOYEE_ROUTES = ["/dashboard", "/pos", "/stocks", "/settings"] as const;
 
 function allowedRoutes(role: DeviceRole): readonly string[] {

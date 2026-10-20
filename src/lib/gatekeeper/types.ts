@@ -91,11 +91,3 @@ export interface KeywordJoinInput {
 export interface KeywordJoinResult {
   status: "verified" | "blocked" | "pending";
 }
-
-export interface ShopDeletionRequestResult {
-  /** La demande est partie (ou sera rejouée) — équivalent d'un succès pour l'employé. */
-  submitted: boolean;
-  /** True quand le serveur était injoignable : la demande attend un prochain handshake. */
-  pending: boolean;
-  error?: string;
-}

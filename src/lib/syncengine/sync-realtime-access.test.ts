@@ -15,8 +15,8 @@ describe("sync temps réel : garde d'accès par rôle", () => {
     expect(canAccessRoute("/dashboard", "employee")).toBe(true);
     expect(canAccessRoute("/pos", "employee")).toBe(true);
     expect(canAccessRoute("/stocks", "employee")).toBe(true);
-    // /settings est ouvert à l'employé MAIS réduit à la seule demande de suppression
-    // de compte — c'est la page elle-même qui masque le reste (EmployeeAccountPanel).
+    // /settings est ouvert à l'employé (onglet Compte : démission, expérience) —
+    // la page elle-même masque le reste.
     expect(canAccessRoute("/settings", "employee")).toBe(true);
     expect(canAccessRoute("/reports", "employee")).toBe(false);
     expect(canAccessRoute("/history", "employee")).toBe(false);

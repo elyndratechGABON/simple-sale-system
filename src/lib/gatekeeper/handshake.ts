@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { applyAccountMetadata, handleHandshakeRefusal } from "./handshake-support";
 import { applyCommand, getAppliedIds, setAppliedIds } from "./commands";
 import { clearKeywordClaim, getKeywordClaim } from "./keyword";
-import { flushPendingDeleteRequest } from "./delete";
 import { setLock } from "./lock";
 import {
   APP_ORIGIN,
@@ -90,11 +89,6 @@ export async function handshake(): Promise<HandshakeResult> {
       nextApplied.push(command.id);
     }
     if (nextApplied.length !== applied.length) await setAppliedIds(nextApplied);
-
-    // Une demande de suppression déposée hors ligne est rejouée dès que le serveur
-    // répond — le propriétaire doit la voir dans son tableau quel que soit le moment
-    // où la connexion est revenue.
-    await flushPendingDeleteRequest();
 
     // L'échéance renvoyée par le serveur fait foi (prolongations /extend et renew y
     // sont déjà répercutées) — la caisse s'y cale à chaque handshake.

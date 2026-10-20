@@ -1,7 +1,7 @@
 import { emitOp } from "../ops";
 import { ensureIdentity, isSharedGroup } from "../identity";
 import { runOpsExchange } from "@/lib/sync";
-import { getDB, purgeAllData } from "@/lib/db";
+import { closeEmployeeHistory, getDB, listProducts, purgeAllData } from "@/lib/db";
 import type { DeviceLeavePayload } from "../types";
 import { resetGatekeeper } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
@@ -17,6 +17,44 @@ import { savePreferences } from "@/lib/settings";
  * locale ne disparaisse. Sans cet ordre, la purge emporterait l'outbox et la démission
  * ne serait jamais poussée — le propriétaire garderait un écran fantôme à jamais.
  */
+
+/** Le propriétaire du groupe : la fiche au rôle `owner` hors soi-même. */
+async function ownerPeerId(shopId: string): Promise<string | null> {
+  const owners = await getDB()
+    .paired_devices.where("shop_id")
+    .equals(shopId)
+    .filter((p) => p.role === "owner")
+    .toArray();
+  // Un seul propriétaire en pratique : le premier trouvé fait foi.
+  return owners[0]?.id ?? null;
+}
+
+/**
+ * Restitue le stock restant : une op `stock.adjusted` POSITIVE ciblée au propriétaire
+ * par produit encore étalisé (les services n'ont rien à rendre). Émises AVANT le
+ * `device.leave` — c'est le même tour de manivelle (`runOpsExchange`) qui pousse le
+ * paquet ; après la purge, l'outbox n'existerait plus.
+ */
+async function emitStockReturnOps(): Promise<void> {
+  const identity = await ensureIdentity();
+  if (!isSharedGroup(identity.shopId)) return;
+  const ownerId = await ownerPeerId(identity.shopId);
+  if (!ownerId) return;
+  const remaining = (await listProducts()).filter(
+    (p) => p.type !== "service" && Number.isFinite(p.stock) && (p.stock ?? 0) > 0,
+  );
+  if (remaining.length === 0) return;
+  const db = getDB();
+  await db.transaction("rw", [db.sync_ops, db.settings], async () => {
+    for (const p of remaining) {
+      await emitOp(db, identity, {
+        type: "stock.adjusted",
+        entity_id: p.id,
+        payload: { product_id: p.id, delta: p.stock, target_device_id: ownerId },
+      });
+    }
+  });
+}
 
 /** Émet `device.leave` et tente de le pousser tout de suite (best-effort). */
 export async function emitLeaveOp(): Promise<void> {
@@ -40,13 +78,18 @@ export async function emitLeaveOp(): Promise<void> {
 
 /** Purge locale + retour au premier lancement (comme la suppression de boutique). */
 export async function finalizeLeave(): Promise<void> {
+  const identity = await ensureIdentity();
+  // Le carnet d'expérience survit à la purge (hors des stores de snapshot.ts) : il n'a
+  // de sens fermé QUE par la démission — une clôture par purge écraserait la durée.
+  await closeEmployeeHistory(identity.shopId);
   await purgeAllData();
   resetGatekeeper();
   savePreferences({ onboarded: false });
 }
 
-/** Le tout pour un bouton : pousser le départ, puis tout purger localement. */
+/** Le tout pour un bouton : restituer le stock, pousser le départ, tout purger. */
 export async function leaveShop(): Promise<void> {
+  await emitStockReturnOps();
   await emitLeaveOp();
   await finalizeLeave();
 }

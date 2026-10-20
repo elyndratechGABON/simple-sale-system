@@ -21,7 +21,6 @@ export type {
   KeywordJoinInput,
   KeywordJoinResult,
   LockReason,
-  ShopDeletionRequestResult,
   SubscriptionRequestStatus,
 } from "./types";
 export {
@@ -51,10 +50,4 @@ export {
 } from "./keyword";
 export { joinByKeyword, resetKeywordBlock } from "./keyword-join";
 export { handshake } from "./handshake";
-export {
-  clearDeleteAccountRequest,
-  deleteShopRemote,
-  flushPendingDeleteRequest,
-  getDeleteAccountRequest,
-  requestShopDeletion,
-} from "./delete";
+export { clearDeleteAccountRequest, deleteShopRemote, getDeleteAccountRequest } from "./delete";
