@@ -1,5 +1,3 @@
-import { Package } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { ClusterTutorialApi } from "./useClusterTutorial";
 import { TutorialProductForm } from "./TutorialProductForm";
 
@@ -17,22 +15,6 @@ export function TutorialAdd({ t }: { t: ClusterTutorialApi }) {
             ✓ {t.addedCount} {addedLabel}
           </p>
         )}
-
-        <Button
-          variant="default"
-          size="lg"
-          className="w-full gap-2"
-          onClick={t.handleLoadDemo}
-          disabled={t.loadingDemo}
-        >
-          {t.loadingDemo ? (
-            "Chargement…"
-          ) : (
-            <>
-              <Package className="h-4 w-4" /> Charger les produits de démo
-            </>
-          )}
-        </Button>
       </div>
     </div>
   );
