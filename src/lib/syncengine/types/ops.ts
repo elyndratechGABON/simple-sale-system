@@ -14,7 +14,8 @@ export type OpType =
   | "device.announce"
   | "device.approve"
   | "catalogue.snapshot"
-  | "catalogue.request";
+  | "catalogue.request"
+  | "stock.low";
 
 /** Une opération du journal. Idempotente : rejouée, elle ne doit produire qu'UN effet. */
 export interface SyncOp {

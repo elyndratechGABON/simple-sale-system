@@ -2,6 +2,8 @@ import { touch } from "./internal";
 import type { PosDatabase } from "./schema/database";
 import { recordMovement } from "./stock";
 import type { Product } from "./types/sync";
+import { getCachedIdentity } from "../syncengine/identity";
+import { emitOp } from "../syncengine/ops";
 
 /**
  * Applique un delta de stock à un produit, ou à une de ses variantes si `variantId`
@@ -59,5 +61,37 @@ export async function applyStockDelta(
       note: opts?.note,
     });
   }
+  await maybeEmitStockLow(db, p, qty, updated.stock, quantity);
   return updated;
+}
+
+/** Franchissement du seuil : le stock passe de > threshold à <= threshold pendant un
+ *  déstockage. Un employé le crie au propriétaire (op `stock.low`) — c'est son canal
+ *  de demande de recharge quand l'écran du patron n'observe pas son stock directement.
+ *  Le franchissement est le test et pas `<=` seul : une seule op par passage, pas une
+ *  babille d'ops à chaque vente sous le seuil ; la déduplication côté apply reste la
+ *  seconde barrière. Seulement l'employé : le propriétaire voit ses alertes en direct. */
+async function maybeEmitStockLow(
+  db: PosDatabase,
+  p: Product,
+  oldStock: number,
+  newStock: number,
+  quantity: number,
+): Promise<void> {
+  const threshold = p.min_stock;
+  const crossed =
+    quantity < 0 && threshold != null && oldStock > threshold && newStock <= threshold;
+  if (!crossed) return;
+  const identity = getCachedIdentity();
+  if (identity?.role !== "employee") return;
+  await emitOp(db, identity, {
+    type: "stock.low",
+    entity_id: p.id,
+    payload: {
+      product_id: p.id,
+      device_id: identity.deviceId,
+      stock: newStock,
+      threshold,
+    },
+  });
 }

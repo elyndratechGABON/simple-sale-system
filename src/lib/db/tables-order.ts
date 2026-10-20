@@ -16,10 +16,7 @@ export async function addRound(saleId: string, lines: CartLine[]): Promise<Sale>
   const ordered_at = Date.now();
   return db.transaction(
     "rw",
-    db.sales,
-    db.sale_items,
-    db.products,
-    db.stock_movements,
+    [db.sales, db.sale_items, db.products, db.stock_movements, db.sync_ops, db.settings],
     async () => {
       const sale = await db.sales.get(saleId);
       if (!sale || sale.deleted_at) throw new Error("Table introuvable.");

@@ -14,6 +14,7 @@ import type {
   StockMovement,
   Subscription,
 } from "../types/records";
+import type { AlertSeverity } from "@/lib/alerts";
 import type { Product } from "../types/sync";
 import { applyEarlyVersions } from "./versions/early";
 import { applyLateAVersions } from "./versions/late-a";
@@ -40,6 +41,21 @@ export class PosDatabase extends Dexie {
   monthly_overviews!: Table<MonthlyOverview, string>;
   processed_ops!: Table<ProcessedOp, string>;
   paired_devices!: Table<PairedDevice, string>;
+  sync_lost_stock_alerts!: Table<
+    {
+      id: string;
+      product_id: string;
+      device_id: string;
+      stock: number;
+      threshold: number;
+      severity: AlertSeverity;
+      title: string;
+      detail: string;
+      to: string;
+      created_at: number;
+    },
+    string
+  >;
 
   constructor() {
     super("pos-db");

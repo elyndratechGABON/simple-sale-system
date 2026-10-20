@@ -26,6 +26,42 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
     case "stock.adjusted":
       await applyStockAdjusted(db, op);
       break;
+    case "stock.low":
+      // Alerte stock bas reçue d'un employé : on l'ajoute à la liste des alerts du propriétaire.
+      // L'op porte product_id, device_id (l'employé), stock actuel et seuil franchi.
+      // On crée une alerte warning que l'on stocke pour l'affichage dans la cloche.
+      {
+        const pl = op.payload as {
+          product_id: string;
+          device_id: string;
+          stock: number;
+          threshold: number;
+        };
+        if (pl?.product_id && pl?.device_id && pl?.stock != null && pl?.threshold != null) {
+          const alertId = `low-stock:${pl.product_id}:${pl.device_id}`;
+          // Vérifier si cette alerte existe déjà (déduplication par id).
+          const existing = await db.processed_ops.get(alertId);
+          if (!existing) {
+            await db.processed_ops.put({ id: alertId, processed_at: Date.now() });
+            // On stocke l'alerte en base pour que NotificationBell puisse la lire.
+            await db.transaction("rw", db.sync_lost_stock_alerts, async () => {
+              await db.sync_lost_stock_alerts.add({
+                id: alertId,
+                product_id: pl.product_id,
+                device_id: pl.device_id,
+                stock: pl.stock,
+                threshold: pl.threshold,
+                severity: "warning",
+                title: "Stock bas détecté",
+                detail: `Stock à ${pl.stock} (seuil ${pl.threshold}) sur un produit employé`,
+                to: "/stocks",
+                created_at: Date.now(),
+              });
+            });
+          }
+        }
+      }
+      break;
     case "sale.created":
       await applySaleCreated(db, op);
       break;

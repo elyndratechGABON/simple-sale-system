@@ -22,7 +22,13 @@
 //
 // (state.ts) cache partagé et accès ; (crypto.ts) signature des ops ; (shop-id.ts) dérivation
 // et adoption du groupe ; (load.ts) chargement/écriture de l'identité.
-export { getDeviceKeys, getIdentity, isSharedGroup, resetIdentityForTests } from "./state";
+export {
+  getDeviceKeys,
+  getCachedIdentity,
+  getIdentity,
+  isSharedGroup,
+  resetIdentityForTests,
+} from "./state";
 export { signableBody, signOp, verifyOpSignature } from "./crypto";
 export { adoptShopIdFromRelay, clearAdoptedShopId, refreshShopId } from "./shop-id";
 export {

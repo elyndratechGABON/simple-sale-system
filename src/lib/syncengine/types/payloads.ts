@@ -13,6 +13,12 @@ export interface StockAdjustedPayload {
   product_id: string;
   delta: number;
 }
+export interface StockLowPayload {
+  product_id: string;
+  device_id: string;
+  stock: number;
+  threshold: number;
+}
 export interface CategoryCreatedPayload {
   name: string;
 }
