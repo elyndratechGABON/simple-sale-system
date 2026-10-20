@@ -36,3 +36,4 @@ export { PosDatabase } from "./schema/database";
 export { getDB, resetDBForTests } from "./internal";
 export { addStock, removeStock, listStockMovements } from "./stock";
 export { applyStockDelta } from "./stock-delta";
+export { listLostStockAlerts } from "./stock-delta";

@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, CircleAlert, TriangleAlert, Info as InfoIcon, type LucideIcon } from "lucide-react";
-import { listProducts, listOpenTables } from "@/lib/db";
+import { listLostStockAlerts, listProducts, listOpenTables } from "@/lib/db";
 import { buildAlerts, type AlertSeverity } from "@/lib/alerts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,9 +66,25 @@ export function NotificationBell() {
     queryFn: listOpenTables,
     staleTime: 30_000,
   });
+  // Les cris de recharge des employés (op `stock.low` arrivée par le relais ops). Vide
+  // côté employé : seul le propriétaire reçoit ces alertes, dispatch les déduplique.
+  const { data: cries } = useQuery({
+    queryKey: ["lost_stock_alerts"],
+    queryFn: listLostStockAlerts,
+    staleTime: 30_000,
+  });
   const alerts = useMemo(
-    () => buildAlerts(products ?? [], openTables ?? []),
-    [products, openTables],
+    () => [
+      ...(cries ?? []).map((c) => ({
+        id: c.id,
+        severity: c.severity,
+        title: c.title,
+        detail: c.detail,
+        to: c.to,
+      })),
+      ...buildAlerts(products ?? [], openTables ?? []),
+    ],
+    [cries, products, openTables],
   );
   const unseenCount = useMemo(() => {
     void seenVersion;
@@ -109,7 +125,8 @@ export function NotificationBell() {
             <Bell className="h-4 w-4" /> Notifications
           </DialogTitle>
           <DialogDescription>
-            Stock, tables en cours — tout ce qui attend une action de votre part.
+            Stock, tables en cours, demandes de recharge des employés — tout ce qui attend une
+            action de votre part.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">

@@ -1,4 +1,4 @@
-import { touch } from "./internal";
+import { getDB, touch } from "./internal";
 import type { PosDatabase } from "./schema/database";
 import { recordMovement } from "./stock";
 import type { Product } from "./types/sync";
@@ -63,6 +63,33 @@ export async function applyStockDelta(
   }
   await maybeEmitStockLow(db, p, qty, updated.stock, quantity);
   return updated;
+}
+
+export type LostStockAlertSeverity = "warning" | "info";
+
+/** Un cri `stock.low` d'un employé, déjà dédupliqué côté `dispatch.ts`. */
+export interface LostStockAlert {
+  id: string;
+  product_id: string;
+  device_id: string;
+  stock: number;
+  threshold: number;
+  severity: LostStockAlertSeverity;
+  title: string;
+  detail: string;
+  to: "/stocks";
+  created_at: number;
+}
+
+/**
+ * Les cris de recharge des employés, appliqués chez le propriétaire par `dispatch`
+ * (dédup par `low-stock:<produit>:<écran>` — un id stable tant que la situation persiste).
+ * Plus récents d'abord, pour la cloche des notifications.
+ */
+export async function listLostStockAlerts(): Promise<LostStockAlert[]> {
+  return getDB().sync_lost_stock_alerts.orderBy("created_at").reverse().toArray() as Promise<
+    LostStockAlert[]
+  >;
 }
 
 /** Franchissement du seuil : le stock passe de > threshold à <= threshold pendant un
