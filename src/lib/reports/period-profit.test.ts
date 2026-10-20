@@ -44,13 +44,41 @@ test("la marge se calcule au coût ACTUEL du catalogue, pas au coût figé à la
 
 test("une prestation rapporte son CA sans marge — son poids passe par les charges saisies", () => {
   const r = periodProfit(
-    [produit("p1", { type: "service", category: "Coiffure", cost: 9999 })],
+    [produit("p1", { type: "service", category: "Coiffure", name: "Coupe enfant", cost: 9999 })],
     [ligne({ product_id: "p1", quantity: 2 })],
   );
 
   expect(r.serviceRevenue).toBe(1000);
   expect(r.productMargin).toBe(0);
   expect(r.serviceCategories).toEqual(["Coiffure"]);
+});
+
+test("les PRESTATIONS vendues sont listées par NOM, avec leur CA — la ligne de saisie", () => {
+  // Deux prestations distinctes dans la même catégorie : la section « Charges de
+  // service » doit montrer chacune, pas une seule ligne « Coiffure ».
+  const r = periodProfit(
+    [
+      produit("p1", { type: "service", category: "Coiffure", name: "Coupe enfant" }),
+      produit("p2", { type: "service", category: "Coiffure", name: "Coloration" }),
+      produit("p3", { category: "Boisson" }),
+    ],
+    [
+      ligne({ id: "a", product_id: "p1", quantity: 2, price_at_sale: 500 }),
+      ligne({ id: "b", product_id: "p2", price_at_sale: 2000 }),
+      ligne({ id: "c", product_id: "p3" }),
+    ],
+  );
+
+  expect(r.servicesSold).toEqual([
+    expect.objectContaining({
+      product: expect.objectContaining({ name: "Coloration" }),
+      revenue: 2000,
+    }),
+    expect.objectContaining({
+      product: expect.objectContaining({ name: "Coupe enfant" }),
+      revenue: 1000,
+    }),
+  ]);
 });
 
 test("seules les catégories VENDUES en service figurent dans serviceCategories", () => {
@@ -66,6 +94,8 @@ test("seules les catégories VENDUES en service figurent dans serviceCategories"
   expect(r.serviceCategories).toEqual(["Coiffure"]);
   expect(r.serviceRevenue).toBe(500);
   expect(r.categoryRevenue["Beauté"]).toBeUndefined();
+  // Au catalogue mais JAMAIS vendue : pas de ligne de saisie.
+  expect(r.servicesSold).toHaveLength(1);
 });
 
 test("une ligne sans fiche (libre ou orpheline) n'entre dans aucun compte", () => {

@@ -12,6 +12,15 @@
 import type { Product, SaleItem } from "@/lib/db";
 import { soldProductsByCategory } from "./sold-products-by-category";
 
+export interface ServiceSold {
+  /** Fiche produit de la prestation. */
+  product: Product;
+  /** Quantité vendue sur la période. */
+  quantity: number;
+  /** CA de la période pour cette prestation. */
+  revenue: number;
+}
+
 export interface PeriodProfit {
   /** Σ (CA − coût actuel × quantité) des produits vendus. Une marge SEULEMENT pour eux. */
   productMargin: number;
@@ -22,6 +31,12 @@ export interface PeriodProfit {
   serviceRevenue: number;
   /** Catégories où au moins une prestation a été vendu sur la période. */
   serviceCategories: string[];
+  /**
+   * Les PRESTATIONS vendues, une par fiche produit — la liste des lignes « Charges de
+   * service », où le commerçant voit LE NOM de ce qu'il a vendu pour y affecter le coût
+   * de l'avoir réalisé. Tri par CA décroissant (reste à faire à l'appelant).
+   */
+  servicesSold: ServiceSold[];
   /** CA de la période par catégorie — même clé que `serviceCategories`. */
   categoryRevenue: Record<string, number>;
   /** Produits vendus sans coût d'achat saisi — preuve du filet « bénéfice surestimé ». */
@@ -34,6 +49,7 @@ export function periodProfit(products: Product[], items: SaleItem[]): PeriodProf
   let soldWithoutCost = 0;
   const serviceCategories = new Set<string>();
   const categoryRevenue: Record<string, number> = {};
+  const servicesSold: ServiceSold[] = [];
 
   for (const [category, list] of soldProductsByCategory(products, items)) {
     let aService = false;
@@ -42,6 +58,7 @@ export function periodProfit(products: Product[], items: SaleItem[]): PeriodProf
       if (sold.product.type === "service") {
         serviceRevenue += sold.revenue;
         aService = true;
+        servicesSold.push(sold);
       } else {
         productMargin += sold.revenue - sold.product.cost * sold.quantity;
         if (!sold.product.cost) soldWithoutCost += 1;
@@ -49,11 +66,13 @@ export function periodProfit(products: Product[], items: SaleItem[]): PeriodProf
     }
     if (aService) serviceCategories.add(category);
   }
+  servicesSold.sort((a, b) => b.revenue - a.revenue);
 
   return {
     productMargin,
     serviceRevenue,
     serviceCategories: [...serviceCategories],
+    servicesSold,
     categoryRevenue,
     soldWithoutCost,
   };

@@ -46,10 +46,12 @@ export function ProfitTab({
   });
   const { services, business } = groupChargesByKind(charges);
 
-  // Marge au coût courant, CA des prestations et catégories vendues en service : un
+  // Marge au coût courant, CA des prestations et prestations vendues : un
   // seul passage (cf. `periodProfit`), réactif à `["products"]` via sa props.
-  const { productMargin, serviceRevenue, serviceCategories, categoryRevenue, soldWithoutCost } =
-    useMemo(() => periodProfit(products, items), [products, items]);
+  const { productMargin, serviceRevenue, servicesSold, categoryRevenue, soldWithoutCost } = useMemo(
+    () => periodProfit(products, items),
+    [products, items],
+  );
 
   const totalServices = services.reduce((s, c) => s + c.amount, 0);
   const totalBusiness = business.reduce((s, c) => s + c.amount, 0);
@@ -92,10 +94,9 @@ export function ProfitTab({
       </section>
 
       <ServiceChargesSection
-        categories={serviceCategories}
+        sold={servicesSold}
         services={services}
-        categoryRevenue={categoryRevenue}
-        onSave={(category, amount, id) => save("service", category, amount, id)}
+        onSave={(name, amount, id) => save("service", name, amount, id)}
         onRemove={(id) => remove(id)}
       />
 
