@@ -11,6 +11,8 @@ import { DevicesCard } from "./DevicesCard";
 import { InstallCard } from "./InstallCard";
 import { BackupCard } from "./BackupCard";
 import { PinCard } from "./PinCard";
+import { DeleteShopCard } from "./DeleteShopCard";
+import { ResignCard } from "./ResignCard";
 
 export function SettingsPage() {
   const { features } = usePreferences();
@@ -44,6 +46,9 @@ export function SettingsPage() {
           <TabsTrigger value="systeme" className="shrink-0 whitespace-nowrap">
             Système
           </TabsTrigger>
+          <TabsTrigger value="compte" className="shrink-0 whitespace-nowrap">
+            Compte
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="identite" className="mt-3 space-y-3">
@@ -64,6 +69,10 @@ export function SettingsPage() {
           <PinCard />
           <BackupCard />
           <InstallCard />
+        </TabsContent>
+
+        <TabsContent value="compte" className="mt-3 space-y-3">
+          {role === "owner" ? <DeleteShopCard /> : <ResignCard />}
         </TabsContent>
       </Tabs>
     </div>

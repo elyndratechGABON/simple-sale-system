@@ -1,4 +1,7 @@
-const PROJECT_DOMAIN = typeof window !== "undefined" ? window.location.origin : "";
+// `?.` : sous Node (tests, scripts), `window = globalThis` existe mais SANS `location` —
+// le simple `typeof window !== "undefined"` ne suffisait pas.
+const PROJECT_DOMAIN =
+  typeof window !== "undefined" && window.location ? window.location.origin : "";
 
 /** Adresse de l'orchestrateur. Compilée au build via VITE_ORCHESTRATOR_URL, sinon le domaine de l'app. */
 export function getOrchestratorUrl(): string {

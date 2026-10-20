@@ -1,5 +1,11 @@
 import type { PosDatabase } from "../../db";
-import type { DeviceAnnouncePayload, DeviceApprovePayload, PairedDevice, SyncOp } from "../types";
+import type {
+  DeviceAnnouncePayload,
+  DeviceApprovePayload,
+  DeviceLeavePayload,
+  PairedDevice,
+  SyncOp,
+} from "../types";
 import { PAIRING_KEYS } from "../types";
 
 export async function applyDeviceAnnounce(db: PosDatabase, op: SyncOp): Promise<void> {
@@ -94,4 +100,18 @@ export async function applyDeviceApprove(db: PosDatabase, op: SyncOp): Promise<v
     paired_at: existing.paired_at ?? now,
     updated_at: now,
   });
+}
+
+/**
+ * Départ d'un appareil : sa fiche du registre est EFFACÉE sur tout le groupe.
+ * Révoque en même temps la clé publique épinglée (elle vit sur la fiche) — après le
+ * départ, plus aucune op de cet appareil ne peut plus être vérifiée. Idempotent :
+ * rejouée, l'op ne trouve plus rien à effacer.
+ */
+export async function applyDeviceLeave(db: PosDatabase, op: SyncOp): Promise<void> {
+  const pl = op.payload as DeviceLeavePayload;
+  // `org_device_id` est la seule source de la cible : l'op porte le PARTANT, jamais
+  // l'écran qui l'applique (même modèle que `device.approve`).
+  if (!pl?.org_device_id) return;
+  await db.paired_devices.delete(pl.org_device_id);
 }

@@ -22,3 +22,4 @@ export {
   normPairCode,
 } from "./code";
 export { announceDevice, reannounceProfile, approveDevice } from "./announce";
+export { emitLeaveOp, finalizeLeave, leaveShop } from "./leave";

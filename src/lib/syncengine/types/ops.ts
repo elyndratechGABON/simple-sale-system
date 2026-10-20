@@ -13,6 +13,7 @@ export type OpType =
   | "category.created"
   | "device.announce"
   | "device.approve"
+  | "device.leave"
   | "catalogue.snapshot"
   | "catalogue.request"
   | "stock.low";

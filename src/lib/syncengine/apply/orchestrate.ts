@@ -68,6 +68,10 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
           if (dejaConnu) {
             await db.paired_devices.put({ ...dejaConnu, last_seen: now, updated_at: now });
           }
+        } else if (op.type === "device.leave") {
+          // Le départ EFFACE la fiche (`applyOp`) : le tampon générique ci-dessous la
+          // recréerait avec `{ id, shop_id }` — un fantôme que le rôle absent ferait
+          // lire « Propriétaire ». Aucun upsert forcé ici.
         } else {
           // Toute autre op prouve qu'on a RENCONTRÉ l'appareil : tampon `last_seen` sur la
           // fiche. Ne JAMAIS écraser une fiche détaillée posée par une annonce (statut,

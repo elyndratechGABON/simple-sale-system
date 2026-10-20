@@ -86,13 +86,23 @@ export interface DeviceApprovePayload {
   org_device_id: string;
   role: DeviceRole;
   /**
-   * Clé publique de l'appareil approuvé, recopiée de sa fiche par le principal. C'est
+   * ClǸ publique de l'appareil approuvǸ, recopiǸe de sa fiche par le principal. C'est
    * elle qui la PINSE : une annonce `pending` ne l week's pas fait (cf. `applyOp`,
-   * `device.announce`), donc l'approbation est le seul autre moment où une clé peut
-   * entrer en référence. Sans ce champ, un appareil approuvé à la main verrait ses
-   * ops rejetées faute de clé connue.
+   * `device.announce`), donc l'approbation est le seul autre moment o�� une clǸ peut
+   * entrer en rǸfǸrence. Sans ce champ, un appareil approuvǸ �� la main verrait ses
+   * ops rejetǸes faute de clǸ connue.
    */
   public_key?: string;
+}
+
+/**
+ * DǸmission : l'appareil quitte le groupe LUI-MȎME. `org_device_id` porte l'appareil
+ * PARTANT (l'op est signée par sa propre clé — le départ est une déclaration de
+ * l'appareil, jamais un jugement du groupe), et son application EFFACE la fiche du
+ * registre : la clé publique part avec elle, la confiance est révoquée.
+ */
+export interface DeviceLeavePayload {
+  org_device_id: string;
 }
 
 /**

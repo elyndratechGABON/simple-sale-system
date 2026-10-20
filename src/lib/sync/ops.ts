@@ -25,6 +25,10 @@ const OPS_TTL_MS = 30 * 86400_000;
  * ont convergé (rafraîchissement des écrans sans attendre la manœuvre).
  */
 export async function runOpsExchange(): Promise<SyncState | null> {
+  // Vitest charge `.env.local` : sans ce garde, un test qui déclenche l'échange pousserait
+  // de VRAIES ops (signées, avec le vrai jeton) sur le relais de production. Les tests
+  // qui veulent un transport injectent `exchangeOps(makeRelay().client)` directement.
+  if (import.meta.env.VITEST) return null;
   const identity = await ensureIdentity();
   if (!isSharedGroup(identity.shopId)) return null; // caisse jamais inscrite → rien à partager
   const url = getOpsRelayUrl();

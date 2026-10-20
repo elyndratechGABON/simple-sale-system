@@ -19,6 +19,7 @@ export type {
   ClientCreatedPayload,
   ClientUpdatedPayload,
   DeviceApprovePayload,
+  DeviceLeavePayload,
   ProductCreatedPayload,
   ProductUpdatedPayload,
   SaleCancelledPayload,

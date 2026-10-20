@@ -3,7 +3,7 @@ import type { SyncOp } from "../types";
 import { applyCatalogueSnapshot } from "./catalogue";
 import { applyChargeDeleted, applyChargeSaved } from "./charges";
 import { applyClientCreated, applyClientDeleted, applyClientUpdated } from "./clients";
-import { applyDeviceAnnounce, applyDeviceApprove } from "./devices";
+import { applyDeviceAnnounce, applyDeviceApprove, applyDeviceLeave } from "./devices";
 import {
   applyProductCreated,
   applyProductDeleted,
@@ -88,6 +88,9 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       break;
     case "device.approve":
       await applyDeviceApprove(db, op);
+      break;
+    case "device.leave":
+      await applyDeviceLeave(db, op);
       break;
     case "catalogue.snapshot":
       await applyCatalogueSnapshot(db, op);
