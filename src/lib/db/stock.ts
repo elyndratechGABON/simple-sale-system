@@ -116,6 +116,30 @@ export async function removeStock(
 }
 
 /**
+ * Recharge à distance : le propriétaire envoie +qty à UN écran employé. La cible est
+ * dans le payload (`target_device_id`) — même modèle que l'instantané de catalogue.
+ * PAS de mouvement local ni de delta sur le stock du propriétaire : sa fiche est le
+ * dépôt, c'est LUI qui décide d'en retirer la quantité (les stocks des écrans divergent).
+ */
+export async function sendRecharge(
+  productId: string,
+  targetDeviceId: string,
+  quantity: number,
+): Promise<void> {
+  await ensureIdentity();
+  const db = getDB();
+  const p = await db.products.get(productId);
+  if (!p || p.deleted_at) throw new Error("Produit introuvable.");
+  const qty = Math.max(0, Math.round(quantity));
+  if (!qty) throw new Error("Quantité invalide.");
+  await emitOp(db, getIdentity(), {
+    type: "stock.adjusted",
+    entity_id: productId,
+    payload: { product_id: productId, delta: qty, target_device_id: targetDeviceId },
+  });
+}
+
+/**
  * Écrit une ligne du journal des mouvements. À appeler DANS la transaction qui modifie
  * le stock : un mouvement sans variation correspondante serait un mensonge, et
  * l'inverse aussi. Journal plafonné aux 2 000 dernières lignes — c'est un outil de

@@ -12,6 +12,8 @@ export interface SaleCancelledPayload {
 export interface StockAdjustedPayload {
   product_id: string;
   delta: number;
+  /** Recharge adressée à UN écran (recharge à distance) : absent = delta collectif. */
+  target_device_id?: string;
 }
 export interface StockLowPayload {
   product_id: string;

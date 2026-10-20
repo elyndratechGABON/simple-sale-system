@@ -4,6 +4,7 @@ import { ProductForm } from "@/components/ProductForm";
 import type { StocksDialogsApi } from "./useStocksDialogs";
 import { AddStockDialog } from "./AddStockDialog";
 import { ProductDetailDialog } from "./ProductDetailDialog";
+import { RechargeDialog } from "./RechargeDialog";
 import { RemoveStockDialog } from "./RemoveStockDialog";
 import { DeleteProductDialog } from "./DeleteProductDialog";
 import { MovementsDialog } from "./Movements";
@@ -35,6 +36,8 @@ export function StocksDialogs({
     setRemoveTarget,
     deleteTarget,
     setDeleteTarget,
+    rechargeTarget,
+    setRechargeTarget,
     movementsOpen,
     setMovementsOpen,
     movementsProductId,
@@ -81,7 +84,13 @@ export function StocksDialogs({
           setDetailId(null);
           openEdit(p);
         }}
+        onRecharge={(p) => {
+          setDetailId(null);
+          setRechargeTarget(p);
+        }}
       />
+
+      <RechargeDialog product={rechargeTarget} onClose={() => setRechargeTarget(null)} />
 
       <RemoveStockDialog product={removeTarget} onClose={() => setRemoveTarget(null)} />
 

@@ -36,6 +36,9 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
       db.paired_devices,
       db.settings,
       db.shop_profiles,
+      // Le handler `stock.adjusted` journalise le mouvement chez le récepteur
+      // (`recordMovement`) — absent de cette liste, la transaction échouait NotFound.
+      db.stock_movements,
     ],
     async () => {
       const seen = new Set<string>();

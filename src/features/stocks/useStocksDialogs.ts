@@ -17,6 +17,9 @@ export function useStocksDialogs() {
   const [removeTarget, setRemoveTarget] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
 
+  // Recharge à distance : le produit que l'on va envoyer à un écran employé.
+  const [rechargeTarget, setRechargeTarget] = useState<Product | null>(null);
+
   // Journal global. `movementsProductId` le restreint à une fiche quand on y entre
   // depuis le menu d'une card produit ; `null` = tous les mouvements confondus.
   const [movementsOpen, setMovementsOpen] = useState(false);
@@ -71,6 +74,8 @@ export function useStocksDialogs() {
     setRemoveTarget,
     deleteTarget,
     setDeleteTarget,
+    rechargeTarget,
+    setRechargeTarget,
     movementsOpen,
     setMovementsOpen,
     movementsProductId,

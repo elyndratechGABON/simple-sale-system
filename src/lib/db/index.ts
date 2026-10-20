@@ -34,6 +34,6 @@ export * from "./clients";
 export * from "./categories";
 export { PosDatabase } from "./schema/database";
 export { getDB, resetDBForTests } from "./internal";
-export { addStock, removeStock, listStockMovements } from "./stock";
+export { addStock, removeStock, sendRecharge, listStockMovements } from "./stock";
 export { applyStockDelta } from "./stock-delta";
 export { listLostStockAlerts } from "./stock-delta";

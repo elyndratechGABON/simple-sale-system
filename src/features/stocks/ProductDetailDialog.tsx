@@ -1,4 +1,4 @@
-import { Package, PackagePlus, Pencil } from "lucide-react";
+import { Package, PackagePlus, Pencil, Send } from "lucide-react";
 import type { Product } from "@/lib/db";
 import { formatFCFA, formatRelative } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -22,12 +22,14 @@ export function ProductDetailDialog({
   onClose,
   onAddStock,
   onEdit,
+  onRecharge,
 }: {
   product: Product | null;
   lastSoldAt?: number;
   onClose: () => void;
   onAddStock: (p: Product) => void;
   onEdit: (p: Product) => void;
+  onRecharge: (p: Product) => void;
 }) {
   return (
     <Dialog open={product !== null} onOpenChange={(v) => !v && onClose()}>
@@ -111,6 +113,17 @@ export function ProductDetailDialog({
                   <Pencil className="h-4 w-4 mr-1.5" /> Modifier le produit
                 </Button>
               </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  const p = product;
+                  onClose();
+                  onRecharge(p);
+                }}
+              >
+                <Send className="h-4 w-4 mr-1.5" /> Envoyer à un écran (recharge)
+              </Button>
             </div>
           </>
         )}
