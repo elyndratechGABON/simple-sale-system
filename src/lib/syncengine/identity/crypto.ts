@@ -2,14 +2,38 @@ import type { DeviceKeys, SyncOp } from "../types";
 import { getDeviceKeys } from "./state";
 
 /**
+ * JSON CANONIQUE : les clés d'un objet sont triées, récursivement.
+ *
+ * Pourquoi : la signature ne doit dépendre que du CONTENU de l'op, jamais de
+ * l'ordre des clés. Or le relais stocke le payload en JSONB — PostgreSQL réordonne
+ * les clés (par longueur, puis alphabétique) en le stockant. La signature calculée à
+ * l'émission ne se vérifiait donc plus à la réception : TOUTE op distante était
+ * rejetée en silence, et rien ne se propageait entre écrans (ni fiche, ni stock, ni
+ * vente). Les tests ne le voyaient pas : leur relais de test est une Map en mémoire,
+ * qui conserve l'ordre d'insertion.
+ */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    const src = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(src)
+        .sort()
+        .map((k) => [k, canonical(src[k])]),
+    );
+  }
+  return value;
+}
+
+/**
  * Corps exact couvert par la signature d'une opération. Les champs qui décrivent
  * l'AUTORITÉ de l'op (`device_id`, `shop_id`, `seq`, `id`, `created_at`, `type`,
  * `entity_id`) et le `payload` — mais ni `sig` ni `status` (cyclage d'outbox local,
  * réécrit après signature) ni aucun champ d'horodatage de mise à jour.
  *
- * `JSON.stringify` est déterministe pour un objet construit dans le même ordre à
- * l'émission et à la vérification : les deux lectures viennent du même JSON issu du
- * relais, donc les clés se présentent dans le même ordre des deux côtés.
+ * Le `payload` est mis en forme CANONIQUE (cf. `canonical`) : le corps signé est
+ * alors identique à l'émission et à la réception, quel que soit l'ordre des clés
+ * adopté par le stockage.
  */
 export function signableBody(op: SyncOp): string {
   return JSON.stringify({
@@ -19,7 +43,7 @@ export function signableBody(op: SyncOp): string {
     seq: op.seq,
     type: op.type,
     entity_id: op.entity_id,
-    payload: op.payload ?? null,
+    payload: op.payload === undefined || op.payload === null ? null : canonical(op.payload),
     created_at: op.created_at,
   });
 }

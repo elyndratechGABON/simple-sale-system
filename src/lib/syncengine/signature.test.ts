@@ -87,4 +87,38 @@ describe("signature des opérations", () => {
     await resetDBForTests();
     resetIdentityForTests();
   });
+
+  it("survit au réordonnancement des clés du payload (JSONB du relais)", async () => {
+    // LE PIÈGE : le relais stocke le payload en JSONB, et PostgreSQL réordonne les
+    // clés (par longueur, puis alphabétique). La signature, elle, portait l'ordre
+    // d'émission. Résultat en production : TOUTE op distante était rejetée à la
+    // réception — aucune fiche d'écran, aucun stock, aucune vente ne se propageait.
+    // Le test le voyait pas : son relais est une Map en mémoire (ordre conservé).
+    await setShopAccount({ name: "Boutique", phone: "0700000001", password: "x" });
+    await ensureIdentity();
+    await trustDeviceA();
+
+    const op = await opFromA({
+      // Un payload à plusieurs clés, comme une annonce d'appareil : c'est là que le
+      // réordonnancement JSONB se voit.
+      payload: {
+        device_id: "device-a",
+        public_key: "cle",
+        employee_name: "Employé",
+        role: "employee",
+        pair_code: "ABCDEF",
+      },
+    });
+    // Le relais renvoie le payload réordonné : c'est exactement ce que fait JSONB.
+    const payload = op.payload as Record<string, unknown>;
+    const reordonne = Object.fromEntries(
+      Object.keys(payload)
+        .sort((a, b) => a.length - b.length || a.localeCompare(b))
+        .map((k) => [k, payload[k]]),
+    );
+    expect(Object.keys(reordonne)).not.toEqual(Object.keys(payload));
+
+    const { applied } = await applyRemoteOps([{ ...op, payload: reordonne }]);
+    expect(applied).toBe(1);
+  });
 });
