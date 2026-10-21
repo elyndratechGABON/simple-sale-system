@@ -6,6 +6,7 @@ import { getAccountQuota } from "@/lib/gatekeeper";
 import { PlanChooser } from "@/components/PlanChooser";
 import { PaymentModal } from "@/components/PaymentModal";
 import { useSubscription } from "@/hooks/use-subscription";
+import { etatAbonnement, libelleAbonnement } from "@/lib/subscription-state";
 import type { PlanInfo } from "@/lib/pricing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,26 +48,21 @@ export function SubscriptionCard() {
   const plan = quota?.planName ?? null;
   const places = quota ? `${quota.deviceCount}/${quota.maxDevices}` : null;
 
-  let badge = "Abonnement";
-  let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "default";
-  let detail = `Jusqu'au ${formatDateShort(profile.expiryDate)}`;
-
-  if (isInGrace) {
-    badge = `Grâce · ${graceHoursRemaining} h`;
-    badgeVariant = "destructive";
-    detail = `Abonnement échu le ${formatDateShort(profile.expiryDate)} — la caisse fonctionne encore, mais la synchronisation s'arrête à la fin de la grâce.`;
-  } else if (isExpired) {
-    badge = "Expiré";
-    badgeVariant = "destructive";
-    detail = `L'échéance du ${formatDateShort(profile.expiryDate)} est passée. La caisse est bloquée : renouvelez pour repartir.`;
-  } else if (essai) {
-    badge = `Essai · ${daysRemaining} j`;
-    badgeVariant = "secondary";
-    detail = `Votre période d'essai se termine le ${formatDateShort(profile.expiryDate)}. Un abonnement la prolongera.`;
-  } else if (daysRemaining <= 7) {
-    badge = `Expire dans ${daysRemaining} j`;
-    badgeVariant = "outline";
-  }
+  const etat = etatAbonnement({
+    joursRestants: daysRemaining,
+    enGrace: isInGrace,
+    heuresGrace: graceHoursRemaining,
+    essai,
+  });
+  const { badge, detail } = libelleAbonnement(etat, profile.expiryDate, formatDateShort);
+  const badgeVariant: "default" | "secondary" | "destructive" | "outline" =
+    etat.kind === "grace" || etat.kind === "expire"
+      ? "destructive"
+      : etat.kind === "essai"
+        ? "secondary"
+        : etat.kind === "bientot"
+          ? "outline"
+          : "default";
 
   return (
     <Card>
