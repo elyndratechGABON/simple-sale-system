@@ -21,6 +21,7 @@
 // Ce module est PUR hors réseau : aucune variable d'environnement, aucun fetch.
 import { getShopProfile, getSetting, setSetting, setShopExpiry } from "@/lib/db";
 import { unlockLocal } from "@/lib/gatekeeper";
+import { queuePaymentSms } from "@/lib/payments/proof";
 import { matchTier, parsePaymentSms, type ParsedPaymentSms } from "@/lib/sms-payment";
 
 export const SETTING_OFFLINE_RECEIPTS = "offline_payment_receipts";
@@ -88,6 +89,11 @@ export async function unlockFromPaymentSms(
     await setSetting(SETTING_OFFLINE_RECEIPTS, [receipt, ...all].slice(0, 20));
     await unlockLocal();
     await setShopExpiry(nextExpiry);
+    // Le serveur doit APPRENDRE le paiement : le SMS est transmis, signé avec la clé
+    // de l'appareil, pour que le Control Center puisse le valider (c'est un humain qui
+    // tranche, jamais le SMS). Sans réseau, la preuve repart toute seule au cycle
+    // suivant — d'où la file d'attente.
+    void queuePaymentSms(smsText, "");
     return { ok: true, receipt };
   }
 

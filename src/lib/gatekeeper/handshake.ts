@@ -1,6 +1,7 @@
 import { getShopProfile, setSetting, setShopExpiry, setShopKeyword } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
+import { devicePublicKey } from "@/lib/payments/proof";
 import { toast } from "sonner";
 import { applyAccountMetadata, handleHandshakeRefusal } from "./handshake-support";
 import { applyCommand, getAppliedIds, setAppliedIds } from "./commands";
@@ -28,6 +29,7 @@ export async function handshake(): Promise<HandshakeResult> {
   const applied = await getAppliedIds();
   const lastApplied = applied.length > 0 ? applied[applied.length - 1] : null;
   const deviceFingerprint = await getDeviceFingerprint();
+  const publicKey = await devicePublicKey();
 
   try {
     const res = await fetch(`${url}/api/v1/handshake`, {
@@ -43,6 +45,10 @@ export async function handshake(): Promise<HandshakeResult> {
         app_origin: APP_ORIGIN,
         last_applied_command_id: lastApplied,
         device_fingerprint: deviceFingerprint,
+        // La clé PUBLIQUE de l'appareil : c'est elle qui permet au serveur de
+        // VÉRIFIER ce que l'écran lui envoie — notamment une preuve de paiement
+        // signée (le SMS de Mobile Money transmis par l'application elle-même).
+        device_public_key: publicKey,
         // Identifiants du compte marchand (v3) : le serveur rattache cette caisse au
         // compte, ou le crée au premier contact avec un essai de 30 jours.
         ...(profile.accountPhone && profile.accountPassword

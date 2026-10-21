@@ -82,6 +82,59 @@ async function importKey(jwk: string, usages: KeyUsage[]): Promise<CryptoKey> {
   return crypto.subtle.importKey("jwk", parsed, SIGN_ALGO, false, usages);
 }
 
+/**
+ * Le corps exact couvert par la signature d'une PREUVE DE PAIEMENT (un SMS de
+ * paiement transmis à l'orchestrateur).
+ *
+ * Les clés sont TRIÉES : le corps signé doit être identique à l'émission et à la
+ * vérification, et le JSON ne garantit pas l'ordre d'un objet. Le serveur fait de
+ * même (`signableProofBody`), donc les deux côtés s'accordent quoi qu'il arrive.
+ */
+export function signableProofBody(proof: {
+  device_id: string;
+  from?: string;
+  received_at: number;
+  sms: string;
+}): string {
+  const corps: Record<string, unknown> = {
+    device_id: proof.device_id,
+    from: proof.from ?? "",
+    received_at: Number(proof.received_at) || 0,
+    sms: proof.sms,
+  };
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.keys(corps)
+        .sort()
+        .map((k) => [k, corps[k]]),
+    ),
+  );
+}
+
+/**
+ * Signe une preuve de paiement avec la clé de CET appareil.
+ *
+ * C'est ce qui remplace le secret partagé d'une passerelle tierce : le serveur sait
+ * que la preuve vient bien de l'écran concerné, et pas d'un tiers qui usurpe un
+ * numéro de téléphone.
+ */
+export async function signProof(proof: {
+  device_id: string;
+  from?: string;
+  received_at: number;
+  sms: string;
+}): Promise<string> {
+  const { privateKey } = getDeviceKeys();
+  if (!privateKey) throw new Error("Cet appareil n'a pas de clé de signature.");
+  const key = await importKey(privateKey, ["sign"]);
+  const sig = await crypto.subtle.sign(
+    SIGN_HASH,
+    key,
+    new TextEncoder().encode(signableProofBody(proof)),
+  );
+  return b64.enc(sig);
+}
+
 /** Signe `op` avec la clé privée de cet appareil. Renvoie l'op à pousser. */
 export async function signOp(op: SyncOp): Promise<SyncOp> {
   const { privateKey } = getDeviceKeys();

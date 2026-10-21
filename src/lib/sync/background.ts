@@ -1,6 +1,7 @@
 import { getShopProfile, markShopSynced } from "@/lib/db";
 import { handshake, syncData } from "@/lib/gatekeeper";
 import { flushPendingRelease } from "@/lib/gatekeeper/seat";
+import { sendPendingProofs } from "@/lib/payments/proof";
 import { blessPendingPeers } from "./bless";
 import { runOpsExchange, SYNC_REFRESH_MS } from "./ops";
 import { buildLightPayload } from "./payload";
@@ -23,6 +24,10 @@ export async function backgroundSync(): Promise<boolean> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return false;
   const profile = await getShopProfile();
   if (!profile) return false;
+
+  // Les preuves de paiement en attente partent d'abord : un marchand qui a payé
+  // hors ligne veut voir son paiement arriver à valider sans attendre le tour suivant.
+  await sendPendingProofs();
 
   // Une libération d'appareil restée en attente (suppression faite hors ligne) :
   // elle repart maintenant que le réseau est revenu.
