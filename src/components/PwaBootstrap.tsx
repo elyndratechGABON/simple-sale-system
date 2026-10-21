@@ -19,6 +19,8 @@ import {
 import { autoCloseDay } from "@/lib/db";
 import { backgroundSync } from "@/lib/sync";
 import { loadLockState } from "@/lib/gatekeeper";
+import { unlockFromPaymentSms } from "@/lib/offline-unlock";
+import { clearSharedSmsUrl, extractSharedSms } from "@/lib/payments/share-target";
 import { withRetry } from "@/lib/syncengine/retry";
 import { toast } from "sonner";
 
@@ -61,6 +63,26 @@ export function PwaBootstrap() {
   useEffect(() => {
     registerServiceWorker();
     requestPersistentStorage();
+    // Le commerçant a PARTAGÉ son reçu de paiement avec l'application (« Partager »
+    // dans l'appli SMS de l'opérateur). Le texte arrive par l'URL (cf. le manifeste) :
+    // on le traite exactement comme un SMS collé — il déverrouille la caisse et part
+    // signé vers l'orchestrateur.
+    const partage = extractSharedSms(window.location.search);
+    if (partage) {
+      clearSharedSmsUrl();
+      void unlockFromPaymentSms(partage).then((res) => {
+        if (res.ok) {
+          toast.success("Reçu de paiement reçu", {
+            description:
+              "Votre paiement est enregistré et transmis. L'abonnement sera validé sous peu.",
+          });
+        } else {
+          toast.error("Ce message n'est pas un reçu de paiement", {
+            description: "Partagez le SMS de confirmation reçu de votre opérateur (montant, TID).",
+          });
+        }
+      });
+    }
     // Clôture automatique : les ventes encaissées il y a plus de 24 h passent
     // `day_closed` à chaque démarrage. L'affichage s'appuie sur `isClosed()`, qui lit
     // l'heure, donc ce n'est pas ce qui verrouille ; c'est ce qui rend l'état durable.
