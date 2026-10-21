@@ -5,7 +5,15 @@
 // sans re-rendu superflu, et le verrou persiste dans IndexedDB : une caisse suspendue le
 // reste même hors ligne, jusqu'à une prolongation livrée par le serveur.
 import { useSyncExternalStore, useState } from "react";
-import { AlertTriangle, Clock, Fingerprint, LockKeyhole, MonitorX, ScanLine } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock,
+  Fingerprint,
+  LockKeyhole,
+  MonitorX,
+  ScanLine,
+  Store,
+} from "lucide-react";
 import {
   getLockSnapshot,
   resetDeviceConflict,
@@ -13,6 +21,7 @@ import {
   subscribeLock,
 } from "@/lib/gatekeeper";
 import { unlockFromPaymentSms } from "@/lib/offline-unlock";
+import { reattachAccount } from "@/lib/gatekeeper";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -30,6 +39,10 @@ export function SuspendedScreen() {
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [sms, setSms] = useState("");
   const [unlocking, setUnlocking] = useState(false);
+  // Réassociation du compte (blocage « appareil déjà enregistré »).
+  const [reattachOpen, setReattachOpen] = useState(false);
+  const [reattachPhone, setReattachPhone] = useState("");
+  const [reattachPassword, setReattachPassword] = useState("");
   if (!locked) return null;
 
   // Quatre blocages, quatre messages : le dépassement de quota n'est pas un impayé, le
@@ -55,6 +68,25 @@ export function SuspendedScreen() {
     setBusy(true);
     try {
       await resetDeviceConflict();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Réassociation : le téléphone + le mot de passe du compte rendent son poste. */
+  async function handleReattach() {
+    setBusy(true);
+    try {
+      const result = await reattachAccount(reattachPhone, reattachPassword);
+      if (result.ok) {
+        setReattachOpen(false);
+        setReattachPassword("");
+        toast.success("Compte rattaché", {
+          description: "Cet écran a repris sa place dans votre commerce.",
+        });
+      } else {
+        toast.error(result.error ?? "Rattachement impossible.");
+      }
     } finally {
       setBusy(false);
     }
@@ -129,11 +161,46 @@ export function SuspendedScreen() {
             <Button onClick={retryDeviceConflict} disabled={busy}>
               {busy ? "Vérification…" : "Réessayer"}
             </Button>
+            {/* Réassociation : la fiche locale a été purgée (suppression, réinstallation)
+                et les identifiants du compte ont disparu avec elle. Le téléphone + le
+                mot de passe du compte rendent à l'écran SON propre poste. */}
+            <Button variant="outline" onClick={() => setReattachOpen(true)} disabled={busy}>
+              <Store className="h-4 w-4" />
+              Réassocier mon compte
+            </Button>
             <Button asChild variant="outline">
               <a href={SUPPORT_WHATSAPP} target="_blank" rel="noreferrer">
                 Contacter le service client
               </a>
             </Button>
+            {reattachOpen && (
+              <div className="mt-3 space-y-2 rounded-lg border p-3 text-left">
+                <p className="text-xs text-muted-foreground">
+                  Le téléphone et le mot de passe du compte marchand (c ceux de la boutique). Le
+                  serveur laissera cet écran reprendre sa place.
+                </p>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="Téléphone du compte"
+                  value={reattachPhone}
+                  onChange={(e) => setReattachPhone(e.target.value)}
+                />
+                <input
+                  type="password"
+                  placeholder="Mot de passe du compte"
+                  value={reattachPassword}
+                  onChange={(e) => setReattachPassword(e.target.value)}
+                />
+                <Button
+                  className="w-full"
+                  disabled={busy || !reattachPhone.trim() || reattachPassword.length < 4}
+                  onClick={() => void handleReattach()}
+                >
+                  {busy ? "Rattachement…" : "Rattacher ce téléphone"}
+                </Button>
+              </div>
+            )}
           </div>
         ) : keywordInvalid ? (
           <div className="mt-6 flex flex-col gap-2">

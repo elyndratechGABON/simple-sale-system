@@ -1,4 +1,4 @@
-import { getSetting, getShopProfile } from "@/lib/db";
+import { getSetting, getShopProfile, setShopAccount } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { handshake } from "./handshake";
 import { APP_ORIGIN, SETTING_GRACE_ENDS_AT, SETTING_QUOTA, SETTING_REQUEST } from "./settings";
@@ -6,6 +6,46 @@ import type { AccountQuota, SubscriptionRequestStatus } from "./types";
 
 export async function getAccountQuota(): Promise<AccountQuota | null> {
   return (await getSetting<AccountQuota>(SETTING_QUOTA)) ?? null;
+}
+
+/**
+ * RÉASSOCIER ce téléphone à son compte marchand.
+ *
+ * Le cas : la fiche locale a été purgée (suppression de la boutique, réinstallation),
+ * donc les identifiants du compte ont disparu, et le serveur refuse l'écran parce que
+ * son empreinte appartient encore à son ANCIEN poste — « Cet appareil est déjà
+ * enregistré ». Sans ce chemin, le commerçant est coincé : il ne peut ni travailler
+ * (la caisse est bloquée) ni se rattacher.
+ *
+ * Le téléphone + le mot de passe du compte prouvent le DROIT sur ce commerce : le
+ * serveur laisse alors l'écran réattribuer sa propre fiche (le même commerce, la
+ * même empreinte, le même téléphone).
+ */
+export async function reattachAccount(
+  phone: string,
+  password: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const profil = await getShopProfile();
+  const tel = phone.trim();
+  const mdp = password.trim();
+  if (!tel || mdp.length < 4) {
+    return { ok: false, error: "Indiquez le téléphone et le mot de passe du compte." };
+  }
+  await setShopAccount({
+    name: profil?.storeName ?? "",
+    phone: tel,
+    password: mdp,
+    ownerName: profil?.ownerName ?? "",
+  });
+  // Le handshake immédiat : le verrou se lève dès que le serveur a reconnu le compte.
+  const result = await handshake();
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: "Le serveur n'a pas reconnu ce compte. Vérifiez le téléphone et le mot de passe.",
+    };
+  }
+  return { ok: true };
 }
 
 /**

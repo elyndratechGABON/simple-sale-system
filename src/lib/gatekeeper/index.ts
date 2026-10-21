@@ -28,6 +28,7 @@ export {
   getAccountQuota,
   getGraceEndsAt,
   getSubscriptionRequest,
+  reattachAccount,
   refreshAccountQuota,
   syncData,
 } from "./account";
