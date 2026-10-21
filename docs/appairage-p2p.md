@@ -48,7 +48,24 @@ fait « tout arrive en une minute » : personne ne clique rien.
 | 8 | Le patron publie le catalogue vers le nouvel écran | **même cycle** que 7 | ≤ 60 s | relais | `catalogue.snapshot` | **C** (idem) |
 | 9 | L'employé tire le catalogue, l'applique | cycle 60 s | ≤ 60 s | relais | `catalogue.snapshot` | **C** (idem) — le stock n'arrivait pas |
 | 10 | L'employé encaisse ; le stock se met à jour chez le patron | cycle 60 s | ≤ 60 s | relais | `sale`, `stock.adjusted` | **C** (idem) |
-| 11 | L'employé démissionne | bouton « Démission » | 0 | relais + orchestrateur | `device.leave` | **E** — la démission ne parlait qu'au relais : l'orchestrateur, qui tient le quota, n'apprenait rien → **la place restait occupée à vie**. |
+| 11 | L'employé démissionne ou supprime sa boutique | bouton | 0 | relais + orchestrateur | `device.leave` | **E** — la démission ne parlait qu'au relais : l'orchestrateur, qui tient le quota, n'apprenait rien → **la place restait occupée à vie**. |
+
+## La sixième rupture : le téléphone sur un bundle périmé
+
+Le 21/10, tous les correctifs étaient déployés et vérifiés, et rien ne fonctionnait
+quand même. La cause : **le téléphone tournait sur l'ancien bundle**.
+
+Au rechargement, c'est l'**ancien** service worker qui sert la page (cache-first) ; le
+nouveau s'installe *pendant* ce rechargement. Il faut donc un **deuxième** rechargement
+pour que la nouvelle version prenne la main — et rien ne le dit à l'écran : l'app
+paraît vivante, elle ne dialogue simplement avec personne.
+
+La trace dans le relais : **deux jetons frappés à 244 ms** (l'ancien code en frappait
+deux) et un code **périmé de neuf heures** dans l'annonce.
+
+D'où la règle : **un déploiement n'atteint les téléphones qu'au deuxième
+rechargement**, et il faut le dire à l'utilisateur — d'où le bandeau « Nouvelle version
+disponible → Recharger » (`registerServiceWorker`, `controllerchange`).
 
 ## Les cinq ruptures, en une phrase chacune
 
