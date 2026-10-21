@@ -1,7 +1,7 @@
 import type { PosDatabase } from "../../db";
 import { verifyOpSignature } from "../identity";
+import { knownPairCode } from "../pairing/code";
 import type { DeviceAnnouncePayload, PairedDevice, SyncOp } from "../types";
-import { PAIRING_KEYS } from "../types";
 
 /**
  * Clés publiques autorisées à signer, résolues AVANT toute vérification.
@@ -53,13 +53,10 @@ async function isAnnounceProven(
   existing: PairedDevice | undefined,
 ): Promise<boolean> {
   if (existing?.status === "paired") return true; // déjà au registre : rien à prouver
-  const [codeRow, expRow] = await Promise.all([
-    db.settings.get(PAIRING_KEYS.code),
-    db.settings.get(PAIRING_KEYS.codeExpiresAt),
-  ]);
-  if (pl.pair_code && codeRow?.value === pl.pair_code && Number(expRow?.value ?? 0) > Date.now()) {
-    return true; // le secret que le propriétaire affiche, jamais envoyé
-  }
+  // Le code de paire : preuve que le principal a ouvert son QR pour CET écran. La
+  // fenêtre de preuve (12 h) survit au sommeil du téléphone du patron — sans elle,
+  // un employé scanné le matin était ignoré le soir.
+  if (await knownPairCode(pl.pair_code)) return true;
   // Groupe vide : premier écran du commerce. Rien à protéger — c'est la confiance
   // initiale, celle qui existait avant les signatures.
   return (await db.paired_devices.where("shop_id").equals(op.shop_id).count()) === 0;

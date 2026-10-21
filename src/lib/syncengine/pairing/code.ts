@@ -1,6 +1,7 @@
 import { getDB } from "../../db";
 import { ensureIdentity, isSharedGroup } from "../identity";
-import { PAIRING_KEYS } from "../types";
+import { PAIRING_KEYS, PAIR_CODE_PROOF_WINDOW_MS, RECENT_CODES_LIMIT } from "../types";
+import { emitOp } from "../ops";
 import { announceDevice } from "./announce";
 
 /** 6 caractères sans ambiguité visuelle (pas de 0/O, 1/I, ni de lettres à géométrie proche). */
@@ -21,11 +22,53 @@ export async function generatePairingCode(): Promise<string> {
   await ensureIdentity();
   const code = randomCode();
   const expiresAt = Date.now() + PAIR_CODE_TTL_MS;
-  await getDB().settings.bulkPut([
+  const db = getDB();
+  await db.settings.bulkPut([
     { key: PAIRING_KEYS.code, value: code },
     { key: PAIRING_KEYS.codeExpiresAt, value: expiresAt },
   ]);
+  // Le code frappé est ajouté aux « codes récents » : c'est lui qui restera une preuve
+  // d'invitation, même après l'expiration de l'affichage (cf. `knownPairCode`).
+  await rememberRecentCode(code);
   return code;
+}
+
+/** Les codes frappés récemment, du plus ancien au plus récent. */
+async function recentCodes(): Promise<{ code: string; at: number }[]> {
+  const raw = (await getDB().settings.get(PAIRING_KEYS.recentCodes))?.value;
+  return Array.isArray(raw) ? (raw as { code: string; at: number }[]) : [];
+}
+
+async function rememberRecentCode(code: string): Promise<void> {
+  const db = getDB();
+  const codes = await recentCodes();
+  const kept = [...codes.filter((c) => c.code !== code), { code, at: Date.now() }].slice(
+    -RECENT_CODES_LIMIT,
+  );
+  await db.settings.put({ key: PAIRING_KEYS.recentCodes, value: kept });
+}
+
+/**
+ * Ce code est-il une preuve d'invitation encore valable ?
+ *
+ * - le code ACTIF, tant qu'il n'a pas expiré (10 min) ;
+ * - un code frappé récemment, dans la fenêtre de preuve (12 h) — le patron qui ouvre
+ *   son application le lendemain matin reconnaît ainsi l'employé qui a scanné hier.
+ *
+ * L'affichage expire vite (le QR affiché au-dessus du code n'a pas à durer) ; la
+ * preuve, elle, doit survivre au sommeil du téléphone.
+ */
+export async function knownPairCode(code: string | undefined | null): Promise<boolean> {
+  if (!code) return false;
+  const db = getDB();
+  const [codeRow, expRow] = await Promise.all([
+    db.settings.get(PAIRING_KEYS.code),
+    db.settings.get(PAIRING_KEYS.codeExpiresAt),
+  ]);
+  if (codeRow?.value === code && Number(expRow?.value ?? 0) > Date.now()) return true;
+  const now = Date.now();
+  const codes = await recentCodes();
+  return codes.some((c) => c.code === code && now - c.at <= PAIR_CODE_PROOF_WINDOW_MS);
 }
 
 /**

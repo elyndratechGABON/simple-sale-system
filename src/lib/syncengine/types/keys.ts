@@ -19,7 +19,27 @@ export const PAIRING_KEYS = {
    * changement SUFFIT à autoriser une nouvelle présentation.
    */
   announcedFormat: "syncengine_announced_format",
+  /**
+   * Les derniers codes frappés par cet écran, avec leur heure.
+   *
+   * Pourquoi : le code affiché au-dessus du QR expire en 10 minutes (c'est l'affichage
+   * qui doit expirer), mais la PREUVE que l'employé a été invité doit survivre au
+   * sommeil du téléphone du patron. Un patron qui ouvre l'application six heures
+   * plus tard voyait son employé ignoré — l'annonce, faute de code encore valide,
+   * n'était ni appliquée ni même visible.
+   */
+  recentCodes: "syncengine_recent_pair_codes",
 } as const;
+
+/**
+ * Fenêtre pendant laquelle un code déjà frappé reste une PREUVE d'invitation.
+ * Assez large pour couvrir une nuit (le patron ouvre l'application le lendemain),
+ * assez court pour qu'un code photographié ne reste jamais une clé permanente.
+ */
+export const PAIR_CODE_PROOF_WINDOW_MS = 12 * 60 * 60 * 1000;
+
+/** Combien de codes frappés on garde en mémoire. */
+export const RECENT_CODES_LIMIT = 5;
 
 /** Version du format de signature des annonces. À changer quand `signableBody` change. */
 export const ANNOUNCE_FORMAT = 2;

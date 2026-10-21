@@ -11,6 +11,8 @@ export {
   IDENTITY_ADOPTED_SHOP_ID,
   PAIRING_KEYS,
   ANNOUNCE_FORMAT,
+  PAIR_CODE_PROOF_WINDOW_MS,
+  RECENT_CODES_LIMIT,
   SEQUENCE_KEY,
 } from "./keys";
 export type { DeviceKeys, DeviceRole, SyncIdentity } from "./identity";

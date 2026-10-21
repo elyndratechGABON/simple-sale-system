@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { getDB, setShopAccount } from "../db";
 import { ensureIdentity, getIdentity } from "./identity";
 import { listPendingOps } from "./outbox";
-import { announceDevice, generatePairingCode, sessionCode } from "./pairing";
+import { announceDevice, generatePairingCode, knownPairCode, sessionCode } from "./pairing";
 import { PAIRING_KEYS } from "./types";
 import { ACCOUNT, freshDevice } from "./sync-engine-helpers";
 
@@ -62,6 +62,27 @@ describe("code de session", () => {
     );
     expect(src).not.toMatch(/generatePairingCode\(/);
     expect(src).toMatch(/pair_code: code/);
+  });
+
+  it("un code frappé reste une preuve bien après l'expiration de l'affichage", async () => {
+    // Le cas vécu : l'employé scanne le QR à 11h33, le patron ouvre son téléphone à
+    // 12h30 — le code affiché a expiré depuis 45 minutes. L'annonce devait être
+    // reconnue quand même, sinon l'employé n'apparaîtrait jamais et ne recevrait pas
+    // le stock.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const code = await generatePairingCode();
+
+    // L'affichage du code expire (10 min).
+    await getDB().settings.put({
+      key: PAIRING_KEYS.codeExpiresAt,
+      value: Date.now() - 1000,
+    });
+    expect(await knownPairCode(code)).toBe(true); // … mais la preuve tient
+
+    // Un code qui n'a jamais été frappé n'est pas une preuve.
+    expect(await knownPairCode("ZZZZZZ")).toBe(false);
   });
 
   it("un changement de format de signature fait se présenter à nouveau", async () => {

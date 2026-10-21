@@ -6,7 +6,7 @@ import type {
   PairedDevice,
   SyncOp,
 } from "../types";
-import { PAIRING_KEYS } from "../types";
+import { knownPairCode } from "../pairing/code";
 
 export async function applyDeviceAnnounce(db: PosDatabase, op: SyncOp): Promise<void> {
   // Une caisse se présente. Elle est `paired` si son code correspond à celui affiché
@@ -18,13 +18,10 @@ export async function applyDeviceAnnounce(db: PosDatabase, op: SyncOp): Promise<
   const existing =
     (await db.paired_devices.get(pl.device_id)) ??
     ({ id: pl.device_id, shop_id: op.shop_id, updated_at: now } satisfies PairedDevice);
-  const [activeCode, expiresAt] = await Promise.all([
-    db.settings.get(PAIRING_KEYS.code),
-    db.settings.get(PAIRING_KEYS.codeExpiresAt),
-  ]);
-  const codeOk = Boolean(
-    pl.pair_code && activeCode?.value === pl.pair_code && Number(expiresAt?.value ?? 0) > now,
-  );
+  // Le code est la preuve que le principal a invité CET écran. La fenêtre de preuve
+  // (12 h) survit au sommeil du téléphone du patron : le code affiché expire en
+  // 10 minutes, la preuve, non.
+  const codeOk = await knownPairCode(pl.pair_code);
   const wasPaired = existing.status === "paired";
   const firstSighting = !existing.role && !existing.status;
 

@@ -16,6 +16,7 @@ export { ROLE_LABELS, getIdentityRole, isOwnerIdentity } from "./roles";
 export {
   generatePairingCode,
   sessionCode,
+  knownPairCode,
   getPairingToken,
   pairCodeExpiry,
   clearPairingCode,

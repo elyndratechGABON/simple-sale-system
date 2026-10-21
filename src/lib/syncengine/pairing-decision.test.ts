@@ -62,7 +62,11 @@ describe("décision d'application du code (côté principal)", () => {
     expect((await listPendingOps(shopId)).some((o) => o.type === "device.approve")).toBe(true);
   });
 
-  it("un code expiré est refusé comme un mauvais code", async () => {
+  it("un code dont l'affichage a expiré reste une preuve (fenêtre de 12 h)", async () => {
+    // Le cas vécu : l'employé scanne le QR, le patron ouvre son téléphone des
+    // heures plus tard. Le code affiché a expiré depuis — mais la preuve que
+    // l'employé a été invité tient, sinon il n'apparaîtrait jamais chez le patron et
+    // ne recevrait pas le stock.
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
@@ -72,6 +76,27 @@ describe("décision d'application du code (côté principal)", () => {
 
     await applyRemoteOpsSigned([await announceOp(shopId, "device-tardif", 1, { pair_code: code })]);
     const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-tardif");
+    expect(peer?.status).toBe("paired");
+  });
+
+  it("un code vieux de plus de 12 h n'est plus une preuve", async () => {
+    // La borne de la fenêtre : au-delà, l'invitation est périmée et l'écran attend
+    // l'approbation du patron (comme une annonce sans code).
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const code = await generatePairingCode();
+    await getDB().settings.put({ key: PAIRING_KEYS.codeExpiresAt, value: Date.now() - 1000 });
+    await getDB().settings.put({
+      key: PAIRING_KEYS.recentCodes,
+      value: [{ code, at: Date.now() - 13 * 60 * 60 * 1000 }],
+    });
+    const shopId = getIdentity().shopId;
+
+    await applyRemoteOpsSigned([
+      await announceOp(shopId, "device-trop-vieux", 1, { pair_code: code }),
+    ]);
+    const peer = (await listPairedDevices(shopId)).find((p) => p.id === "device-trop-vieux");
     expect(peer?.status).toBe("pending");
   });
 
