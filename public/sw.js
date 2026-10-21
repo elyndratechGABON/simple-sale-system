@@ -53,9 +53,21 @@ self.addEventListener("install", (event) => {
         precacheInto(pages, PRECACHE_PAGES),
         precacheInto(assets, PRECACHE_ASSETS),
       ]);
+      // `skipWaiting()` : la nouvelle version prend la main TOUT DE SUITE. Le
+      // rechargement de la page (que l'application propose quand elle voit le
+      // changement de contrôle) sert alors le NOUVEAU JavaScript. Sans lui, le
+      // nouveau service worker resterait en attente et la page tournerait encore
+      // sur l'ancien bundle.
       self.skipWaiting();
     })(),
   );
+});
+
+// L'application demande explicitement l'activation de la version en attente
+// (« Nouvelle version disponible → Recharger »). C'est le seul moment où changer
+// de version est sans risque : la page va de toute façon être rechargée.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 // `allSettled` et non `all` : une seule URL en échec (route retirée, réseau qui coupe en

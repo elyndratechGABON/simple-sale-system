@@ -10,11 +10,17 @@
 // paramètres, via le hook `usePwaInstall`.
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { registerServiceWorker, requestPersistentStorage } from "@/lib/pwa";
+import {
+  registerServiceWorker,
+  requestPersistentStorage,
+  UPDATE_EVENT,
+  type UpdateAvailableDetail,
+} from "@/lib/pwa";
 import { autoCloseDay } from "@/lib/db";
 import { backgroundSync } from "@/lib/sync";
 import { loadLockState } from "@/lib/gatekeeper";
 import { withRetry } from "@/lib/syncengine/retry";
+import { toast } from "sonner";
 
 // Relance de la synchronisation d'arrière-plan : toutes les minutes tant que l'app est
 // ouverte. C'est elle qui fait arriver les données quand le PC du commerçant s'allume
@@ -35,6 +41,23 @@ const SYNCED_QUERY_KEYS: string[][] = [
 
 export function PwaBootstrap() {
   const queryClient = useQueryClient();
+  // Mise à jour disponible : l'application tourne sur un bundle périmé. Le service
+  // worker nouveau EST installé mais attend — on propose le rechargement, qui est le
+  // seul moyen d'obtenir le nouveau code (le JavaScript déjà chargé reste l'ancien).
+  // Sans ce signal, un téléphone peut rester des heures sur une version périmée sans
+  // que rien ne le montre.
+  useEffect(() => {
+    const onUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<UpdateAvailableDetail>).detail;
+      toast("Nouvelle version disponible", {
+        description: "Rechargez l'application pour être à jour.",
+        action: { label: "Recharger", onClick: () => detail.apply() },
+        duration: Infinity,
+      });
+    };
+    window.addEventListener(UPDATE_EVENT, onUpdate);
+    return () => window.removeEventListener(UPDATE_EVENT, onUpdate);
+  }, []);
   useEffect(() => {
     registerServiceWorker();
     requestPersistentStorage();

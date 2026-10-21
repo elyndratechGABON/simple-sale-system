@@ -43,19 +43,91 @@ export function isInsecureContext(): boolean {
   return window.isSecureContext === false;
 }
 
+/** Événement émis quand une version de l'application est prête à être appliquée. */
+export const UPDATE_EVENT = "app-update-available";
+
+export interface UpdateAvailableDetail {
+  /** Applique la mise à jour : le service worker en attente prend la main, la page se recharge. */
+  apply: () => void;
+}
+
 export function registerServiceWorker(): void {
   if (typeof window === "undefined") return;
   if (import.meta.env.DEV) return;
   if (!("serviceWorker" in navigator)) return;
   const register = () =>
-    navigator.serviceWorker.register("/sw.js").catch((error) => {
-      console.error("Service worker registration failed", error);
-    });
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        // Un nouveau service worker a PRIS LA MAIN : les assets qu'il sert ont changé,
+        // mais la page qui tourne charge encore l'ancien JavaScript — il faut la
+        // recharger. Sans ce signal, un téléphone peut rester des heures sur une
+        // version périmée, et RIEN ne le montre : l'app paraît vivante, elle ne
+        // dialogue simplement avec personne (le canal P2P, lui, se tait).
+        //
+        // Le premier enregistrement ne compte PAS : il n'y avait pas de contrôleur
+        // avant, donc rien n'a changé pour la page.
+        let avaitControleur = Boolean(navigator.serviceWorker.controller);
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (!avaitControleur) {
+            avaitControleur = true;
+            return;
+          }
+          notifyUpdate(registration);
+        });
+        // Un service worker en attente (installé, pas encore actif) est la même
+        // situation : la version suivante est prête.
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          notifyUpdate(registration);
+        }
+        registration.addEventListener("updatefound", () => {
+          const installing = registration.installing;
+          if (!installing) return;
+          installing.addEventListener("statechange", () => {
+            if (installing.state === "installed" && navigator.serviceWorker.controller) {
+              notifyUpdate(registration);
+            }
+          });
+        });
+      })
+      .catch((error) => {
+        console.error("Service worker registration failed", error);
+      });
   // Sur la coquille SPA statique, `load` peut se déclencher avant que ce module
   // (monté via useEffect) s'exécute. Attendre un événement déjà passé ne déclencherait
   // jamais register, et l'application resterait sans service worker — donc sans précache.
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register);
+}
+
+/** Prévient l'interface qu'une version est prête. */
+function notifyUpdate(registration: ServiceWorkerRegistration): void {
+  window.dispatchEvent(
+    new CustomEvent<UpdateAvailableDetail>(UPDATE_EVENT, {
+      detail: { apply: () => void applyUpdate(registration) },
+    }),
+  );
+}
+
+/**
+ * Applique la version en attente : le service worker prend la main, puis la page se
+ * recharge — le rechargement est le seul moyen d'obtenir le NOUVEAU JavaScript (le
+ * code déjà chargé reste l'ancien, quoi qu'il arrive).
+ */
+export async function applyUpdate(registration: ServiceWorkerRegistration): Promise<void> {
+  const waiting = registration.waiting;
+  if (!waiting) {
+    window.location.reload();
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true });
+    waiting.postMessage({ type: "SKIP_WAITING" });
+    // Filet : si le navigateur ne signale pas le changement de contrôle, on recharge
+    // quand même — le service worker actif serves alors les nouveaux assets.
+    setTimeout(resolve, 2000);
+  });
+  window.location.reload();
 }
 
 export async function requestPersistentStorage(): Promise<boolean> {
