@@ -25,6 +25,22 @@ import {
 } from "./types";
 import { publishFreshCatalog } from "./catalog";
 
+/**
+ * Pousse l'outbox vers le relais, tout de suite, sans attendre la fin de la rotation.
+ *
+ * Indispensable quand une op doit partir MAINTENANT (le stock d'un écran qui vient
+ * de rejoindre) : la publication automatique, elle, ne se fait que si le catalogue a
+ * changé — et l'op resterait dans l'outbox, invisible.
+ */
+async function pousserOutbox(client: TransportClient, shopId: string): Promise<void> {
+  const pending = await listPendingOps(shopId);
+  if (pending.length === 0) return;
+  const signed = await signAll(pending);
+  if (await client.push(shopId, signed)) {
+    await markOpsSynced(pending.map((o) => o.id));
+  }
+}
+
 /** Cycle complet d'un appareil : pousse son outbox, tire ce que les autres ont laissé,
  *  rejoue les ops étrangères. Jamais bloquant : tout est déjà protégé en amont. */
 export async function exchangeOps(client: TransportClient): Promise<SyncState> {
@@ -142,6 +158,22 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       if (newcomerAnnounced) {
         // L'op d'annonce est dans `foreign` : le nouveau pair est donc déjà enregistré.
         for (const peer of peers) if (!cibles.includes(peer.id)) cibles.push(peer.id);
+        // LE NOUVEAU PAIR A DROIT À SON STOCK, tout de suite. C'est un envoi
+        // délibéré, pas un effet de bord de la republication : `publishFreshCatalog`
+        // ne republie que si le catalogue du propriétaire a CHANGÉ — un écran qui
+        // rejoint un commerce déjà en service (le catalogue a donc déjà été publié à
+        // l'écran précédent) n'aurait jamais rien reçu. C'était le cas du premier
+        // employé arrivant sur un catalogue déjà partagé : aucun instantané pour lui.
+        for (const op of foreign) {
+          if (op.type !== "device.announce") continue;
+          if (knownBefore.has(op.entity_id)) continue;
+          const peer = peers.find((p) => p.id === op.entity_id);
+          if (peer) await emitShareOps(peer);
+        }
+        // … et l'instantané part TOUT DE SUITE. L'attendre la republication
+        // automatique, c'est ne jamais le publier : celle-ci ne se fait que si le
+        // catalogue a changé (c'est son but), et le catalogue n'a pas bougé.
+        await pousserOutbox(client, identity.shopId);
       }
       // Appareils fraîchement approuvés : envoi IMMÉDIAT du snapshot (hors throttle).
       for (const deviceId of freshApproves) {
