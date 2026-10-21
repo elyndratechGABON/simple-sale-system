@@ -57,5 +57,23 @@ export function relayTransport(
         return [];
       }
     },
+    // La preuve de vie des écrans du groupe : quand chacun a-t-il tiré ses ops.
+    // Un relais qui ne sait pas le dire renvoie une liste vide — l'interface
+    // affiche alors l'ancienne information, sans planter.
+    async peers(shopId: string): Promise<{ device_id: string; last_pulled_at: number }[]> {
+      try {
+        const res = await timedFetch(
+          `${baseUrl}/api/v1/ops/peers?shop_id=${encodeURIComponent(shopId)}`,
+          { headers: authHeaders },
+        );
+        if (!res.ok) return [];
+        const data = (await res.json().catch(() => null)) as {
+          peers?: { device_id: string; last_pulled_at: number }[];
+        } | null;
+        return Array.isArray(data?.peers) ? data.peers : [];
+      } catch {
+        return [];
+      }
+    },
   };
 }

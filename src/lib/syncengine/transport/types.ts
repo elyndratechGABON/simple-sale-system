@@ -22,6 +22,11 @@ export interface TransportClient {
   /** Tire toutes les ops du groupe — y compris les siennes. `deviceId` identifie
    *  l'appareil qui tire : le relais suit la fraîcheur par appareil (purge sûre). */
   pull(shopId: string, deviceId: string): Promise<SyncOp[]>;
+  /**
+   * QUAND chaque écran du groupe a tiré ses opérations — la preuve de vie d'un
+   * écran. Optionnel : un relais qui ne sait pas le dire ne casse rien.
+   */
+  peers?(shopId: string): Promise<{ device_id: string; last_pulled_at: number }[]>;
 }
 
 /** Bilan d'un cycle d'échange, pour l'UI (indicateur de sync) et les tests. */

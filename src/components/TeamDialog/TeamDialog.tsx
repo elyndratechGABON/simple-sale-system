@@ -58,6 +58,7 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
     sortedPeers,
     paired,
     pending,
+    lastContact,
   } = useActivityData(open);
 
   // Demandes de catalogue en attente de confirmation (propriétaire)
@@ -69,6 +70,9 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
 
   // « Un écran n'est JAMAIS son propre pair » : l'écran courant est absent du registre
   // des pairs ; sa ligne (« Cette caisse » — vos ventes directes) est reconstruite ici.
+  // Son « dernier contact » vient du RELAIS (il a tiré le groupe) : le registre ne
+  // sait rien de lui, puisqu'il ne s'envoie rien à lui-même — la ligne afficherait
+  // « Jamais » en permanence, ce qui fait croire à une panne.
   const selfDevice = useMemo<PairedDevice | null>(() => {
     if (!identity) return null;
     return {
@@ -77,9 +81,10 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
       device_name: "Cette caisse",
       role: "owner",
       status: "paired",
+      last_seen: lastContact.get(identity.deviceId),
       updated_at: Date.now(),
     };
-  }, [identity]);
+  }, [identity, lastContact]);
 
   // CA et ventes par écran sur la période : attribution par `isOwnSale`
   // (`seller_device_id`, ou nom du vendeur pour les ventes antérieures au suivi).
@@ -104,7 +109,13 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
   }, [sales, paired, selfDevice]);
 
   // La caisse courante en tête, puis les pairs (propriétaires d'abord, employés ensuite).
-  const sorted = selfDevice ? [selfDevice, ...sortedPeers] : sortedPeers;
+  // Le dernier contact de chaque pair : le relais d'abord (il a tiré le groupe —
+  // la preuve qu'il est là), le registre ensuite (il nous a envoyé quelque chose).
+  const pairsAvecContact = sortedPeers.map((p) => {
+    const contact = Math.max(p.last_seen ?? 0, lastContact.get(p.id) ?? 0);
+    return contact ? { ...p, last_seen: contact } : p;
+  });
+  const sorted = selfDevice ? [selfDevice, ...pairsAvecContact] : pairsAvecContact;
   const selected =
     (selfDevice && selfDevice.id === selectedId ? selfDevice : null) ??
     paired.find((d) => d.id === selectedId) ??

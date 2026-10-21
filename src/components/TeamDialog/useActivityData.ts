@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getSaleItemsForSales, listSales, listStockMovements } from "@/lib/db";
 import { ensureIdentity } from "@/lib/syncengine/identity";
 import { listPairedDevices } from "@/lib/syncengine/peers";
+import { relayTransport } from "@/lib/syncengine/transport";
+import { getOpsRelayUrl, getOpsToken } from "@/lib/sync";
 import { monthStart } from "./helpers";
 
 export type Range = "month" | "week" | "day";
@@ -26,6 +28,22 @@ export function useActivityData(open: boolean) {
     queryFn: () => listPairedDevices(identity?.shopId ?? ""),
     enabled: open && Boolean(identity),
     staleTime: 10_000,
+  });
+
+  // La preuve de VIE des écrans : quand chacun a-t-il tiré le groupe. Le registre
+  // local dit « quand cet écran nous a-t-il envoyé quelque chose » — ce qui reste
+  // « Jamais » pour un employé qui vend peu, et « Jamais » en permanence pour
+  // l'écran du patron (il n'envoie rien à lui-même). Le relais, lui, sait quand
+  // chaque appareil a tiré : c'est la mesure honnête de « cet écran est-il là ».
+  const { data: lastPulled } = useQuery({
+    queryKey: ["peers_last_pull", identity?.shopId],
+    queryFn: async () => {
+      const client = relayTransport(getOpsRelayUrl(), fetch, getOpsToken());
+      return (await client.peers?.(identity?.shopId ?? "")) ?? [];
+    },
+    enabled: open && Boolean(identity?.shopId),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 
   const from =
@@ -70,6 +88,20 @@ export function useActivityData(open: boolean) {
     (a, b) => (roleOrder[a.role ?? "employee"] ?? 9) - (roleOrder[b.role ?? "employee"] ?? 9),
   );
 
+  // Le dernier contact connu de chaque écran : le relais d'abord (il a tiré le
+  // groupe), le registre ensuite (il nous a envoyé quelque chose). Le plus récent
+  // des deux — c'est la preuve que l'écran circule.
+  const lastContact = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of lastPulled ?? []) {
+      if (p.last_pulled_at) map.set(p.device_id, p.last_pulled_at);
+    }
+    for (const p of [...paired, ...pending]) {
+      if (p.last_seen && p.last_seen > (map.get(p.id) ?? 0)) map.set(p.id, p.last_seen);
+    }
+    return map;
+  }, [lastPulled, paired, pending]);
+
   return {
     identity,
     range,
@@ -82,5 +114,6 @@ export function useActivityData(open: boolean) {
     sortedPeers,
     paired,
     pending,
+    lastContact,
   };
 }
