@@ -28,6 +28,24 @@ export async function generatePairingCode(): Promise<string> {
   return code;
 }
 
+/**
+ * Le code de la SESSION en cours : UNE seule génération par ouverture de dialogue.
+ *
+ * Pourquoi : le dialogue QR peut déclencher son effet deux fois (double rendu React,
+ * remontée d'état), et chaque passage sur `generatePairingCode` crée un code
+ * DIFFÉRENT. Le patron se retrouvait alors avec un code affiché, un code stocké
+ * localement et un code « frappé » au relais qui divergeaient — donc avec un code
+ * qu'il ne reconnaissait jamais dans l'annonce de son employé. L'écran restait « à
+ * approuver » et n'apparaissait jamais dans « Caisses synchronisées ».
+ *
+ * Le code de session est celui du store local : le QR, le jeton frappé au relais et
+ * la preuve présentée par l'employé portent le MÊME.
+ */
+export async function sessionCode(current: string | null): Promise<string> {
+  if (current) return current;
+  return generatePairingCode();
+}
+
 /** Le code encore valide, ou `null` s'il n'y en a pas / est expiré. */
 export async function getPairingToken(): Promise<string | null> {
   const db = getDB();

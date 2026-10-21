@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import { getPreferences } from "@/lib/settings";
-import { announceDevice, generatePairingCode, pairCodeExpiry } from "@/lib/syncengine/pairing";
+import { announceDevice, pairCodeExpiry, sessionCode } from "@/lib/syncengine/pairing";
 import type { ShopProfile } from "@/lib/db";
 import type { SyncIdentity } from "@/lib/syncengine/types";
 
@@ -27,28 +27,41 @@ export function useQrPayload({
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState(false);
   const [qrErrorDetail, setQrErrorDetail] = useState<string | null>(null);
+  // Le code de la session en cours : UN SEUL par ouverture de dialogue (cf.
+  // `sessionCode`). L'effet peut se rejouer ; chaque génération produirait un code
+  // différent, et le patron ne reconnaîtrait jamais celui que l'employé annonce.
+  const codeRef = useRef<string | null>(null);
 
   // Génération paresseuse : seulement quand le dialogue s'ouvre avec un compte connu.
   // exhaustive-deps ignoré volontairement : ajouter profile/identity à la liste de
-  // dépendances ferait régénérer le QR à chaque refetch (comportement pré-existant).
+  // dépendances ferait régénérer le QR à chaque refetch (comportement préexistant).
   useEffect(() => {
-    if (!open || !hasNamePhone) return;
+    // Fermeture : la session de code est finie. La réouverture repartira d'un code
+    // neuf — et d'un seul (cf. `sessionCode`).
+    if (!open) {
+      codeRef.current = null;
+      return;
+    }
+    if (!hasNamePhone) return;
     let cancelled = false;
     setQrError(false);
     setQrErrorDetail(null);
     void (async () => {
       try {
-        // Le QR transporte désormais un code de confirmation TEMPORAIRE (code de paire
-        // P2P) : le scanner s'annonce avec lui et le principal le reconnaît d'office.
-        // On garantit un code frais actif avant de fabriquer le QR.
-        if (pairCode === null) {
-          const code = await generatePairingCode();
-          if (!cancelled) {
-            setPairCode(code);
-            setCodeExpiry(await pairCodeExpiry());
-          }
-          await announceDevice().catch(() => {});
+        // Le QR porte un code de confirmation TEMPORAIRE (code de paire P2P) : le
+        // scanner s'annonce avec lui et le principal le reconnaît d'office.
+        //
+        // UN SEUL code par ouverture : le dialogue peut rejouer son effet, et chaque
+        // génération crée un code différent. Le code de session est celui qu'on AFFICHE,
+        // qu'on frappe au relais et qu'on compare à l'annonce de l'employé — les trois
+        // doivent être le même, sinon le patron ne reconnaît jamais personne.
+        const code = await sessionCode(codeRef.current);
+        codeRef.current = code;
+        if (!cancelled) {
+          setPairCode(code);
+          setCodeExpiry(await pairCodeExpiry());
         }
+        await announceDevice().catch(() => {});
         if (cancelled) return;
         // Jeton de partage : frappe au relais (pas de mot de passe dans le QR).
         // Si le relais est inaccessible, aucun QR n'est émis : le mot de passe ne
@@ -76,7 +89,9 @@ export function useQrPayload({
                 // au téléphone/nom de la fiche Boutique — sinon le relais répond 400.
                 account_name: profile?.accountName || profile?.storeName || "",
                 account_phone: profile?.accountPhone || profile?.phone || "",
-                pair_code: pairCode ?? generatePairingCode(),
+                // LE code de session : le jeton frappé et le QR doivent porter le même
+                // code que celui que le patron compare à l'annonce de l'employé.
+                pair_code: code,
               }),
             });
             if (mintRes.ok) {
@@ -112,7 +127,7 @@ export function useQrPayload({
           /* relay hors ligne → pas de token → aucun QR émis (jamais de mot de passe) */
         }
         let text: string | null = null;
-        if (token && pairCode) {
+        if (token && code) {
           // QR du jeton (v2) : pas de password, juste le token + pair_code + role=employee.
           // La copie boutique (shop) part TOUJOURS : l'employé doit recevoir le vrai nom de
           // la boutique (sinon il reste "Ma boutique"). storeName : le `workspaceName`
@@ -130,7 +145,7 @@ export function useQrPayload({
             // un `??` garderait la chaîne vide et l'écran scanné partirait SANS compte,
             // donc sans groupe partagé (stock jamais reçu, import « n'attachée à aucun compte »).
             account_phone: profile?.accountPhone || profile?.phone || "",
-            pair_code: pairCode,
+            pair_code: code,
             role: "employee" as const,
             ...(shopStoreName
               ? {
