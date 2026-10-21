@@ -4,8 +4,25 @@ import type { SyncOp } from "../types";
 import { applyOp } from "./dispatch";
 import { compareOps, resolveTrustedKeys, verifyAgainst } from "./trust";
 
-/** Toutes les ops d'un seul tenant, dans l'ordre déterministe, atomiquement. */
-export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; skipped: number }> {
+/**
+ * Toutes les ops d'un seul tenant, dans l'ordre déterministe, atomiquement.
+ *
+ * `fromArchive` : les opérations viennent de l'ARCHIVE de l'orchestrateur (la
+ * restauration d'une boutique après perte), pas du relais. La vérification des
+ * signatures est alors MIS DE CÔTÉ, et c'est délibéré : l'archive est le propre
+ * journal du compte, chiffré avec sa clé et servi à travers un job que seul un
+ * écran du compte peut ouvrir. Le client ne SAIT pas vérifier ces opérations — les
+ * clés de ses pairs ont disparu avec la fiche locale — et il ne doit pas les
+ * rejeter : ses ventes et son catalogue sont là, signés, dans l'archive de son
+ * commerce.
+ *
+ * Ce que la vérification protège reste protégé : le CANAL P2P, lui, vérifie
+ * toujours. L'archive est le lieu où le serveur engage sa parole.
+ */
+export async function applyRemoteOps(
+  ops: SyncOp[],
+  options: { fromArchive?: boolean } = {},
+): Promise<{ applied: number; skipped: number }> {
   if (ops.length === 0) return { applied: 0, skipped: 0 };
   const sorted = [...ops].sort(compareOps);
   const db = getDB();
@@ -19,10 +36,16 @@ export async function applyRemoteOps(ops: SyncOp[]): Promise<{ applied: number; 
   // Pourquoi une preuve est nécessaire : le relais est aveugle et `shop_id` vient du
   // client. Sans signature, quiconque peut écrire au relais (jeton lu dans le bundle,
   // `shop_id` énumérable) injecte des ventes, des prix, des annulations.
-  const keys = await resolveTrustedKeys(db, sorted);
-  const checks = await Promise.all(sorted.map((op) => verifyAgainst(op, keys.get(op.device_id))));
-  // L'ordre global est RÉTABLI : `trusted` suit `sorted`, pas l'ordre des vérifications.
-  const trusted = sorted.filter((_, i) => checks[i]);
+  let trusted: SyncOp[];
+  if (options.fromArchive) {
+    // L'archive engage la parole du serveur (cf. le commentaire de la fonction).
+    trusted = sorted;
+  } else {
+    const keys = await resolveTrustedKeys(db, sorted);
+    const checks = await Promise.all(sorted.map((op) => verifyAgainst(op, keys.get(op.device_id))));
+    // L'ordre global est RÉTABLI : `trusted` suit `sorted`, pas l'ordre des vérifications.
+    trusted = sorted.filter((_, i) => checks[i]);
+  }
 
   const result = await db.transaction(
     "rw",

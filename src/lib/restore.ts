@@ -123,8 +123,12 @@ export async function consumeRestore(
     total = Number(data.total_ops ?? total);
 
     if (ops.length > 0) {
-      // Même chemin que le canal P2P : signatures vérifiées, `processed_ops` déduplique.
-      const r = await applyRemoteOps(ops);
+      // Même chemin que le canal P2P : déduplication par `processed_ops`, application
+      // atomique. SAUF la vérification des signatures : les opérations viennent de
+      // l'ARCHIVE du compte (chiffrée, servie par un job que seul un écran du compte
+      // peut ouvrir) — le serveur engage sa parole, et le client ne peut plus vérifier
+      // des signatures dont les clés ont disparu avec sa fiche locale.
+      const r = await applyRemoteOps(ops, { fromArchive: true });
       applied += r.applied;
       skipped += r.skipped;
     }

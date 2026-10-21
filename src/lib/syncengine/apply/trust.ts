@@ -59,6 +59,9 @@ async function isAnnounceProven(
   if (await knownPairCode(pl.pair_code)) return true;
   // Groupe vide : premier écran du commerce. Rien à protéger — c'est la confiance
   // initiale, celle qui existait avant les signatures.
+  // (Une opération sans groupe — venue d'une archive ancienne — ne peut être prouvée
+  // par ce chemin : elle ne l'est par aucun autre non plus.)
+  if (!op.shop_id) return false;
   return (await db.paired_devices.where("shop_id").equals(op.shop_id).count()) === 0;
 }
 
