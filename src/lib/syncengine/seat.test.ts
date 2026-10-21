@@ -69,7 +69,7 @@ describe("libération de place", () => {
 
     await exchangeOps(relay.client);
 
-    const appel = APPELS.find((a) => a.url.endsWith("/api/v1/entry/release"));
+    const appel = APPELS.find((a) => a.url.endsWith("/api/v1/devices/release"));
     expect(appel).toBeDefined();
     // L'identifiant de l'écran CHEZ LE SERVEUR : c'est lui que le serveur décompte.
     expect(appel!.body.device_id).toBe("srv-partant");
@@ -108,11 +108,11 @@ describe("libération de place", () => {
     await relay.client.push(shopId, [leaveOp]);
 
     await exchangeOps(relay.client);
-    const premier = APPELS.filter((a) => a.url.endsWith("/api/v1/entry/release")).length;
+    const premier = APPELS.filter((a) => a.url.endsWith("/api/v1/devices/release")).length;
     expect(premier).toBe(1);
 
     // Cycle suivant : l'op est déjà consommée (`processed_ops`) — on ne redemande rien.
     await exchangeOps(relay.client);
-    expect(APPELS.filter((a) => a.url.endsWith("/api/v1/entry/release")).length).toBe(1);
+    expect(APPELS.filter((a) => a.url.endsWith("/api/v1/devices/release")).length).toBe(1);
   });
 });

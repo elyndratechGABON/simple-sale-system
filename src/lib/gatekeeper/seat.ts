@@ -1,14 +1,24 @@
 import { getShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
+import { getDeviceFingerprint } from "@/lib/device-fingerprint";
 
 /**
- * Rend la place d'un écran qui quitte le commerce.
+ * Rend la place d'un écran qui quitte le commerce, ET libère son empreinte.
  *
  * Le quota de l'orchestrateur compte les ÉCRANS DU COMPTE : sans libération, un
  * commerce qui a eu un employé ne peut plus en recrouver un autre, même après son
- * départ. Deux appelants, une seule route :
+ * départ.
  *
- *  - l'écran qui part, à la démission (sa propre place) ;
+ * L'EMPREINTE (le lien entre ce téléphone physique et une boutique) doit être
+ * libérée elle aussi : sinon le serveur garde l'appareil rattaché à l'ancienne
+ * boutique et refuse toute nouvelle inscription — « Cet appareil est déjà
+ * enregistré » — alors que l'utilisateur a tout effacé. L'empreinte est concernée
+ * même quand l'identifiant d'appareil a changé (réinstallation : l'application
+ * supprimée, la nouvelle identité a un autre `device_id`).
+ *
+ * Deux appelants, une seule route :
+ *
+ *  - l'écran qui part, à la démission ou à la suppression de sa boutique ;
  *  - le propriétaire, quand il reçoit l'op de départ d'un employé (l'appel a pu
  *    échouer chez l'employé — réseau coupé, téléphone éteint).
  *
@@ -17,13 +27,17 @@ import { getOrchestratorUrl } from "@/lib/sync";
  */
 export async function releaseSeat(
   targetDeviceId: string,
+  fingerprint?: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
   const profile = await getShopProfile();
   if (!profile?.deviceId) return { ok: false, error: "Profil boutique absent." };
   const base = getOrchestratorUrl();
   if (!base) return { ok: false, error: "Aucun serveur de synchronisation configuré." };
   try {
-    const res = await fetch(`${base}/api/v1/entry/release`, {
+    // L'empreinte vit dans le localStorage : elle survit à la purge de la base, donc
+    // elle est encore connue au moment où l'écran se libère.
+    const empreinte = fingerprint ?? (await getDeviceFingerprint().catch(() => null));
+    const res = await fetch(`${base}/api/v1/devices/release`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -32,6 +46,7 @@ export async function releaseSeat(
         // qu'il est (identifiant + enseigne), le propriétaire par ses identifiants de
         // compte. Le serveur accepte l'une ou l'autre.
         store_name: profile.storeName ?? "",
+        ...(empreinte ? { fingerprint: empreinte } : {}),
         ...(profile.accountPhone && profile.accountPassword
           ? {
               account_phone: profile.accountPhone,

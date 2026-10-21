@@ -102,7 +102,10 @@ export async function getDeviceFingerprint(): Promise<string | null> {
   const raw = fingerprintInput({
     userAgent: nav.userAgent ?? "",
     platform: nav.platform ?? "",
-    screen: `${screen.width}x${screen.height}x${screen.colorDepth}`,
+    // Un navigateur sans `screen` (mode très restreint) ne doit pas faire échouer
+    // l'appel : l'empreinte est un garde-fou, jamais un motif de plantage.
+    screen:
+      typeof screen === "undefined" ? "" : `${screen.width}x${screen.height}x${screen.colorDepth}`,
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? "",
     cores: str(nav.hardwareConcurrency),
     language: nav.language ?? "",

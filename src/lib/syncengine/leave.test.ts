@@ -238,12 +238,28 @@ describe("démission — device.leave", () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
+    // L'empreinte de l'appareil est lisible : elle est ce qui rattache le téléphone
+    // à une boutique. La libération doit l'embarquer. (Node n'a pas de localStorage :
+    // on en bricole un minimal.)
+    const store = new Map<string, string>();
+    (window as unknown as { localStorage: Storage }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+      key: () => null,
+      length: 0,
+    } as unknown as Storage;
+    store.set("pos_device_fingerprint", "empreinte-de-test");
     await departFromGroup();
 
-    const appel = appels.find((a) => a.url.endsWith("/api/v1/entry/release"));
+    const appel = appels.find((a) => a.url.endsWith("/api/v1/devices/release"));
     expect(appel).toBeDefined();
     // L'identifiant de l'écran CHEZ LE SERVEUR : c'est lui que le serveur décompte.
     expect(appel!.body.device_id).toBe((await getShopProfile())?.deviceId);
+    // L'EMPREINTE part avec : sans elle, le téléphone reste rattaché à son ancienne
+    // boutique et se voit refuser toute nouvelle inscription.
+    expect(appel!.body.fingerprint).toBe("empreinte-de-test");
 
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
