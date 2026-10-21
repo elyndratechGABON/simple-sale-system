@@ -7,7 +7,14 @@
 // celui-ci ré-émettrait une annonce APRÈS le départ (l'appareil qui repart de zéro se
 // ré-annonce), ce qui recréerait la fiche et masquerait l'effet du départ.
 import { describe, it, expect } from "vitest";
-import { getDB, addEmployeeHistory, listProducts, resetDBForTests, setShopAccount } from "../db";
+import {
+  getDB,
+  addEmployeeHistory,
+  getShopProfile,
+  listProducts,
+  resetDBForTests,
+  setShopAccount,
+} from "../db";
 import { ensureIdentity, getDeviceKeys, resetIdentityForTests } from "./identity";
 import { setCachedIdentity, setCachedKeys } from "./identity/state";
 import { signAll } from "./ops";
@@ -37,6 +44,12 @@ describe("démission — device.leave", () => {
     await emitLeaveOp();
     const bOps = await signAll(await listPendingOps(idB.shopId));
     expect(bOps.map((o) => o.type)).toEqual(["device.announce", "device.leave"]);
+    // Le départ porte l'identifiant de l'écran CHEZ LE SERVEUR : c'est lui qui permet
+    // de rendre la place (le quota orchestrateur compte les écrans du compte).
+    const leaveOp0 = bOps.find((o) => o.type === "device.leave");
+    expect((leaveOp0!.payload as { server_device_id?: string }).server_device_id).toBe(
+      (await getShopProfile())?.deviceId,
+    );
 
     // Retour chez le propriétaire : identité restaurée à l'identique, et le code de
     // paire est reposé tel quel — l'annonce de B est comparée à ce même jeton.

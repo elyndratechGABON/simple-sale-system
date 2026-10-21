@@ -1,9 +1,10 @@
 import { emitOp } from "../ops";
 import { ensureIdentity, isSharedGroup } from "../identity";
 import { runOpsExchange } from "@/lib/sync";
-import { closeEmployeeHistory, getDB, listProducts, purgeAllData } from "@/lib/db";
+import { closeEmployeeHistory, getDB, getShopProfile, listProducts, purgeAllData } from "@/lib/db";
 import type { DeviceLeavePayload } from "../types";
 import { resetGatekeeper } from "@/lib/gatekeeper";
+import { releaseSeat } from "@/lib/gatekeeper/seat";
 import { savePreferences } from "@/lib/settings";
 
 /**
@@ -62,7 +63,14 @@ export async function emitLeaveOp(): Promise<void> {
   // Sans compte partagé, personne n'a besoin d'apprendre le départ : rien à émettre.
   if (!isSharedGroup(identity.shopId)) return;
   const db = getDB();
-  const payload: DeviceLeavePayload = { org_device_id: identity.deviceId };
+  const profile = await getShopProfile();
+  const payload: DeviceLeavePayload = {
+    org_device_id: identity.deviceId,
+    // L'identifiant de l'écran CHEZ LE SERVEUR : c'est lui qui permet au propriétaire
+    // de rendre la place (cf. `releaseSeat`). Sans lui, le départ ne libère rien et le
+    // quota compte l'écran à vie.
+    ...(profile?.deviceId ? { server_device_id: profile.deviceId } : {}),
+  };
   // `emitOp` écrit AUSSI le compteur `seq` dans `settings` (cf. ops.ts) : le store est
   // inclus ici, sinon la transaction échouait NotFound.
   await db.transaction("rw", [db.sync_ops, db.settings], async () => {
@@ -87,9 +95,15 @@ export async function finalizeLeave(): Promise<void> {
   savePreferences({ onboarded: false });
 }
 
-/** Le tout pour un bouton : restituer le stock, pousser le départ, tout purger. */
+/** Le tout pour un bouton : restituer le stock, pousser le départ, rendre la place, tout purger. */
 export async function leaveShop(): Promise<void> {
   await emitStockReturnOps();
   await emitLeaveOp();
+  // La PLACE est rendue à l'orchestrateur AVANT la purge : après, la fiche locale
+  // (identifiant, enseigne, identifiants du compte) a disparu et la preuve de soi
+  // avec. Best-effort : si le réseau manque, le propriétaire rendra la place en
+  // recevant l'op de départ.
+  const profile = await getShopProfile();
+  if (profile?.deviceId) await releaseSeat(profile.deviceId);
   await finalizeLeave();
 }

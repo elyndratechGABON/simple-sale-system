@@ -10,7 +10,13 @@ import {
   markCatalogueRequestSnapshotSent,
 } from "../../db";
 import { emitShareOps, pairedEmployees } from "../sharing";
-import type { CatalogueRequestPayload, DeviceApprovePayload, SyncOp } from "../types";
+import { releaseSeat } from "@/lib/gatekeeper/seat";
+import type {
+  CatalogueRequestPayload,
+  DeviceApprovePayload,
+  DeviceLeavePayload,
+  SyncOp,
+} from "../types";
 import {
   KEY_LAST_SNAPSHOT,
   SNAPSHOT_THROTTLE_MS,
@@ -103,6 +109,22 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     for (const op of approveOps) {
       if (!(await getDB().processed_ops.get(op.id))) {
         freshApproves.push((op.payload as DeviceApprovePayload).org_device_id);
+      }
+    }
+
+    // Départs fraîchement appliqués : l'écran qui part rend sa PLACE au compte. Le
+    // quota de l'orchestrateur compte les écrans du compte — sans cette libération,
+    // un commerce qui a eu un employé ne peut plus en recrouver un autre. L'appel est
+    // ici (et pas dans le handler) parce qu'il touche le réseau : un `await` de fetch
+    // au milieu d'une transaction Dexie la ferait committer sous les pieds de l'appelant.
+    const leaveOps = foreign.filter((op) => op.type === "device.leave");
+    for (const op of leaveOps) {
+      if (await getDB().processed_ops.get(op.id)) continue;
+      const serverDeviceId = (op.payload as DeviceLeavePayload | undefined)?.server_device_id;
+      if (!serverDeviceId) continue;
+      const res = await releaseSeat(serverDeviceId);
+      if (!res.ok) {
+        console.warn(`[exchangeOps] place non rendue pour ${serverDeviceId} : ${res.error}`);
       }
     }
 

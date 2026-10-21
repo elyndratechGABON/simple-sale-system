@@ -51,3 +51,4 @@ export {
 export { joinByKeyword, resetKeywordBlock } from "./keyword-join";
 export { handshake } from "./handshake";
 export { clearDeleteAccountRequest, deleteShopRemote, getDeleteAccountRequest } from "./delete";
+export { releaseSeat } from "./seat";

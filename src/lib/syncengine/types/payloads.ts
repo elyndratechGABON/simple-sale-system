@@ -103,6 +103,14 @@ export interface DeviceApprovePayload {
  */
 export interface DeviceLeavePayload {
   org_device_id: string;
+  /**
+   * Identifiant de l'écran chez l'ORCHESTRATEUR (la fiche boutique). C'est lui qui
+   * permet au propriétaire de RENDRE LA PLACE de l'écran qui part : le quota compte
+   * les écrans du compte, et sans libération un commerce ne peut plus recruter après
+   * un départ. Absent = l'op a été émise par un écran qui ne s'est jamais inscrit
+   * chez le serveur (rien à libérer de son côté).
+   */
+  server_device_id?: string;
 }
 
 /**
