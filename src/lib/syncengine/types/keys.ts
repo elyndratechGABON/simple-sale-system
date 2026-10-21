@@ -9,7 +9,20 @@ export const PAIRING_KEYS = {
    *  patron sur une fiche périmée pour toujours. Compare pour ne ré-annoncer qu'au
    *  changement réel. */
   announcedProfile: "syncengine_announced_profile",
+  /**
+   * FORMAT de signature des annonces au moment de la DERNIÈRE annonce.
+   *
+   * Le one-shot doit être ré-armingé quand le format change : une annonce signée dans
+   * l'ancien format n'est plus vérifiable par les écrans de la nouvelle version (le
+   * relais réordonne les clés du payload, cf. `canonical`), et sans nouvelle annonce
+   * personne ne reconnaîtrait plus l'autre. Le format est doncVersionné, et son
+   * changement SUFFIT à autoriser une nouvelle présentation.
+   */
+  announcedFormat: "syncengine_announced_format",
 } as const;
+
+/** Version du format de signature des annonces. À changer quand `signableBody` change. */
+export const ANNOUNCE_FORMAT = 2;
 
 /** Clés de persistence de l'identité — partagées entre `db.ts` et `identity.ts`. */
 export const IDENTITY_KEYS = {

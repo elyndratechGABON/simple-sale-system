@@ -1,7 +1,7 @@
 import { getDB, getShopProfile } from "../../db";
 import { emitOp } from "../ops";
 import { ensureIdentity, getDeviceKeys, isSharedGroup } from "../identity";
-import { PAIRING_KEYS } from "../types";
+import { PAIRING_KEYS, ANNOUNCE_FORMAT } from "../types";
 import type { DeviceRole, PairedDevice } from "../types";
 
 /** Les deux champs de fiche que le patriarche voit dans « Activité du personnel ». */
@@ -30,9 +30,6 @@ export async function announceDevice(pairCode?: string): Promise<void> {
   const db = getDB();
   const alreadyAnnounced =
     (await db.settings.get(PAIRING_KEYS.announced))?.value === identity.shopId;
-  // Déjà annoncé ET aucun code : seule une fiche changée justifie de repartir. Déjà
-  // annoncé AVEC un code : le code est à usage unique, on refuse (cf. la note ci-dessus).
-  if (alreadyAnnounced && pairCode) return;
 
   const profile = await getShopProfile();
   // Le nom d'un EMPLOYÉ est celui que la personne a saisi. Le repli sur le nom de la
@@ -44,7 +41,17 @@ export async function announceDevice(pairCode?: string): Promise<void> {
       ? identity.employeeName || profile?.storeName?.trim() || ""
       : identity.employeeName.trim();
   const employeePhone = identity.employeePhone?.trim() ?? "";
-  if (alreadyAnnounced) {
+  // Le FORMAT de signature a changé : les annonces déjà émises ne sont plus
+  // vérifiables par les écrans de la nouvelle version (le relais réordonne les clés du
+  // payload). Sans nouvelle présentation, les deux écrans resteraient muets l'un pour
+  // l'autre — pour toujours.
+  const formatChanged =
+    (await db.settings.get(PAIRING_KEYS.announcedFormat))?.value !== ANNOUNCE_FORMAT;
+  if (alreadyAnnounced && !formatChanged) {
+    // Un code est à USAGE UNIQUE : une seconde présentation avec le même code
+    // n'apporterait rien (et le patron l'aurait déjà vu).
+    if (pairCode) return;
+    // Sans code, seule une FICHE changée justifie de repartir.
     const seen = (await db.settings.get(PAIRING_KEYS.announcedProfile))?.value as
       string | undefined;
     if (seen === profileFingerprint(employeeName, employeePhone)) return;
@@ -66,6 +73,7 @@ export async function announceDevice(pairCode?: string): Promise<void> {
       key: PAIRING_KEYS.announcedProfile,
       value: profileFingerprint(employeeName, employeePhone),
     });
+    await db.settings.put({ key: PAIRING_KEYS.announcedFormat, value: ANNOUNCE_FORMAT });
   });
 }
 

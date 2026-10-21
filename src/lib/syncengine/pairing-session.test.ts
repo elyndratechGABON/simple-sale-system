@@ -9,7 +9,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { getDB, setShopAccount } from "../db";
-import { generatePairingCode, sessionCode } from "./pairing";
+import { ensureIdentity, getIdentity } from "./identity";
+import { listPendingOps } from "./outbox";
+import { announceDevice, generatePairingCode, sessionCode } from "./pairing";
 import { PAIRING_KEYS } from "./types";
 import { ACCOUNT, freshDevice } from "./sync-engine-helpers";
 
@@ -60,5 +62,31 @@ describe("code de session", () => {
     );
     expect(src).not.toMatch(/generatePairingCode\(/);
     expect(src).toMatch(/pair_code: code/);
+  });
+
+  it("un changement de format de signature fait se présenter à nouveau", async () => {
+    // Les annonces émises dans l'ancien format ne sont plus vérifiables par les
+    // écrans de la nouvelle version. Sans nouvelle présentation, les deux écrans
+    // resteraient muets l'un pour l'autre.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await announceDevice();
+    expect(
+      (await listPendingOps(getIdentity().shopId)).filter((o) => o.type === "device.announce"),
+    ).toHaveLength(1);
+
+    // Le format local correspond : rien ne repart.
+    await announceDevice();
+    expect(
+      (await listPendingOps(getIdentity().shopId)).filter((o) => o.type === "device.announce"),
+    ).toHaveLength(1);
+
+    // Le format a changé (nouvelle version déployée) : l'appareil se présente à
+    // nouveau, SANS code.
+    await getDB().settings.put({ key: PAIRING_KEYS.announcedFormat, value: 1 });
+    await announceDevice();
+    expect(
+      (await listPendingOps(getIdentity().shopId)).filter((o) => o.type === "device.announce"),
+    ).toHaveLength(2);
   });
 });
