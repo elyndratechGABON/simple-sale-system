@@ -3,6 +3,50 @@ import { getOrchestratorUrl } from "@/lib/sync";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
 
 /**
+ * Libération en attente : la suppression a eu lieu HORS LIGNE.
+ *
+ * Le localStorage, et non la base IndexedDB : la suppression locale vide la base
+ * (c'est le but), une file d'attente en base serait donc détruite au moment précis
+ * où elle compte. Le localStorage, lui, survit à la purge.
+ */
+const PENDING_RELEASE_KEY = "caisse_pos_pending_device_release";
+
+interface PendingRelease {
+  device_id: string;
+  store_name: string;
+  fingerprint?: string;
+  at: number;
+}
+
+function readPendingRelease(): PendingRelease | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PENDING_RELEASE_KEY);
+    return raw ? (JSON.parse(raw) as PendingRelease) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingRelease(value: PendingRelease): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PENDING_RELEASE_KEY, JSON.stringify(value));
+  } catch {
+    /* stockage indisponible : la libération attendra une suppression en ligne */
+  }
+}
+
+function clearPendingRelease(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PENDING_RELEASE_KEY);
+  } catch {
+    /* rien à faire */
+  }
+}
+
+/**
  * Rend la place d'un écran qui quitte le commerce, ET libère son empreinte.
  *
  * Le quota de l'orchestrateur compte les ÉCRANS DU COMPTE : sans libération, un
@@ -22,8 +66,8 @@ import { getDeviceFingerprint } from "@/lib/device-fingerprint";
  *  - le propriétaire, quand il reçoit l'op de départ d'un employé (l'appel a pu
  *    échouer chez l'employé — réseau coupé, téléphone éteint).
  *
- * Best-effort : un échec réseau ne doit jamais empêcher une démission. La place sera
- * rendue au prochain échange, quand le patron aura récupéré l'op de départ.
+ * Best-effort : un échec réseau ne doit jamais empêcher une démission. La demande
+ * est alors mise en attente et repart au prochain cycle de synchronisation.
  */
 export async function releaseSeat(
   targetDeviceId: string,
@@ -57,13 +101,63 @@ export async function releaseSeat(
     });
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      // Un REFUS du serveur (preuve insuffisante) ne se rejouera pas : la file ne
+      // servirait qu'à refaire la même demande. Une PANNE, elle, se rejoue.
+      if (res.status >= 400 && res.status < 500) {
+        return { ok: false, error: data?.error ?? `Serveur : ${res.status}.` };
+      }
+      writePendingRelease({
+        device_id: targetDeviceId || profile.deviceId,
+        store_name: profile.storeName ?? "",
+        ...(empreinte ? { fingerprint: empreinte } : {}),
+        at: Date.now(),
+      });
       return { ok: false, error: data?.error ?? `Serveur : ${res.status}.` };
     }
+    clearPendingRelease();
     return { ok: true };
   } catch (e) {
+    // Réseau coupé : la demande est mise en attente, elle repartira au prochain cycle.
+    writePendingRelease({
+      device_id: targetDeviceId || profile.deviceId,
+      store_name: profile.storeName ?? "",
+      ...(fingerprint ? { fingerprint } : {}),
+      at: Date.now(),
+    });
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Impossible de contacter le serveur.",
     };
   }
+}
+
+/**
+ * Rejoue une libération restée en attente (suppression faite hors ligne). Best-effort :
+ * le demande reste en attente si le réseau est toujours absent.
+ */
+export async function flushPendingRelease(): Promise<boolean> {
+  const pending = readPendingRelease();
+  if (!pending) return false;
+  const base = getOrchestratorUrl();
+  if (!base) return false;
+  try {
+    const res = await fetch(`${base}/api/v1/devices/release`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        device_id: pending.device_id,
+        store_name: pending.store_name,
+        ...(pending.fingerprint ? { fingerprint: pending.fingerprint } : {}),
+      }),
+    });
+    if (res.ok) {
+      clearPendingRelease();
+      return true;
+    }
+    // Un refus ne changera pas au fil du temps : on abandonne la demande.
+    if (res.status >= 400 && res.status < 500) clearPendingRelease();
+  } catch {
+    /* toujours hors ligne : on retentera */
+  }
+  return false;
 }

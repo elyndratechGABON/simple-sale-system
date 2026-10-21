@@ -1,5 +1,6 @@
 import { getShopProfile, markShopSynced } from "@/lib/db";
 import { handshake, syncData } from "@/lib/gatekeeper";
+import { flushPendingRelease } from "@/lib/gatekeeper/seat";
 import { blessPendingPeers } from "./bless";
 import { runOpsExchange, SYNC_REFRESH_MS } from "./ops";
 import { buildLightPayload } from "./payload";
@@ -22,6 +23,10 @@ export async function backgroundSync(): Promise<boolean> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return false;
   const profile = await getShopProfile();
   if (!profile) return false;
+
+  // Une libération d'appareil restée en attente (suppression faite hors ligne) :
+  // elle repart maintenant que le réseau est revenu.
+  await flushPendingRelease();
 
   const ops = await runOpsExchange();
   const changed = Boolean(ops && (ops.pushed > 0 || ops.applied > 0));

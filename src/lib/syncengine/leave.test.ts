@@ -26,6 +26,7 @@ import {
   generatePairingCode,
   leaveShop,
 } from "./pairing";
+import { flushPendingRelease, releaseSeat } from "@/lib/gatekeeper/seat";
 import { listPairedDevices } from "./peers";
 import { PAIRING_KEYS } from "./types";
 import { applyRemoteOpsSigned } from "./__tests__/setup";
@@ -260,6 +261,51 @@ describe("démission — device.leave", () => {
     // L'EMPREINTE part avec : sans elle, le téléphone reste rattaché à son ancienne
     // boutique et se voit refuser toute nouvelle inscription.
     expect(appel!.body.fingerprint).toBe("empreinte-de-test");
+
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("une suppression hors ligne laisse la libération EN ATTENTE", async () => {
+    // Le réseau coupé ne doit pas perdre la libération : la demande est mise en
+    // attente (localStorage — la purge de la base ne peut pas l'emporter) et rejouée
+    // au cycle suivant.
+    vi.stubEnv("VITE_ORCHESTRATOR_URL", "https://orchestrateur.test");
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("réseau coupé");
+    });
+
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const res = await releaseSeat("ecran-qui-part");
+    expect(res.ok).toBe(false);
+    // La demande est en attente, et elle porte ce qu'il faut pour la rejouer.
+    const pending = JSON.parse(
+      (window as unknown as { localStorage: Storage }).localStorage.getItem(
+        "caisse_pos_pending_device_release",
+      ) ?? "null",
+    );
+    expect(pending?.device_id).toBe("ecran-qui-part");
+
+    // Le réseau revient : le rejeu part et la demande est effacée.
+    const appels: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      appels.push({ url: String(url), body: JSON.parse(String(init?.body ?? "{}")) });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const flushed = await flushPendingRelease();
+    expect(flushed).toBe(true);
+    expect(appels[0]?.url).toContain("/api/v1/devices/release");
+    expect(appels[0]?.body.device_id).toBe("ecran-qui-part");
+    expect(
+      (window as unknown as { localStorage: Storage }).localStorage.getItem(
+        "caisse_pos_pending_device_release",
+      ),
+    ).toBeNull();
 
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
