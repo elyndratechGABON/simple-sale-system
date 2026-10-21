@@ -13,6 +13,7 @@ import { BackupCard } from "./BackupCard";
 import { PinCard } from "./PinCard";
 import { DeleteShopCard } from "./DeleteShopCard";
 import { ResignCard } from "./ResignCard";
+import { SubscriptionCard } from "./SubscriptionCard";
 
 export function SettingsPage() {
   const { features } = usePreferences();
@@ -72,6 +73,7 @@ export function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="compte" className="mt-3 space-y-3">
+          <SubscriptionCard />
           {role === "owner" ? <DeleteShopCard /> : <ResignCard />}
         </TabsContent>
       </Tabs>

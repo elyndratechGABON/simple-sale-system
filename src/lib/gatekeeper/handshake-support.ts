@@ -78,7 +78,13 @@ export function lockDecision(data: { over_limit?: boolean; status: string }): {
  *  (places, identifiant de compte, demande d'abonnement, grace period). Tolérant : un
  *  serveur ancien sans ces champs laisse l'état précédent en place. */
 export async function applyAccountMetadata(data: {
-  account?: { max_devices?: number; device_count?: number; id?: string };
+  account?: {
+    max_devices?: number;
+    device_count?: number;
+    id?: string;
+    plan_name?: string | null;
+    trial?: boolean;
+  };
   subscription_request?: SubscriptionRequestStatus;
   grace_ends_at?: number;
   grace_period?: boolean;
@@ -93,6 +99,10 @@ export async function applyAccountMetadata(data: {
     await setSetting(SETTING_QUOTA, {
       maxDevices: data.account.max_devices,
       deviceCount: data.account.device_count,
+      // Le palier et l'état essai/abonné : c'est ce que le commerçant lit dans
+      // « Paramètres → Compte → Abonnement ».
+      ...(data.account.plan_name ? { planName: data.account.plan_name } : {}),
+      ...(typeof data.account.trial === "boolean" ? { trial: data.account.trial } : {}),
     } satisfies AccountQuota);
   }
 

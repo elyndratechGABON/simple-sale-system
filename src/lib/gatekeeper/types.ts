@@ -2,6 +2,10 @@
 export interface AccountQuota {
   maxDevices: number;
   deviceCount: number;
+  /** Le nom du palier (Essentiel, Confort, Affluence) tel que le serveur le voit. */
+  planName?: string;
+  /** Le compte n'a jamais payé : c'est un ESSAI, pas un abonnement. */
+  trial?: boolean;
 }
 
 /**
