@@ -77,10 +77,12 @@ export async function releaseSeat(
   if (!profile?.deviceId) return { ok: false, error: "Profil boutique absent." };
   const base = getOrchestratorUrl();
   if (!base) return { ok: false, error: "Aucun serveur de synchronisation configuré." };
+  // L'empreinte vit dans le localStorage : elle survit à la purge de la base, donc
+  // elle est encore connue au moment où l'écran se libère. Elle est calculée AVANT
+  // l'appel : la demande en attente (hors ligne) doit la porter, sinon le rejeu ne
+  // pourrait pas détacher l'empreinte.
+  const empreinte = fingerprint ?? (await getDeviceFingerprint().catch(() => null));
   try {
-    // L'empreinte vit dans le localStorage : elle survit à la purge de la base, donc
-    // elle est encore connue au moment où l'écran se libère.
-    const empreinte = fingerprint ?? (await getDeviceFingerprint().catch(() => null));
     const res = await fetch(`${base}/api/v1/devices/release`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -121,7 +123,7 @@ export async function releaseSeat(
     writePendingRelease({
       device_id: targetDeviceId || profile.deviceId,
       store_name: profile.storeName ?? "",
-      ...(fingerprint ? { fingerprint } : {}),
+      ...(empreinte ? { fingerprint: empreinte } : {}),
       at: Date.now(),
     });
     return {

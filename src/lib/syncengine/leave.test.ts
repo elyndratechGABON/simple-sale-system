@@ -275,6 +275,18 @@ describe("démission — device.leave", () => {
       throw new Error("réseau coupé");
     });
 
+    // Node n'a pas de localStorage : on en bricole un minimal.
+    const store = new Map<string, string>();
+    (window as unknown as { localStorage: Storage }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+      key: () => null,
+      length: 0,
+    } as unknown as Storage;
+    store.set("pos_device_fingerprint", "empreinte-de-test");
+
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
@@ -287,6 +299,9 @@ describe("démission — device.leave", () => {
       ) ?? "null",
     );
     expect(pending?.device_id).toBe("ecran-qui-part");
+    // L'EMPREINTE doit accompagner la demande en attente : c'est elle qui détachera
+    // le téléphone de son ancienne boutique au rejeu.
+    expect(pending?.fingerprint).toBe("empreinte-de-test");
 
     // Le réseau revient : le rejeu part et la demande est effacée.
     const appels: { url: string; body: Record<string, unknown> }[] = [];
