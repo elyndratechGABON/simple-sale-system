@@ -14,18 +14,22 @@ function profileFingerprint(name: string, phone: string): string {
  * `pairCode` est le code saisi par l'écran qui rejoint ; le principal s'annonce sans code,
  * sa présence et son rôle suffisent.
  *
- * L'annonce est one-shot À L'APPAREILAGE (l'idempotence de l'onboarding : une seconde
- * annonce ferait réapparaître l'écran « à approuver » chez le patron). Elle se rejoue
- * pour autant que la FICHE change — nom ou numéro corrigé plus tard : sans cela le patron
- * resterait sur une fiche périmée, et le numéro que le commerçant vient d'enregistrer
- * n'atteindrait jamais personne. Le code, lui, ne se rejoue pas : le repasser à chaque
- * changement de nom le rendrait réutilisable bien après son expiration.
+ * L'annonce est one-shot PAR GROUPE (l'idempotence de l'onboarding : une seconde
+ * annonce dans le MÊME groupe ferait réapparaître l'écran « à approuver » chez le
+ * patron). Elle se rejoue pour autant que la FICHE change — nom ou numéro corrigé
+ * plus tard : sans cela le patron resterait sur une fiche périmée, et le numéro que
+ * le commerçant vient d'enregistrer n'atteindrait jamais personne. Le code, lui, ne
+ * se rejoue pas : le repasser à chaque changement de nom le rendrait réutilisable
+ * bien après son expiration. Le drapeau retient le `shop_id` annoncé : changer de
+ * boutique (scan du QR, adoption du groupe du relais) réautorise la présentation —
+ * l'écran annoncé ailleurs ne doit pas rester muet dans son nouveau monde.
  */
 export async function announceDevice(pairCode?: string): Promise<void> {
   const identity = await ensureIdentity();
   if (!isSharedGroup(identity.shopId)) return;
   const db = getDB();
-  const alreadyAnnounced = (await db.settings.get(PAIRING_KEYS.announced))?.value === true;
+  const alreadyAnnounced =
+    (await db.settings.get(PAIRING_KEYS.announced))?.value === identity.shopId;
   // Déjà annoncé ET aucun code : seule une fiche changée justifie de repartir. Déjà
   // annoncé AVEC un code : le code est à usage unique, on refuse (cf. la note ci-dessus).
   if (alreadyAnnounced && pairCode) return;
@@ -57,7 +61,7 @@ export async function announceDevice(pairCode?: string): Promise<void> {
   };
   await db.transaction("rw", [db.sync_ops, db.settings], async () => {
     await emitOp(db, identity, { type: "device.announce", entity_id: identity.deviceId, payload });
-    await db.settings.put({ key: PAIRING_KEYS.announced, value: true });
+    await db.settings.put({ key: PAIRING_KEYS.announced, value: identity.shopId });
     await db.settings.put({
       key: PAIRING_KEYS.announcedProfile,
       value: profileFingerprint(employeeName, employeePhone),
@@ -72,9 +76,11 @@ export async function announceDevice(pairCode?: string): Promise<void> {
  */
 export async function reannounceProfile(): Promise<void> {
   const db = getDB();
-  // Le one-shot doit avoir déjà été posé : sinon cette fonction se comporterait comme
-  // une première annonce et afficherait l'écran « à approuver » chez le patron.
-  if ((await db.settings.get(PAIRING_KEYS.announced))?.value !== true) return;
+  const identity = await ensureIdentity();
+  // Le one-shot doit déjà avoir été posé DANS CE GROUPE : sinon cette fonction se
+  // comporterait comme une première annonce et afficherait l'écran « à approuver »
+  // chez le patron.
+  if ((await db.settings.get(PAIRING_KEYS.announced))?.value !== identity.shopId) return;
   await announceDevice();
 }
 

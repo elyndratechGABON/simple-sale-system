@@ -5,7 +5,14 @@
 import { describe, it, expect } from "vitest";
 import { getDB, setShopAccount } from "../db";
 import { applyRemoteOpsSigned } from "./__tests__/setup";
-import { ensureIdentity, getIdentity, setIdentityEmployeeName, setIdentityRole } from "./identity";
+import {
+  ensureIdentity,
+  getIdentity,
+  setIdentityEmployeeName,
+  setIdentityRole,
+  adoptShopIdFromRelay,
+  refreshShopId,
+} from "./identity";
 import { announceDevice, approveDevice, enterPairingCode, generatePairingCode } from "./pairing";
 import { listPairedDevices } from "./peers";
 import { listPendingOps } from "./outbox";
@@ -143,5 +150,37 @@ describe("QR + code de confirmation temporaire", () => {
     expect(peer).toBeDefined();
     expect(peer?.status).toBe("pending");
     expect(peer?.paired_at).toBeUndefined();
+  });
+});
+
+describe("le drapeau d'annonce est par groupe", () => {
+  it("changer de groupe (scan → shop_id du relais) réautorise la présentation", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    await announceDevice();
+    const ancienShop = getIdentity().shopId;
+    expect(
+      (await listPendingOps(ancienShop)).filter((o) => o.type === "device.announce"),
+    ).toHaveLength(1);
+
+    // L'appareil est scanné : il adopte le groupe du relais sans réinitialisation.
+    await adoptShopIdFromRelay("s_relatif");
+    await refreshShopId();
+    expect(getIdentity().shopId).toBe("s_relatif");
+    // Même appareil, fiche inchangée : il doit quand même SE PRÉSENTER au nouveau groupe,
+    // sans quoi ni le patron ni personne ne pourra un jour vérifier ses ops.
+    await announceDevice();
+    const announces = (await listPendingOps("s_relatif")).filter(
+      (o) => o.type === "device.announce",
+    );
+    expect(announces).toHaveLength(1);
+
+    // Le one-shot reste un one-shot DANS le groupe : aucune seconde annonce sans
+    // changement de fiche.
+    await announceDevice();
+    expect(
+      (await listPendingOps("s_relatif")).filter((o) => o.type === "device.announce"),
+    ).toHaveLength(1);
   });
 });

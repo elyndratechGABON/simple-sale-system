@@ -137,7 +137,9 @@ describe("démission — device.leave", () => {
     const stockOp = bOps.find((o) => o.type === "stock.adjusted");
     expect(stockOp).toBeDefined();
     expect(stockOp!.entity_id).toBe("p_render");
-    expect(stockOp!.payload as { product_id: string; delta: number; target_device_id: string }).toEqual({
+    expect(
+      stockOp!.payload as { product_id: string; delta: number; target_device_id: string },
+    ).toEqual({
       product_id: "p_render",
       delta: 3,
       target_device_id: idO.deviceId,
