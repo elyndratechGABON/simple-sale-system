@@ -107,3 +107,34 @@ pas à l'employé. E explique le « nombre limite d'appareils atteint ».
    le stock du patron doivent être là.
 4. Dans le relais, les ops `device.announce` des deux appareils doivent exister pour le
    groupe, et chaque `device_pull` doit avancer.
+
+## Le signal à surveiller : « Jamais »
+
+Chez le patron, chaque écran du groupe affiche **depuis quand il a synchronisé**
+(« Il y a 1 h », « Jamais »). C'est LE témoin du canal P2P : un écran qui affiche
+« Jamais » n'a jamais rien reçu — l'appairage a pu réussir et le stock, non.
+
+## Capacité (chiffres mesurés, 21/10/2026)
+
+| Poste | Mesure | Où |
+| --- | --- | --- |
+| Relais (Neon) | 8,5 Mo pour 2 groupes actifs / 28 ops | `neondb.sync_ops` |
+| Orchestrateur (Neon) | 9,3 Mo pour 8 boutiques / 4 comptes | `orchestrator.shops` |
+| Tir d'un groupe | `LIMIT 5000` ops | `relay/handler.mjs` (`MAX_PULL`) |
+| Purge | une op part dès que tous les écrans présents l'ont tirée ; un écran qui ne tire plus depuis 24 h est « absent » et ne bloque rien | `ABSENT_MS` |
+| Index du relais | `idx_sync_ops_shop_created (shop_id, created_at)` — le tir reste un parcours d'index | `neondb` |
+
+Le relais ne stocke **que les opérations en vol** : la purge (drainer de
+l'orchestrateur : copier puis purger) borne sa taille. Le coût d'une boutique y est
+donc proportionnel à son activité, pas au nombre de boutiques.
+
+**Plafonds à connaître** :
+- **5 000 ops non purgées par groupe** : au-delà, le relais sert les plus anciennes et
+  les plus récentes n'arriveraient plus. La purge l'évite en pratique (un écran qui ne
+  tire plus depuis 24 h ne bloque rien) ; un écran qui tire toutes les 23 h, lui,
+  bloquerait la purge de son groupe.
+- Le **tableau de bord** de l'orchestrateur agrège toutes les boutiques à chaque
+  chargement : son coût croît linéairement. Au-delà de quelques centaines de
+  boutiques, il faudra paginer (la route `/api/v1/admin/shops` est déjà paginée).
+- L'**historique** de l'orchestrateur (`activity_events`, `sync_payloads`) croît par
+  boutique et par jour : c'est une question de stockage et dilling, pas de technique.
