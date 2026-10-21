@@ -52,6 +52,28 @@ export async function handleHandshakeRefusal(res: Response): Promise<HandshakeRe
   return null;
 }
 
+/**
+ * La décision de VERROUILLER l'écran, d'après la réponse du serveur.
+ *
+ * Quatre blocages, quatre raisons — et un cas qui n'en est pas un :
+ *  - `device_limit` : trop d'écrans sur le compte (une place manque) ;
+ *  - `suspended` : décision d'Elyndra ;
+ *  - `expired` : l'échéance est passée ET la période de grâce (3 jours) avec — la
+ *    tolérance est finie, le service est coupé (les données locales restent intactes) ;
+ *  - `keyword_invalid` / `device_conflict` : des rejeux d'informations, pas une dette.
+ *
+ * Pendant la GRÂCE, le compte est encore « actif » : l'écran n'est jamais bloqué.
+ */
+export function lockDecision(data: { over_limit?: boolean; status: string }): {
+  locked: boolean;
+  reason: LockReason | null;
+} {
+  if (data.over_limit === true) return { locked: true, reason: "device_limit" };
+  if (data.status === "suspended") return { locked: true, reason: "suspended" };
+  if (data.status === "expired") return { locked: true, reason: "expired" };
+  return { locked: false, reason: null };
+}
+
 /** Répercute sur le stockage local les métadonnées de compte de la réponse au handshake
  *  (places, identifiant de compte, demande d'abonnement, grace period). Tolérant : un
  *  serveur ancien sans ces champs laisse l'état précédent en place. */

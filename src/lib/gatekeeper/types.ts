@@ -22,7 +22,14 @@ export type CommandType = "suspend" | "renew" | "broadcast_message" | "delete_ac
 
 /** Pourquoi la caisse est bloquée : abonnement suspendu, quota d'appareils dépassé,
  *  mot clé de récupération rejeté, ou appareil déjà enregistré ailleurs. */
-export type LockReason = "suspended" | "device_limit" | "keyword_invalid" | "device_conflict";
+export type LockReason =
+  | "suspended"
+  | "device_limit"
+  | "keyword_invalid"
+  | "device_conflict"
+  /** L'abonnement est arrivé à échéance et la période de grâce est passée : le service
+   *  est coupé — c'est la fin de la tolérance. */
+  | "expired";
 
 export interface AdminCommand {
   id: string;
@@ -72,7 +79,11 @@ export interface HandshakeResult {
     | "account_password"
     | "device_limit"
     | "keyword_invalid"
-    | "device_conflict";
+    | "device_conflict"
+    /** Décision d'Elyndra : le compte est suspendu. */
+    | "suspended"
+    /** L'échéance est passée et la période de grâce de 3 jours avec : le service est coupé. */
+    | "expired";
 }
 
 export interface KeywordClaim {

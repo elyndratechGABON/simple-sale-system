@@ -3,7 +3,7 @@ import { getOrchestratorUrl } from "@/lib/sync";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
 import { devicePublicKey } from "@/lib/payments/proof";
 import { toast } from "sonner";
-import { applyAccountMetadata, handleHandshakeRefusal } from "./handshake-support";
+import { applyAccountMetadata, handleHandshakeRefusal, lockDecision } from "./handshake-support";
 import { applyCommand, getAppliedIds, setAppliedIds } from "./commands";
 import { clearKeywordClaim, getKeywordClaim } from "./keyword";
 import { setLock } from "./lock";
@@ -123,13 +123,16 @@ export async function handshake(): Promise<HandshakeResult> {
     }
 
     // Un écran au-delà du quota d'appareils est bloqué comme un suspendu, mais avec sa
-    // propre raison : ce n'est pas un impayé, c'est une place manquante.
-    const overLimit = data.over_limit === true;
-    const suspended = data.status === "suspended";
-    const reason: LockReason | null = overLimit ? "device_limit" : suspended ? "suspended" : null;
-    await setSetting(SETTING_LOCKED, overLimit || suspended);
+    // propre raison : ce n'est pas un impayé, c'est une place manquante. Un compte
+    // EXPIRÉ (période de grâce de 3 jours écoulée) est bloqué lui aussi : c'est la fin
+    // de la tolérance.
+    const { locked, reason } = lockDecision({
+      over_limit: data.over_limit === true,
+      status: data.status,
+    });
+    await setSetting(SETTING_LOCKED, locked);
     await setSetting(SETTING_LOCK_REASON, reason);
-    setLock(overLimit || suspended, reason);
+    setLock(locked, reason);
 
     // Mot clé généré à la création : l'écran fondateur est le SEUL à le recevoir — il
     // doit le conserver (il resservira sur un autre téléphone). Posé une seule fois,
@@ -153,7 +156,7 @@ export async function handshake(): Promise<HandshakeResult> {
       ok: true,
       sync_allowed: data.sync_allowed !== false,
       status: data.status,
-      reason: overLimit ? "device_limit" : undefined,
+      reason: reason ?? undefined,
     };
   } catch {
     return { ok: false, sync_allowed: false, status: "unknown", reason: "network" };

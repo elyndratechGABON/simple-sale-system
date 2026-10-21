@@ -5,7 +5,7 @@
 // sans re-rendu superflu, et le verrou persiste dans IndexedDB : une caisse suspendue le
 // reste même hors ligne, jusqu'à une prolongation livrée par le serveur.
 import { useSyncExternalStore, useState } from "react";
-import { AlertTriangle, Fingerprint, LockKeyhole, MonitorX, ScanLine } from "lucide-react";
+import { AlertTriangle, Clock, Fingerprint, LockKeyhole, MonitorX, ScanLine } from "lucide-react";
 import {
   getLockSnapshot,
   resetDeviceConflict,
@@ -38,6 +38,9 @@ export function SuspendedScreen() {
   const overLimit = reason === "device_limit";
   const keywordInvalid = reason === "keyword_invalid";
   const deviceConflict = reason === "device_conflict";
+  // EXPIRÉ : la période de grâce (3 jours) est passée sans paiement. Ce n'est pas une
+  // suspension (une décision d'Elyndra) : c'est la fin de la tolérance.
+  const expired = reason === "expired";
 
   async function retryKeyword() {
     setBusy(true);
@@ -93,6 +96,8 @@ export function SuspendedScreen() {
             <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden />
           ) : deviceConflict ? (
             <Fingerprint className="h-6 w-6 text-destructive" aria-hidden />
+          ) : expired ? (
+            <Clock className="h-6 w-6 text-destructive" aria-hidden />
           ) : (
             <LockKeyhole className="h-6 w-6 text-destructive" aria-hidden />
           )}
@@ -104,7 +109,9 @@ export function SuspendedScreen() {
               ? "Cet appareil est déjà enregistré"
               : overLimit
                 ? "Limite d'appareils atteinte"
-                : "Abonnement suspendu"}
+                : expired
+                  ? "Abonnement expiré"
+                  : "Abonnement suspendu"}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {keywordInvalid
@@ -113,7 +120,9 @@ export function SuspendedScreen() {
               ? "Un seul appareil physique peut correspondre à une boutique, et le serveur a retrouvé celui-ci déjà rattaché à une autre inscription. Vos données locales sont intactes et la caisse continue de fonctionner hors ligne : c'est la synchronisation qui attend. Contactez le service client pour rattacher cette caisse à votre boutique."
               : overLimit
                 ? "Toutes les places de votre abonnement sont utilisées par d'autres caisses. Passez à un palier supérieur ou libérez un appareil pour activer celle-ci."
-                : "Votre abonnement a été suspendu. La caisse est bloquée tant que le renouvellement n'est pas enregistré."}
+                : expired
+                  ? "Votre abonnement a atteint son échéance et la période de grâce de 3 jours est passée. La caisse est bloquée tant que le renouvellement n'est pas enregistré — vos données locales sont intactes."
+                  : "Votre abonnement a été suspendu. La caisse est bloquée tant que le renouvellement n'est pas enregistré."}
         </p>
         {deviceConflict ? (
           <div className="mt-6 flex flex-col gap-2">
