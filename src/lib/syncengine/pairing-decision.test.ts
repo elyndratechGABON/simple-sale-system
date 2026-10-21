@@ -86,10 +86,15 @@ describe("décision d'application du code (côté principal)", () => {
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
     const code = await generatePairingCode();
-    await getDB().settings.put({ key: PAIRING_KEYS.codeExpiresAt, value: Date.now() - 1000 });
+    // Émis il y a 13 h : l'affichage est expiré depuis 12 h 50, la preuve aussi.
+    const ilYa13h = Date.now() - 13 * 60 * 60 * 1000;
+    await getDB().settings.put({
+      key: PAIRING_KEYS.codeExpiresAt,
+      value: ilYa13h + 10 * 60_000,
+    });
     await getDB().settings.put({
       key: PAIRING_KEYS.recentCodes,
-      value: [{ code, at: Date.now() - 13 * 60 * 60 * 1000 }],
+      value: [{ code, at: ilYa13h }],
     });
     const shopId = getIdentity().shopId;
 

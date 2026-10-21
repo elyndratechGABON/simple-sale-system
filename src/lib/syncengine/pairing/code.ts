@@ -9,6 +9,9 @@ const CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const PAIR_CODE_LENGTH = 6;
 const PAIR_CODE_TTL_MS = 10 * 60_000;
 
+/** Durée d'AFFICHATION d'un code au-dessus du QR (la PREUVE dure plus longtemps). */
+export { PAIR_CODE_TTL_MS };
+
 function randomCode(): string {
   const out = new Array<string>(PAIR_CODE_LENGTH);
   for (let i = 0; i < PAIR_CODE_LENGTH; i++) {
@@ -65,8 +68,16 @@ export async function knownPairCode(code: string | undefined | null): Promise<bo
     db.settings.get(PAIRING_KEYS.code),
     db.settings.get(PAIRING_KEYS.codeExpiresAt),
   ]);
-  if (codeRow?.value === code && Number(expRow?.value ?? 0) > Date.now()) return true;
   const now = Date.now();
+  if (codeRow?.value === code) {
+    const exp = Number(expRow?.value ?? 0);
+    // Le code affiché, encore valide.
+    if (exp > now) return true;
+    // Le code affiché, EXPIRÉ — mais émis récemment : c'est encore une preuve
+    // d'invitation. Ce cas couvre les écrans qui n'ont pas encore la liste des codes
+    // récents (installations antérieures à cette fenêtre).
+    if (exp > 0 && now - (exp - PAIR_CODE_TTL_MS) <= PAIR_CODE_PROOF_WINDOW_MS) return true;
+  }
   const codes = await recentCodes();
   return codes.some((c) => c.code === code && now - c.at <= PAIR_CODE_PROOF_WINDOW_MS);
 }
