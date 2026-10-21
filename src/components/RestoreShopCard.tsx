@@ -8,7 +8,6 @@ import {
   requestRestore,
 } from "@/lib/restore";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
  * Récupération d'une boutique depuis l'archive de l'orchestrateur.
@@ -81,18 +80,19 @@ export function RestoreShopCard() {
   };
 
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2">
+    <section className="space-y-2">
+      <div>
+        <h3 className="text-sm font-medium flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-          Récupérer ma boutique
-        </CardTitle>
-        <CardDescription className="text-xs">
-          Téléphone perdu ou réinitialisé ? Vos ventes, produits et stocks sont archivés par le
-          service. Relancez l&apos;orchestrateur, puis cliquez ici.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+          Récupérer mes données depuis le serveur
+        </h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Téléphone perdu, réinitialisé, ou boutique supprimée par erreur ? Le service garde une
+          copie de vos ventes, produits et stocks. « Restaurer un fichier » ci-dessus, lui, suppose
+          qu&apos;on a un fichier de sauvegarde sous la main.
+        </p>
+      </div>
+      <div className="space-y-3">
         {phase.kind === "idle" && (
           <>
             <Button className="w-full" onClick={run}>
@@ -158,7 +158,7 @@ export function RestoreShopCard() {
             </span>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

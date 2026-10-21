@@ -10,6 +10,7 @@ import {
 } from "@/lib/exports/json";
 import type { DatabaseSnapshot } from "@/lib/db";
 import { describeSaveResult, saveDocument } from "@/lib/files";
+import { RestoreShopCard } from "@/components/RestoreShopCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -96,6 +97,15 @@ export function BackupCard() {
           Les préférences (nom, couleur, dossier, PIN) ne sont pas incluses : elles sont propres à
           cet appareil.
         </p>
+
+        {/* La RESTAURATION SERVEUR : la copie d'archive de l'orchestrateur. C'est le
+            filet quand le téléphone a perdu ses données (suppression, vol, changement
+            d'appareil) — le fichier ci-dessus, lui, suppose qu'on a un fichier sous la
+            main. Les deux ne se confondent pas : l'un part de l'archive du serveur,
+            l'autre d'un fichier de l'appareil. */}
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+          <RestoreShopCard />
+        </div>
       </CardContent>
 
       <AlertDialog open={pending !== null} onOpenChange={(v) => !v && setPending(null)}>

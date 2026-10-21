@@ -14,7 +14,6 @@ import { PinCard } from "./PinCard";
 import { DeleteShopCard } from "./DeleteShopCard";
 import { ResignCard } from "./ResignCard";
 import { SubscriptionCard } from "./SubscriptionCard";
-import { RestoreShopCard } from "@/components/RestoreShopCard";
 
 export function SettingsPage() {
   const { features } = usePreferences();
@@ -70,7 +69,6 @@ export function SettingsPage() {
         <TabsContent value="systeme" className="mt-3 space-y-3">
           <PinCard />
           <BackupCard />
-          <RestoreShopCard />
           <InstallCard />
         </TabsContent>
 
