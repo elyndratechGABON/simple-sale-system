@@ -9,10 +9,12 @@ import { setLock } from "./lock";
 import {
   APP_ORIGIN,
   APP_VERSION,
+  SETTING_GRACE_ENDS_AT,
   SETTING_KEYWORD_CLAIM,
   SETTING_KEYWORD_REVEALED,
   SETTING_LOCK_REASON,
   SETTING_LOCKED,
+  SETTING_MAINTENANCE,
 } from "./settings";
 import type { AdminCommand, HandshakeResult, LockReason, SubscriptionRequestStatus } from "./types";
 
@@ -72,6 +74,8 @@ export async function handshake(): Promise<HandshakeResult> {
       over_limit?: boolean;
       grace_period?: boolean;
       grace_ends_at?: number;
+      /** Mode maintenance : la caisse cesse de synchroniser, elle encaisse quand même. */
+      maintenance?: { enabled?: boolean; message?: string };
       commands: AdminCommand[];
       shop?: { subscription_end_date?: number };
       account?: { max_devices?: number; device_count?: number; id?: string };
@@ -81,6 +85,19 @@ export async function handshake(): Promise<HandshakeResult> {
     };
 
     await applyAccountMetadata(data);
+
+    // Le mode maintenance est retenu tel quel : la caisse l'affiche et cesse de
+    // synchroniser. Il est EFFACÉ dès que le serveur dit que c'est fini (une levée
+    // de maintenance ne doit pas laisser les caisses en carence).
+    const maintenance = data.maintenance;
+    if (maintenance && maintenance.enabled) {
+      await setSetting(SETTING_MAINTENANCE, {
+        enabled: true,
+        message: maintenance.message ?? "",
+      });
+    } else {
+      await setSetting(SETTING_MAINTENANCE, null);
+    }
 
     const nextApplied = [...applied];
     for (const command of data.commands ?? []) {

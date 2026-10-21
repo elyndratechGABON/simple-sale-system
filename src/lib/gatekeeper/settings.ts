@@ -15,3 +15,14 @@ export const SETTING_GRACE_ENDS_AT = "gatekeeper_grace_ends_at";
 export const SETTING_DELETE_REQUEST = "gatekeeper_delete_request";
 export const SETTING_KEYWORD_CLAIM = "gatekeeper_keyword_claim";
 export const SETTING_KEYWORD_REVEALED = "gatekeeper_keyword_revealed";
+/**
+ * Mode maintenance : l'orchestrateur l'annonce à CHAQUE handshake. La caisse cesse
+ * alors de pousser/tirer ses opérations sur le relais — elle encaisse toujours
+ * (hors ligne d'abord), ses opérations restent en file et repartiront à la levée.
+ */
+export const SETTING_MAINTENANCE = "gatekeeper_maintenance";
+
+export interface MaintenanceState {
+  enabled: boolean;
+  message: string;
+}

@@ -27,6 +27,7 @@ import { Header } from "../components/Header";
 import { BottomNav } from "../components/Nav";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { RenewalBanner } from "../components/RenewalBanner";
+import { MaintenanceBanner } from "../components/MaintenanceBanner";
 import { SuspendedScreen } from "../components/SuspendedScreen";
 import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
 import { DeleteRequestDialog } from "../components/DeleteRequestDialog";
@@ -105,6 +106,7 @@ function AppLayout() {
     <>
       <div className={`flex min-h-screen flex-col ${gradientBg}`}>
         <Header />
+        <MaintenanceBanner />
         <RenewalBanner />
         {/* `.app-main` (styles.css) réserve exactement `--bottomnav-h` + marge système :
             la barre d'onglets est en `fixed` sous `lg` et ne pousse rien — sans cette

@@ -2,6 +2,7 @@ import { ensureIdentity, isSharedGroup } from "@/lib/syncengine/identity";
 import { purgeSyncedOps } from "@/lib/syncengine/outbox";
 import { exchangeOps, relayTransport, type SyncState } from "@/lib/syncengine/transport";
 import { getOpsRelayUrl, getOpsToken } from "./url";
+import { isMaintenanceOn } from "./maintenance";
 
 // Tolérance d'arrière-plan : la caisse sonne (handshake) toutes les minutes — c'est ce
 // qui récupère vite une suspension ou un message — mais ne pousse les agrégats qu'au
@@ -25,10 +26,14 @@ const OPS_TTL_MS = 30 * 86400_000;
  * ont convergé (rafraîchissement des écrans sans attendre la manœuvre).
  */
 export async function runOpsExchange(): Promise<SyncState | null> {
-  // Vitest charge `.env.local` : sans ce garde, un test qui déclenche l'échange pousserait
+  // Vitest charge `.env.local` : sans ce garde, un test qui déclencherait l'échange pousserait
   // de VRAIES ops (signées, avec le vrai jeton) sur le relais de production. Les tests
   // qui veulent un transport injectent `exchangeOps(makeRelay().client)` directement.
   if (import.meta.env.VITEST) return null;
+  // MODE MAINTENANCE : les caisses cessent de pousser/tirer leurs opérations. Elles
+  // encassent toujours (hors ligne d'abord) ; leurs opérations restent en file et
+  // repartiront à la levée du mode.
+  if (await isMaintenanceOn()) return null;
   const identity = await ensureIdentity();
   if (!isSharedGroup(identity.shopId)) return null; // caisse jamais inscrite → rien à partager
   const url = getOpsRelayUrl();
