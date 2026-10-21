@@ -9,7 +9,7 @@ import {
   listPendingCatalogueRequests,
   markCatalogueRequestSnapshotSent,
 } from "../../db";
-import { emitShareOps, pairedEmployees } from "../sharing";
+import { emitShareOps, markSharePublished, pairedEmployees } from "../sharing";
 import { releaseSeat } from "@/lib/gatekeeper/seat";
 import type {
   CatalogueRequestPayload,
@@ -32,13 +32,13 @@ import { publishFreshCatalog } from "./catalog";
  * de rejoindre) : la publication automatique, elle, ne se fait que si le catalogue a
  * changé — et l'op resterait dans l'outbox, invisible.
  */
-async function pousserOutbox(client: TransportClient, shopId: string): Promise<void> {
+async function pousserOutbox(client: TransportClient, shopId: string): Promise<boolean> {
   const pending = await listPendingOps(shopId);
-  if (pending.length === 0) return;
+  if (pending.length === 0) return false;
   const signed = await signAll(pending);
-  if (await client.push(shopId, signed)) {
-    await markOpsSynced(pending.map((o) => o.id));
-  }
+  if (!(await client.push(shopId, signed))) return false;
+  await markOpsSynced(pending.map((o) => o.id));
+  return true;
 }
 
 /** Cycle complet d'un appareil : pousse son outbox, tire ce que les autres ont laissé,
@@ -155,6 +155,11 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         const id = (demande.payload as CatalogueRequestPayload | undefined)?.requester_id;
         if (id && !cibles.includes(id)) cibles.push(id);
       }
+      // Les parts de catalogue à publier MAINTENANT : le nouvel arrivant, et les
+      // pairs jamais servis. `parts` est la mémoire de ce qui part — l'empreinte de
+      // publication n'est mémorisée qu'APRÈS un push réussi (cf. `markSharePublished`),
+      // sinon la rotation suivante republierait le même instantané.
+      const parts: { peerId: string; signature: string; at: number }[] = [];
       if (newcomerAnnounced) {
         // L'op d'annonce est dans `foreign` : le nouveau pair est donc déjà enregistré.
         for (const peer of peers) if (!cibles.includes(peer.id)) cibles.push(peer.id);
@@ -162,19 +167,33 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         // délibéré, pas un effet de bord de la republication : `publishFreshCatalog`
         // ne republie que si le catalogue du propriétaire a CHANGÉ — un écran qui
         // rejoint un commerce déjà en service (le catalogue a donc déjà été publié à
-        // l'écran précédent) n'aurait jamais rien reçu. C'était le cas du premier
-        // employé arrivant sur un catalogue déjà partagé : aucun instantané pour lui.
+        // l'écran précédent) n'aurait jamais rien reçu.
         for (const op of foreign) {
           if (op.type !== "device.announce") continue;
           if (knownBefore.has(op.entity_id)) continue;
           const peer = peers.find((p) => p.id === op.entity_id);
-          if (peer) await emitShareOps(peer);
+          if (!peer) continue;
+          const part = await emitShareOps(peer);
+          if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
         }
-        // … et l'instantané part TOUT DE SUITE. L'attendre la republication
-        // automatique, c'est ne jamais le publier : celle-ci ne se fait que si le
-        // catalogue a changé (c'est son but), et le catalogue n'a pas bougé.
-        await pousserOutbox(client, identity.shopId);
       }
+      // Un pair qui n'a JAMAIS reçu de catalogue n'a pas son stock : on le sert,
+      // quoi qu'il arrive. C'est la reprise après un incident — une annonce
+      // appliquée sans instantané, un écran arrivé pendant une coupure, un
+      // propriétaire qui n'avait pas bougé son catalogue depuis.
+      for (const peer of peers) {
+        if (peer.shared_published_at) continue;
+        if (parts.some((p) => p.peerId === peer.id)) continue;
+        const part = await emitShareOps(peer);
+        if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
+      }
+      // L'outbox part tout de suite : sans ce mini-push, l'instantané resterait dans
+      // la file (la publication automatique ne se fait que si le catalogue a changé,
+      // et c'est précisément le cas où il n'a pas bougé).
+      if (parts.length > 0 && (await pousserOutbox(client, identity.shopId))) {
+        for (const p of parts) await markSharePublished(p.peerId, p.signature, p.at);
+      }
+
       // Appareils fraîchement approuvés : envoi IMMÉDIAT du snapshot (hors throttle).
       for (const deviceId of freshApproves) {
         const peer = peers.find((p) => p.id === deviceId);

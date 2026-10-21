@@ -119,6 +119,33 @@ describe("transport P2P via relais", () => {
     ).toContain("Coca 1L");
   });
 
+  it("un pair jamais servi reçoit son stock à la rotation suivante", async () => {
+    // La reprise : un pair appairé mais jamais servi (annonce appliquée sans
+    // instantané, arrivée pendant une coupure) doit être servi dès la rotation
+    // suivante, même si le catalogue du propriétaire n'a pas bougé.
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const id = getIdentity();
+    const relay = makeRelay();
+    await addProduct({
+      name: "Coca 1L",
+      price: 600,
+      cost: 300,
+      category: "Boisson",
+      stock: 10,
+    });
+    // Un pair appairé, jamais servi.
+    await pairPeer("jacques");
+
+    await exchangeOps(relay.client);
+    const remote = await relay.client.pull(id.shopId, id.deviceId);
+    const pourJacques = remote
+      .filter((o) => o.type === "catalogue.snapshot")
+      .find((o) => (o.payload as { target_device_id?: string }).target_device_id === "jacques");
+    expect(pourJacques).toBeDefined();
+  });
+
   it("le propriétaire republie à chaque employé, et seulement quand SA part change", async () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
