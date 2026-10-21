@@ -18,6 +18,7 @@
 
 import { applyRemoteOps } from "@/lib/syncengine/apply";
 import { getIdentity, refreshShopId } from "@/lib/syncengine/identity";
+import { getShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { getDB } from "@/lib/db";
 import type { SyncOp } from "@/lib/syncengine/types";
@@ -173,5 +174,14 @@ async function ensureRestoreIdentity(): Promise<{ deviceId: string; shopId: stri
       "Votre caisse n'est pas encore rattachée à un compte. Démarrez le service puis relancez la connexion.",
     );
   }
-  return { deviceId: identity.deviceId, shopId: refreshed };
+  // L'identifiant transmis est celui de la FICHE BOUTIQUE (celui que le serveur
+  // connaît), pas l'identité du canal P2P : ce sont deux identifiants pour le même
+  // téléphone, et le serveur ne reconnaît que le premier. Avec le second, la
+  // restauration était refusée d'emblée (« écran inconnu du service ») — donc
+  // IMPOSSIBLE, alors que la carte « Restaurer » était là depuis le début.
+  const profile = await getShopProfile();
+  if (!profile?.deviceId) {
+    throw new Error("Aucune boutique enregistrée sur cet appareil : impossible de restaurer.");
+  }
+  return { deviceId: profile.deviceId, shopId: refreshed };
 }
