@@ -6,7 +6,7 @@
 // Le lot capturé est l'outbox brute signée (annonce + départ), PAS `captureSigned` :
 // celui-ci ré-émettrait une annonce APRÈS le départ (l'appareil qui repart de zéro se
 // ré-annonce), ce qui recréerait la fiche et masquerait l'effet du départ.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   getDB,
   addEmployeeHistory,
@@ -19,7 +19,13 @@ import { ensureIdentity, getDeviceKeys, resetIdentityForTests } from "./identity
 import { setCachedIdentity, setCachedKeys } from "./identity/state";
 import { signAll } from "./ops";
 import { listPendingOps } from "./outbox";
-import { announceDevice, emitLeaveOp, generatePairingCode, leaveShop } from "./pairing";
+import {
+  announceDevice,
+  departFromGroup,
+  emitLeaveOp,
+  generatePairingCode,
+  leaveShop,
+} from "./pairing";
 import { listPairedDevices } from "./peers";
 import { PAIRING_KEYS } from "./types";
 import { applyRemoteOpsSigned } from "./__tests__/setup";
@@ -213,5 +219,33 @@ describe("démission — device.leave", () => {
     expect(
       (await listPairedDevices(idO.shopId)).find((d) => d.id === leaveOp2!.device_id),
     ).toBeUndefined();
+  });
+
+  it("un départ rend la PLACE à l'orchestrateur (le quota compte les écrans)", async () => {
+    // Le geste qui manquait à la suppression de boutique : l'écran disparaissait
+    // chez lui mais CONTINUAIT de compter une place côté orchestrateur — le commerce
+    // ne pouvait plus recrouver d'employé (« nombre limite d'appareils atteint »).
+    const appels: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubEnv("VITE_ORCHESTRATOR_URL", "https://orchestrateur.test");
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      appels.push({ url: String(url), body: JSON.parse(String(init?.body ?? "{}")) });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    await departFromGroup();
+
+    const appel = appels.find((a) => a.url.endsWith("/api/v1/entry/release"));
+    expect(appel).toBeDefined();
+    // L'identifiant de l'écran CHEZ LE SERVEUR : c'est lui que le serveur décompte.
+    expect(appel!.body.device_id).toBe((await getShopProfile())?.deviceId);
+
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 });

@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { getShopProfile, purgeAllData } from "@/lib/db";
 import { deleteShopRemote, resetGatekeeper } from "@/lib/gatekeeper";
+import { departFromGroup } from "@/lib/syncengine/pairing";
 import { savePreferences } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,11 @@ export function DeleteShopCard() {
         // continue la purge locale — l'utilisateur ne doit pas rester bloqué.
         toast.warning(`Serveur : ${remote.error ?? "injoignable"}. Purge locale quand même.`);
       }
+      // LE DÉPART, avant la purge : le stock restant retourne au patron, le groupe est
+      // prévenu, et la PLACE est rendue à l'orchestrateur. Sans ce geste, l'écran
+      // supprimé continuait de compter une place — le commerce ne pouvait plus
+      // recrouver d'employé (« nombre limite d'appareils atteint »).
+      await departFromGroup();
       await purgeAllData();
       resetGatekeeper();
       savePreferences({ onboarded: false });

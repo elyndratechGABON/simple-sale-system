@@ -95,15 +95,30 @@ export async function finalizeLeave(): Promise<void> {
   savePreferences({ onboarded: false });
 }
 
-/** Le tout pour un bouton : restituer le stock, pousser le départ, rendre la place, tout purger. */
-export async function leaveShop(): Promise<void> {
+/**
+ * Les trois gestes d'un DÉPART, communs à la démission ET à la suppression de la
+ * boutique par l'écran lui-même :
+ *
+ *  1. le stock restant retourne au patron (op `stock.adjusted` ciblée) ;
+ *  2. le groupe est prévenu (op `device.leave` signée) — la fiche de l'écran disparaît
+ *     du registre de tous les pairs ;
+ *  3. la PLACE est rendue à l'orchestrateur : le quota compte les écrans du compte,
+ *     et sans libération un commerce qui a eu un employé ne peut plus en recrouver
+ *     un autre (« nombre limite d'appareils atteint »).
+ *
+ * Les trois sont best-effort : un réseau coupé ne doit pas empêcher le départ, et la
+ * place sera rendue au prochain échange (le patron rend la place en recevant l'op de
+ * départ).
+ */
+export async function departFromGroup(): Promise<void> {
   await emitStockReturnOps();
   await emitLeaveOp();
-  // La PLACE est rendue à l'orchestrateur AVANT la purge : après, la fiche locale
-  // (identifiant, enseigne, identifiants du compte) a disparu et la preuve de soi
-  // avec. Best-effort : si le réseau manque, le propriétaire rendra la place en
-  // recevant l'op de départ.
   const profile = await getShopProfile();
   if (profile?.deviceId) await releaseSeat(profile.deviceId);
+}
+
+/** Le tout pour un bouton : restituer le stock, pousser le départ, rendre la place, tout purger. */
+export async function leaveShop(): Promise<void> {
+  await departFromGroup();
   await finalizeLeave();
 }

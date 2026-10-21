@@ -35,6 +35,7 @@ import {
 } from "@/lib/gatekeeper";
 import { getShopProfile, purgeAllData, closeEmployeeHistory } from "@/lib/db";
 import { ensureIdentity, resetDeviceIdentity } from "@/lib/syncengine/identity";
+import { departFromGroup } from "@/lib/syncengine/pairing";
 import { resetGatekeeper } from "@/lib/gatekeeper";
 import { savePreferences } from "@/lib/settings";
 import { ShieldAlert, Trash2 } from "lucide-react";
@@ -72,6 +73,10 @@ export function DeleteRequestDialog() {
         toast.warning(`Serveur : ${remote.error ?? "injoignable"}. Purge locale quand même.`);
       }
       const identity = await ensureIdentity();
+      // LE DÉPART, avant la purge : le stock restant retourne au patron, le groupe est
+      // prévenu, et la PLACE est rendue à l'orchestrateur (le quota compte les écrans
+      // du compte — sans libération, l'écran supprimé garderait sa place pour toujours).
+      await departFromGroup();
       await closeEmployeeHistory(identity.shopId);
       await purgeAllData();
       await resetDeviceIdentity();
