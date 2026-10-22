@@ -183,15 +183,14 @@ export function RestoreShopCard() {
         </summary>
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Si vous avez lancé l&apos;orchestrateur sur votre ordinateur, indiquez son adresse (par
-            exemple <code>http://192.168.1.24:8788</code>). Laissez vide pour utiliser le service en
-            ligne.
+            Si vous avez lancé l&apos;orchestrateur sur votre ordinateur, indiquez son adresse.
+            Laissez vide pour utiliser le service en ligne.
           </p>
           <div className="flex gap-2">
             <Input
               value={adresseLocale}
               onChange={(e) => setAdresseLocale(e.target.value)}
-              placeholder="http://192.168.1.24:8788"
+              placeholder="https://mon-orchestrateur.local:8788"
               inputMode="url"
               aria-label="Adresse de l'orchestrateur local"
             />
@@ -207,6 +206,22 @@ export function RestoreShopCard() {
           {getLocalOrchestratorUrl() && (
             <p className="text-xs text-muted-foreground">
               Adresse enregistrée : {getLocalOrchestratorUrl()}
+            </p>
+          )}
+          {/* L'HTTPS N'EST PAS OPTIONNEL : l'application est servie en HTTPS, et le
+              navigateur REFUSE qu'une page HTTPS appelle une adresse HTTP — c'est le
+              « contenu mixte », bloqué sans exception. Une adresse `http://192.168…`
+              échouerait donc TOUJOURS, et l'utilisateurcroirait l'instance locale
+              éteinte alors qu'elle répond très bien. D'où l'avertissement ci-dessous,
+              qui est la première cause de ce type d'échec. */}
+          {adresseLocale.trim().startsWith("http://") && (
+            <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Cette adresse en HTTP sera refusée par le navigateur : l&apos;application est en
+                HTTPS et ne peut pas appeler une adresse non chiffrée. Utilisez une adresse{" "}
+                <code>https://</code>.
+              </span>
             </p>
           )}
         </div>
