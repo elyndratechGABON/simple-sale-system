@@ -17,6 +17,30 @@ if (!("window" in globalThis)) {
   (globalThis as Record<string, unknown>).window = globalThis;
 }
 
+// `localStorage` : l'environnement node n'en a pas. Les préférences de l'application
+// (thème, tables, adresse de l'orchestrateur local) y sont stockées — sans lui, les
+// modules qui les lisent lisent `undefined` et plantent.
+// Un simple `Map` suffit : il n'est question que de lire et d'écrire des chaînes.
+if (!("localStorage" in globalThis)) {
+  const memoire = new Map<string, string>();
+  (globalThis as Record<string, unknown>).localStorage = {
+    getItem: (cle: string) => memoire.get(cle) ?? null,
+    setItem: (cle: string, valeur: string) => {
+      memoire.set(cle, String(valeur));
+    },
+    removeItem: (cle: string) => {
+      memoire.delete(cle);
+    },
+    clear: () => {
+      memoire.clear();
+    },
+    key: (index: number) => Array.from(memoire.keys())[index] ?? null,
+    get length() {
+      return memoire.size;
+    },
+  };
+}
+
 /**
  * Les ops en attente de l'APPAREIL COURANT, SIGNÉES par sa clé — c'est-à-dire ce que
  * `exchangeOps` pousserait réellement au relais.

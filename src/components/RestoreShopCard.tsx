@@ -1,13 +1,9 @@
-import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Download, Loader2, ShieldCheck } from "lucide-react";
-import {
-  consumeRestore,
-  forgetRestoreJob,
-  recallRestoreJob,
-  rememberRestoreJob,
-  requestRestore,
-} from "@/lib/restore";
+import { useEffect, useState } from "react";
+import { AlertTriangle, CheckCircle2, Download, Loader2, Server, ShieldCheck } from "lucide-react";
+import { consumeRestore, forgetRestoreJob, recallRestoreJob, requestRestore } from "@/lib/restore";
+import { getLocalOrchestratorUrl, setLocalOrchestratorUrl } from "@/lib/sync/local-server";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /**
  * Récupération d'une boutique depuis l'archive de l'orchestrateur.
@@ -26,14 +22,31 @@ type Phase =
 
 export function RestoreShopCard() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  // L'adresse de l'instance locale (le PC du commerçant). Elle change d'une fois sur
+  // deux (l'IP du réseau change), d'où un champ plutôt qu'une valeur compilée.
+  const [adresseLocale, setAdresseLocale] = useState("");
+
+  useEffect(() => {
+    setAdresseLocale(getLocalOrchestratorUrl());
+  }, []);
+
+  const enregistrerAdresse = () => {
+    setLocalOrchestratorUrl(adresseLocale);
+    setAdresseLocale(getLocalOrchestratorUrl());
+  };
+
+  const effacerAdresse = () => {
+    setLocalOrchestratorUrl(null);
+    setAdresseLocale("");
+  };
 
   const run = async () => {
     setPhase({ kind: "waiting", message: "Connexion au service…" });
     try {
       // 1. Demande (ou relance) le job. Le serveur répond `pending` tant que
       // l'orchestrateur n'a pas drainé le relais — donc on le dit, on ne devine pas.
+      // La demande mémorise le job : l'UI peut donc survivre à un rechargement.
       const req = await requestRestore();
-      await rememberRestoreJob(req.job_id);
 
       if (req.status !== "ready") {
         setPhase({ kind: "waiting", message: req.message });
@@ -159,6 +172,45 @@ export function RestoreShopCard() {
           </div>
         )}
       </div>
+
+      {/* L'INSTANCE LOCALE : l'orchestrateur du commerçant, allumé chez lui. Son adresse
+          n'est pas compilée dans l'application (elle change avec le réseau), d'où un
+          champ. Vide = le cloud sert la restauration, comme avant. */}
+      <details className="rounded-lg border border-dashed p-3">
+        <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium">
+          <Server className="h-4 w-4 text-muted-foreground" />
+          Récupérer depuis mon orchestrateur local
+        </summary>
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Si vous avez lancé l&apos;orchestrateur sur votre ordinateur, indiquez son adresse (par
+            exemple <code>http://192.168.1.24:8788</code>). Laissez vide pour utiliser le service en
+            ligne.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={adresseLocale}
+              onChange={(e) => setAdresseLocale(e.target.value)}
+              placeholder="http://192.168.1.24:8788"
+              inputMode="url"
+              aria-label="Adresse de l'orchestrateur local"
+            />
+            <Button type="button" variant="outline" onClick={enregistrerAdresse}>
+              Enregistrer
+            </Button>
+            {getLocalOrchestratorUrl() && (
+              <Button type="button" variant="ghost" onClick={effacerAdresse}>
+                Effacer
+              </Button>
+            )}
+          </div>
+          {getLocalOrchestratorUrl() && (
+            <p className="text-xs text-muted-foreground">
+              Adresse enregistrée : {getLocalOrchestratorUrl()}
+            </p>
+          )}
+        </div>
+      </details>
     </section>
   );
 }

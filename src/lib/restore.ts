@@ -20,6 +20,7 @@ import { applyRemoteOps } from "@/lib/syncengine/apply";
 import { getIdentity, refreshShopId } from "@/lib/syncengine/identity";
 import { getShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
+import { adressesRestore, erreurReseau } from "@/lib/sync/adresses";
 import { getDB } from "@/lib/db";
 import type { SyncOp } from "@/lib/syncengine/types";
 
@@ -44,9 +45,55 @@ export interface RestoreProgress {
 
 const REQ_TIMEOUT_MS = 15_000;
 const KEY_RESTORE_JOB = "restore_job_id";
+/** L'adresse qui a servi à OUVRIR le job : le job n'existe que là. */
+const KEY_RESTORE_BASE = "restore_base_url";
+
+/**
+ * Les instances locales à essayer, dans l'ordre : celle configurée (si elle
+ * existe), puis le cloud.
+ *
+ * Le repli sur le cloud est la RÉSILIENCE de la caisse : une instance locale
+ * éteinte ne doit pas rendre la récupération impossible. Le cloud garde l'archive
+ * courante — le local sert surtout ce que le cloud a oublié.
+ */
+function adresses(): string[] {
+  return adressesRestore(getOrchestratorUrl());
+}
+
+/**
+ * Les identifiants du compte, quand on les a.
+ *
+ * Le cloud n'en a pas besoin (il connaît la caisse par son `device_id`), mais
+ * l'instance locale les EXIGE : elle tient l'archive du compte et ne la sert
+ * qu'à lui. Sans eux, la restauration locale serait refusée.
+ */
+async function identifiantsCompte(): Promise<{
+  account_phone: string;
+  account_password: string;
+} | null> {
+  const profile = await getShopProfile();
+  if (!profile?.accountPhone || !profile.accountPassword) return null;
+  return { account_phone: profile.accountPhone, account_password: profile.accountPassword };
+}
 
 async function orchestratorPost<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${getOrchestratorUrl()}${path}`, {
+  const liste = adresses();
+  let dernier: unknown = null;
+  for (const base of liste) {
+    try {
+      return await postUn<T>(base, path, body);
+    } catch (err) {
+      // Un refus du service (401, 403…) est une RÉPONSE : on la remonte, on ne
+      // va pas demander au cloud à la place (il répondrait la même chose).
+      if (!erreurReseau(err)) throw err;
+      dernier = err;
+    }
+  }
+  throw dernier instanceof Error ? dernier : new Error("Aucun service de sauvegarde n'a répondu.");
+}
+
+async function postUn<T>(base: string, path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -75,10 +122,37 @@ async function orchestratorPost<T>(path: string, body: unknown): Promise<T> {
  */
 export async function requestRestore(): Promise<RestoreRequestResult> {
   const identity = await ensureRestoreIdentity();
-  return orchestratorPost<RestoreRequestResult>("/api/v1/restore", {
+  const identifiants = await identifiantsCompte();
+  const resultat = await orchestratorPost<RestoreRequestResult>("/api/v1/restore", {
     device_id: identity.deviceId,
     shop_id: identity.shopId,
+    // L'instance locale exige les identifiants du compte : sans eux, elle refuse
+    // de servir l'archive (elle ne la distribue pas à quiconque approche).
+    ...(identifiants ?? {}),
   });
+  // On note l'adresse qui a servi : le job sera relu AU MÊME endroit, même si le
+  // commerçant change d'adresse entre-temps.
+  await memoriserBaseRestore(resultat.job_id);
+  return resultat;
+}
+
+/**
+ * L'adresse qui a ouvert le job. Mémorisée à l'ouverture : le job est un jeton
+ * qui n'existe que sur le service qui l'a créé.
+ */
+async function memoriserBaseRestore(jobId: string): Promise<void> {
+  await getDB().settings.put({ key: KEY_RESTORE_JOB, value: jobId });
+  await getDB().settings.put({ key: KEY_RESTORE_BASE, value: adresses()[0] });
+}
+
+async function adresseDuJob(jobId: string): Promise<string> {
+  const memorise = await getDB()
+    .settings.get(KEY_RESTORE_BASE)
+    .then((r) => (typeof r?.value === "string" ? r.value : null))
+    .catch(() => null);
+  if (memorise) return memorise;
+  // Ancien job (mémorisé avant cette version) : on retombe sur l'adresse courante.
+  return adresses()[0];
 }
 
 /**
@@ -87,6 +161,11 @@ export async function requestRestore(): Promise<RestoreRequestResult> {
  * atteinte et `processed_ops` fait le reste.
  *
  * Le job reste REJOUABLE côté serveur : le rappeler ne détruit rien.
+ *
+ * ⚠️ Le `job_id` fait office de JETON d'accès : il est aléatoire et n'existe que si
+ * les identifiants du compte ont été vérifiés à l'ouverture. C'est le même modèle
+ * que le cloud — mais sur un réseau local, le trafic est visible par les voisins
+ * Wi-Fi : l'instance locale devrait donc être jointe depuis un réseau de confiance.
  */
 export async function consumeRestore(
   jobId: string,
@@ -104,9 +183,13 @@ export async function consumeRestore(
   let rounds = 0;
   const MAX_ROUNDS = 2000;
 
+  // Le job a été ouvert sur UNE adresse (le local s'il répondait, le cloud sinon).
+  // On interroge donc la MÊME adresse pour le relire : le job n'existe que là.
+  const base = await adresseDuJob(jobId);
+
   while (rounds++ < MAX_ROUNDS) {
     const url =
-      `${getOrchestratorUrl()}/api/v1/restore/${encodeURIComponent(jobId)}` +
+      `${base}/api/v1/restore/${encodeURIComponent(jobId)}` +
       `?device_id=${encodeURIComponent(identity.deviceId)}` +
       `&shop_id=${encodeURIComponent(identity.shopId)}&cursor=${cursor}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(REQ_TIMEOUT_MS) });
@@ -148,10 +231,6 @@ export async function consumeRestore(
 }
 
 /** Le job est mémorisé pour que l'UI survive à un rechargement de page. */
-export async function rememberRestoreJob(jobId: string): Promise<void> {
-  await getDB().settings.put({ key: KEY_RESTORE_JOB, value: jobId });
-}
-
 export async function recallRestoreJob(): Promise<string | null> {
   const row = await getDB().settings.get(KEY_RESTORE_JOB);
   return typeof row?.value === "string" ? row.value : null;
@@ -159,6 +238,7 @@ export async function recallRestoreJob(): Promise<string | null> {
 
 export async function forgetRestoreJob(): Promise<void> {
   await getDB().settings.delete(KEY_RESTORE_JOB);
+  await getDB().settings.delete(KEY_RESTORE_BASE);
 }
 
 /**
