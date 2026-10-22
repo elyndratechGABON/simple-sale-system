@@ -179,3 +179,14 @@ test → build → commit`, **dans la même séquence**. L'autorisation couvre l
   `.tsx` est intestable et finit en règle non documentée ; il appartient à `src/lib/`,
   avec son test à côté. Un composant qui exporte autre chose qu'un composant déclenche
   `react-refresh/only-export-components`.
+- **L'ORCHESTRATEUR LOCAL se vise en HTTPS, ou pas du tout.** L'application est servie
+  en HTTPS, et le navigateur REFUSE qu'une page HTTPS appelle une adresse HTTP
+  (contenu mixte) : une instance locale en `http://192.168.x.x` est INJOIGNABLE, et
+  rien côté serveur ne le dit — l'utilisateur croit l'instance éteinte alors qu'elle
+  répond. L'adresse de l'instance est RUNTIME (`src/lib/sync/local-server.ts`,
+  `localStorage`), jamais compilée : elle change avec le réseau et l'instance n'est
+  allumée que par intermittence. La restauration interroge le local PUIS le cloud :
+  une instance éteinte ne doit pas rendre la récupération impossible, mais un
+  REFUS (401/403) n'est pas une panne — il est remonté tel quel, sans changer de
+  service. Le `job_id` est un jeton qui n'existe que sur le service qui l'a ouvert :
+  l'adresse est mémorisée avec lui.
