@@ -36,10 +36,15 @@ export function useSaleMutations(hooks: {
   const saleMut = useMutation({
     mutationFn: (input: SaleInput) => createSale(input),
     onSuccess: (sale) => {
-      // `products` aussi : encaisser sort le stock, et l'accueil comme le catalogue
-      // affichaient encore l'ancienne quantité.
+      // Invalidation IMMÉDIATE, locale — l'écran de VEDETTE même honneur : un employé
+      // qui encaisse doit voir son accueil bouger avant le cycle de sync, pas après.
+      // `products` : encaisser sort du stock. `sale_items` : les chips d'articles.
+      // `reports` : étagère de la comptabilité. (Les clés dérivées du Dashboard, du
+      // rapport et de l'Équipe partagent ces préfixes — React Query invalide en pile.)
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["sale_items"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
       playSuccessChime();
       onSold(sale);
     },
@@ -50,6 +55,8 @@ export function useSaleMutations(hooks: {
     mutationFn: () => closeDay(),
     onSuccess: (n) => {
       qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["sale_items"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
       onDayClosed(n);
     },
     onError: (e: Error) => toast.error(e.message),
