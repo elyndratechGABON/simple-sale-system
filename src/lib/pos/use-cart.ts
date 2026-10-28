@@ -8,9 +8,11 @@
 // paiement, le nombre de convives et la monnaie rendue. Tout ce qui décrit « qui on
 // encaisse et comment » est sans sens pour la vente suivante.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Product } from "@/lib/db";
+import { getCachedIdentity } from "../syncengine/identity";
+import { syncMyReservations } from "../syncengine/reservations";
 import { cartKey, type CartEntry, type FreeLine, type UiLine } from "./types";
 import {
   addOneToLine,
@@ -128,6 +130,27 @@ export function useCart(products: Product[]) {
     setCart({});
     setFreeLines([]);
   }, []);
+
+  // RÉSERVATION OPTIMISTE : l'état du panier devient la source des op
+  // `stock.reserve` / `stock.release` — l'ÉCART est émis après chaque changement
+  // (comparaison avec le registre local), jamais l'état complet. La vente
+  // encaissée vide le panier, donc les réservations repartent d'elles-mêmes au
+  // moment de l'écrit ; `sale.created` porte le vrai décrément.
+  useEffect(() => {
+    const desired = new Map<string, number>();
+    for (const [key, entry] of Object.entries(cart)) {
+      // La clé du panier PORTE le produit : `${p.id}::${variantId}` (ou `p.id`).
+      const sep = key.indexOf("::");
+      const productId = sep === -1 ? key : key.slice(0, sep);
+      const variantId = sep === -1 ? undefined : key.slice(sep + 2);
+      const product = products.find((x) => x.id === productId);
+      if (!product || product.type === "service" || !Number.isFinite(product.stock)) continue;
+      const regKey = `${product.id}|${variantId ?? ""}`;
+      desired.set(regKey, (desired.get(regKey) ?? 0) + entry.qty);
+    }
+    void syncMyReservations(desired, getCachedIdentity());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, products]);
 
   return {
     cart,

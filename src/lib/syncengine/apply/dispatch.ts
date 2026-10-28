@@ -11,6 +11,7 @@ import {
   applyStockAdjusted,
 } from "./products";
 import { applySaleCancelled, applySaleCreated } from "./sales";
+import { applyStockReleaseOp, applyStockReserveOp } from "../reservations";
 
 export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
   switch (op.type) {
@@ -97,6 +98,19 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
           }
         }
       }
+      break;
+    case "stock.reserve":
+      // Réservation optimiste d'un panier concurrent : déduite du DISPONIBLE
+      // (en mémoire, cf. `reservations.ts`) — jamais de la base. Dédup :
+      // un rejeu n'additionne pas deux fois.
+      if (await db.processed_ops.get(op.id)) break;
+      applyStockReserveOp(op);
+      break;
+    case "stock.release":
+      // Fin d'une réservation (retrait de panier, encaissement, tournée posée) :
+      // rend au disponible. Idempotent par la même déduplication.
+      if (await db.processed_ops.get(op.id)) break;
+      applyStockReleaseOp(op);
       break;
     case "sale.created":
       await applySaleCreated(db, op);

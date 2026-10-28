@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { nextTableLabel, type Target } from "@/lib/pos/types";
@@ -11,6 +11,8 @@ import { useTableMutations } from "@/lib/pos/use-table-mutations";
 import { usePosData } from "./usePosData";
 import { usePosUiState } from "./usePosUiState";
 import { usePosDerived } from "./usePosDerived";
+import { availableStock, useReservationsVersion } from "@/lib/syncengine/reservations";
+import { getCachedIdentity } from "@/lib/syncengine/identity";
 
 export type PosController = ReturnType<typeof usePos>;
 
@@ -22,9 +24,18 @@ export type PosController = ReturnType<typeof usePos>;
 export function usePos() {
   const ui = usePosUiState();
   const data = usePosData(ui.target);
-  const cart = useCart(data.products);
+  // RÉSERVATION OPTIMISTE : le stock des fiches n'a de sens pour la vente qu'AMPUTÉ
+  // de ce que les autres écrans retiennent dans leur panier — s'abonne à la version
+  // du registre pour rafraîchir à chaque op reçue du relais.
+  useReservationsVersion();
+  const products = useMemo(() => {
+    const me = getCachedIdentity()?.deviceId;
+    if (!me) return data.products;
+    return data.products.map((p) => ({ ...p, stock: availableStock(p, { excludeDeviceId: me }) }));
+  }, [data.products]);
+  const cart = useCart(products);
   const derived = usePosDerived({
-    products: data.products,
+    products,
     isService: data.isService,
     serviceTab: ui.serviceTab,
     filter: ui.filter,
