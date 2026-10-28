@@ -78,7 +78,11 @@ export function useTableMutations(hooks: {
       // comptoir le faisaient déjà — l'encaissement de table avait été oublié.
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["sale_items", sale.id] });
+      qc.invalidateQueries({ queryKey: ["sale_items"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
+      // Équipe : la vente part attribuée à l'écran qui encaisse (seller_device_id).
+      qc.invalidateQueries({ queryKey: ["activity_sales"] });
+      qc.invalidateQueries({ queryKey: ["activity_items"] });
       toast.success(`Table ${sale.table} encaissée`, {
         description: `Total ${formatFCFA(sale.total)} · Rendu ${formatFCFA(sale.change_due)}`,
       });
@@ -114,7 +118,11 @@ export function useTableMutations(hooks: {
       // doit être invalidé — sans quoi les autres écrans gardent l'ancienne quantité.
       qc.invalidateQueries({ queryKey: ["products"] });
       qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["sale_items", sale.id] });
+      qc.invalidateQueries({ queryKey: ["sale_items"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
+      // Équipe : CA de l'écran encaisseur.
+      qc.invalidateQueries({ queryKey: ["activity_sales"] });
+      qc.invalidateQueries({ queryKey: ["activity_items"] });
       notifyOwner(); // Trigger temps réel propriétaire + son
       toast.success(`Tournée encaissée sur la table ${sale.table}`, {
         description: `Total ${formatFCFA(sale.total)} · Rendu ${formatFCFA(sale.change_due)}`,

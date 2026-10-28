@@ -71,6 +71,11 @@ export async function payTable(saleId: string, cashGiven: number): Promise<Sale>
     if (cashGiven < total) throw new Error("Montant insuffisant.");
 
     const now = Date.now();
+    const identity = getIdentity();
+    // QUI encaisse : la vente d'une table doit remonter sous l'écran qui a encaissé
+    // (« Équipe » : le CA par employé, comme un comptoir). Sans ces champs, la vente
+    // était orpheline pour l'employé — le patron la voyait, lui non.
+    const sellerLabel = identity.role === "owner" ? "" : identity.employeeName?.trim() || "Employé";
     const settled: Sale = {
       ...sale,
       status: "paid",
@@ -80,6 +85,9 @@ export async function payTable(saleId: string, cashGiven: number): Promise<Sale>
       total,
       cash_given: cashGiven,
       change_due: cashGiven - total,
+      ...(sellerLabel
+        ? { seller_name: sellerLabel, seller_device_id: identity.deviceId }
+        : {}),
       ...touch(),
     };
     await db.sales.put(settled);
@@ -133,6 +141,9 @@ export async function payRound(
     if (cashGiven < roundTotal) throw new Error("Montant insuffisant.");
 
     const now = Date.now();
+    const identity = getIdentity();
+    // QUI encaisse la tournée : attribue la vente à l'écran qui encaisse (« Équipe »).
+    const sellerLabel = identity.role === "owner" ? "" : identity.employeeName?.trim() || "Employé";
     const settled: Sale = {
       id: uid(),
       timestamp: now,
@@ -145,6 +156,9 @@ export async function payRound(
       customers_count: 1,
       table: sale.table,
       status: "paid",
+      ...(sellerLabel
+        ? { seller_name: sellerLabel, seller_device_id: identity.deviceId }
+        : {}),
       ...touch(),
     };
     await db.sales.put(settled);
