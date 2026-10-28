@@ -18,6 +18,7 @@ import {
 } from "@/lib/pwa";
 import { autoCloseDay } from "@/lib/db";
 import { backgroundSync } from "@/lib/sync";
+import { runCriticalOpsExchange, CRITICAL_INTERVAL_MS } from "@/lib/sync/ops";
 import { loadLockState } from "@/lib/gatekeeper";
 import { unlockFromPaymentSms } from "@/lib/offline-unlock";
 import { clearSharedSmsUrl, extractSharedSms } from "@/lib/payments/share-target";
@@ -106,9 +107,21 @@ export function PwaBootstrap() {
     const onOnline = () => void sync();
     window.addEventListener("online", onOnline);
     const interval = window.setInterval(() => void sync(), SYNC_INTERVAL_MS);
+    // VOIE RAPIDE : toutes les SECONDES, pousser ce qui est critique (ventes,
+    // stock, réservations) sans attendre la minute — coût zéro hors file critique.
+    const fastInterval = window.setInterval(() => {
+      void runCriticalOpsExchange().then((state) => {
+        if (state && (state.pushed > 0 || state.applied > 0)) {
+          for (const key of SYNCED_QUERY_KEYS) {
+            void queryClient.invalidateQueries({ queryKey: key });
+          }
+        }
+      });
+    }, CRITICAL_INTERVAL_MS);
     return () => {
       window.removeEventListener("online", onOnline);
       window.clearInterval(interval);
+      window.clearInterval(fastInterval);
     };
   }, [queryClient]);
 

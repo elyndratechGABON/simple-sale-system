@@ -19,7 +19,9 @@ export type OpType =
   | "stock.low"
   | "stock.conflict"
   | "stock.reserve"
-  | "stock.release";
+  | "stock.release"
+  | "webrtc.offer"
+  | "webrtc.answer";
 
 /** Une opération du journal. Idempotente : rejouée, elle ne doit produire qu'UN effet. */
 export interface SyncOp {

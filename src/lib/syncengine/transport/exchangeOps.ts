@@ -24,6 +24,7 @@ import {
   type TransportClient,
 } from "./types";
 import { publishFreshCatalog } from "./catalog";
+import { deliverSignaling, forwardToPeers, startWebRtcMesh } from "../webrtc";
 
 /**
  * Pousse l'outbox vers le relais, tout de suite, sans attendre la fin de la rotation.
@@ -65,15 +66,27 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     let pushed = 0;
     if (pending.length > 0) {
       const signed = await signAll(pending);
+      // FAN-OUT direct : le lot signé part aussi sur les canaux WebRTC ouverts
+      // (LAN) — la latence passe de deux rotations relais à un aller-retour local.
+      // Le push relais garde le cycle : rattrapage des pairs hors LAN, retrouvaille.
+      forwardToPeers(signed);
       if (await client.push(identity.shopId, signed)) {
         await markOpsSynced(pending.map((o) => o.id));
         pushed = pending.length;
       }
     }
 
+    startWebRtcMesh();
+
     const remote = await client.pull(identity.shopId, identity.deviceId);
     const foreign: SyncOp[] = [];
     let skipped = 0;
+
+    // SIGNALISATION RTC : les ops webrtc.* n'ont rien à faire dans le dispatch
+    // (aucun état métier) — elles se consomment ici, au canal.
+    const signaling: SyncOp[] = remote.filter((op) => op.type.startsWith("webrtc."));
+    if (signaling.length > 0) deliverSignaling(signaling);
+    const remoteBusiness = remote.filter((op) => !op.type.startsWith("webrtc."));
 
     // Know which devices are already paired BEFORE processing announces
     const knownBefore = new Set(
@@ -83,7 +96,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     );
     let newcomerAnnounced = false;
 
-    for (const op of remote) {
+    for (const op of remoteBusiness) {
       if (op.device_id === identity.deviceId) {
         skipped++;
         continue;
@@ -253,11 +266,10 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         await markCatalogueRequestSnapshotSent(req.id);
       }
     }
-    // Publication continue (rôle non-employé) : si le catalogue local vient de changer —
-    // le nôtre ou celui que les pairs nous ont fait appliquer ci-dessus — on republie un
-    // instantané ABSOLU au relais, dans la même rotation. L'écran employé qui importera son
-    // stock le tirera directement, même si ce téléphone est déjà éteint.
-    await publishFreshCatalog(client, identity);
+    // Toujours republier le catalogue frais si le propriétaire a de nouveaux produits/stocks
+    if (identity.role !== "employee") {
+      await publishFreshCatalog(client, identity);
+    }
     return { pushed, applied, skipped, remote: foreign.length };
   } finally {
     release();

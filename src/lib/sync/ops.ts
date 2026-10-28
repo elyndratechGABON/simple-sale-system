@@ -1,5 +1,5 @@
 import { ensureIdentity, isSharedGroup } from "@/lib/syncengine/identity";
-import { purgeSyncedOps } from "@/lib/syncengine/outbox";
+import { purgeSyncedOps, listPendingOps } from "@/lib/syncengine/outbox";
 import { exchangeOps, relayTransport, type SyncState } from "@/lib/syncengine/transport";
 import { getOpsRelayUrl, getOpsToken } from "./url";
 import { isMaintenanceOn } from "./maintenance";
@@ -9,6 +9,21 @@ import { isMaintenanceOn } from "./maintenance";
 // plus toutes les cinq minutes une fois la première synchronisation faite.
 const SYNC_INTERVAL_MS = 60_000;
 const SYNC_REFRESH_MS = 5 * 60_000;
+
+/** VOIE RAPIDE — ops critiques (stock, ventes, réservations) : le relais est sondé
+ *  à chaque SECONDE tant qu'une op critique attend, au lieu d'attendre la minute.
+ *  Le tick 1 s ne pousse QUE si nécessaire : hors file critique, coût zéro. */
+export const CRITICAL_INTERVAL_MS = 1_000;
+
+/** Op types dont la DESTINATION rapide n'attend pas la minute. */
+const CRITICAL_OPS: string[] = [
+  "sale.created",
+  "sale.cancelled",
+  "stock.adjusted",
+  "stock.reserve",
+  "stock.release",
+  "stock.conflict",
+];
 
 export { SYNC_INTERVAL_MS, SYNC_REFRESH_MS };
 
@@ -46,5 +61,33 @@ export async function runOpsExchange(): Promise<SyncState | null> {
   } catch {
     // L'échange est un plus, jamais un goulot.
     return null;
+  }
+}
+
+let lastFastRun = 0;
+let fastRunning = false;
+
+/**
+ * VOIE RAPIDE : l'intervalle de polling critique (ops de stock / ventes /
+ * réservations) passe de la minute à 1 SECONDE tant qu'une op critique attend
+ * dans l'outbox. Une op non critique seule ne déclenche RIEN — la minute
+ * normale s'en chargera.
+ */
+export async function runCriticalOpsExchange(): Promise<SyncState | null> {
+  if (import.meta.env.VITEST) return null;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return null;
+  if (fastRunning) return null;
+  // Anti-martelage : deux voies rapides jamais espacées de moins d'une seconde.
+  if (Date.now() - lastFastRun < 900) return null;
+  const identity = await ensureIdentity();
+  if (!isSharedGroup(identity.shopId)) return null;
+  const pending = await listPendingOps(identity.shopId);
+  if (!pending.some((op) => CRITICAL_OPS.includes(op.type))) return null;
+  fastRunning = true;
+  lastFastRun = Date.now();
+  try {
+    return await runOpsExchange();
+  } finally {
+    fastRunning = false;
   }
 }
