@@ -61,24 +61,6 @@ export function ReportsPage() {
           requêtes, inutile de payer les deux pour l'affichage d'un seul. */}
       {onglet === "donnees" ? (
         <div className="space-y-4">
-          {/* Tombes chiffrées : sous le sac de la requête, un « 0 FCFA » affiché
-              une demi-seconde serait une information False — on affiche un état
-              de chargement FAITHFUL à la place. */}
-          <Card>
-            <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3 p-3 sm:p-4">
-              {isLoading ? (
-                <>
-                  <Skeleton className="h-12" />
-                  <Skeleton className="h-12" />
-                </>
-              ) : (
-                <>
-                  <Kpi label="Chiffre d'affaires" value={formatFCFA(stats?.revenue ?? 0)} accent />
-                  <Kpi label="Ventes" value={String(stats?.salesCount ?? 0)} />
-                </>
-              )}
-            </CardContent>
-          </Card>
           {!isLoading ? (
             <DataTab
               items={items}
@@ -86,7 +68,10 @@ export function ReportsPage() {
               salesCount={stats?.salesCount ?? 0}
             />
           ) : (
-            <Skeleton className="h-40" />
+            <>
+              <Skeleton className="h-24" />
+              <Skeleton className="h-40" />
+            </>
           )}
           {!isLoading && stats && stats.topProducts.length > 0 && (
             <div className="flat-card p-3 sm:p-4 space-y-1.5">
@@ -95,7 +80,9 @@ export function ReportsPage() {
                 <div key={p.product_id} className="flex items-center gap-2 text-sm">
                   <span className="w-4 shrink-0 text-muted-foreground tabular-nums">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                  <span className="shrink-0 text-muted-foreground tabular-nums">{p.quantity}×</span>
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
+                    {p.quantity}
+                  </span>
                   <span className="w-24 shrink-0 text-right font-semibold tabular-nums">
                     {formatFCFA(p.revenue)}
                   </span>

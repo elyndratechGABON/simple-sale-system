@@ -50,8 +50,8 @@ export function DataTab({ items, revenue, salesCount }: DataTabProps) {
               </div>
               {group.lines.map((line) => (
                 <div key={line.key} className="flex items-center gap-2 text-sm">
-                  <span className="w-14 shrink-0 text-muted-foreground tabular-nums">
-                    ×{line.quantity}
+                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
+                    {line.quantity}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{line.label}</span>
                   <span className="shrink-0 text-muted-foreground tabular-nums">
