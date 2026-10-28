@@ -34,22 +34,10 @@ export async function publishFreshCatalog(
 ): Promise<void> {
   if (identity.role === "employee") return;
   const db = getDB();
-  const sig = await catalogSignature();
-  // Catalogue vide → rien à redistribuer, et aucune trace : un republier avec zéro produit
-  // n'apporterait que du bruit au relais (et ferait « voir » un appareil sans catalogue).
-  if (!sig || sig === "[]") return;
-  const lastSig = await db.settings.get(KEY_LAST_CATALOG_SIG);
-  // Catalogue inchangé : inutile de calculer une part par employé.
-  if (lastSig?.value === sig) return;
-
-  // Une seule passe : on prépare les parts à envoyer, puis on ne pousse que si au moins
-  // un écran a effectivement changé de sous-catalogue. Le délai anti-spam est celui du
-  // PAIR (`shared_published_at`) : un délai global bloquerait la publication même quand la
-  // part d'UN employé vient de changer — précisément le cas qu'on veut voir passer.
   const peers = await pairedEmployees(identity.shopId);
   const parts: { peerId: string; signature: string; at: number }[] = [];
   for (const peer of peers) {
-    const part = await emitShareOps(peer);
+    const part = await emitShareOps(peer, { force: true });
     if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
   }
   if (parts.length === 0) return;
@@ -59,7 +47,6 @@ export async function publishFreshCatalog(
     const signed = await signAll(pending);
     if (await client.push(identity.shopId, signed)) {
       await markOpsSynced(pending.map((o) => o.id));
-      await db.settings.put({ key: KEY_LAST_CATALOG_SIG, value: sig });
       for (const part of parts) await markSharePublished(part.peerId, part.signature, part.at);
     }
   }

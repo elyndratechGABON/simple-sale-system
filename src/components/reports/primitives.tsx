@@ -16,7 +16,7 @@ export function Kpi({
 }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+      <p className="truncate text-xs text-muted-foreground">{label}</p>
       <p
         className={cn(
           "mt-0.5 truncate text-base font-semibold tabular-nums sm:text-lg",
@@ -25,7 +25,7 @@ export function Kpi({
       >
         {value}
       </p>
-      {hint && <p className="truncate text-[11px] text-muted-foreground tabular-nums">{hint}</p>}
+      {hint && <p className="truncate text-xs text-muted-foreground tabular-nums">{hint}</p>}
     </div>
   );
 }

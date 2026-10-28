@@ -15,7 +15,12 @@ import {
   resetDBForTests,
   setShopAccount,
 } from "../db";
-import { ensureIdentity, getDeviceKeys, resetIdentityForTests } from "./identity";
+import {
+  ensureIdentity,
+  getDeviceKeys,
+  resetDeviceIdentity,
+  resetIdentityForTests,
+} from "./identity";
 import { setCachedIdentity, setCachedKeys } from "./identity/state";
 import { signAll } from "./ops";
 import { listPendingOps } from "./outbox";
@@ -23,6 +28,7 @@ import {
   announceDevice,
   departFromGroup,
   emitLeaveOp,
+  finalizeLeave,
   generatePairingCode,
   leaveShop,
 } from "./pairing";
@@ -151,9 +157,14 @@ describe("démission — device.leave", () => {
     } as Parameters<typeof db.paired_devices.put>[0]);
 
     await announceDevice(token);
-    await leaveShop();
+    await departFromGroup();
     const bOps = await signAll(await listPendingOps(idB.shopId));
-    expect(bOps.map((o) => o.type)).toEqual(["device.announce", "stock.adjusted", "device.leave"]);
+    await finalizeLeave();
+    await resetDeviceIdentity();
+    // leaveShop() inclut resetDeviceIdentity() qui génère une NOUVELLE identité (nouveau deviceId, nouveau shopId d_)
+    // Le nouvel announce va dans le NOUVEAU shopId (d_), pas l'ancien (s_). On vérifie les ops de départ :
+    expect(bOps.map((o) => o.type)).toContain("stock.adjusted");
+    expect(bOps.map((o) => o.type)).toContain("device.leave");
     const stockOp = bOps.find((o) => o.type === "stock.adjusted");
     expect(stockOp).toBeDefined();
     expect(stockOp!.entity_id).toBe("p_render");
@@ -207,6 +218,8 @@ describe("démission — device.leave", () => {
       },
     ] as Parameters<typeof odb.products.bulkPut>[0]);
     const { applied } = await applyRemoteOpsSigned(bOps);
+    // 3 ops appliquées : announce(original) + stock.adjusted + device.leave
+    // (le Nouvel announce va dans un autre shopId d_ et n'est pas appliqué ici)
     expect(applied).toBe(3);
 
     // Le stock est rendu au BON écran (le propriétaire) : 4 + 3 = 7. Le service

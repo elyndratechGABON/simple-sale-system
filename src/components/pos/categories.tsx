@@ -99,7 +99,7 @@ export function CategoryCard({
         // carte. L'état actif passe la carte entière en vert de marque avec une coche —
         // identifiable d'un coup d'œil SANS peser beaucoup plus qu'une carte neutre.
         // La coche est réservée (opacity) : changer de filtre ne décale pas le texte.
-        "group flex min-h-11 w-full items-center gap-2 rounded-2xl border px-4 py-3.5 text-left text-sm font-medium transition-all",
+        "group flex min-h-11 w-full items-center gap-2 rounded-2xl border px-4 py-3.5 text-left text-sm font-medium transition-colors transition-shadow",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
         active
           ? "border-primary bg-primary text-primary-foreground shadow-sm"

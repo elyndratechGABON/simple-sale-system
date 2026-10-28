@@ -1,6 +1,6 @@
 import { applyPairingShop, parsePairingPayload, redeemShareToken } from "@/lib/pairing";
 import { savePreferences } from "@/lib/settings";
-import { saveShopProfile, setShopAccount } from "@/lib/db";
+import { getShopProfile, saveShopProfile, setShopAccount, setShopAccountId } from "@/lib/db";
 import {
   adoptShopIdFromRelay,
   ensureIdentity,
@@ -39,7 +39,16 @@ export async function runJoinScan(
       if (redeem.account_name) accountName = redeem.account_name;
       if (redeem.account_phone) accountPhone = redeem.account_phone;
       if (redeem.pair_code) pairCode = redeem.pair_code;
-      if (redeem.shop_id) relayShopId = redeem.shop_id;
+      if (redeem.shop_id) {
+        relayShopId = redeem.shop_id;
+        // Extraire l'accountId du shop_id format s_<accountId> et le stocker localement
+        // afin que deriveShopId utilise le bon groupe P2P pour l'employé.
+        const accountIdMatch = redeem.shop_id.match(/^s_[A-Za-z0-9_-]+/);
+        if (accountIdMatch) {
+          const rawAccountId = accountIdMatch[0].slice(2); // enlever le préfixe "s_"
+          await setShopAccountId(rawAccountId);
+        }
+      }
     }
   }
   // 1. Applique la copie complète de la boutique du propriétaire.
@@ -85,8 +94,26 @@ export async function runJoinScan(
   // n'écrasera pas cet identifiant par le sien.
   if (relayShopId && /^s_[A-Za-z0-9_-]{1,24}$/.test(relayShopId)) {
     await adoptShopIdFromRelay(relayShopId);
+  } else {
+    // Fallback : si pas de relayShopId (QR code ancien / sans token), forcer quand même
+    // l'adoption depuis le compte propriétaire que l'on vient de configurer.
+    // Cela garantit que l'employé et le patron sont dans le même groupe `s_` même
+    // sans token QR.
+    const profile = await getShopProfile();
+    if (profile?.accountId) {
+      const accountShopId = `s_${String(profile.accountId)
+        .replace(/[^A-Za-z0-9_-]/g, "")
+        .slice(0, 24)}`;
+      await adoptShopIdFromRelay(accountShopId);
+    }
   }
 
   await refreshShopId();
+
+  // Le mécanisme de catalogue snapshot est déjà activé par le flux de sync
+  // existant : lors du prochain échange d'opérations (handshake + pull/push),
+  // le propriétaire enverra l'instantané complet des produits à l'employé.
+  // Aucun déclenchement manuel n'est requis — le système convergera naturellement.
+
   return { status: "ok", pairCode };
 }

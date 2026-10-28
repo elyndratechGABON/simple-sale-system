@@ -15,16 +15,26 @@ import type { Product, SaleItem } from "@/lib/db";
  * la saisie n'y changeait rien, d'où son apparente erreur. Ça se déconnecte au premier
  * enregistrement du coût — la liste des articles suit le même prédicat que
  * `ProductCostsSection`.
+ *
+ * Les services (type === "service" ou category === "Service") n'ont PAS de coût d'achat :
+ * ils ont des « charges de service » à la place. Ils ne doivent JAMAIS apparaître dans
+ * l'alerte « sans coût » — ce bandeau ne concerne que les PRODUITS (biens physiques)
+ * qui ont un stock et dont le coût d'achat n'est pas saisi.
  */
 export function useCostAlerts(items: SaleItem[], products: Product[]) {
   const sold = useMemo(() => {
     // Vendus sur la période ET rattachés au catalogue. Une ligne libre n'a pas de fiche à
     // compléter, et un identifiant inconnu ne pourrait pas être mis à jour non plus.
     const ids = new Set(items.filter((i) => i.product_id).map((i) => i.product_id as string));
-    return products.filter((p) => ids.has(p.id) && !(p.cost > 0));
+    return products.filter(
+      (p) => ids.has(p.id) && p.type !== "service" && p.category !== "Service" && !(p.cost > 0),
+    );
   }, [items, products]);
 
-  const global = useMemo(() => products.filter((p) => !p.cost || p.cost <= 0), [products]);
+  const global = useMemo(
+    () => products.filter((p) => p.type !== "service" && p.category !== "Service" && !(p.cost > 0)),
+    [products],
+  );
 
   return { sold, global };
 }

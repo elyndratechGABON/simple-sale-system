@@ -30,23 +30,24 @@ export function CartActions({ pos }: { pos: PosController }) {
         )}
         <Button
           size="lg"
-          className="w-full h-16 text-lg gap-2"
+          className="w-full h-16 text-lg gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={!pos.canOpenCheckout}
           onClick={() => pos.setCheckoutOpen(true)}
         >
           <CheckCircle2 className="h-5 w-5" />
-          Valider la vente
+          Encaisser {formatFCFA(pos.total)}
         </Button>
       </>
     );
   }
 
   if (pos.cashing) {
+    const due = pos.dueNow;
     return (
       <div className="space-y-2">
         <Button
           size="lg"
-          className="w-full h-16 text-lg gap-2"
+          className="w-full h-16 text-lg gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
           disabled={!pos.canValidate || pos.payMut.isPending || pos.payRoundMut.isPending}
           onClick={() =>
             pos.cashing!.kind === "round"
@@ -60,8 +61,8 @@ export function CartActions({ pos }: { pos: PosController }) {
         >
           <CheckCircle2 className="h-5 w-5" />
           {pos.cashing.kind === "round"
-            ? "Valider l'encaissement de la tournée"
-            : "Valider l'encaissement"}
+            ? `Encaisser la tournée ${formatFCFA(due)}`
+            : `Encaisser ${formatFCFA(due)}`}
         </Button>
         <Button
           variant="ghost"

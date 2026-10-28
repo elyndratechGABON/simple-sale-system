@@ -1,4 +1,4 @@
-import { Package, Scissors } from "lucide-react";
+import { Package, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ProductType = "product" | "service";
@@ -25,15 +25,15 @@ export function ProductTypeSelector({ value, onChange, disabled }: Props) {
         disabled={disabled}
         icon={<Package className="h-4 w-4 text-primary" />}
         title="Produit"
-        subtitle="Coût d'achat & stock"
+        subtitle="Avec gestion du stock"
       />
       <TypeCard
         selected={value === "service"}
         onClick={() => !disabled && onChange("service")}
         disabled={disabled}
-        icon={<Scissors className="h-4 w-4 text-primary" />}
+        icon={<Wrench className="h-4 w-4 text-primary" />}
         title="Service"
-        subtitle="Sans stock, coût global"
+        subtitle="Sans stock physique"
       />
     </div>
   );
@@ -57,7 +57,7 @@ function TypeCard({ selected, onClick, disabled, icon, title, subtitle }: TypeCa
       aria-disabled={disabled}
       onClick={onClick}
       className={cn(
-        "relative rounded-xl border p-3 text-left transition-all duration-200",
+        "relative rounded-xl border p-3 text-left transition-colors duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
         selected
           ? "border-primary bg-primary/5 ring-1 ring-primary"
@@ -74,7 +74,7 @@ function TypeCard({ selected, onClick, disabled, icon, title, subtitle }: TypeCa
         </span>
         <div className="flex-1 min-w-0">
           <span className="block text-sm font-semibold text-foreground">{title}</span>
-          <span className="block text-[11px] text-muted-foreground truncate">{subtitle}</span>
+          <span className="block text-xs text-muted-foreground truncate">{subtitle}</span>
         </div>
       </div>
       {selected && (

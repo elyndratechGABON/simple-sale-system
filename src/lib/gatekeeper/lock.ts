@@ -67,4 +67,12 @@ export async function resetDeviceConflict(): Promise<void> {
 /** Vide le verrou de suspension retenu en mémoire après une purge (`purgeAllData`). */
 export function resetGatekeeper(): void {
   setLock(false, null);
+  // Effacer l'empreinte matérielle pour que l'orchestrateur voie un appareil "neuf"
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem("pos_device_fingerprint");
+    } catch {
+      // Ignoré : localStorage inaccessible (mode privé)
+    }
+  }
 }

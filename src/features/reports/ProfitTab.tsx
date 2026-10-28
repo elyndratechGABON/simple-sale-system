@@ -84,12 +84,14 @@ export function ProfitTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Titre choisi pour ce qu'on y FAIT, pas pour ce que c'est : c'est le passage en lot
             pour les produits vendus dont le coût d'achat manque. La saisie individuelle se
             fait au formulaire produit — deux portes pour la même donnée, deux usages. */}
       <section>
-        <h2 className="mb-2 text-sm font-semibold">Coûts des produits</h2>
+        <h2 className="mb-2 text-sm font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded inline-block">
+          Produits
+        </h2>
         <ProductCostsSection products={products} items={items} />
       </section>
 
@@ -108,24 +110,38 @@ export function ProfitTab({
 
       {/* La conclusion de l'onglet : la marge au coût COURANT, moins ce que le commerçant
           vient de saisir — les ventes ne contiennent ni les charges ni les coûts corrigés. */}
-      <Card>
-        <CardContent className="space-y-1.5 p-3 sm:p-4">
-          <h2 className="text-sm font-semibold">Bénéfice net</h2>
-          <NetLine label="Marge produits" value={formatFCFA(productMargin)} />
-          <NetLine label="CA des prestations" value={formatFCFA(serviceRevenue)} />
-          <NetLine
-            label="Charges de service"
-            value={totalServices > 0 ? `− ${formatFCFA(totalServices)}` : "—"}
-          />
-          <NetLine
-            label="Charges du business"
-            value={totalBusiness > 0 ? `− ${formatFCFA(totalBusiness)}` : "—"}
-          />
+      <Card className="bg-primary/5 border-primary/20">
+        <CardContent className="space-y-1.5 p-4 sm:p-5">
+          <h2 className="mb-2 text-sm font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded inline-block">
+            Bénéfice net
+          </h2>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Marge produits</span>
+              <span className="tabular-nums font-medium bg-gray-200 px-2 rounded">{formatFCFA(productMargin)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">CA des prestations</span>
+              <span className="tabular-nums font-medium">{formatFCFA(serviceRevenue)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Charges de service</span>
+              <span className="tabular-nums font-medium">
+                {totalServices > 0 ? `− ${formatFCFA(totalServices)}` : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Charges du business</span>
+              <span className="tabular-nums font-medium">
+                {totalBusiness > 0 ? `− ${formatFCFA(totalBusiness)}` : "—"}
+              </span>
+            </div>
+          </div>
           <div className="flex items-center justify-between border-t pt-1.5">
-            <span className="text-sm font-semibold">Bénéfice net</span>
+            <span className="text-base font-semibold">Bénéfice net</span>
             <span
               className={cn(
-                "text-base font-bold tabular-nums",
+                "text-lg font-bold tabular-nums",
                 net >= 0 ? "text-primary" : "text-destructive",
               )}
             >

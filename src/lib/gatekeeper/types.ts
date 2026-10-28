@@ -84,6 +84,12 @@ export interface HandshakeResult {
     | "device_limit"
     | "keyword_invalid"
     | "device_conflict"
+    /** Auto-réinitialisation après conflit d'empreinte — l'appelant retente le handshake. */
+    | "fingerprint_conflict_auto_reset"
+    /** Auto-réinitialisation après limite d'appareils — l'appelant retente le handshake. */
+    | "device_limit_auto_reset"
+    /** Nombre max de tentatives de retry atteint. */
+    | "max_retries"
     /** Décision d'Elyndra : le compte est suspendu. */
     | "suspended"
     /** L'échéance est passée et la période de grâce de 3 jours avec : le service est coupé. */

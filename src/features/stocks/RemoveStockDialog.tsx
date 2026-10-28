@@ -84,6 +84,7 @@ export function RemoveStockDialog({
             variant="destructive"
             disabled={!product || !(Number(removeQty) > 0) || removeStockMut.isPending}
             onClick={() => removeStockMut.mutate()}
+            aria-busy={removeStockMut.isPending}
           >
             {removeStockMut.isPending ? "…" : "Retirer"}
           </Button>

@@ -13,7 +13,6 @@ import { listPairedDevices } from "@/lib/syncengine/peers";
 import { DevicePairingDialog } from "@/components/DevicePairingDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SyncedDevices } from "./SyncedDevices";
 
 /**
@@ -49,6 +48,7 @@ export function DevicesCard() {
     queryFn: ensureIdentity,
     staleTime: 60_000,
   });
+  const isOwner = identity?.role === "owner";
   const { data: peers } = useQuery({
     queryKey: ["paired_devices"],
     queryFn: () => listPairedDevices(identity?.shopId ?? ""),
@@ -76,91 +76,94 @@ export function DevicesCard() {
   const [showAccountPassword, setShowAccountPassword] = useState(false);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <MonitorSmartphone className="h-4 w-4" /> Appareils
-        </CardTitle>
-        <CardDescription>
+    <div className="flat-card space-y-4">
+      <header className="space-y-1">
+        <h2 className="text-title flex items-center gap-2">
+          <MonitorSmartphone className="h-5 w-5" /> Appareils
+        </h2>
+        <p className="text-small text-muted-foreground">
           Partager votre abonnement entre plusieurs caisses : l'une montre le code QR, les autres le
           scannent depuis l'écran « Rejoindre via code QR ».
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex items-center justify-between rounded-lg border bg-accent/50 px-3 py-2">
-          <span className="text-sm text-muted-foreground">Places utilisées</span>
-          <Badge
-            variant={quota && localDeviceCount >= quota.maxDevices ? "destructive" : "secondary"}
-            className="tabular-nums"
-          >
-            {localDeviceCount} / {quota?.maxDevices ?? "—"}
-          </Badge>
+        </p>
+      </header>
+
+      <div className="flex items-center justify-between rounded-xl bg-accent/50 px-4 py-3">
+        <span className="text-body text-muted-foreground">Places utilisées</span>
+        <Badge
+          variant={quota && localDeviceCount >= quota.maxDevices ? "destructive" : "secondary"}
+          className="tabular-nums"
+        >
+          {localDeviceCount} / {quota?.maxDevices ?? "—"}
+        </Badge>
+      </div>
+
+      {/* Fiche du compte marchand : affichée dès qu'on détient les identifiants
+            (créés à l'onboarding ou rattachés). Rend visibles les informations que
+            la saisie initiale a posées, pour vérifier avant de partager l'appareil. */}
+      {hasAccount && (
+        <div className="space-y-2 rounded-xl bg-muted/50 p-3">
+          <p className="text-body font-medium flex items-center gap-2">
+            <Store className="h-4 w-4" /> Compte marchand
+          </p>
+          <dl className="space-y-1.5 text-body">
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Nom du compte</dt>
+              <dd className="text-right font-medium">
+                {profile?.accountName || profile?.storeName || "—"}
+              </dd>
+            </div>
+            {profile?.ownerName && (
+              <div className="flex justify-between gap-2">
+                <dt className="text-muted-foreground">Propriétaire</dt>
+                <dd className="text-right">{profile.ownerName}</dd>
+              </div>
+            )}
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Téléphone</dt>
+              <dd className="text-right font-mono">{profile?.accountPhone}</dd>
+            </div>
+            <div className="flex justify-between items-center gap-2">
+              <dt className="text-muted-foreground">Mot de passe</dt>
+              <dd className="flex items-center gap-2">
+                <span className="font-mono">
+                  {showAccountPassword ? profile?.accountPassword : "••••••••"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAccountPassword((v) => !v)}
+                  className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label={
+                    showAccountPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"
+                  }
+                >
+                  {showAccountPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </dd>
+            </div>
+          </dl>
+          <p className="text-small text-muted-foreground">
+            Ces identifiants servent au partage entre vos caisses : scannez-leur le QR d'appairage,
+            ou saisissez-leur ce téléphone et ce mot de passe.
+          </p>
         </div>
+      )}
 
-        {/* Fiche du compte marchand : affichée dès qu'on détient les identifiants
-              (créés à l'onboarding ou rattachés). Rend visibles les informations que
-              la saisie initiale a posées, pour vérifier avant de partager l'appareil. */}
-        {hasAccount && (
-          <div className="space-y-2 rounded-xl border p-3">
-            <p className="flex items-center gap-2 text-sm font-medium">
-              <Store className="h-4 w-4" /> Compte marchand
-            </p>
-            <dl className="space-y-1.5 text-sm">
-              <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">Nom du compte</dt>
-                <dd className="text-right font-medium">
-                  {profile?.accountName || profile?.storeName || "—"}
-                </dd>
-              </div>
-              {profile?.ownerName && (
-                <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Propriétaire</dt>
-                  <dd className="text-right">{profile.ownerName}</dd>
-                </div>
-              )}
-              <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">Téléphone</dt>
-                <dd className="text-right font-mono">{profile?.accountPhone}</dd>
-              </div>
-              <div className="flex justify-between items-center gap-2">
-                <dt className="text-muted-foreground">Mot de passe</dt>
-                <dd className="flex items-center gap-2">
-                  <span className="font-mono">
-                    {showAccountPassword ? profile?.accountPassword : "••••••••"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAccountPassword((v) => !v)}
-                    className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={
-                      showAccountPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"
-                    }
-                  >
-                    {showAccountPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </dd>
-              </div>
-            </dl>
-            <p className="text-xs text-muted-foreground">
-              Ces identifiants servent au partage entre vos caisses : scannez-leur le QR
-              d'appairage, ou saisissez-leur ce téléphone et ce mot de passe.
-            </p>
-          </div>
-        )}
+      {identity && <SyncedDevices peers={peers ?? []} />}
 
-        {identity && <SyncedDevices peers={peers ?? []} />}
-
-        <Button onClick={() => setPairingOpen(true)}>
-          <QrCode className="h-4 w-4 mr-2" />
-          {hasAccount ? "Ajouter un appareil" : "Rejoindre un compte"}
-        </Button>
-      </CardContent>
+      <Button onClick={() => setPairingOpen(true)} className="w-full">
+        <QrCode className="h-4 w-4 mr-2" />
+        {hasAccount
+          ? isOwner
+            ? "Créer un employé"
+            : "Rejoindre via code QR"
+          : "Rejoindre un compte"}
+      </Button>
 
       <DevicePairingDialog open={pairingOpen} onOpenChange={setPairingOpen} />
-    </Card>
+    </div>
   );
 }

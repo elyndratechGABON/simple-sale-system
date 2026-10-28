@@ -55,7 +55,9 @@ export function ServiceChargesSection({
   if (rows.length === 0) {
     return (
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold">Charges de service</h3>
+        <h3 className="mb-2 text-sm font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded inline-block">
+          Services
+        </h3>
         <p className="rounded-lg border border-dashed p-3 text-center text-sm text-muted-foreground">
           Aucune prestation vendue sur la période
         </p>
@@ -64,15 +66,17 @@ export function ServiceChargesSection({
   }
 
   return (
-    <section className="space-y-2">
-      <h3 className="text-sm font-semibold">Charges de service</h3>
+    <section className="space-y-2 max-w-5xl">
+      <h3 className="mb-2 text-sm font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded inline-block">
+        Services
+      </h3>
       {rows.map(({ cle, ca }) => {
         const existante = parNom.get(cle);
         return (
-          <div key={cle} className="flex items-center gap-2 text-sm">
+          <div key={cle} className="flex items-center gap-3 text-sm">
             <span className="min-w-0 flex-1 truncate">{cle}</span>
             {ca !== undefined && (
-              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                 {`CA ${formatFCFA(ca)}`}
               </span>
             )}
@@ -82,9 +86,9 @@ export function ServiceChargesSection({
               step="1"
               inputMode="numeric"
               defaultValue={existante && existante.amount > 0 ? String(existante.amount) : ""}
-              placeholder="—"
+              placeholder="Coût global (FCFA)"
               aria-label={`Coût de la prestation ${cle}`}
-              className="h-9 w-32 text-right tabular-nums"
+              className="h-9 w-36 text-right tabular-nums bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
               onBlur={(e) => {
                 const raw = e.target.value.trim();
 

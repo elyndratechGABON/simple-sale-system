@@ -76,7 +76,7 @@ export function HistoryFilters({
                 onClick={() => onPick(b.start)}
                 aria-pressed={active?.start === b.start}
                 className={cn(
-                  "rounded-xl border bg-card p-3 text-left transition-all hover:border-primary active:scale-[0.98]",
+                  "rounded-xl border bg-card p-3 text-left transition-colors transition-transform hover:border-primary active:scale-[0.98]",
                   active?.start === b.start && "border-primary ring-2 ring-primary ring-offset-1",
                 )}
               >

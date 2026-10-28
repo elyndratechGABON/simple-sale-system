@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -29,61 +28,61 @@ export function InstallCard() {
   if (installed || !canInstall) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Download className="h-4 w-4" /> Installer l'application
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <Button
-          onClick={async () => {
-            const outcome = await install();
-            if (outcome === "ios-help") setIosHelpOpen(true);
-            if (outcome === "unavailable") {
-              setHint(
-                insecure ? "insecure" : platform === "android" ? "android-menu" : "desktop-menu",
-              );
-            }
-          }}
-        >
-          <Download className="h-4 w-4 mr-2" />
-          Installer
-        </Button>
-        {hint === "insecure" && (
-          <p className="text-sm text-muted-foreground">
-            Vous êtes en http sur une adresse locale : les navigateurs n'y proposent jamais
-            l'installation. Ouvrez l'application via son adresse <b>https://</b>, puis revenez.
-          </p>
-        )}
-        {hint === "android-menu" && (
-          <p className="text-sm text-muted-foreground">
-            Menu ⋮ du navigateur → « Installer l'application » (ou « Ajouter à l'écran d'accueil »),
-            puis confirmez.
-          </p>
-        )}
-        {hint === "desktop-menu" && (
-          <p className="text-sm text-muted-foreground">
-            Icône d'installation dans la barre d'adresse, ou menu du navigateur → « Installer
-            ELYNDRA CAISSE » (Edge : ⋯ → Applications).
-          </p>
-        )}
-        {/* Contrairement à la page de présentation, aucune navigation préalable n'est
-            nécessaire : nous sommes déjà dans l'application, donc dans le périmètre que
-            Safari retiendra pour le raccourci. */}
-        {(isIos || hint === null) && (
-          <p className="text-sm text-muted-foreground">
-            Sur iPhone et iPad, l'installation passe par le menu Partager de Safari.
-          </p>
-        )}
-      </CardContent>
+    <div className="flat-card space-y-3">
+      <header className="space-y-1">
+        <h2 className="text-title flex items-center gap-2">
+          <Download className="h-5 w-5" /> Installer l'application
+        </h2>
+      </header>
+
+      <Button
+        onClick={async () => {
+          const outcome = await install();
+          if (outcome === "ios-help") setIosHelpOpen(true);
+          if (outcome === "unavailable") {
+            setHint(
+              insecure ? "insecure" : platform === "android" ? "android-menu" : "desktop-menu",
+            );
+          }
+        }}
+        className="w-full"
+      >
+        <Download className="h-4 w-4 mr-2" />
+        Installer
+      </Button>
+      {hint === "insecure" && (
+        <p className="text-small text-muted-foreground">
+          Vous êtes en http sur une adresse locale : les navigateurs n'y proposent jamais
+          l'installation. Ouvrez l'application via son adresse <b>https://</b>, puis revenez.
+        </p>
+      )}
+      {hint === "android-menu" && (
+        <p className="text-small text-muted-foreground">
+          Menu ⋮ du navigateur → « Installer l'application » (ou « Ajouter à l'écran d'accueil »),
+          puis confirmez.
+        </p>
+      )}
+      {hint === "desktop-menu" && (
+        <p className="text-small text-muted-foreground">
+          Icône d'installation dans la barre d'adresse, ou menu du navigateur → « Installer ELYNDRA
+          CAISSE » (Edge : ⋯ → Applications).
+        </p>
+      )}
+      {/* Contrairement à la page de présentation, aucune navigation préalable n'est
+          nécessaire : nous sommes déjà dans l'application, donc dans le périmètre que
+          Safari retiendra pour le raccourci. */}
+      {(isIos || hint === null) && (
+        <p className="text-small text-muted-foreground">
+          Sur iPhone et iPad, l'installation passe par le menu Partager de Safari.
+        </p>
+      )}
 
       <Dialog open={iosHelpOpen} onOpenChange={setIosHelpOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Ajouter à l'écran d'accueil</DialogTitle>
             <DialogDescription asChild>
-              <ol className="mt-2 space-y-2 text-left text-sm">
+              <ol className="mt-2 space-y-2 text-left text-body">
                 <li>1. Touchez le bouton Partager, en bas de Safari.</li>
                 <li>2. Faites défiler puis choisissez « Ajouter à l'écran d'accueil ».</li>
                 <li>3. Confirmez avec « Ajouter ».</li>
@@ -92,6 +91,6 @@ export function InstallCard() {
           </DialogHeader>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }

@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { Bar, BarChart, XAxis } from "recharts";
-import { Card } from "@/components/Card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -25,16 +24,16 @@ export function WeekPerformanceCard({ data }: { data: DashboardData }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: 0.45 }}
     >
-      <Card>
-        <div className="border-b px-4 py-3">
-          <p className="text-base font-semibold">Performance de la semaine</p>
-          <p className="text-xs text-muted-foreground">Comparée à la semaine précédente</p>
+      <div className="flat-card">
+        <div className="px-4 py-3 divide-x divide-border">
+          <p className="text-title font-semibold">Performance de la semaine</p>
+          <p className="text-small text-muted-foreground">Comparée à la semaine précédente</p>
         </div>
         <div className="space-y-4 p-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
-              <p className="text-2xl font-bold leading-tight">
+              <p className="text-small text-muted-foreground">Chiffre d'affaires</p>
+              <p className="text-display font-bold leading-tight">
                 {weekStats ? (
                   <AnimatedCounter value={weekStats.revenue} format={formatFCFA} />
                 ) : (
@@ -44,7 +43,7 @@ export function WeekPerformanceCard({ data }: { data: DashboardData }) {
             </div>
             {Number.isFinite(revenueDelta) && weekStats && weekStats.revenue > 0 && (
               <span
-                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ${
+                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-body font-semibold ${
                   revenueDelta >= 0
                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     : "bg-destructive/10 text-destructive"
@@ -59,7 +58,7 @@ export function WeekPerformanceCard({ data }: { data: DashboardData }) {
               </span>
             )}
           </div>
-          <div className="flex gap-6 text-sm">
+          <div className="flex gap-6 text-body">
             <span className="text-muted-foreground">
               Ventes&nbsp;
               <span className="font-semibold text-foreground">{weekStats?.salesCount ?? 0}</span>
@@ -71,9 +70,9 @@ export function WeekPerformanceCard({ data }: { data: DashboardData }) {
               </span>
             </span>
           </div>
-          <ChartContainer config={weekChartConfig} className="h-20 w-full">
+          <ChartContainer config={weekChartConfig} className="h-28 w-full">
             <BarChart data={weekChartData} margin={{ left: 0, right: 0 }}>
-              <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={4} fontSize={11} />
+              <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={4} fontSize={12} />
               <ChartTooltip
                 content={<ChartTooltipContent formatter={(v) => formatFCFA(Number(v))} />}
               />
@@ -81,7 +80,7 @@ export function WeekPerformanceCard({ data }: { data: DashboardData }) {
             </BarChart>
           </ChartContainer>
         </div>
-      </Card>
+      </div>
     </motion.div>
   );
 }

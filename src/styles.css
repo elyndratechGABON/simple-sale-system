@@ -6,9 +6,9 @@
 :root {
   --card-radius: 24px;
   --card-padding: 20px;
-  --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
-  --card-border: 1px solid #e5e8e7;
-  --card-bg: #ffffff;
+  --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --card-border: 1px solid var(--color-border);
+  --card-bg: var(--card);
   --card-gap: 16px;
   --color-primary: #059669;
 }
@@ -16,6 +16,7 @@ html {
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  color-scheme: light dark;
 }
 body {
   env(safe-area-inset-top): env(safe-area-inset-top);
@@ -27,8 +28,24 @@ body {
 }
 /* clamp pour tailles fluides */
 :root {
-  --font-fluid: clamp(0.875rem, 0.8rem + 0.4vw, 1.125rem);
+  /* Display : 2-3 tailles seulement */
+  --text-display: clamp(2rem, 1.5rem + 3vw, 3rem); /* h1 hero */
+  --text-title: clamp(1.5rem, 1.25rem + 1.5vw, 2rem); /* h2 sections */
+  --text-body: clamp(1rem, 0.9rem + 0.5vw, 1.125rem); /* paragraphes */
+  --text-small: 0.875rem; /* labels, meta */
+
+  /* Leading cohérent */
+  --leading-tight: 1.1;
+  --leading-snug: 1.35;
+  --leading-relaxed: 1.6;
+
+  /* Tracking display */
+  --tracking-tight: -0.03em;
+  --tracking-normal: 0;
+
+  /* Space fluide */
   --space-fluid: clamp(0.5rem, 0.3rem + 1vw, 1.5rem);
+  --section-gap: clamp(3rem, 2rem + 4vw, 6rem); /* 120-240px desktop */
 }
 
 /*
@@ -108,6 +125,19 @@ body {
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Typography */
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --text-display: var(--text-display);
+  --text-title: var(--text-title);
+  --text-body: var(--text-body);
+  --text-small: var(--text-small);
+  --leading-tight: var(--leading-tight);
+  --leading-snug: var(--leading-snug);
+  --leading-relaxed: var(--leading-relaxed);
+  --tracking-tight: var(--tracking-tight);
+  --tracking-normal: var(--tracking-normal);
 }
 
 :root {
@@ -231,17 +261,13 @@ body {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
     overflow-x: clip;
+    /* Suppression du rubber-band uniquement sur pointeurs fins (souris/trackpad).
+       Garde le pull-to-refresh natif sur tactile (coarse). */
   }
-
-  /* Aucune barre de défilement visible nulle part : l'application est une motion
-     d'app native, pas une page web. Le défilement reste fonctionnel (doigt,
-     molette, clavier) — seule l'indication visuelle disparaît. */
-  * {
-    scrollbar-width: none;
-  }
-
-  *::-webkit-scrollbar {
-    display: none;
+  @media (pointer: fine) {
+    html {
+      overscroll-behavior: none;
+    }
   }
 
   body {
@@ -308,6 +334,46 @@ body {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Typography utilities — nouvelle échelle */
+@utility text-display {
+  font-size: var(--text-display);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 700;
+}
+
+@utility text-title {
+  font-size: var(--text-title);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 600;
+}
+
+@utility text-body {
+  font-size: var(--text-body);
+  line-height: var(--leading-relaxed);
+  letter-spacing: var(--tracking-normal);
+}
+
+@utility text-small {
+  font-size: var(--text-small);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-muted-foreground);
+}
+
+/* Section spacing */
+@utility section-gap {
+  margin-block: var(--section-gap);
+}
+
+/* Flat card — no shadow, no border, bg-card */
+@utility flat-card {
+  background-color: var(--color-card);
+  border-radius: var(--radius-xl);
+  padding: var(--card-padding);
 }
 
 /* Les enfants directs d'une chip-row s'accrochent au bord au scroll. */

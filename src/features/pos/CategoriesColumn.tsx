@@ -11,9 +11,6 @@ export function CategoriesColumn({ pos }: { pos: PosController }) {
   return (
     <aside className="hidden xl:block">
       <section className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-4">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Catégories
-        </p>
         <div className="space-y-1">
           <CategoryRail
             label="Tous"

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogFooter } from "@/components/ui/dialog";
 import { StockPicker } from "./StockPicker";
 import { StockDetailsForm } from "./StockDetailsForm";
 
-/** Ajout de stock : sélecteur de produit, quantité, et champs optionnels de journal.
+/** Ajout de stock : sélecteur de produit et quantité, rien d'autre.
  *  L'état du formulaire est interne et se réinitialise à chaque ouverture. */
 export function AddStockDialog({
   open,
@@ -24,17 +24,11 @@ export function AddStockDialog({
   const qc = useQueryClient();
   const [stockProductId, setStockProductId] = useState("");
   const [addQty, setAddQty] = useState("");
-  const [unitCost, setUnitCost] = useState("");
-  const [supplier, setSupplier] = useState("");
-  const [movementNote, setMovementNote] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setStockProductId(seedProductId ?? "");
     setAddQty("");
-    setUnitCost("");
-    setSupplier("");
-    setMovementNote("");
   }, [open, seedProductId]);
 
   const selectedProduct = products.find((p) => p.id === stockProductId) ?? null;
@@ -44,11 +38,7 @@ export function AddStockDialog({
       if (!selectedProduct) throw new Error("Sélectionnez un produit.");
       const qty = Number(addQty) || 0;
       if (qty <= 0) throw new Error("Quantité invalide.");
-      return addStock(selectedProduct.id, qty, {
-        unit_cost: Number(unitCost) || undefined,
-        supplier: supplier.trim() || undefined,
-        note: movementNote.trim() || undefined,
-      });
+      return addStock(selectedProduct.id, qty);
     },
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ["products"] });
@@ -75,12 +65,6 @@ export function AddStockDialog({
                 setAddQty("");
               }}
               onSubmit={() => addStockMut.mutate()}
-              unitCost={unitCost}
-              onUnitCostChange={setUnitCost}
-              supplier={supplier}
-              onSupplierChange={setSupplier}
-              note={movementNote}
-              onNoteChange={setMovementNote}
             />
           )}
         </div>
@@ -91,6 +75,7 @@ export function AddStockDialog({
           <Button
             onClick={() => addStockMut.mutate()}
             disabled={!selectedProduct || !addQty || Number(addQty) <= 0 || addStockMut.isPending}
+            aria-busy={addStockMut.isPending}
           >
             {addStockMut.isPending ? "Ajout…" : "Ajouter au stock"}
           </Button>

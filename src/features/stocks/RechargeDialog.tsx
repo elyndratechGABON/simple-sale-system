@@ -119,6 +119,7 @@ export function RechargeDialog({
               <Button
                 onClick={() => rechargeMut.mutate()}
                 disabled={!deviceIds || !qty || Number(qty) <= 0 || rechargeMut.isPending}
+                aria-busy={rechargeMut.isPending}
               >
                 {rechargeMut.isPending ? "Envoi…" : "Envoyer la recharge"}
               </Button>

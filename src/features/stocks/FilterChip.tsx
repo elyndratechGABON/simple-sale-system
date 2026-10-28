@@ -34,7 +34,7 @@ export function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors duration-150",
+        "flex h-11 shrink-0 items-center gap-1.5 rounded-[12px] border px-3 text-sm font-medium transition-colors duration-150",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:scale-[0.97]",
         active
           ? "border-primary bg-primary text-primary-foreground"
@@ -52,7 +52,7 @@ export function FilterChip({
       {count !== undefined && (
         <span
           className={cn(
-            "shrink-0 rounded-full px-1.5 text-[11px] font-semibold tabular-nums",
+            "shrink-0 rounded-full px-1.5 text-xs font-semibold tabular-nums",
             active
               ? "bg-primary-foreground/20 text-primary-foreground"
               : "bg-muted text-muted-foreground",
@@ -70,9 +70,7 @@ export function FilterChip({
 export function ChipRow({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {title}
-      </p>
+      <p className="mb-1.5 text-small text-muted-foreground">{title}</p>
       <div className="-mx-[var(--page-gutter)] flex gap-1.5 overflow-x-auto px-[var(--page-gutter)] pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {children}
       </div>

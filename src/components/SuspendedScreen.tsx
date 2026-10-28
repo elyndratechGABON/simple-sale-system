@@ -18,10 +18,15 @@ import {
   getLockSnapshot,
   resetDeviceConflict,
   resetKeywordBlock,
+  resetGatekeeper,
   subscribeLock,
 } from "@/lib/gatekeeper";
-import { unlockFromPaymentSms } from "@/lib/offline-unlock";
+import { VerifyPaymentDialog } from "@/features/settings/VerifyPaymentDialog";
 import { reattachAccount } from "@/lib/gatekeeper";
+import { departFromGroup } from "@/lib/syncengine/pairing";
+import { purgeAllData } from "@/lib/db";
+import { resetDeviceIdentity } from "@/lib/syncengine/identity";
+import { savePreferences } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -36,9 +41,6 @@ export function SuspendedScreen() {
     reason: null,
   }));
   const [busy, setBusy] = useState(false);
-  const [unlockOpen, setUnlockOpen] = useState(false);
-  const [sms, setSms] = useState("");
-  const [unlocking, setUnlocking] = useState(false);
   // Réassociation du compte (blocage « appareil déjà enregistré »).
   const [reattachOpen, setReattachOpen] = useState(false);
   const [reattachPhone, setReattachPhone] = useState("");
@@ -73,6 +75,22 @@ export function SuspendedScreen() {
     }
   }
 
+  async function handleLeaveAndReset() {
+    setBusy(true);
+    try {
+      await departFromGroup();
+      await purgeAllData();
+      await resetDeviceIdentity();
+      resetGatekeeper();
+      savePreferences({ onboarded: false });
+      window.location.reload();
+    } catch {
+      toast.error("Impossible de libérer cet appareil.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Réassociation : le téléphone + le mot de passe du compte rendent son poste. */
   async function handleReattach() {
     setBusy(true);
@@ -89,32 +107,6 @@ export function SuspendedScreen() {
       }
     } finally {
       setBusy(false);
-    }
-  }
-
-  /** Déblocage OFFLINE : colle le SMS de confirmation de l'opérateur → levée immédiate. */
-  async function handleOfflineUnlock() {
-    if (!sms.trim() || unlocking) return;
-    setUnlocking(true);
-    try {
-      const result = await unlockFromPaymentSms(sms.trim());
-      if (result.ok && result.receipt) {
-        toast.success(`Abonnement ${result.receipt.planName} débloqué hors ligne`, {
-          description: `Reçu ${result.receipt.amount.toLocaleString("fr-FR")} F — confirmation serveur au prochain contact.`,
-        });
-        setSms("");
-        setUnlockOpen(false);
-      } else {
-        const messages: Record<string, string> = {
-          not_a_payment_sms: "Ce texte ne ressemble pas à un SMS de confirmation de paiement.",
-          no_matching_tier: "Le montant ne correspond à aucun palier (10 000 / 25 000 / 50 000 F).",
-        };
-        toast.error(
-          messages[result.reason ?? "unknown"] ?? "Impossible de déverrouiller à partir de ce SMS.",
-        );
-      }
-    } finally {
-      setUnlocking(false);
     }
   }
 
@@ -213,44 +205,24 @@ export function SuspendedScreen() {
               </a>
             </Button>
           </div>
+        ) : overLimit ? (
+          <div className="mt-6 flex flex-col gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => void handleLeaveAndReset()}
+              disabled={busy}
+            >
+              {busy ? "Libération…" : "Libérer cet appareil (Recommencer)"}
+            </Button>
+            <Button asChild variant="outline">
+              <a href={SUPPORT_WHATSAPP} target="_blank" rel="noreferrer">
+                Contacter le service client
+              </a>
+            </Button>
+          </div>
         ) : (
           <>
-            <div className="mt-6 flex flex-col gap-2">
-              <Button onClick={() => setUnlockOpen((v) => !v)}>
-                <ScanLine className="h-4 w-4" />
-                J'ai un SMS de confirmation — débloquer
-              </Button>
-              <Button asChild variant="outline">
-                <a href={SUPPORT_WHATSAPP} target="_blank" rel="noreferrer">
-                  Contacter le service client
-                </a>
-              </Button>
-            </div>
-
-            {unlockOpen && (
-              <div className="mt-3 space-y-3">
-                <textarea
-                  className="w-full min-h-20 rounded-lg border bg-input px-3 py-2 text-sm"
-                  placeholder={
-                    'Collez le SMS reçu de l\'opérateur, ex : "Recu 10000F du 076505254,Client. … TID: …."'
-                  }
-                  value={sms}
-                  onChange={(e) => setSms(e.target.value)}
-                  rows={3}
-                />
-                <p className="text-xs text-muted-foreground">
-                  L'app reconnaît le montant et le TID, puis déverrouille immédiatement — même hors
-                  ligne.
-                </p>
-                <Button
-                  className="w-full"
-                  disabled={!sms.trim() || unlocking}
-                  onClick={() => void handleOfflineUnlock()}
-                >
-                  {unlocking ? "Vérification…" : "Déverrouiller maintenant"}
-                </Button>
-              </div>
-            )}
+            <VerifyPaymentDialog open={false} onOpenChange={() => {}} />
           </>
         )}
         <p className="mt-3 text-xs text-muted-foreground">

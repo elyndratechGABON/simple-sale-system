@@ -1,5 +1,6 @@
 import { setSetting, setShopAccountId } from "@/lib/db";
 import { refreshShopId } from "@/lib/syncengine/identity";
+import { resetDeviceIdentity } from "@/lib/syncengine/identity";
 import { setLock } from "./lock";
 import {
   SETTING_GRACE_ENDS_AT,
@@ -42,12 +43,52 @@ export async function handleHandshakeRefusal(res: Response): Promise<HandshakeRe
       error?: string;
     } | null;
     if (data?.code === "fingerprint_conflict") {
-      await setSetting(SETTING_LOCKED, true);
-      await setSetting(SETTING_LOCK_REASON, "device_conflict" as LockReason);
-      setLock(true, "device_conflict");
-      return { ok: false, sync_allowed: false, status: "unknown", reason: "device_conflict" };
+      // --- AUTO-FIX : empreinte en conflit → on efface l'empreinte locale, on régénère
+      // l'identité (nouveau deviceId), et on laisse l'appelant retenter le handshake ---
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem("pos_device_fingerprint");
+        } catch {
+          // Ignoré : localStorage inaccessible (mode privé)
+        }
+      }
+      await resetDeviceIdentity();
+      // On ne verrouille PAS l'écran : on laisse l'appelant retenter le handshake
+      // avec la nouvelle identité (nouveau deviceId, nouvelle empreinte).
+      return {
+        ok: false,
+        sync_allowed: false,
+        status: "unknown",
+        reason: "fingerprint_conflict_auto_reset",
+      };
     }
     return { ok: false, sync_allowed: false, status: "unknown", reason: "error" };
+  }
+  // Quota d'appareils dépassé (over_limit) : l'orchestrateur a compté trop d'appareils.
+  // Cela arrive souvent quand un device.leave n'a pas encore été traité par l'orchestrateur.
+  // AUTO-FIX : on réinitialise l'identité locale (nouveau deviceId + empreinte fraîche)
+  // et on laisse l'appelant retenter le handshake.
+  if (res.status === 403 || res.status === 200) {
+    const data = (await res
+      .clone()
+      .json()
+      .catch(() => null)) as { over_limit?: boolean } | null;
+    if (data?.over_limit === true) {
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem("pos_device_fingerprint");
+        } catch {
+          // Ignoré
+        }
+      }
+      await resetDeviceIdentity();
+      return {
+        ok: false,
+        sync_allowed: false,
+        status: "unknown",
+        reason: "device_limit_auto_reset",
+      };
+    }
   }
   return null;
 }

@@ -13,7 +13,7 @@ export function PlanCard({ plan, onSelect }: PlanCardProps) {
   return (
     <div
       className={cn(
-        "relative flex flex-col rounded-xl border bg-card p-5 transition-all",
+        "relative flex flex-col rounded-xl border bg-card p-5 transition-colors transition-shadow transition-transform",
         plan.isPopular
           ? "border-primary ring-2 ring-primary shadow-md scale-[1.02]"
           : "hover:border-primary/40 hover:shadow-sm",

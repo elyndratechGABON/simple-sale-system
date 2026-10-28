@@ -11,10 +11,16 @@ export function LandingHeader() {
     <header className="sticky top-0 z-20 border-b bg-card/85 backdrop-blur pt-[env(safe-area-inset-top)]">
       <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-4 py-3 lg:px-8">
         <Link to="/" className="flex items-center gap-3">
-          <img src="/logo-header.png" alt="ELYNDRA CAISSE" className="h-14 w-14 object-contain" />
+          <img
+            src="/logo-header.png"
+            alt="ELYNDRA CAISSE"
+            className="h-14 w-14 object-contain"
+            width={56}
+            height={56}
+          />
           <span>
             <span className="block text-base font-bold leading-tight">ELYNDRA CAISSE</span>
-            <span className="block text-[11px] font-semibold tracking-wide text-primary/80">
+            <span className="block text-xs font-semibold tracking-wide text-primary/80">
               ELYNDRA TECH GABON
             </span>
           </span>

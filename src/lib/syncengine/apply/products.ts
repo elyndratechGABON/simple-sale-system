@@ -1,4 +1,5 @@
 import type { PosDatabase } from "../../db";
+import { enforceServiceUnlimited } from "../../db/products";
 import { recordMovement } from "../../db/stock";
 import { getIdentity } from "../identity";
 import type {
@@ -15,7 +16,8 @@ export async function applyProductCreated(db: PosDatabase, op: SyncOp): Promise<
   // Upsert : le rejeu d'un pair ne doit pas écraser une suppression locale.
   const existing = await db.products.get(pl.product.id);
   if (existing?.deleted_at) return;
-  await db.products.put(pl.product);
+  // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
+  await db.products.put(enforceServiceUnlimited(pl.product));
 }
 
 export async function applyProductUpdated(db: PosDatabase, op: SyncOp): Promise<void> {
@@ -23,7 +25,8 @@ export async function applyProductUpdated(db: PosDatabase, op: SyncOp): Promise<
   if (!pl?.product_id) return;
   const existing = await db.products.get(pl.product_id);
   if (!existing || existing.deleted_at) return;
-  await db.products.put({ ...existing, ...pl.fields, ...touch() });
+  // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
+  await db.products.put(enforceServiceUnlimited({ ...existing, ...pl.fields, ...touch() }));
 }
 
 export async function applyProductDeleted(db: PosDatabase, op: SyncOp): Promise<void> {

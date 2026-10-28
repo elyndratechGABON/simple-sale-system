@@ -51,7 +51,7 @@ export function StockPicker({
               type="button"
               onClick={() => onSelect(p.id)}
               className={cn(
-                "w-full flex items-center justify-between rounded-lg border p-3 text-left transition-all",
+                "w-full flex items-center justify-between rounded-lg border p-3 text-left transition-colors",
                 "hover:border-primary/50 hover:bg-accent/50",
               )}
             >

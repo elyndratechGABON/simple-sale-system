@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import type { ProductFormState } from "./useProductForm";
 
 /** Bloc « Photo » — et, par héritage de sa structure d'origine, le prix et les seuils de
@@ -29,140 +30,174 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
   } = form;
 
   return (
-    <div>
-      <Label htmlFor="photo">Photo</Label>
-      <div className="mt-1 flex items-center gap-3">
-        {photo ? (
-          <img src={photo} alt="" className="h-16 w-16 rounded-lg border object-cover" />
-        ) : (
-          <span className="flex h-16 w-16 items-center justify-center rounded-lg border bg-muted/40">
-            <ImagePlus className="h-6 w-6 text-muted-foreground" />
-          </span>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={photoBusy}
-            onClick={() => photoInputRef.current?.click()}
-          >
-            <ImagePlus className="h-4 w-4 mr-1.5" />
-            {photoBusy ? "…" : photo ? "Changer" : "Ajouter une photo"}
-          </Button>
-          {photo && (
-            <Button type="button" variant="ghost" size="sm" onClick={() => setPhoto(undefined)}>
-              <Trash2 className="h-4 w-4 mr-1.5 text-destructive" />
-              Retirer
-            </Button>
+    <div className="space-y-3">
+      {/* Photo section */}
+      <div>
+        <Label htmlFor="photo" className="text-sm">
+          Photo du produit
+        </Label>
+        <div className="mt-1 flex items-center gap-2.5">
+          {photo ? (
+            <div className="relative h-12 w-12 shrink-0 rounded-lg border bg-muted/40">
+              <img
+                src={photo}
+                alt=""
+                className="h-12 w-12 rounded-lg object-cover"
+                width={48}
+                height={48}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/50 text-white hover:bg-black/70"
+                onClick={() => setPhoto(undefined)}
+              >
+                <Trash2 className="h-2.5 w-2.5" />
+              </Button>
+            </div>
+          ) : (
+            <label
+              htmlFor="photo"
+              className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 transition-colors hover:border-primary/50 hover:bg-primary/5"
+            >
+              <ImagePlus className="h-5 w-5 text-muted-foreground" />
+            </label>
           )}
-        </div>
-      </div>
-      <input
-        ref={photoInputRef}
-        id="photo"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handlePhoto}
-      />
-      <div className="space-y-3">
-        {/* Prix de revente et coût d'achat côte à côte pour les produits (marge d'un coup d'œil).
-            Pour un service, seul le prix de revente s'affiche. */}
-        {productType === "product" ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="price">Prix de revente (FCFA)</Label>
-              <Input
-                id="price"
-                inputMode="numeric"
-                value={price}
-                onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-                placeholder="Ex : 300"
-              />
-            </div>
-            <div>
-              <Label htmlFor="cost">Coût d'achat (FCFA)</Label>
-              <Input
-                id="cost"
-                inputMode="numeric"
-                value={cost}
-                onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
-                placeholder="Optionnel"
-              />
-            </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={photoBusy}
+              onClick={() => photoInputRef.current?.click()}
+              className="h-9 text-xs"
+            >
+              <ImagePlus className="h-3.5 w-3.5 mr-1.5" />
+              {photoBusy ? "…" : photo ? "Changer" : "Ajouter une photo"}
+            </Button>
+            {photo && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setPhoto(undefined)}
+                className="h-9 text-xs"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5 text-destructive" />
+                Retirer
+              </Button>
+            )}
           </div>
-        ) : (
+        </div>
+        <input
+          ref={photoInputRef}
+          id="photo"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handlePhoto}
+        />
+      </div>
+
+      {/* Prix et coût d'achat */}
+      <div className={cn("space-y-1.5", productType === "product" && "grid grid-cols-2 gap-2")}>
+        <div>
+          <Label htmlFor="price" className="text-xs font-medium">
+            Prix de vente *
+          </Label>
+          <Input
+            id="price"
+            inputMode="numeric"
+            value={price}
+            onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+            placeholder="Ex : 300"
+            className="mt-0.5 h-9 text-sm"
+          />
+        </div>
+        {productType === "product" && (
           <div>
-            <Label htmlFor="price">Prix de revente (FCFA)</Label>
+            <Label htmlFor="cost" className="text-xs font-medium">
+              Coût d'achat
+            </Label>
             <Input
-              id="price"
+              id="cost"
               inputMode="numeric"
-              value={price}
-              onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
-              placeholder="Ex : 300"
+              value={cost}
+              onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
+              placeholder="Optionnel"
+              className="mt-0.5 h-9 text-sm"
             />
           </div>
         )}
+      </div>
 
-        {productType === "product" && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Optionnel — sans cette valeur, le bénéfice sera surestimé.
-          </p>
-        )}
+      {productType === "product" && (
+        <p className="text-[10px] text-muted-foreground">
+          Optionnel — sans cette valeur, le bénéfice sera surestimé.
+        </p>
+      )}
 
-        {productType === "product" && (
-          <>
-            {/* Le stock global n'est PAS saisissable sur un produit à variantes : il est
-                la somme des variantes (`normalizeVariantStock`). Proposer une case à
-                côté des stocks par variante ferait saisir deux fois le même stock, et
-                le premier venu l'écraserait. */}
-            {variants.length === 0 && (
+      {/* Section Gestion du stock pour les produits */}
+      {productType === "product" && (
+        <div className="rounded-lg border border-border bg-muted/30 p-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+              Gestion du stock
+            </Label>
+            {variants.length > 0 && (
+              <span className="text-[10px] text-muted-foreground">Géré par variante</span>
+            )}
+          </div>
+
+          {variants.length === 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
               <div>
-                <Label htmlFor="stock">Stock</Label>
+                <Label htmlFor="stock" className="text-xs">
+                  Stock initial
+                </Label>
                 <Input
                   id="stock"
                   inputMode="numeric"
-                  className="mt-1"
                   value={stock}
                   onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
-                  placeholder="50"
+                  placeholder="Ex : 50"
                   disabled={unlimited}
+                  className="mt-0.5 h-8 text-xs"
                 />
               </div>
-            )}
 
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="unlimited"
-                checked={unlimited}
-                onCheckedChange={(v) => setUnlimited(Boolean(v))}
-              />
-              <Label htmlFor="unlimited" className="cursor-pointer text-xs">
-                Stock illimité
-              </Label>
+              <div className="flex items-center gap-2 pt-1 sm:pt-4">
+                <Checkbox
+                  id="unlimited"
+                  checked={unlimited}
+                  onCheckedChange={(v) => setUnlimited(Boolean(v))}
+                />
+                <Label htmlFor="unlimited" className="cursor-pointer text-xs font-medium">
+                  Stock illimité
+                </Label>
+              </div>
+
+              {!unlimited && (
+                <div className="sm:col-span-2">
+                  <Label htmlFor="min-stock" className="text-xs">
+                    Seuil d'alerte (par défaut : 5)
+                  </Label>
+                  <Input
+                    id="min-stock"
+                    inputMode="numeric"
+                    value={minStock}
+                    onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
+                    placeholder="5"
+                    className="mt-0.5 h-8 text-xs"
+                  />
+                </div>
+              )}
             </div>
-
-            {variants.length === 0 && !unlimited && (
-              <div>
-                <Label htmlFor="min-stock">Stock minimum (seuil d'alerte)</Label>
-                <Input
-                  id="min-stock"
-                  inputMode="numeric"
-                  value={minStock}
-                  onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Par défaut : 5"
-                  className="mt-1.5"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Sous ce seuil, le produit apparaît comme « stock faible ».
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

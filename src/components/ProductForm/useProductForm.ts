@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { addProduct, updateProduct, type Category, type Product } from "@/lib/db";
+import { runOpsExchange } from "@/lib/sync";
 import { fileToScaledDataUrl } from "@/lib/images";
 import { usePreferences } from "@/hooks/use-preferences";
 
@@ -180,6 +181,8 @@ export function useProductForm({
       } else {
         await addProduct(p);
       }
+      // Pousse immédiatement les opérations vers le relais (best-effort)
+      void runOpsExchange().catch(() => {});
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["products"] });

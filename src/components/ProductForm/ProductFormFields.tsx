@@ -6,6 +6,7 @@ import { CategorySelect } from "@/components/CategorySelect";
 import { PhotoAndPricing } from "./PhotoAndPricing";
 import { ProductTypeSelector } from "./ProductTypeSelector";
 import { VariantEditor } from "./VariantEditor";
+import { cn } from "@/lib/utils";
 import type { ProductFormState } from "./useProductForm";
 
 /** Corps du formulaire produit (sans chrome de modale) — partagé par l'onglet Stocks
@@ -29,48 +30,43 @@ export const ProductFormFields: FC<{ form: ProductFormState }> = ({ form }) => {
   } = form;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       {/* Le type commande quels champs existent : le choisir EN PREMIER */}
-      <ProductTypeSelector
-        value={productType}
-        onChange={(type) => {
-          setProductType(type);
-          if (type === "service") setUnlimited(true);
-        }}
-      />
+      <div className="space-y-1">
+        <Label className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+          Type d'article
+        </Label>
+        <ProductTypeSelector
+          value={productType}
+          onChange={(type) => {
+            setProductType(type);
+            if (type === "service") setUnlimited(true);
+          }}
+        />
+      </div>
 
-      <div>
-        <Label htmlFor="name">Nom</Label>
+      {/* Nom du produit */}
+      <div className="space-y-1">
+        <Label htmlFor="name" className="text-xs font-medium">
+          Nom du produit *
+        </Label>
         <Input
           id="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Ex : Regab"
+          placeholder="Ex : Regab 65 cl"
+          className="h-9 text-sm"
         />
       </div>
 
+      {/* Photo et Prix */}
       <PhotoAndPricing form={form} />
 
-      {showVariants && <VariantEditor form={form} />}
-
-      {hasSerialNumber && productType === "product" && (
-        <div>
-          <Label htmlFor="serialNumber">Numéro de série / IMEI</Label>
-          <Input
-            id="serialNumber"
-            value={serialNumber}
-            onChange={(e) => setSerialNumber(e.target.value)}
-            placeholder="Optionnel — ex: IMEI ou N° série"
-          />
-        </div>
-      )}
+      {/* Unité de vente pour les produits */}
       {productType === "product" && (
-        <div>
-          <Label>Unité de vente</Label>
-          {/* Les quatre unités sont proposées partout : le kilo n'appartient plus à un
-             cluster précis. Un epicier vend du riz au kg sans avoir choisi `weight`.
-             Le sélecteur est donc rétrogradé en 4 choix neutres. */}
-          <div className="flex flex-wrap gap-2 mt-1">
+        <div className="space-y-1">
+          <Label className="text-xs font-medium">Unité de vente</Label>
+          <div className="flex flex-wrap gap-1.5">
             {(
               [
                 ["piece", "Pièce"],
@@ -85,6 +81,7 @@ export const ProductFormFields: FC<{ form: ProductFormState }> = ({ form }) => {
                 variant={unit === value ? "default" : "outline"}
                 size="sm"
                 onClick={() => setUnit(value)}
+                className="h-8 px-2.5 rounded-md text-xs"
               >
                 {label}
               </Button>
@@ -92,10 +89,15 @@ export const ProductFormFields: FC<{ form: ProductFormState }> = ({ form }) => {
           </div>
         </div>
       )}
-      <div>
-        <Label>Catégorie</Label>
+
+      {/* Catégorie */}
+      <div className="space-y-1">
+        <Label className="text-xs font-medium">Catégorie</Label>
         <CategorySelect value={category} onChange={setCategory} />
       </div>
+
+      {/* Variantes */}
+      {showVariants && <VariantEditor form={form} />}
     </div>
   );
 };

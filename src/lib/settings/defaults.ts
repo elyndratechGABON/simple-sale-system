@@ -10,6 +10,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   customDomain: "",
   features: {
     tables: false,
+    subscription: "inconnu",
   },
   tablesEnabled: false,
   tables: ["1", "2", "3", "4", "5", "6"],

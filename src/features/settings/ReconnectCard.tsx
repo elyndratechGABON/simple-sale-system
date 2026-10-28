@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { getIdentity, refreshShopId } from "@/lib/syncengine/identity";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
 import { setShopAccount } from "@/lib/db";
+import { getLocalOrchestratorUrl } from "@/lib/sync/local-server";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 /**
@@ -28,8 +29,15 @@ export function ReconnectCard() {
       try {
         const identity = await getIdentity();
         const fingerprint = await getDeviceFingerprint();
+        const localUrl = getLocalOrchestratorUrl();
 
-        const res = await fetch("/api/v1/handshake", {
+        if (!localUrl) {
+          throw new Error(
+            "Aucune instance locale configuree. Configurez l'adresse de l'orchestrateur local dans Parametres > Compte > Serveur local.",
+          );
+        }
+
+        const res = await fetch(`${localUrl}/api/v1/handshake`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -71,7 +79,10 @@ export function ReconnectCard() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!connecting) connectMut.mutate();
+    e.stopPropagation();
+    // Ne pas soumettre si d�j� en cours de connexion ou champs vides
+    if (connecting || !phone.trim() || !password.trim()) return;
+    connectMut.mutate();
   };
 
   return (
@@ -82,22 +93,29 @@ export function ReconnectCard() {
           Reconnecter au proprio
         </CardTitle>
         <CardDescription>
-          Vous avez perdu vos donnees (reinstallation, reset, perte telephone).
-          Entrez les identifiants du compte proprio pour reconnecter cet ecran.
+          Vous avez perdu vos donnees (reinstallation, reset, perte telephone). Entrez les
+          identifiants du compte proprio pour reconnecter cet ecran.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3" autoComplete="off">
           <div className="space-y-2">
-            <label htmlFor="phone" className="text-sm font-medium">Telephone du proprio</label>
+            <label htmlFor="phone" className="text-sm font-medium">
+              Telephone du proprio
+            </label>
             <Input
               id="phone"
               type="tel"
               value={phone}
-              onChange={e => setPhone(e.target.value)}
+              onChange={(e) => setPhone(e.target.value)}
               placeholder="07 XX XX XX XX"
               required
               disabled={connecting}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                (connecting || !phone.trim() || !password.trim()) &&
+                e.preventDefault()
+              }
             />
           </div>
           <div className="space-y-2">
@@ -105,7 +123,7 @@ export function ReconnectCard() {
               Mot de passe du compte proprio
               <button
                 type="button"
-                onClick={() => setShowPassword(v => !v)}
+                onClick={() => setShowPassword((v) => !v)}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? "Masquer" : "Afficher"}
@@ -115,10 +133,15 @@ export function ReconnectCard() {
               id="password"
               type="password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="......."
               required
               disabled={connecting}
+              onKeyDown={(e) =>
+                e.key === "Enter" &&
+                (connecting || !phone.trim() || !password.trim()) &&
+                e.preventDefault()
+              }
             />
           </div>
           <div className="space-y-3 pt-2">
@@ -131,8 +154,8 @@ export function ReconnectCard() {
               Reconnecter au proprio
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Les identifiants sont ceux du compte proprio (telephone + mot de passe).
-              La connexion s'effectue en HTTPS direct avec le serveur.
+              Les identifiants sont ceux du compte proprio (telephone + mot de passe). La connexion
+              s'effectue en HTTPS direct avec le serveur.
             </p>
           </div>
         </form>

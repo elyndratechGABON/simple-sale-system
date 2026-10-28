@@ -61,9 +61,6 @@ export function ProductPanel({
           colonne de gauche (xl:block) — sinon ce sont deux fois les mêmes boutons. */}
       {!pos.isService && pos.categories.length > 0 && (
         <section className="mt-4 xl:hidden">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Catégories
-          </p>
           <div className="mt-3 grid grid-cols-2 gap-2.5 xs:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 xl:gap-3">
             <CategoryCard
               label="Tous"

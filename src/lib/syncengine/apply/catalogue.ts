@@ -1,5 +1,6 @@
 import type { PosDatabase } from "../../db";
 import { getPreferences, savePreferences } from "../../settings";
+import { enforceServiceUnlimited } from "../../db/products";
 import { getIdentity } from "../identity";
 import type { CatalogueSnapshotPayload, SyncOp } from "../types";
 import { sameVariantStocks, touch } from "./helpers";
@@ -30,7 +31,8 @@ export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promi
     if (!existing) {
       // Bootstrap : la fiche est celle du propriétaire, `updated_at` compris — c'est
       // cette date qui decidera, à l'import suivant, si son stock est plus frais.
-      await db.products.put({ ...p });
+      // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
+      await db.products.put(enforceServiceUnlimited({ ...p }));
       continue;
     }
     if (existing.deleted_at) continue;
@@ -40,12 +42,14 @@ export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promi
     const stock = Number.isFinite(p.stock) ? p.stock : existing.stock;
     const variants = p.variants?.map((v) => ({ ...v }));
     if (stock === existing.stock && sameVariantStocks(variants, existing.variants)) continue;
-    await db.products.put({
-      ...existing,
-      stock,
-      ...(variants ? { variants } : {}),
-      ...touch(),
-    });
+    await db.products.put(
+      enforceServiceUnlimited({
+        ...existing,
+        stock,
+        ...(variants ? { variants } : {}),
+        ...touch(),
+      }),
+    );
   }
   // Le relais est aussi le garant du NOM de la boutique : si ce nouvel écran est
   // encore sur le placeholder « Ma boutique » (fiche jamais écrite à l'onboarding,

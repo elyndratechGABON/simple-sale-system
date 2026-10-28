@@ -1,12 +1,13 @@
 import { motion } from "framer-motion";
 
-interface LoadingScreenProps {
-  progress: number;
-}
-
 const BRAND = "ELYNDRA CAISSE";
 
-export function LoadingScreen({ progress }: LoadingScreenProps) {
+/**
+ * Écran de chargement : les lettres « ELYNDRA CAISSE » montent et brillent en boucle.
+ * Le layout (/_app) ne bascule vers l'application qu'après le premier cycle complet
+ * de l'animation (~2,6 s) — la barre de progression a été retirée.
+ */
+export function LoadingScreen() {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-6">
@@ -41,17 +42,6 @@ export function LoadingScreen({ progress }: LoadingScreenProps) {
             </motion.span>
           ))}
         </motion.h1>
-        <div className="w-64">
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            ></div>
-          </div>
-          <p className="mt-2 text-center text-sm font-medium text-muted-foreground">
-            {progress < 100 ? "Création de l'espace employé…" : "Terminé !"}
-          </p>
-        </div>
       </div>
     </div>
   );

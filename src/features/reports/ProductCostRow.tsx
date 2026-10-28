@@ -59,15 +59,15 @@ export function ProductCostRow({
   }
 
   return (
-    <div className="flex items-center gap-2 border-b py-2 text-sm last:border-b-0">
-      <span className="min-w-0 flex-1 truncate font-medium">{product.name}</span>
-      <span className="w-12 shrink-0 text-right text-muted-foreground tabular-nums">
-        ×{quantitySold}
+    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 border-b py-2 text-sm last:border-b-0 items-center">
+      <span className="min-w-0 truncate font-medium">{product.name}</span>
+      <span className="text-right text-muted-foreground tabular-nums whitespace-nowrap">
+        <span className="bg-gray-200 px-2 rounded text-xs font-medium">{quantitySold}</span>
       </span>
-      <span className="w-24 shrink-0 text-right text-muted-foreground tabular-nums">
+      <span className="text-right text-muted-foreground tabular-nums whitespace-nowrap">
         {formatFCFA(product.price)}
       </span>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Input
           ref={inputRef}
           type="number"
@@ -75,9 +75,9 @@ export function ProductCostRow({
           step="0.01"
           inputMode="decimal"
           defaultValue={saved}
-          placeholder="—"
+          placeholder="Coût (FCFA)"
           aria-label={`Coût de ${product.name}`}
-          className="h-9 w-28 text-right tabular-nums"
+          className="h-9 w-32 text-right tabular-nums bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
           onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
@@ -90,7 +90,7 @@ export function ProductCostRow({
         {product.cost > 0 && <Check className="h-4 w-4 shrink-0 text-primary" />}
       </div>
       {/* Lecture seule : ce que la catégorie a rapporté, pour situer le coût saisi. */}
-      <span className="w-24 shrink-0 text-right tabular-nums">{formatFCFA(revenue)}</span>
+      <span className="text-right tabular-nums font-medium">{formatFCFA(revenue)}</span>
     </div>
   );
 }

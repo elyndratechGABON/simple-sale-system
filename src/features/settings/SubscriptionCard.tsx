@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useAccess } from "@/hooks/use-access";
 import { SubscriptionPaymentDialog } from "./SubscriptionPaymentDialog";
@@ -13,28 +12,18 @@ export function SubscriptionCard() {
   const isOwner = role === "owner";
   const subscriptionFeature = features?.subscription ?? false;
 
-  // Statut simplifié : on utilise la présence/features pour déterminer l'état
-  const subscriptionStatus = subscriptionFeature
-    ? features.subscription === "active"
-      ? "Actif"
-      : features.subscription === "trial"
-        ? "Essai"
-        : "Expiré"
-    : "Inconnu";
+  // Statut simplifié : la feature d'abonnement est un booléen (activée ou non) —
+  // les comparaisons à « active » / « trial » ne peuvent jamais matcher.
+  const subscriptionStatus = subscriptionFeature ? "Actif" : "Inconnu";
 
-  const [open, setOpen] = useState(false);
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-
-  const handleOpenChange = (v: boolean) => {
-    setOpen(v);
-  };
+  const [paymentPlan, setPaymentPlan] = useState<{ id: string; name: string; price: number } | null>(null);
 
   const renderStatusBadge = () => {
     if (subscriptionStatus === "Inconnu") {
       return <Badge variant="secondary">Aucun abonnement détecté</Badge>;
     }
     return (
-      <Badge variant={subscriptionStatus === "Actif" ? "default" : subscriptionStatus === "Essai" ? "warning" : "destructive"}>
+      <Badge variant={subscriptionStatus === "Actif" ? "default" : "secondary"}>
         {subscriptionStatus}
       </Badge>
     );
@@ -47,11 +36,11 @@ export function SubscriptionCard() {
   };
 
   const openPaymentDialog = (planKey: keyof typeof plans) => {
-    setShowPaymentDialog(true);
+    setPaymentPlan(plans[planKey]);
   };
 
   const handlePaymentDialogClose = () => {
-    setShowPaymentDialog(false);
+    setPaymentPlan(null);
   };
 
   if (!isOwner) return null;
@@ -64,7 +53,8 @@ export function SubscriptionCard() {
       </div>
 
       {/* Boutons selon le statut */}
-      {subscriptionStatus === "Essai" && (
+      {/* Pas d'abonnement actif : proposer le paiement */}
+      {!subscriptionFeature && (
         <div>
           <Button
             onClick={() => openPaymentDialog("essentiel")}
@@ -72,13 +62,6 @@ export function SubscriptionCard() {
           >
             Payer l'abonnement
           </Button>
-          {showPaymentDialog && (
-            <SubscriptionPaymentDialog
-              isOpen={showPaymentDialog}
-              onClose={handlePaymentDialogClose}
-              plan={plans.essentiel}
-            />
-          )}
         </div>
       )}
 
@@ -97,31 +80,16 @@ export function SubscriptionCard() {
           >
             Changer d'abonnement
           </Button>
-          {showPaymentDialog && (
-            <>
-              {plans.confort.id === "confort" && (
-                <SubscriptionPaymentDialog
-                  isOpen={showPaymentDialog}
-                  onClose={handlePaymentDialogClose}
-                  plan={plans.confort}
-                />
-              )}
-              {plans.affluence.id === "affluence" && (
-                <SubscriptionPaymentDialog
-                  isOpen={showPaymentDialog}
-                  onClose={handlePaymentDialogClose}
-                  plan={plans.affluence}
-                />
-              )}
-            </>
-          )}
         </div>
       )}
 
-      {subscriptionStatus === "Expiré" && (
-        <p className="text-sm text-muted-foreground">
-          Votre abonnement a expiré. Renouvelez pour continuer d'utiliser toutes les fonctionnalités.
-        </p>
+      {/* Un seul dialog de paiement, celui du palier choisi */}
+      {paymentPlan && (
+        <SubscriptionPaymentDialog
+          isOpen
+          onClose={handlePaymentDialogClose}
+          plan={paymentPlan}
+        />
       )}
 
       {/* État par défaut */}

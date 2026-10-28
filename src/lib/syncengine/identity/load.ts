@@ -104,11 +104,12 @@ export async function setIdentityEmployeePhone(phone: string): Promise<SyncIdent
 }
 
 /** Oublie l'identité courante, purge le journal et repart d'un appareil neuf.
- *  À utiliser quand le mobile change de compte/commerce : les ops de l'ancien monde
- *  n'ont plus d'objet ici. */
+ *  À utiliser quand le mobile change de compte/commerce.
+ *  NE PURGE PAS sync_ops : les ops de départ (stock.adjusted, device.leave) doivent
+ *  partir vers le relais pour libérer la place et rendre le stock au patron. */
 export async function resetDeviceIdentity(): Promise<SyncIdentity> {
   const db = getDB();
-  await db.transaction("rw", db.settings, db.sync_ops, async () => {
+  await db.transaction("rw", db.settings, async () => {
     await db.settings.bulkDelete([
       IDENTITY_KEYS.device,
       IDENTITY_KEYS.publicKey,
@@ -123,9 +124,19 @@ export async function resetDeviceIdentity(): Promise<SyncIdentity> {
       PAIRING_KEYS.code,
       PAIRING_KEYS.codeExpiresAt,
     ]);
-    await db.sync_ops.clear();
+    // NE PAS purger sync_ops : les ops de départ (stock.adjusted, device.leave) doivent
+    // être envoyés au relais pour libérer la place et rendre le stock au patron.
   });
   setCachedIdentity(null);
   setCachedKeys(null);
+  // Effacer l'empreinte matérielle : sinon l'orchestrateur la retrouve au prochain handshake
+  // et rattache le "nouvel" appareil à l'historique des anciens employés.
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem("pos_device_fingerprint");
+    } catch {
+      // Ignoré : localStorage inaccessible (mode privé)
+    }
+  }
   return ensureIdentity();
 }

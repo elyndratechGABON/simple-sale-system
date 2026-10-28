@@ -30,9 +30,7 @@ function KpiCell({
       >
         {value}
       </p>
-      <p className="mt-0.5 truncate text-[10px] uppercase leading-none tracking-wide text-muted-foreground">
-        {label}
-      </p>
+      <p className="mt-0.5 truncate text-xs leading-none text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -55,13 +53,11 @@ export function StocksSummary({
   out: number;
 }) {
   return (
-    <Card>
-      <CardContent className="grid grid-cols-[1.5fr_1fr_1fr_1fr] divide-x p-0">
-        <KpiCell label="Stock" value={formatFCFA(value)} primary />
-        <KpiCell label="Produits" value={String(productCount)} />
-        <KpiCell label="Faible" value={String(low)} tone="warning" />
-        <KpiCell label="Rupture" value={String(out)} tone="danger" />
-      </CardContent>
-    </Card>
+    <div className="flat-card grid grid-cols-[1.5fr_1fr_1fr_1fr] divide-x divide-border p-0">
+      <KpiCell label="Stock" value={formatFCFA(value)} primary />
+      <KpiCell label="Produits" value={String(productCount)} />
+      <KpiCell label="Faible" value={String(low)} tone="warning" />
+      <KpiCell label="Rupture" value={String(out)} tone="danger" />
+    </div>
   );
 }

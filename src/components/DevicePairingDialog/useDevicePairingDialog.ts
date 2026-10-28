@@ -101,9 +101,15 @@ export function useDevicePairingDialog(open: boolean) {
     await approveDevice(peerId, "employee");
     await qc.invalidateQueries({ queryKey: ["paired_devices"] });
     toast.success("Écran approuvé — rôle employé.");
+
+    // Notifier le proprio que l'employé s'est connecté
+    const peer = await getDB().paired_devices.get(peerId);
+    if (peer) {
+      const employeeName = peer.device_name || `Écran ${peer.id.slice(0, 6)}`;
+      toast.success(`${employeeName} s'est connecté à votre boutique.`);
+    }
     // Rattachement au compte marchand (best-effort, non bloquant) : le crédit d'écran est
     // déjà local ; ceci n'actualise que le compteur serveur, dès que l'orchestrateur répond.
-    const peer = await getDB().paired_devices.get(peerId);
     if (peer?.server_device_id) {
       const res = await blessEmployeeDevice(peer.server_device_id);
       if (res.ok) {

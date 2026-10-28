@@ -43,10 +43,6 @@ export const Route = createFileRoute("/_app")({
 function AppLayout() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  // Progression RÉELLE du démarrage, passée à l'écran de chargement : chaque jalon
-  // franchi pousse le compteur (jamais en arrière — `Math.max`, l'ordre d'arrivée
-  // des promesses n'est pas garanti).
-  const [progress, setProgress] = useState(8);
 
   // GARDE ANTI-FLASH, COURUE APRÈS hydratation. À l'ouverture d'un lien direct ou de
   // l'app installée (`start_url` = /pos), le document statique est hydraté par React :
@@ -79,32 +75,27 @@ function AppLayout() {
       void router.navigate({ to: "/welcome" });
       return;
     }
-    const bump = (v: number) => setProgress((p) => Math.max(p, v));
-    // Plancher court (400 ms) : juste le temps que l'écran ne clignote pas quand
-    // tout est déjà prêt. Le compteur étant sincère, plus besoin de délai-théâtre.
-    const minDelay = new Promise((r) => setTimeout(r, 400)).then(() => bump(90));
-    // La synchronisation réseau NE BLOQUE PLUS l'affichage : l'app est offline-first,
-    // rien dans /pos n'en dépend. Elle part en tâche de fond dès que le profil existe.
-    const profileReady = ensureShopProfile(getPreferences().workspaceName).then(() => bump(75));
-    void Promise.all([minDelay, profileReady]).then(async () => {
-      bump(100);
-      // Laisse le compteur afficher 100 % un instant avant la bascule vers l'app.
-      await new Promise((r) => setTimeout(r, 250));
+    // ANIMATION AVANT TOUT : l'écran de chargement reste affiché jusqu'à la fin du
+    // premier cycle des lettres (dernière lettre : 13 × 0,06 s + 1,6 s ≈ 2,4 s ;
+    // marge de respiration → 2,8 s). La bascule vers l'app attend aussi le profil,
+    // mais ne peut JAMAIS partir avant l'animation complète.
+    const intro = new Promise((r) => setTimeout(r, 2_800));
+    const profileReady = ensureShopProfile(getPreferences().workspaceName);
+    void Promise.all([intro, profileReady]).then(async () => {
+      // Petit instant de respiration après l'animation, avant la bascule vers l'app.
+      await new Promise((r) => setTimeout(r, 300));
       setLoading(false);
     });
     void profileReady.then(() => backgroundSync());
   }, [onboarded, router]);
 
   const prefs = getPreferences();
-  const gradientBg = prefs.use_gradient_bg
-    ? "bg-gradient-to-br from-emerald-900 via-teal-900 to-amber-900"
-    : "bg-background";
 
-  if (loading) return <LoadingScreen progress={progress} />;
+  if (loading) return <LoadingScreen />;
 
   return (
     <>
-      <div className={`flex min-h-screen flex-col ${gradientBg}`}>
+      <div className="flex min-h-screen flex-col bg-background">
         <Header />
         <MaintenanceBanner />
         <RenewalBanner />
@@ -113,7 +104,7 @@ function AppLayout() {
             réserve elle recouvrirait la fin de chaque page (le bouton « Valider la
             vente », le dernier produit, le dernier réglage). À partir de `lg`, la barre
             disparaît et la réserve avec elle. */}
-        <main className={`app-main flex-1 ${gradientBg}`}>
+        <main className="app-main flex-1 bg-background">
           <RouteTransition />
         </main>
       </div>

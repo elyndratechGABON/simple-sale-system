@@ -87,7 +87,11 @@ export function ClientFormDialog({
           <Button variant="ghost" onClick={onClose}>
             Annuler
           </Button>
-          <Button onClick={() => saveMut.mutate()} disabled={!name.trim() || saveMut.isPending}>
+          <Button
+            onClick={() => saveMut.mutate()}
+            disabled={!name.trim() || saveMut.isPending}
+            aria-busy={saveMut.isPending}
+          >
             {saveMut.isPending ? "Enregistrement…" : "Enregistrer"}
           </Button>
         </DialogFooter>

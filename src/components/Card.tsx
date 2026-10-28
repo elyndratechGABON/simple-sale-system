@@ -36,7 +36,7 @@ export function Card({
         if (isInteractive && (e.key === "Enter" || e.key === " ")) onClick?.();
       }}
       className={cn(
-        "rounded-[24px] overflow-hidden transition-all duration-200",
+        "rounded-[24px] overflow-hidden transition-transform duration-200",
         "shadow-[0_2px_12px_rgba(0,0,0,0.05)]",
         "p-[20px] w-full",
         variant === "primary" && "bg-primary text-white shadow-none",

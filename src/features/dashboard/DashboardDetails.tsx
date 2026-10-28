@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ShoppingCart, ArrowRight } from "lucide-react";
-import { Card } from "@/components/Card";
 import { Button } from "@/components/ui/button";
 import { SaleItemChips } from "@/components/SaleItemChips";
 import { formatFCFA, formatKg, formatRelative } from "@/lib/format";
@@ -26,9 +25,9 @@ export function DashboardDetails({ data }: { data: DashboardData }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.55 }}
           >
-            <Card>
-              <div className="border-b px-4 py-3">
-                <p className="text-base font-semibold">
+            <div className="flat-card">
+              <div className="px-4 py-3 divide-x divide-border">
+                <p className="text-title font-semibold">
                   Top {isService ? "prestations" : "produits"} — 7 jours
                 </p>
               </div>
@@ -41,19 +40,19 @@ export function DashboardDetails({ data }: { data: DashboardData }) {
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
                       {index + 1}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    <span className="min-w-0 flex-1 truncate text-body font-medium">
                       {product.name}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    <span className="shrink-0 text-small text-muted-foreground tabular-nums">
                       {product.quantity} {isService ? "prestations" : "ventes"}
                     </span>
-                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                    <span className="w-24 shrink-0 text-right text-body font-semibold tabular-nums">
                       {formatFCFA(product.revenue)}
                     </span>
                   </div>
                 ))}
               </div>
-            </Card>
+            </div>
           </motion.div>
         )}
       </div>
@@ -64,26 +63,26 @@ export function DashboardDetails({ data }: { data: DashboardData }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.65 }}
         >
-          <Card>
-            <div className="border-b px-4 py-3">
-              <p className="text-base font-semibold">Boucherie — 14 jours</p>
+          <div className="flat-card">
+            <div className="px-4 py-3 divide-x divide-border">
+              <p className="text-title font-semibold">Boucherie — 14 jours</p>
             </div>
-            <div className="grid grid-cols-3 gap-3 border-b p-4">
+            <div className="grid grid-cols-3 gap-3 divide-x divide-border p-4">
               <div>
-                <p className="text-xs text-muted-foreground">Vendu au poids</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                <p className="text-small text-muted-foreground">Vendu au poids</p>
+                <p className="mt-0.5 truncate text-title font-semibold tabular-nums">
                   {formatKg(weightSales.weightKg)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Poids moyen / pesée</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                <p className="text-small text-muted-foreground">Poids moyen / pesée</p>
+                <p className="mt-0.5 truncate text-title font-semibold tabular-nums">
                   {formatKg(weightSales.avgWeightKg)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Chiffre d'affaires</p>
-                <p className="mt-0.5 truncate text-lg font-semibold tabular-nums">
+                <p className="text-small text-muted-foreground">Chiffre d'affaires</p>
+                <p className="mt-0.5 truncate text-title font-semibold tabular-nums">
                   {formatFCFA(weightSales.revenue)}
                 </p>
               </div>
@@ -98,20 +97,20 @@ export function DashboardDetails({ data }: { data: DashboardData }) {
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary tabular-nums">
                       {index + 1}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    <span className="min-w-0 flex-1 truncate text-body font-medium">
                       {product.name}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    <span className="shrink-0 text-small text-muted-foreground tabular-nums">
                       {formatKg(product.weightKg)} vendus
                     </span>
-                    <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums">
+                    <span className="w-24 shrink-0 text-right text-body font-semibold tabular-nums">
                       {formatFCFA(product.revenue)}
                     </span>
                   </div>
                 ))}
               </div>
             )}
-          </Card>
+          </div>
         </motion.div>
       )}
 
@@ -121,10 +120,10 @@ export function DashboardDetails({ data }: { data: DashboardData }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.65 }}
         >
-          <Card>
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <p className="text-base font-semibold">Activité récente</p>
-              <span className="text-xs text-muted-foreground">
+          <div className="flat-card">
+            <div className="flex items-center justify-between divide-x divide-border px-4 py-3">
+              <p className="text-title font-semibold">Activité récente</p>
+              <span className="text-small text-muted-foreground">
                 {recentSales.length} vente{recentSales.length > 1 ? "s" : ""}
               </span>
             </div>
@@ -139,25 +138,25 @@ export function DashboardDetails({ data }: { data: DashboardData }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <SaleItemChips items={sale.items} className="min-w-0" />
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-small text-muted-foreground">
                       {formatRelative(sale.timestamp)}
                     </p>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums">
+                  <span className="shrink-0 text-body font-semibold tabular-nums">
                     {formatFCFA(sale.total)}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="border-t p-2">
+            <div className="divide-x divide-border p-2">
               <Button asChild variant="ghost" size="sm" className="w-full">
-                <Link to="/history">
+                <Link to="/history" className="flex items-center justify-center gap-2">
                   Voir tout l'historique
-                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
             </div>
-          </Card>
+          </div>
         </motion.div>
       )}
     </div>

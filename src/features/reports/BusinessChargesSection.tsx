@@ -60,7 +60,9 @@ export function BusinessChargesSection({
 
   return (
     <section className="space-y-2">
-      <h3 className="text-sm font-semibold">Charges du business</h3>
+      <h3 className="mb-2 text-sm font-semibold bg-primary text-primary-foreground px-3 py-1.5 rounded inline-block">
+        Business
+      </h3>
 
       {business.length === 0 && drafts.length === 0 && (
         <p className="rounded-lg border border-dashed p-3 text-center text-sm text-muted-foreground">
@@ -75,7 +77,7 @@ export function BusinessChargesSection({
             key={line.label}
             defaultValue={line.label}
             aria-label={`Nom de la charge ${line.label}`}
-            className="h-9 min-w-0 flex-1"
+            className="h-9 min-w-0 flex-1 bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
             onBlur={(e) => {
               const label = e.target.value.trim();
               if (!label) {
@@ -94,7 +96,7 @@ export function BusinessChargesSection({
             defaultValue={line.amount > 0 ? String(line.amount) : ""}
             placeholder="—"
             aria-label={`Montant de la charge ${line.label}`}
-            className="h-9 w-32 text-right tabular-nums"
+            className="h-9 w-32 text-right tabular-nums bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
             onBlur={(e) => {
               const raw = e.target.value.trim();
 
@@ -136,7 +138,7 @@ export function BusinessChargesSection({
             }
             placeholder="Nom du poste…"
             aria-label="Nom du nouveau poste"
-            className="h-9 min-w-0 flex-1"
+            className="h-9 min-w-0 flex-1 bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
             onBlur={() => enregistrerDraft(draft)}
           />
           <Input
@@ -152,7 +154,7 @@ export function BusinessChargesSection({
             }
             placeholder="Montant"
             aria-label="Montant du nouveau poste"
-            className="h-9 w-32 text-right tabular-nums"
+            className="h-9 w-32 text-right tabular-nums bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
             onBlur={() => enregistrerDraft(draft)}
           />
           <Button
@@ -170,7 +172,7 @@ export function BusinessChargesSection({
       <Button
         variant="outline"
         size="sm"
-        className="w-full"
+        className="w-auto"
         onClick={ajouter}
         aria-label="Ajouter une charge"
       >

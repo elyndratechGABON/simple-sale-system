@@ -27,25 +27,31 @@ export function CostBatch({ initialSelected }: { initialSelected?: string[] }) {
 
   const { data: products = [] } = useQuery({ queryKey: ["products"], queryFn: listProducts });
 
+  // Filtrer les services : ils n'ont PAS de coût d'achat (ils ont des charges de service)
+  const productList = useMemo(
+    () => products.filter((p) => p.type !== "service" && p.category !== "Service"),
+    [products],
+  );
+
   const selectedIds = useMemo(() => {
-    const ids = new Set(initialSelected ?? products.map((p) => p.id));
+    const ids = new Set(initialSelected ?? productList.map((p) => p.id));
     for (const id of unpicked) ids.delete(id);
     return ids;
-  }, [initialSelected, products, unpicked]);
+  }, [initialSelected, productList, unpicked]);
 
   const filtered = useMemo(() => {
     const needle = search.toLowerCase();
-    return products.filter((p) => {
+    return productList.filter((p) => {
       if (needle !== "" && !p.name.toLowerCase().includes(needle)) return false;
       if (filter === "with") return p.cost > 0;
       if (filter === "without") return p.cost <= 0;
       return true;
     });
-  }, [products, search, filter]);
+  }, [productList, search, filter]);
 
   const selected = useMemo(
-    () => products.filter((p) => selectedIds.has(p.id)),
-    [products, selectedIds],
+    () => productList.filter((p) => selectedIds.has(p.id)),
+    [productList, selectedIds],
   );
 
   function toggle(id: string) {

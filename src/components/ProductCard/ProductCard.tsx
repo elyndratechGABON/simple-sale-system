@@ -63,14 +63,14 @@ export function ProductCard({
     <article
       onClick={onOpen}
       className={cn(
-        "group flex flex-col overflow-hidden rounded-xl border bg-card transition-colors",
-        onOpen && "cursor-pointer hover:border-primary/40",
+        "group flex flex-col overflow-hidden rounded-xl bg-card transition-colors",
+        onOpen && "cursor-pointer hover:bg-primary/5",
       )}
     >
       {/* ── Visuel : conteneur carré imposé (§16). `contain` et non `cover` — une
           photo de produit ne doit jamais être rognée ni déformée. ── */}
       {has("image") && (
-        <div className="relative aspect-square w-full overflow-hidden border-b bg-muted/30">
+        <div className="relative aspect-square w-full overflow-hidden bg-muted/30">
           {product.photo ? (
             <img
               src={product.photo}

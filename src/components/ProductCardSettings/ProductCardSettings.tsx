@@ -84,7 +84,7 @@ export function ProductCardSettings({ context }: { context: CardContext }) {
         <CardContent>
           <ul className="flex flex-wrap gap-1.5">
             {fields.map((f) => (
-              <li key={f} className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium">
+              <li key={f} className="rounded-full bg-muted px-2 py-1 text-xs font-medium">
                 {CARD_FIELD_LABELS[f]}
               </li>
             ))}
@@ -138,7 +138,7 @@ export function ProductCardSettings({ context }: { context: CardContext }) {
                   >
                     {CARD_FIELD_LABELS[field]}
                     {locked && (
-                      <span className="ml-1.5 text-[11px] text-muted-foreground">
+                      <span className="ml-1.5 text-xs text-muted-foreground">
                         (toujours affiché)
                       </span>
                     )}

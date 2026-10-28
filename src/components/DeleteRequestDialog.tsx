@@ -176,6 +176,7 @@ export function DeleteRequestDialog() {
               deleteMut.mutate();
             }}
             disabled={deleteMut.isPending}
+            aria-busy={deleteMut.isPending}
           >
             <Trash2 className="h-4 w-4 mr-1" />
             {deleteMut.isPending ? "Suppression…" : "Accepter et effacer"}

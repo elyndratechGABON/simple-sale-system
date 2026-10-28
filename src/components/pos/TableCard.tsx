@@ -40,9 +40,9 @@ export function TableCard({
     <div
       className={cn(
         "select-none [-webkit-touch-callout:none]",
-        "flex min-h-[64px] flex-col rounded-lg border px-2 py-1.5 text-left transition-all",
+        "flex min-h-[72px] flex-col rounded-lg border px-3 py-2.5 text-left transition-colors",
         "hover:border-primary",
-        busy ? "border-primary/40 bg-accent" : "bg-card",
+        busy ? "border-orange-300 bg-orange-50" : "border-border bg-card",
         active && "ring-2 ring-primary ring-offset-1",
       )}
     >
@@ -76,26 +76,28 @@ export function TableCard({
               : `Table ${label}, occupée. Appui long pour libérer.`
         }
         className={cn(
-          "flex w-full flex-col gap-0.5 rounded-md text-left",
+          "flex w-full flex-col gap-1 rounded-md text-left",
           !disabled && "active:scale-[0.98]",
           !busy && disabled && "cursor-default",
         )}
       >
         <span className="flex items-center justify-between gap-1">
-          <span className="truncate text-sm font-semibold leading-tight">{label}</span>
-          {busy && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+          <span className="truncate text-sm font-semibold leading-tight text-foreground">
+            {label}
+          </span>
+          {busy && <span className="h-2 w-2 shrink-0 rounded-full bg-orange-500" />}
         </span>
         {!busy ? (
-          <span className="text-xs leading-tight text-muted-foreground">libre</span>
+          <span className="text-xs leading-tight text-muted-foreground">Libre</span>
         ) : (
-          <span className="font-bold leading-tight text-primary tabular-nums">
-            {formatFCFA(table.total)}
-          </span>
-        )}
-        {busy && (
-          <span className="text-[11px] leading-tight text-muted-foreground">
-            {table.opened_at ? formatTime(table.opened_at) : "occupée"}
-          </span>
+          <>
+            <span className="font-bold leading-tight text-orange-700 tabular-nums">
+              {formatFCFA(table.total)}
+            </span>
+            <span className="text-xs leading-tight text-orange-600">
+              {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+            </span>
+          </>
         )}
       </button>
     </div>

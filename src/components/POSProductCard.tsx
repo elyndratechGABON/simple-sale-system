@@ -94,7 +94,7 @@ export const POSProductCard = memo(function POSProductCard({
           </p>
           <p
             className={cn(
-              "mt-auto pt-1 text-[11px] leading-none",
+              "mt-auto pt-1 text-xs leading-none",
               out
                 ? "font-medium text-destructive"
                 : low

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Phone, Receipt } from "lucide-react";
+import { ChevronLeft, ChevronRight, Package, Phone, Receipt } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
-import { listSales } from "@/lib/db";
+import { getSaleItemsForSales, listSales } from "@/lib/db";
 import type { PairedDevice } from "@/lib/syncengine/types";
 import { RoleBadge } from "./RoleBadge";
 import { isOwnSale } from "./helpers";
@@ -72,6 +72,31 @@ export function EmployeeResults({ device }: { device: PairedDevice }) {
     [own, daySel],
   );
   const dayTotal = daySales.reduce((sum, s) => sum + s.total, 0);
+
+  // Produits vendus le jour choisi : lignes de `sale_items` agrégées par produit
+  // (quel produit, combien d'unités) — pas seulement le CA par vente.
+  const { data: dayItems } = useQuery({
+    queryKey: ["team_day_items", daySales.map((s) => s.id)],
+    queryFn: () => getSaleItemsForSales(daySales.map((s) => s.id)),
+    enabled: daySel !== null && daySales.length > 0,
+    staleTime: 30_000,
+  });
+
+  const dayProducts = useMemo(() => {
+    const map = new Map<string, { name: string; qty: number; revenue: number }>();
+    for (const it of dayItems ?? []) {
+      const key = it.product_id ?? it.name;
+      const cur = map.get(key) ?? {
+        name: it.variant ? `${it.name} (${it.variant})` : it.name,
+        qty: 0,
+        revenue: 0,
+      };
+      cur.qty += it.quantity;
+      cur.revenue += it.quantity * it.price_at_sale;
+      map.set(key, cur);
+    }
+    return [...map.values()].sort((a, b) => b.qty - a.qty);
+  }, [dayItems]);
 
   // Un jour futur de ce mois ne se commande pas (aucun clic, en semonce grise).
   const todayEnd = new Date(
@@ -196,23 +221,46 @@ export function EmployeeResults({ device }: { device: PairedDevice }) {
             — {formatFCFA(dayTotal)} · {daySales.length} vente{daySales.length > 1 ? "s" : ""}
           </p>
           {daySales.length > 0 ? (
-            daySales.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <Receipt className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(s.timestamp).toLocaleTimeString("fr-FR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    {s.client_name ? ` · ${s.client_name}` : ""}
-                  </span>
+            <>
+              {dayProducts.length > 0 && (
+                <div className="mb-2 space-y-1">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    <Package className="h-3.5 w-3.5" /> Produits vendus
+                  </p>
+                  {dayProducts.map((p) => (
+                    <div
+                      key={p.name}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span className="min-w-0 truncate">
+                        {p.name}
+                        <span className="ml-1 text-xs text-muted-foreground">× {p.qty}</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {formatFCFA(p.revenue)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <span className="shrink-0 font-medium tabular-nums">{formatFCFA(s.total)}</span>
-              </div>
-            ))
+              )}
+              {daySales.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <Receipt className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="truncate">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(s.timestamp).toLocaleTimeString("fr-FR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      {s.client_name ? ` · ${s.client_name}` : ""}
+                    </span>
+                  </div>
+                  <span className="shrink-0 font-medium tabular-nums">{formatFCFA(s.total)}</span>
+                </div>
+              ))}
+            </>
           ) : (
             <p className="text-xs text-muted-foreground">Aucune vente ce jour-là.</p>
           )}

@@ -13,7 +13,7 @@ export function FieldOrderList({ fields, onMove }: FieldOrderListProps) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">Ordre d&apos;affichage</Label>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Les flèches déplacent le champ d&apos;un cran — plus simple au doigt qu&apos;un
         glisser-déposer.
       </p>
@@ -23,7 +23,7 @@ export function FieldOrderList({ fields, onMove }: FieldOrderListProps) {
             key={field}
             className="flex items-center gap-2 rounded-lg border bg-card px-2 py-1.5"
           >
-            <span className="w-4 shrink-0 text-center text-[11px] tabular-nums text-muted-foreground">
+            <span className="w-4 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
               {i + 1}
             </span>
             <span className="flex-1 truncate text-sm">{CARD_FIELD_LABELS[field]}</span>

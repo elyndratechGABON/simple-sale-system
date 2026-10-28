@@ -32,9 +32,22 @@ export function normalizeVariantStock<T extends { stock: number; variants?: Prod
   return { ...p, stock: p.variants.reduce((total, v) => total + (v.stock ?? 0), 0) };
 }
 
+/**
+ * Le CONCEPT : une prestation (type « service ») n'a pas de stock — elle est TOUJOURS
+ * illimitée, sur tous les écrans. Enforcé au seul endroit où tout le monde écrit un
+ * produit, derrière la normalisation des variantes : aucune fiche service ne peut
+ * exister avec un stock fini, ni localement, ni chez un pair qui appliquerait son op.
+ */
+export function enforceServiceUnlimited<T extends { type?: string; stock: number }>(p: T): T {
+  if (p.type === "service" && Number.isFinite(p.stock)) {
+    return { ...p, stock: Number.POSITIVE_INFINITY };
+  }
+  return p;
+}
+
 export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Promise<Product> {
   await ensureIdentity();
-  const product: Product = normalizeVariantStock({ ...p, id: uid(), ...touch() });
+  const product = enforceServiceUnlimited(normalizeVariantStock({ ...p, id: uid(), ...touch() }));
   const db = getDB();
   // Produit + op dans UNE transaction : un produit présent sans son op de création ne
   // pourrait jamais arriver seul sur un autre appareil.
@@ -77,7 +90,7 @@ export async function updateProduct(p: Product): Promise<void> {
   const previous = await db.products.get(p.id);
   // Normalisé AVANT la comparaison : le journal doit raconter la même correction que celle
   // réellement écrite, pas un écart entre le stock somme et le stock saisi dans le formulaire.
-  const next = normalizeVariantStock({ ...p, ...touch() });
+  const next = enforceServiceUnlimited(normalizeVariantStock({ ...p, ...touch() }));
   await db.transaction(
     "rw",
     db.products,

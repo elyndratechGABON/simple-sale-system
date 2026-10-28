@@ -68,6 +68,8 @@ export interface Preferences {
   features: {
     /** Plan de salle (tables) : ajoute le système de tables à la caisse. */
     tables: boolean;
+    /** État de l'abonnement de la boutique. */
+    subscription?: "actif" | "essai" | "expiré" | "inconnu";
   };
   /**
    * Système de tables : commande servie puis encaissée en fin de service (restaurant) vs

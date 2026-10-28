@@ -23,7 +23,7 @@ export function WelcomeCard({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md active:scale-[0.99]"
+      className="group flex w-full items-center gap-4 rounded-2xl border bg-card p-4 text-left shadow-sm transition-colors transition-shadow transition-transform hover:border-primary/40 hover:shadow-md active:scale-[0.99]"
     >
       <span
         className={cn(
@@ -39,7 +39,7 @@ export function WelcomeCard({
           {role && (
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                "rounded-full px-2 py-0.5 text-xs font-medium",
                 primary ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
               )}
             >

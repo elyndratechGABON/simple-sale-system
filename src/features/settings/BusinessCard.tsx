@@ -4,7 +4,6 @@ import { AlertTriangle, Utensils } from "lucide-react";
 import { savePreferences, type Preferences } from "@/lib/settings";
 import { usePreferences } from "@/hooks/use-preferences";
 import { cancelSale, listOpenTables } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
@@ -79,65 +78,64 @@ export function BusinessCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Utensils className="h-4 w-4" /> Plan de salle
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-          <div className="min-w-0">
-            <p className="font-medium">
-              {tablesEnabled
-                ? "Commandes par table, encaissées en fin de service."
-                : "Service direct : chaque vente est encaissée à la commande."}
-            </p>
-          </div>
-          <Switch
-            checked={tablesEnabled}
-            onCheckedChange={onTablesToggle}
-            disabled={disabling}
-            aria-label="Activer le plan de salle"
-          />
-        </div>
+    <div className="flat-card space-y-4">
+      <header className="space-y-1">
+        <h2 className="text-title flex items-center gap-2">
+          <Utensils className="h-5 w-5" /> Plan de salle
+        </h2>
+      </header>
 
-        {tablesEnabled && (
-          <AlertDialog
-            open={confirmingDisable}
-            onOpenChange={(v) => !v && setConfirmingDisable(false)}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                  Désactiver le plan de salle ?
-                </AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <div className="flex flex-col gap-2">
-                    <p>
-                      {openTables.length} table{openTables.length > 1 ? "s" : ""} ouverte
-                      {openTables.length > 1 ? "s" : ""} encore active
-                      {openTables.length > 1 ? "s" : ""} seront annulées : les articles servis
-                      retournent en rayon et ne seront pas encaissés.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Les tables configurées dans « Tables » seront aussi retirées ; réactiver le
-                      plan de salle ne les restaurera pas.
-                    </p>
-                  </div>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={disabling}>Annuler</AlertDialogCancel>
-                <AlertDialogAction onClick={() => void disableTables()} disabled={disabling}>
-                  {disabling ? "…" : "Désactiver et annuler"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
-      </CardContent>
-    </Card>
+      <div className="flex items-center justify-between gap-3 rounded-xl bg-accent/50 p-3">
+        <div className="min-w-0">
+          <p className="text-body font-medium">
+            {tablesEnabled
+              ? "Commandes par table, encaissées en fin de service."
+              : "Service direct : chaque vente est encaissée à la commande."}
+          </p>
+        </div>
+        <Switch
+          checked={tablesEnabled}
+          onCheckedChange={onTablesToggle}
+          disabled={disabling}
+          aria-label="Activer le plan de salle"
+        />
+      </div>
+
+      {tablesEnabled && (
+        <AlertDialog
+          open={confirmingDisable}
+          onOpenChange={(v) => !v && setConfirmingDisable(false)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                Désactiver le plan de salle ?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="flex flex-col gap-2">
+                  <p>
+                    {openTables.length} table{openTables.length > 1 ? "s" : ""} ouverte
+                    {openTables.length > 1 ? "s" : ""} encore active
+                    {openTables.length > 1 ? "s" : ""} seront annulées : les articles servis
+                    retournent en rayon et ne seront pas encaissés.
+                  </p>
+                  <p className="text-small text-muted-foreground">
+                    Les tables configurées dans « Tables » seront aussi retirées ; réactiver le plan
+                    de salle ne les restaurera pas.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={disabling}>Annuler</AlertDialogCancel>
+              <AlertDialogAction onClick={() => void disableTables()} disabled={disabling}>
+                {disabling ? "…" : "Désactiver et annuler"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </div>
   );
 }

@@ -40,7 +40,7 @@ export function FieldLine({
 
     case "stock":
       return (
-        <p className="flex items-center gap-1 text-[11px] leading-tight">
+        <p className="flex items-center gap-1 text-xs leading-tight">
           <span
             aria-hidden
             className={cn(
@@ -71,7 +71,7 @@ export function FieldLine({
 
     case "status":
       return (
-        <p className="truncate text-[11px] leading-tight text-muted-foreground">
+        <p className="truncate text-xs leading-tight text-muted-foreground">
           {label} :{" "}
           {isService
             ? "prestation"
@@ -85,7 +85,7 @@ export function FieldLine({
 
     case "category":
       return (
-        <p className="truncate text-[11px] leading-tight text-muted-foreground">
+        <p className="truncate text-xs leading-tight text-muted-foreground">
           {product.category}
         </p>
       );
@@ -93,7 +93,7 @@ export function FieldLine({
     case "cost":
       // `cost` à 0 = « inconnu », pas « gratuit » : l'afficher en vert serait un mensonge.
       return product.cost > 0 ? (
-        <p className="truncate text-[11px] leading-tight text-muted-foreground tabular-nums">
+        <p className="truncate text-xs leading-tight text-muted-foreground tabular-nums">
           Achat {formatFCFA(product.cost)}
         </p>
       ) : null;
@@ -101,7 +101,7 @@ export function FieldLine({
     case "margin": {
       const margin = product.price - product.cost;
       return product.cost > 0 ? (
-        <p className="truncate text-[11px] leading-tight text-muted-foreground tabular-nums">
+        <p className="truncate text-xs leading-tight text-muted-foreground tabular-nums">
           Marge {formatFCFA(margin)} ({Math.round((margin / product.price) * 100)} %)
         </p>
       ) : null;
@@ -109,21 +109,21 @@ export function FieldLine({
 
     case "reference":
       return product.serialNumber ? (
-        <p className="truncate text-[11px] leading-tight text-muted-foreground">
+        <p className="truncate text-xs leading-tight text-muted-foreground">
           Réf. {product.serialNumber}
         </p>
       ) : null;
 
     case "variants":
       return product.variants && product.variants.length > 0 ? (
-        <p className="truncate text-[11px] leading-tight text-muted-foreground tabular-nums">
+        <p className="truncate text-xs leading-tight text-muted-foreground tabular-nums">
           {product.variants.length} variante{product.variants.length > 1 ? "s" : ""}
         </p>
       ) : null;
 
     case "lastSold":
       return lastSoldAt !== undefined && !isService ? (
-        <p className="truncate text-[11px] leading-tight text-muted-foreground">
+        <p className="truncate text-xs leading-tight text-muted-foreground">
           Vendu {formatRelative(lastSoldAt)}
         </p>
       ) : null;

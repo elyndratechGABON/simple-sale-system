@@ -11,7 +11,7 @@ export function TablesGrid({ pos, onTableTap }: TablesGridProps) {
   if (!pos.hasTables) return null;
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
       {pos.floorPlan.map(({ label, table }) => (
         <TableCard
           key={label}

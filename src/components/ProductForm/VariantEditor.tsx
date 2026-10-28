@@ -2,6 +2,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import type { ProductFormState } from "./useProductForm";
 
 /** Bloc « Variantes » : coût d'achat, prix de revente et stock par variante (taille, couleur, pointure…). */
@@ -9,19 +10,29 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
   const { variants, updateVariant, removeVariant, addVariant } = form;
 
   return (
-    <div>
-      <Label>Variantes (taille, couleur, pointure…) — coût, prix et stock par variante</Label>
-      <div className="mt-1.5 space-y-2">
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="text-lg">⟳</span>
+        </span>
+        <div>
+          <Label className="font-semibold text-sm">Variantes</Label>
+          <p className="text-xs text-muted-foreground">
+            Tailles, couleurs, pointures et stocks associés.
+          </p>
+        </div>
+      </div>
+      <div className="space-y-2">
         {variants.map((v) => (
           <div key={v.id} className="flex items-center gap-2 rounded-xl border bg-card p-2">
             <Input
-              className="h-9 flex-1 min-w-[90px]"
+              className="h-10 flex-1 min-w-[90px]"
               placeholder="Nom (ex : M)"
               value={v.name}
               onChange={(e) => updateVariant(v.id, { name: e.target.value })}
             />
             <Input
-              className="h-9 w-20"
+              className="h-10 w-20"
               placeholder="Coût"
               inputMode="numeric"
               value={v.cost}
@@ -29,7 +40,7 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
               title="Coût d'achat"
             />
             <Input
-              className="h-9 w-20"
+              className="h-10 w-20"
               placeholder="Prix"
               inputMode="numeric"
               value={v.price}
@@ -37,7 +48,7 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
               title="Prix de revente"
             />
             <Input
-              className="h-9 w-16"
+              className="h-10 w-16"
               placeholder="Stock"
               inputMode="numeric"
               value={v.stock}
@@ -48,7 +59,7 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9 shrink-0"
+              className="h-10 w-10 shrink-0"
               onClick={() => removeVariant(v.id)}
               aria-label={`Retirer la variante ${v.name || "sans nom"}`}
             >
@@ -56,7 +67,13 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
             </Button>
           </div>
         ))}
-        <Button type="button" variant="outline" size="sm" onClick={addVariant}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addVariant}
+          className="w-full h-10"
+        >
           <Plus className="h-4 w-4 mr-1.5" />
           Ajouter une variante
         </Button>

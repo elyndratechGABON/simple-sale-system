@@ -1,5 +1,5 @@
 import { emitOp } from "../ops";
-import { ensureIdentity, isSharedGroup } from "../identity";
+import { ensureIdentity, isSharedGroup, resetDeviceIdentity } from "../identity";
 import { runOpsExchange } from "@/lib/sync";
 import { closeEmployeeHistory, getDB, getShopProfile, listProducts, purgeAllData } from "@/lib/db";
 import type { DeviceLeavePayload } from "../types";
@@ -121,4 +121,5 @@ export async function departFromGroup(): Promise<void> {
 export async function leaveShop(): Promise<void> {
   await departFromGroup();
   await finalizeLeave();
+  await resetDeviceIdentity(); // Nouvelle identité = l'orchestrateur voit un NOUVEL appareil
 }

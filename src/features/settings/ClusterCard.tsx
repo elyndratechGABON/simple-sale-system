@@ -6,7 +6,6 @@ import { usePreferences } from "@/hooks/use-preferences";
 import type { ClusterId } from "@/lib/settings/types";
 import { resolveIcon } from "@/components/settings/icon-map";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -40,33 +39,32 @@ export function ClusterCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Store className="h-4 w-4" /> Type de commerce
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {clusterConfig && (
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <ClusterIcon className="h-5 w-5 text-primary" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold truncate">
-                {clusterConfig.label.split("/")[0].trim()}
-                {cluster === "personnalise" && customDomain && (
-                  <span className="font-normal text-muted-foreground"> — {customDomain}</span>
-                )}
-              </p>
-              <p className="text-sm text-muted-foreground truncate">{clusterConfig.description}</p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-haspopup="dialog">
-              Modifier <ChevronRight className="h-4 w-4" />
-            </Button>
+    <div className="flat-card space-y-4">
+      <header className="space-y-1">
+        <h2 className="text-title flex items-center gap-2">
+          <Store className="h-5 w-5" /> Type de commerce
+        </h2>
+      </header>
+
+      {clusterConfig && (
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <ClusterIcon className="h-5 w-5 text-primary" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-body font-semibold truncate">
+              {clusterConfig.label.split("/")[0].trim()}
+              {cluster === "personnalise" && customDomain && (
+                <span className="font-normal text-muted-foreground"> — {customDomain}</span>
+              )}
+            </p>
+            <p className="text-small text-muted-foreground truncate">{clusterConfig.description}</p>
           </div>
-        )}
-      </CardContent>
+          <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-haspopup="dialog">
+            Modifier <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -94,8 +92,8 @@ export function ClusterCard() {
                     <Icon className="h-5 w-5 text-primary" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-medium">{c.label}</span>
-                    <span className="block text-sm text-muted-foreground">{c.description}</span>
+                    <span className="block text-body font-medium">{c.label}</span>
+                    <span className="block text-small text-muted-foreground">{c.description}</span>
                   </span>
                 </button>
               );
@@ -103,6 +101,6 @@ export function ClusterCard() {
           </div>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }

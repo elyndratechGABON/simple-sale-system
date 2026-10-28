@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 touch-action-manipulation",
   {
     variants: {
       variant: {
@@ -21,7 +21,8 @@ const buttonVariants = cva(
         // Mobile d'abord : 44px = cible tactile minimum du doigt. Dès `sm`
         // (pointeur précis), la densité desktop d'origine reprend. Les appelants
         // qui fixent déjà leur propre `h-*` restent prioritaires sur ces défauts.
-        default: "h-11 px-4 py-2 sm:h-9",
+        default:
+          "h-11 px-4 py-2 sm:h-9 transition-transform hover:scale-[1.02] active:scale-[0.98]",
         sm: "h-10 rounded-md px-3 text-xs sm:h-8",
         lg: "h-12 rounded-md px-8 sm:h-10",
         icon: "h-11 w-11 sm:h-9 sm:w-9",

@@ -15,6 +15,7 @@ import { SaleFlash } from "./SaleFlash";
 import { usePos } from "./usePos";
 import { TablesView } from "./TablesView";
 import { usePreferences } from "@/hooks/use-preferences";
+import { useAccess } from "@/hooks/use-access";
 
 /**
  * La page ouvre directement sur la grille et le panier. Un écran d'attente précédait chaque
@@ -26,6 +27,7 @@ export function PosPage() {
   const { mode, setMode } = pos;
   const { features } = usePreferences();
   const showTables = features?.tables ?? false;
+  const { isOwner } = useAccess();
 
   return (
     <div
@@ -86,14 +88,16 @@ export function PosPage() {
 
       <FreeLineDialog open={pos.freeOpen} onOpenChange={pos.setFreeOpen} onAdd={pos.addFreeLine} />
       <VariantPickerDialog pos={pos} />
-      <CloseDayDialog
-        open={pos.closeOpen}
-        onOpenChange={pos.setCloseOpen}
-        salesCount={pos.salesToday.length}
-        total={pos.todayTotal}
-        busy={pos.closeDayMut.isPending}
-        onConfirm={() => pos.closeDayMut.mutate()}
-      />
+      {isOwner && (
+        <CloseDayDialog
+          open={pos.closeOpen}
+          onOpenChange={pos.setCloseOpen}
+          salesCount={pos.salesToday.length}
+          total={pos.todayTotal}
+          busy={pos.closeDayMut.isPending}
+          onConfirm={() => pos.closeDayMut.mutate()}
+        />
+      )}
       <OrdersDrawer pos={pos} />
       <PinDialog
         open={pos.cancelPinOpen}

@@ -76,7 +76,7 @@ export function ExperiencePage({
                 <div key={h.id} className="rounded-xl border bg-muted/20 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold">{h.storeName}</p>
-                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                       {formatExperienceDuration(endDay)}
                     </span>
                   </div>

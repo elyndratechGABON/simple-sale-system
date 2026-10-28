@@ -27,7 +27,7 @@ export function ActivityStep({ w }: { w: SetupWizardApi }) {
               onClick={() => w.setSelectedCluster(c.id)}
               aria-pressed={active}
               className={cn(
-                "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-sm transition-all",
+                "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-sm transition-colors",
                 active
                   ? "border-primary bg-accent ring-1 ring-primary"
                   : "bg-card hover:border-primary/50",
@@ -57,7 +57,7 @@ export function ActivityStep({ w }: { w: SetupWizardApi }) {
             {(WORKFLOW_DESCRIPTIONS[w.clusterConfig.workflowType]?.steps ?? []).map((s, i) => (
               <span
                 key={s}
-                className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
               >
                 {i + 1}. {s}
               </span>
@@ -101,7 +101,7 @@ export function ActivityStep({ w }: { w: SetupWizardApi }) {
                   onClick={() => w.setCustomStockChoice(m.id)}
                   aria-pressed={w.customStockChoice === m.id}
                   className={cn(
-                    "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-all",
+                    "flex flex-col items-start gap-1 rounded-xl border p-3 text-left text-sm transition-colors",
                     w.customStockChoice === m.id
                       ? "border-primary bg-accent ring-1 ring-primary"
                       : "bg-card hover:border-primary/50",

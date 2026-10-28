@@ -14,9 +14,11 @@ interface CostAlertsProps {
 }
 
 /**
- * Deux périmètres pour un même défaut : les articles VENDUS sans coût (le bénéfice de la
- * période est surestimé) et le catalogue ENTIER sans coût (nettoyage). Le toggle démarre
- * sur « Vendus » : c'est le seul des deux qui change un chiffre affiché.
+ * Deux périmètres pour un même défaut : les PRODUITS (biens physiques) VENDUS sans coût
+ * (le bénéfice de la période est surestimé) et le catalogue ENTIER de produits sans coût
+ * (nettoyage). Les services (prestations) n'ont PAS de coût d'achat — ils ont des
+ * « charges de service » à la place — et ne sont JAMAIS concernés par cette alerte.
+ * Le toggle démarre sur « Vendus » : c'est le seul des deux qui change un chiffre affiché.
  */
 export function CostAlerts({ sold, global, onOpenCostBatch }: CostAlertsProps) {
   const [view, setView] = useState<"sold" | "global">("sold");
