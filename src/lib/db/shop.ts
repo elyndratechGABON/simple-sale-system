@@ -10,7 +10,7 @@ import type { SyncFields } from "./types/sync";
 // n'a eu lieu.
 */
 
-const TRIAL_DAYS = 30;
+const TRIAL_DAYS = 14;
 const TRIAL_DAYS_MS = TRIAL_DAYS * 86_400_000;
 
 /** Le profil de l'appareil, ou null s'il n'est pas encore inscrit. */
