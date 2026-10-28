@@ -76,8 +76,16 @@ export function SettingsPage() {
           </TabsContent>
 
           <TabsContent value="compte" className="mt-3 space-y-4">
-            <SubscriptionCard />
-            {role === "owner" ? <DeleteShopCard /> : <ResignCard />}
+            {/* L'abonnement ne concerne QUE le compte marchand : un employé voit la
+                résiliation, et rien sur la licence qu'il ne paie pas. */}
+            {role === "owner" ? (
+              <>
+                <SubscriptionCard />
+                <DeleteShopCard />
+              </>
+            ) : (
+              <ResignCard />
+            )}
           </TabsContent>
         </Tabs>
         {/* Fondu droite : il reste des onglets au-delà du bord — on ne devine pas. */}

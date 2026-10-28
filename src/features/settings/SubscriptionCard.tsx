@@ -3,28 +3,34 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useAccess } from "@/hooks/use-access";
+import { useSubscription } from "@/hooks/use-subscription";
+import { formatFCFA } from "@/lib/format";
 import { SubscriptionPaymentDialog } from "./SubscriptionPaymentDialog";
 
 /** Carte d'abonnement affichée dans l'onglet Compte (owner uniquement). */
 export function SubscriptionCard() {
   const { features } = usePreferences();
   const { role } = useAccess();
+  const { isExpired, daysRemaining } = useSubscription();
   const isOwner = role === "owner";
   const subscriptionFeature = features?.subscription ?? false;
 
-  // Statut simplifié : la feature d'abonnement est un booléen (activée ou non) —
-  // les comparaisons à « active » / « trial » ne peuvent jamais matcher.
-  const subscriptionStatus = subscriptionFeature ? "Actif" : "Inconnu";
+  // Statut réel lu dans la licence : activé → Actif ; essai (jours restants) → Essai ;
+  // échéance dépassée → Expiré. Les paliers qui ne colleraient pas retombent sur Expiré.
+  const subscriptionStatus = subscriptionFeature
+    ? "Actif"
+    : isExpired
+      ? "Expiré"
+      : daysRemaining > 0
+        ? "Essai"
+        : "Expiré";
 
   const [paymentPlan, setPaymentPlan] = useState<{ id: string; name: string; price: number } | null>(null);
 
   const renderStatusBadge = () => {
-    if (subscriptionStatus === "Inconnu") {
-      return <Badge variant="secondary">Aucun abonnement détecté</Badge>;
-    }
     return (
-      <Badge variant={subscriptionStatus === "Actif" ? "default" : "secondary"}>
-        {subscriptionStatus}
+      <Badge variant={subscriptionStatus === "Actif" ? "default" : subscriptionStatus === "Essai" ? "secondary" : "destructive"}>
+        {subscriptionStatus === "Essai" ? `Essai — ${daysRemaining} jour${daysRemaining > 1 ? "s" : ""} restant${daysRemaining > 1 ? "s" : ""}` : subscriptionStatus}
       </Badge>
     );
   };
