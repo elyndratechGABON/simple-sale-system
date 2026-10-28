@@ -7,7 +7,7 @@ import type { SyncFields } from "./sync";
  *
  * `deviceId` est l'identifiant d'appareil que l'orchestrateur voit : généré une seule
  * fois à la création, stable ensuite. `registrationDate` ne change jamais. `expiryDate`
- * est fixée localement à l'essai de 30 jours, puis ÉCRASÉE par l'orchestrateur, qui fait
+ * est fixée localement à l'essai de 14 jours, puis ÉCRASÉE par l'orchestrateur, qui fait
  * foi sur les prolongations.
  */
 export interface ShopProfile extends SyncFields {

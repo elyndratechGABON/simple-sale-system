@@ -103,7 +103,7 @@ export function Pricing() {
         </motion.ul>
 
         <motion.p className="text-center text-xs text-muted-foreground" {...fadeUp}>
-          30 jours d'essai offerts sur toutes les offres · sans engagement
+          14 jours d'essai offerts sur toutes les offres · sans engagement
         </motion.p>
       </div>
     </section>

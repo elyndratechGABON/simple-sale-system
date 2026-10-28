@@ -33,7 +33,7 @@ const FALLBACK: SubscriptionInfo = {
   isInGrace: false,
   graceEndsAt: null,
   graceHoursRemaining: 0,
-  expiryDate: Date.now() + 30 * DAY_MS,
+  expiryDate: Date.now() + 14 * DAY_MS,
   registrationDate: Date.now(),
 };
 

@@ -38,7 +38,7 @@ export function Hero() {
           <div className="space-y-3">
             <InstallCta />
             <p className="text-sm text-muted-foreground">
-              30 jours d'essai gratuit · aucune carte bancaire requise
+              14 jours d'essai gratuit · aucune carte bancaire requise
             </p>
           </div>
           <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1 text-xs text-muted-foreground">

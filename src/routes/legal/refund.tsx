@@ -24,7 +24,7 @@ function RefundPage() {
     <LegalPage title="Politique de remboursement" lastUpdated="septembre 2026">
       <LegalSection title="1. Essai gratuit">
         <p>
-          Chaque compte bénéficie d'un essai gratuit de 30 jours, sans carte ni paiement. Vous
+          Chaque compte bénéficie d'un essai gratuit de 14 jours, sans carte ni paiement. Vous
           n'êtes jamais facturé pendant cette période.
         </p>
       </LegalSection>

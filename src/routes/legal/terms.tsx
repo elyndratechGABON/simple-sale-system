@@ -45,7 +45,7 @@ function TermsPage() {
 
       <LegalSection title="3. Abonnement et paiement">
         <ul className="list-disc space-y-1 pl-5">
-          <li>un essai gratuit de 30 jours est proposé, sans carte bancaire ;</li>
+          <li>un essai gratuit de 14 jours est proposé, sans carte bancaire ;</li>
           <li>
             trois paliers sont disponibles (Essentiel, Confort, Affluence), chacun couvrant une
             période de 30 jours, payables par mobile money ;

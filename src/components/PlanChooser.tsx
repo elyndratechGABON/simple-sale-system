@@ -22,7 +22,7 @@ export function PlanChooser({ open, onOpenChange, onSelect }: PlanChooserProps) 
           />
           <DialogTitle className="text-2xl">Choisissez votre abonnement</DialogTitle>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            30 jours d'essai gratuit inclus · Sans engagement · Payez par Airtel Money
+            14 jours d'essai gratuit inclus · Sans engagement · Payez par Airtel Money
           </p>
         </DialogHeader>
 

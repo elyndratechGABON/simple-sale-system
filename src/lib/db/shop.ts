@@ -45,7 +45,7 @@ export async function ensureShopProfile(storeName: string): Promise<ShopProfile>
 
 /**
  * Crée ou met à jour le profil. À la création : inscription datée de maintenant, essai
- * de 30 jours, identifiant d'appareil généré une fois pour toutes. À la mise à jour :
+ * de 14 jours, identifiant d'appareil généré une fois pour toutes. À la mise à jour :
  * seules les quatre infos changent, dates et identifiant restent stables.
  */
 export async function saveShopProfile(
