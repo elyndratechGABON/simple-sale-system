@@ -329,6 +329,15 @@ body {
   padding-inline: var(--page-gutter);
 }
 
+/* Scrollbars discrètes : Windows affiche un rail épais qui révèle le fond derrière
+   les cards des Paramètres. Soigne sans supprimer l'indicateur de position. */
+@media (min-width: 1024px) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--primary) 45%, transparent) transparent;
+  }
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {

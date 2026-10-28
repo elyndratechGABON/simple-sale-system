@@ -23,7 +23,7 @@ export function SettingsPage() {
   const accountLabel = `Compte ${ROLE_LABELS[role]}`;
 
   return (
-    <div className="mx-auto max-w-3xl px-[var(--page-gutter)] py-4">
+    <div className="mx-auto max-w-4xl w-full px-[var(--page-gutter)] py-4">
       <div className="mb-5">
         <div className="flex items-center gap-2">
           <h1 className="text-page-title font-bold">Paramètres</h1>
@@ -36,7 +36,7 @@ export function SettingsPage() {
 
       <div className="relative">
         <Tabs defaultValue="identite">
-          <TabsList className="w-full max-w-full justify-start overflow-x-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:hidden">
+          <TabsList className="w-full max-w-full justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="identite" className="shrink-0 whitespace-nowrap min-h-11">
               Identité
             </TabsTrigger>
