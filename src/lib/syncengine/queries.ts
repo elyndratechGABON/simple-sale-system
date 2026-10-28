@@ -27,6 +27,14 @@ export const SYNC_INVALIDATED_QUERIES = [
   "products",
   "sales",
   "sale_items",
+  // Clés DÉRIVÉES du carnet P2P (dialog Équipe) : elles ne partagent le préfixe
+  // d'aucune clé ci-dessus, et sans invalider les CA des employés restaient sur
+  // le dernier état connu — le bug « les gains ne se synchronisent pas ».
+  "activity_sales",
+  "activity_movements",
+  "activity_items",
+  "team_month",
+  "team_day_items",
   "movements",
   "paired_devices",
   "sync_identity",
