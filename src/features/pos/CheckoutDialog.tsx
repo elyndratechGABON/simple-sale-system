@@ -33,6 +33,7 @@ export function CheckoutDialog({ pos }: { pos: PosController }) {
               <Button
                 key={m.id}
                 size="sm"
+                className="h-11 min-[400px]:h-9"
                 variant={pos.payMethod === m.id ? "default" : "outline"}
                 onClick={() => pos.setPayMethod(m.id)}
               >
@@ -60,13 +61,13 @@ export function CheckoutDialog({ pos }: { pos: PosController }) {
                   <Button
                     key={amt}
                     variant="secondary"
-                    size="sm"
+                    className="h-11 min-[400px]:h-8 px-3"
                     onClick={() => pos.setCashGiven(String((Number(pos.cashGiven) || 0) + amt))}
                   >
                     +{formatFCFA(amt)}
                   </Button>
                 ))}
-                <Button variant="ghost" size="sm" onClick={() => pos.setCashGiven("")}>
+                <Button variant="ghost" className="h-11 min-[400px]:h-8 px-3" onClick={() => pos.setCashGiven("")}>
                   Vider
                 </Button>
               </div>
