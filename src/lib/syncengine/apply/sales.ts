@@ -13,7 +13,8 @@ export async function applySaleCreated(db: PosDatabase, op: SyncOp): Promise<voi
     // le déficit se portent à vue du pair comme sur l'appareil d'origine.
     if (item.product_id) {
       const p = await db.products.get(item.product_id);
-      if (p && Number.isFinite(p.stock)) {
+      // Un service est illimité : même garde que `applyStockDelta`, pas de décrément.
+      if (p && p.type !== "service" && Number.isFinite(p.stock)) {
         // Variante : le stock a quitté la VARIANTE sur la caisse émettrice (comme
         // `applyStockDelta`) — le pair doit ajuster la même, pas le stock global.
         const variant = item.variant_id && p.variants?.find((v) => v.id === item.variant_id);
