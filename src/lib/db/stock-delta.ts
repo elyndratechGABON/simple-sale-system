@@ -24,6 +24,8 @@ export async function applyStockDelta(
 ): Promise<Product | null> {
   const p = await db.products.get(productId);
   if (!p || p.deleted_at) return null;
+  // Un service est illimité : il n'a pas de stock à retrancher ni à restaurer.
+  if (p.type === "service") return p;
   const qty = opts?.variantId
     ? (p.variants?.find((v) => v.id === opts.variantId)?.stock ?? 0)
     : p.stock;
