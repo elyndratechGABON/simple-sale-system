@@ -32,20 +32,22 @@ export function TeamRow({
         <MonitorSmartphone className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="min-w-0 flex-1">
+        {/* Le nom et ses coordonnées tiennent dans leur colonne : chaque segment
+            tronque en propre, et le montant reste à droite sans chevaucher. */}
         <p className="truncate text-sm font-medium">
           {device.device_name?.trim() || "Écran sans nom"}
           {isOwnerDevice && <span className="ml-1.5 text-xs text-muted-foreground">(vous)</span>}
         </p>
-        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
           {device.phone?.trim() ? (
             <>
-              <Phone className="h-3 w-3" />
-              {device.phone.trim()}
-              <span aria-hidden>·</span>
+              <Phone className="h-3 w-3 shrink-0" />
+              <span className="min-w-0 truncate">{device.phone.trim()}</span>
+              <span aria-hidden className="shrink-0">·</span>
             </>
           ) : null}
-          <Clock className="h-3 w-3" />
-          {lastSeenLabel(device.last_seen)}
+          <Clock className="h-3 w-3 shrink-0" />
+          <span className="shrink-0">{lastSeenLabel(device.last_seen)}</span>
         </p>
       </div>
       {stats && (

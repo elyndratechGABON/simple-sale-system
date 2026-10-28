@@ -23,7 +23,6 @@ import { approveDevice } from "@/lib/syncengine/pairing";
 import type { PairedDevice } from "@/lib/syncengine/types";
 import { usePendingCatalogueRequests } from "@/hooks/use-pending-catalogue-requests";
 import { EmployeeResults } from "./EmployeeResults";
-import { ImportClosing } from "./ImportClosing";
 import { RecentActivity } from "./RecentActivity";
 import { RoleBadge } from "./RoleBadge";
 import { TeamListPanel } from "./TeamListPanel";
@@ -250,8 +249,6 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
               onConfirm={handleConfirm}
               onDeny={handleDeny}
             />
-
-            <ImportClosing />
 
             <RecentActivity
               sales={sales ?? []}
