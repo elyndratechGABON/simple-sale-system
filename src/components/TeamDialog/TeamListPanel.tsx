@@ -42,9 +42,10 @@ export function TeamListPanel({
 }) {
   return (
     <div className="space-y-3">
-      {/* Écrans approuvés */}
+      {/* Écrans approuvés : deux colonnes dès `md` — la liste reste lisible */
+      /* sans devoir défiler une pile de lignes full-width. */}
       {sorted.length > 0 ? (
-        <div className="space-y-2">
+        <div className="grid gap-2 md:grid-cols-2 md:items-start">
           {sorted.map((d) => (
             <TeamRow
               key={d.id}

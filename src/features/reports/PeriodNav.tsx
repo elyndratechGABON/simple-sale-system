@@ -35,7 +35,7 @@ export function PeriodNav({ view, onViewChange, focusedDay, onFocusedDayChange }
       <div className="flex items-center justify-between gap-2">
         <Button
           variant="ghost"
-          size="icon"
+          className="h-11 w-11 sm:h-10 sm:w-10"
           aria-label={`${NAV_LABEL[view]} précédent`}
           onClick={() => onFocusedDayChange(stepDay(focusedDay, view, -1))}
         >
@@ -46,7 +46,7 @@ export function PeriodNav({ view, onViewChange, focusedDay, onFocusedDayChange }
         </h2>
         <Button
           variant="ghost"
-          size="icon"
+          className="h-11 w-11 sm:h-10 sm:w-10"
           aria-label={`${NAV_LABEL[view]} suivant`}
           onClick={() => onFocusedDayChange(stepDay(focusedDay, view, 1))}
         >

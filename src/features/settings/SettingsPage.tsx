@@ -34,51 +34,58 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="identite">
-        <TabsList className="w-full max-w-full justify-start overflow-x-auto">
-          <TabsTrigger value="identite" className="shrink-0 whitespace-nowrap">
-            Identité
-          </TabsTrigger>
-          <TabsTrigger value="caisse" className="shrink-0 whitespace-nowrap">
-            Caisse
-          </TabsTrigger>
-          <TabsTrigger value="equipe" className="shrink-0 whitespace-nowrap">
-            Équipe
-          </TabsTrigger>
-          <TabsTrigger value="systeme" className="shrink-0 whitespace-nowrap">
-            Système
-          </TabsTrigger>
-          <TabsTrigger value="compte" className="shrink-0 whitespace-nowrap">
-            Compte
-          </TabsTrigger>
-        </TabsList>
+      <div className="relative">
+        <Tabs defaultValue="identite">
+          <TabsList className="w-full max-w-full justify-start overflow-x-auto [scrollbar-width:thin] [&::-webkit-scrollbar]:hidden">
+            <TabsTrigger value="identite" className="shrink-0 whitespace-nowrap min-h-11">
+              Identité
+            </TabsTrigger>
+            <TabsTrigger value="caisse" className="shrink-0 whitespace-nowrap min-h-11">
+              Caisse
+            </TabsTrigger>
+            <TabsTrigger value="equipe" className="shrink-0 whitespace-nowrap min-h-11">
+              Équipe
+            </TabsTrigger>
+            <TabsTrigger value="systeme" className="shrink-0 whitespace-nowrap min-h-11">
+              Système
+            </TabsTrigger>
+            <TabsTrigger value="compte" className="shrink-0 whitespace-nowrap min-h-11">
+              Compte
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="identite" className="mt-3 space-y-3">
-          <EmployeeIdentityCard />
-          <ClusterCard />
-          <AppearanceCard />
-        </TabsContent>
+          <TabsContent value="identite" className="mt-3 space-y-4">
+            <EmployeeIdentityCard />
+            <ClusterCard />
+            <AppearanceCard />
+          </TabsContent>
 
-        <TabsContent value="caisse" className="mt-3 space-y-3">
-          <BusinessCard />
-          <TablesCard disabled={!tablesFeature} />
-        </TabsContent>
+          <TabsContent value="caisse" className="mt-3 space-y-4">
+            <BusinessCard />
+            <TablesCard disabled={!tablesFeature} />
+          </TabsContent>
 
-        <TabsContent value="equipe" className="mt-3 space-y-3">
-          <DevicesCard />
-        </TabsContent>
+          <TabsContent value="equipe" className="mt-3 space-y-4">
+            <DevicesCard />
+          </TabsContent>
 
-        <TabsContent value="systeme" className="mt-3 space-y-3">
-          <PinCard />
-          <BackupCard />
-          <InstallCard />
-        </TabsContent>
+          <TabsContent value="systeme" className="mt-3 space-y-4">
+            <PinCard />
+            <BackupCard />
+            <InstallCard />
+          </TabsContent>
 
-        <TabsContent value="compte" className="mt-3 space-y-3">
-          <SubscriptionCard />
-          {role === "owner" ? <DeleteShopCard /> : <ResignCard />}
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="compte" className="mt-3 space-y-4">
+            <SubscriptionCard />
+            {role === "owner" ? <DeleteShopCard /> : <ResignCard />}
+          </TabsContent>
+        </Tabs>
+        {/* Fondu droite : il reste des onglets au-delà du bord — on ne devine pas. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute right-0 top-0 h-11 w-8 bg-gradient-to-l from-background to-transparent"
+        />
+      </div>
     </div>
   );
 }

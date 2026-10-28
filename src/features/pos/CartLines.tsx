@@ -2,34 +2,31 @@ import { Minus, Plus } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { PosLine } from "@/components/pos";
-import { VoiceDictation } from "@/components/VoiceDictation";
 import { formatFCFA } from "@/lib/format";
 import type { PosController } from "./usePos";
 
 /**
  * Saisie de la tournée. Masquée pendant l'encaissement : à ce moment-là on ne commande
- * plus, on compte l'argent. Porte le total, le compteur de clients et l'accès à la
- * dictée vocale et à l'article manuel.
+ * plus, on compte l'argent.
  */
 export function CartLines({ pos }: { pos: PosController }) {
   if (pos.cashing) return null;
   return (
     <>
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="outline" size="sm" onClick={() => pos.setFreeOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Article manuel
-        </Button>
-        <VoiceDictation products={pos.products} onResult={pos.applyVoice} />
-      </div>
-
       {pos.lines.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           {pos.activeTable
             ? "Touchez des articles pour composer la prochaine tournée."
-            : "Ajoutez des articles depuis la grille ou saisissez-les à la main."}
+            : "Ajoutez des articles depuis la grille."}
         </p>
       ) : (
-        <div className="space-y-2 max-h-64 overflow-auto">
+        <div className="relative space-y-2 max-h-64 sm:max-h-64 max-sm:max-h-[45dvh] overflow-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+          {/* Fondu bas : la ligne coupée au bord du rouleau annonce qu'il reste des
+              choses dessous — sans queue de liste fantôme. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-background to-transparent"
+          />
           {/* `layout` fait glisser les lignes restantes quand on en supprime une au
           milieu du panier, au lieu de les faire sauter. `popLayout` évite que la
           ligne en cours de sortie décale les autres pendant son animation. */}

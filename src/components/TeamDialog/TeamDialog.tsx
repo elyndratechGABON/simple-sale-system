@@ -162,7 +162,7 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? undefined : close())}>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           {selected ? (
             <DialogTitle className="flex items-center gap-2 text-base">
