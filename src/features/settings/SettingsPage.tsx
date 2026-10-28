@@ -36,20 +36,20 @@ export function SettingsPage() {
 
       <div className="relative">
         <Tabs defaultValue="identite">
-          <TabsList className="w-full max-w-full justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TabsTrigger value="identite" className="shrink-0 whitespace-nowrap min-h-11">
+          <TabsList className="w-full max-w-full justify-start overflow-x-auto rounded-full bg-muted p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:rounded-full">
+            <TabsTrigger value="identite" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
               Identité
             </TabsTrigger>
-            <TabsTrigger value="caisse" className="shrink-0 whitespace-nowrap min-h-11">
+            <TabsTrigger value="caisse" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
               Caisse
             </TabsTrigger>
-            <TabsTrigger value="equipe" className="shrink-0 whitespace-nowrap min-h-11">
+            <TabsTrigger value="equipe" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
               Équipe
             </TabsTrigger>
-            <TabsTrigger value="systeme" className="shrink-0 whitespace-nowrap min-h-11">
+            <TabsTrigger value="systeme" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
               Système
             </TabsTrigger>
-            <TabsTrigger value="compte" className="shrink-0 whitespace-nowrap min-h-11">
+            <TabsTrigger value="compte" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
               Compte
             </TabsTrigger>
           </TabsList>
