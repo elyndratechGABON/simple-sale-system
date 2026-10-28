@@ -35,7 +35,7 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="app-container space-y-4 py-4">
+    <div className="mx-auto w-full max-w-7xl space-y-4 py-4">
       <header>
         <h1 className="text-page-title flex items-center gap-2 font-bold">
           <BarChart3 className="h-6 w-6 shrink-0 text-primary" /> Comptabilité
