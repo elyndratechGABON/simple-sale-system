@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
+import { formatFCFA } from "@/lib/format";
+
 /** Dialog de paiement d'abonnement : USSD + WhatsApp, sans validation par l'administration.
  *  Flux : instructions de paiement (numéro + USSD) → « J'ai payé » → zone de collage du
  *  SMS de confirmation → « Double vérifier » ouvre WhatsApp avec le SMS collé.
@@ -53,7 +55,7 @@ export function SubscriptionPaymentDialog({
         {/* Numéro à copier */}
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Envoyez le montant de <strong className="font-bold">{plan.price}</strong> FCFA à ce numéro :
+            Envoyez le montant de <strong className="font-bold">{formatFCFA(plan.price)}</strong> FCFA à ce numéro :
           </p>
           <div className="flex items-center gap-2">
             <span className="text-3xl font-bold">076505254</span>
