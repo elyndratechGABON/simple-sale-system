@@ -23,7 +23,7 @@ export function SettingsPage() {
   const accountLabel = `Compte ${ROLE_LABELS[role]}`;
 
   return (
-    <div className="mx-auto max-w-4xl w-full px-[var(--page-gutter)] py-4">
+    <div className="mx-auto w-full max-w-7xl px-[var(--page-gutter)] py-4">
       <div className="mb-5">
         <div className="flex items-center gap-2">
           <h1 className="text-page-title font-bold">Paramètres</h1>
@@ -54,13 +54,13 @@ export function SettingsPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="identite" className="mt-3 space-y-4">
+          <TabsContent value="identite" className="mt-3 grid items-start gap-4 md:grid-cols-2">
             <EmployeeIdentityCard />
             <ClusterCard />
             <AppearanceCard />
           </TabsContent>
 
-          <TabsContent value="caisse" className="mt-3 space-y-4">
+          <TabsContent value="caisse" className="mt-3 grid items-start gap-4 md:grid-cols-2">
             <BusinessCard />
             <TablesCard disabled={!tablesFeature} />
           </TabsContent>
@@ -69,13 +69,13 @@ export function SettingsPage() {
             <DevicesCard />
           </TabsContent>
 
-          <TabsContent value="systeme" className="mt-3 space-y-4">
+          <TabsContent value="systeme" className="mt-3 grid items-start gap-4 md:grid-cols-2">
             <PinCard />
             <BackupCard />
             <InstallCard />
           </TabsContent>
 
-          <TabsContent value="compte" className="mt-3 space-y-4">
+          <TabsContent value="compte" className="mt-3 grid items-start gap-4 md:grid-cols-2">
             {/* L'abonnement ne concerne QUE le compte marchand : un employé voit la
                 résiliation, et rien sur la licence qu'il ne paie pas. */}
             {role === "owner" ? (
