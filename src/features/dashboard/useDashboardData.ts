@@ -39,10 +39,12 @@ export function useDashboardData() {
   // propriétaire sur sa caisse. Repli sur l'enseigne tant qu'aucun nom n'est renseigné.
   const greetingName =
     (identity?.role === "employee" ? identity.employeeName.trim() : ownerName) || workspaceName;
-  const todayRange = useMemo(() => lastDaysRange(1), []);
+  // Recalculées à chaque rendu (et non une fois au montage) : une caisse laissée ouverte
+  // après minuit doit compter les ventes du NOUVEAU jour, pas celles de la veille.
+  const todayRange = lastDaysRange(1);
   // 14 jours : les 7 derniers = semaine courante, les 7 d'avant = base de comparaison.
   // lastDaysRange(14).to === lastDaysRange(7).to (fin de journée, aujourd'hui inclus).
-  const fortnightRange = useMemo(() => lastDaysRange(14), []);
+  const fortnightRange = lastDaysRange(14);
   const weekRange = useMemo(
     () => ({ from: fortnightRange.to - 7 * 86_400_000, to: fortnightRange.to }),
     [fortnightRange],
