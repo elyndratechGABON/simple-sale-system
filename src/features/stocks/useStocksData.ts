@@ -11,7 +11,7 @@ import { lastDaysRange } from "@/lib/analytics";
  * et les rapports.
  */
 export function useStocksData() {
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isPending: productsLoading } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
   });
@@ -56,5 +56,5 @@ export function useStocksData() {
     return map;
   }, [monthData]);
 
-  return { products, soldQtyByProduct, lastSoldAtByProduct };
+  return { products, productsLoading, soldQtyByProduct, lastSoldAtByProduct };
 }

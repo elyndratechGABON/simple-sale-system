@@ -27,7 +27,7 @@ export function StocksPage() {
   // réglage survit à un redémarrage (§29).
   const cardFields = prefs.stockCardFields;
 
-  const { products, soldQtyByProduct, lastSoldAtByProduct } = useStocksData();
+  const { products, productsLoading, soldQtyByProduct, lastSoldAtByProduct } = useStocksData();
   const filters = useStocksFilters(products, soldQtyByProduct);
   const dialogs = useStocksDialogs();
 
@@ -92,6 +92,7 @@ export function StocksPage() {
           visible={filters.visible}
           cardFields={cardFields}
           lastSoldAtByProduct={lastSoldAtByProduct}
+          isLoading={productsLoading}
           onOpenProduct={dialogs.setDetailId}
           onAddStock={dialogs.openAddStock}
           onRemoveStock={dialogs.setRemoveTarget}

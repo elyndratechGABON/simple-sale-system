@@ -171,6 +171,8 @@ export function useDashboardData() {
   return {
     greetingName,
     isService,
+    /** Requête « aujourd'hui » pas revenue : skeleton de la synthèse. */
+    isLoading: todayData === undefined,
     hasWeightInput,
     todayRev,
     todaySalesCount,

@@ -1,20 +1,20 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { History, Download } from "lucide-react";
+import { History, Download, Receipt, Plus } from "lucide-react";
 import { getSaleItemsForSales, listSales, type Sale, type SaleItem } from "@/lib/db";
 import { lineProfit } from "@/lib/analytics";
 import { formatDay, formatFCFA } from "@/lib/format";
 import { buildSalesCsvBlob, salesCsvFilename } from "@/lib/exports/sales-csv";
 import { describeSaveResult, saveDocument } from "@/lib/files";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ALL, COUNTER, bucketStart, scopeLabel, type Period } from "./history-period";
 import { HistoryFilters } from "./HistoryFilters";
 import { SaleRow } from "./SaleRow";
 
 export function HistoryPage() {
-  const { data: sales = [] } = useQuery({
+  const { isLoading, data: sales = [] } = useQuery({
     queryKey: ["sales", "all"],
     queryFn: () => listSales(),
   });
@@ -163,14 +163,42 @@ export function HistoryPage() {
         onPick={setPicked}
       />
 
-      {filtered.length === 0 ? (
-        <Card>
-          <CardContent className="p-10 text-center text-muted-foreground">
-            {scope === ALL
-              ? "Aucune vente enregistrée."
-              : `Aucune vente pour ${scopeLabel(scope)}.`}
-          </CardContent>
-        </Card>
+      {isLoading ? (
+        // La requête tourne encore : des lia sur Skeleton, pas « Aucune vente » —
+        // un premier chargement ne doit jamais ressembler à un vide de comptabilité.
+        <div className="space-y-2" aria-busy="true">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flat-card space-y-2 p-3">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flat-card text-center space-y-4 p-10">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+            <Receipt className="h-7 w-7 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-title font-medium">
+              {scope === ALL
+                ? "Aucune vente enregistrée"
+                : `Aucune vente pour ${scopeLabel(scope)}`}
+            </p>
+            <p className="text-small mt-1">
+              {scope === ALL
+                ? "Commencez par encaisser votre première commande."
+                : "Changez de filtre ou ouvrez une nouvelle table."}
+            </p>
+          </div>
+          {scope === ALL && (
+            <Button asChild>
+              <a href="/pos" className="flex items-center justify-center gap-2">
+                <Plus className="h-4 w-4" /> Nouvelle vente
+              </a>
+            </Button>
+          )}
+        </div>
       ) : (
         days.map(([day, daySales]) => (
           <section key={day} className="space-y-2">

@@ -9,7 +9,7 @@ export function DashboardPage() {
   const data = useDashboardData();
 
   return (
-    <div className="app-container space-y-4 py-4">
+    <div className="app-container space-y-4 py-4 w-full max-w-full overflow-x-hidden">
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}

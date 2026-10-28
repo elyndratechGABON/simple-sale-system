@@ -10,7 +10,7 @@ import {
 import type { Product } from "@/lib/db";
 import type { ProductCardField } from "@/lib/card-display";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +27,7 @@ export function ProductGrid({
   visible,
   cardFields,
   lastSoldAtByProduct,
+  isLoading,
   onOpenProduct,
   onAddStock,
   onRemoveStock,
@@ -44,25 +45,40 @@ export function ProductGrid({
   onEdit: (p: Product) => void;
   onMovements: (p: Product) => void;
   onDelete: (p: Product) => void;
+  /** Requête produits encore en cours : 6 cards fantômes, la grille ne saute pas. */
+  isLoading?: boolean;
 }) {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flat-card space-y-2 p-3" aria-busy="true">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (products.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-10 text-center space-y-3">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
-            <Package className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <p className="text-muted-foreground">
-            Aucun produit. Cliquez sur « Ajouter du stock » pour commencer.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="flat-card text-center space-y-3 p-10">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+          <Package className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <p className="text-title font-medium">Aucun produit</p>
+        <p className="text-small text-muted-foreground">
+          Cliquez sur « Ajouter du stock » pour commencer.
+        </p>
+      </div>
     );
   }
 
   if (visible.length === 0) {
     return (
-      <p className="py-10 text-center text-sm text-muted-foreground">
+      <p className="py-10 text-center text-body text-muted-foreground">
         Aucun produit ne correspond à la recherche ou aux filtres.
       </p>
     );
@@ -74,10 +90,8 @@ export function ProductGrid({
           pas le total du catalogue : « 2 » quand deux articles correspondent
           évite de faire défiler pour le découvrir. */}
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Produits
-        </p>
-        <p className="text-[11px] tabular-nums text-muted-foreground">
+        <p className="text-small text-muted-foreground">Produits</p>
+        <p className="text-body tabular-nums text-muted-foreground">
           {visible.length}
           {visible.length < products.length && ` sur ${products.length}`}
         </p>
