@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BusinessCard } from "./BusinessCard";
 import { ClusterCard } from "./ClusterCard";
+import { EmployeeIdentityCard } from "./EmployeeIdentityCard";
 import { AppearanceCard } from "./AppearanceCard";
 import { TablesCard } from "./TablesCard";
 import { DevicesCard } from "./DevicesCard";
@@ -28,8 +29,8 @@ export function SettingsPage() {
           <h1 className="text-page-title font-bold">Paramètres</h1>
           <Badge variant="secondary">{accountLabel}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Boutique, caisse, équipe et données — tout ce que l'onboarding a demandé.
+        <p className="text-sm text-muted-foreground max-w-2xl">
+          Boutique, caisse, équipe et données - tout ce que l'onboarding a demandé.
         </p>
       </div>
 
@@ -53,6 +54,7 @@ export function SettingsPage() {
         </TabsList>
 
         <TabsContent value="identite" className="mt-3 space-y-3">
+          <EmployeeIdentityCard />
           <ClusterCard />
           <AppearanceCard />
         </TabsContent>
