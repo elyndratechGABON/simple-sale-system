@@ -14,7 +14,7 @@ import {
   type PeriodStats,
   type WeightSalesStats,
 } from "@/lib/analytics";
-import { usePeriodData } from "@/hooks/use-period-data";
+import { usePeriodDataState } from "@/hooks/use-period-data";
 import { MONTHS, rangeFor, type CalendarView } from "@/lib/reports/period";
 
 export type MonthBucket = { label: string; month: number; revenue: number; salesCount: number };
@@ -58,7 +58,7 @@ export function useReportData(focusedDay: number, view: CalendarView) {
   // TOUS les jours de l'intervalle, à zéro quand il n'y a pas eu de vente : c'est cette
   // série qui alimente le calendrier, la semaine et l'année, donc pas de doublon.
   const range = useMemo(() => rangeFor(focusedDay, view), [view, focusedDay]);
-  const { data } = usePeriodData(range.from, range.to);
+  const { data, isLoading } = usePeriodDataState(range.from, range.to);
   const { data: products } = useQuery({
     queryKey: ["products"],
     queryFn: listProducts,
@@ -87,6 +87,7 @@ export function useReportData(focusedDay: number, view: CalendarView) {
   // poids, rien sinon.
   return {
     stats,
+    isLoading,
     days: days as Map<number, DayBucket>,
     months,
     weightSales: weightSales as WeightSalesStats | null,

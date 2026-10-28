@@ -17,3 +17,9 @@ export function usePeriodData(from: number, to: number) {
     },
   });
 }
+
+/** État de chargement brut, pour les skeletons des pages consommatrices. */
+export function usePeriodDataState(from: number, to: number) {
+  const query = usePeriodData(from, to);
+  return { ...query, isLoading: query.isPending || query.data === undefined };
+}
