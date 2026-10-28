@@ -33,10 +33,11 @@ export async function applyStockDelta(
   if (opts?.variantId) {
     const variant = p.variants?.find((v) => v.id === opts.variantId);
     if (!variant || !Number.isFinite(variant.stock)) return p;
+    const newStock = (variant.stock ?? 0) + quantity;
     const updated: Product = {
       ...p,
       variants: (p.variants ?? []).map((v) =>
-        v.id === opts.variantId ? { ...v, stock: Math.max(0, (v.stock ?? 0) + quantity) } : v,
+        v.id === opts.variantId ? { ...v, stock: newStock } : v,
       ),
       ...touch(),
     };
@@ -50,9 +51,16 @@ export async function applyStockDelta(
         note: opts?.note,
       });
     }
+    if (newStock < 0 && quantity < 0) {
+      await raiseStockConflict(db, p, newStock, quantity, "variant");
+    }
     return updated;
   }
-  const updated: Product = { ...p, stock: Math.max(0, p.stock + quantity), ...touch() };
+  // Le delta s'applique INTÉGRALEMENT : un conflit de ventes concurrentes peut
+  // pousser le stock sous zéro. On ne borne PAS — le négatif affiché est le signal
+  // honnête de la survente, l'alerte part au gérant (`raiseStockConflict`).
+  const newStock = p.stock + quantity;
+  const updated: Product = { ...p, stock: newStock, ...touch() };
   await db.products.put(updated);
   if (quantity !== 0) {
     await recordMovement(db, {
@@ -63,8 +71,61 @@ export async function applyStockDelta(
       note: opts?.note,
     });
   }
-  await maybeEmitStockLow(db, p, qty, updated.stock, quantity);
+  await maybeEmitStockLow(db, p, p.stock, newStock, quantity);
+  if (newStock < 0 && quantity < 0) {
+    await raiseStockConflict(db, p, newStock, quantity, "product");
+  }
   return updated;
+}
+
+/**
+ * CONFLIT DE STOCK — deux vendeurs vendent le même stock en même temps : la somme
+ * des ventes dépasse le disponible. La vente n'est PAS annulée (l'argent est en
+ * caisse, le produit est parti), mais le gérant est alerté et le stock reste
+ * négatif jusqu'au réassort — l'état affiché est honnête.
+ *
+ * Le conflit est écrit deux fois : LOCALEMENT (fiche `sync_lost_stock_alerts`,
+ * la cloche le lit) et en op `stock.conflict` (les autres écrans, gérant
+ * compris, l'appliquent par `dispatch`). Dédup : une fiche tant que le stock
+ * reste négatif, puis une nouvelle au prochain conflit.
+ */
+const STOCK_CONFLICT_ID = "stock-conflict";
+export async function raiseStockConflict(
+  db: PosDatabase,
+  p: Product,
+  newStock: number,
+  quantity: number,
+  scope: "product" | "variant",
+): Promise<void> {
+  const identity = getCachedIdentity();
+  const id = `${STOCK_CONFLICT_ID}:${p.id}:${identity?.deviceId ?? "me"}`;
+  await db.transaction("rw", db.sync_lost_stock_alerts, async () => {
+    await db.sync_lost_stock_alerts.put({
+      id,
+      product_id: p.id,
+      device_id: identity?.deviceId ?? "",
+      stock: newStock,
+      threshold: 0,
+      severity: "warning",
+      title: "Conflit de stock",
+      detail: `Survente : ${scope === "variant" ? "une variante de " : ""}${p.name} à ${newStock} (${quantity} unités vendues au-delà du stock)`,
+      to: "/stocks",
+      created_at: Date.now(),
+    });
+  });
+  if (identity) {
+    await emitOp(db, identity, {
+      type: "stock.conflict",
+      entity_id: p.id,
+      payload: {
+        product_id: p.id,
+        device_id: identity.deviceId,
+        stock: newStock,
+        quantity,
+        scope,
+      },
+    });
+  }
 }
 
 export type LostStockAlertSeverity = "warning" | "info";

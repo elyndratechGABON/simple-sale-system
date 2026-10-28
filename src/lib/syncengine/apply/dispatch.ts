@@ -27,7 +27,7 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       await applyStockAdjusted(db, op);
       break;
     case "stock.low":
-      // Alerte stock bas reçue d'un employé : on l'ajoute à la liste des alerts du propriétaire.
+      // Alerte stock bas reçue d'un employé : on l'ajoute à la liste des alertes du propriétaire.
       // L'op porte product_id, device_id (l'employé), stock actuel et seuil franchi.
       // On crée une alerte warning que l'on stocke pour l'affichage dans la cloche.
       {
@@ -54,6 +54,42 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
                 severity: "warning",
                 title: "Stock bas détecté",
                 detail: `Stock à ${pl.stock} (seuil ${pl.threshold}) sur un produit employé`,
+                to: "/stocks",
+                created_at: Date.now(),
+              });
+            });
+          }
+        }
+      }
+      break;
+    case "stock.conflict":
+      // Survente concurrente reçue d'un pair : la vente est déjà comptée chez
+      // l'émetteur, le stock se retrouve sous zéro. La vente est JAMAIS annulée —
+      // le gérant est alerté, la remise au chiffre se fera au réassort/inventaire.
+      {
+        const pl = op.payload as {
+          product_id: string;
+          device_id: string;
+          stock: number;
+          quantity: number;
+          scope: "product" | "variant";
+        };
+        if (pl?.product_id && pl?.device_id && pl?.stock != null) {
+          const alertId = `stock-conflict:${pl.product_id}:${pl.device_id}`;
+          // Dédup : un conflit par produit×écran tant que le stock reste négatif.
+          const existingAlert = await db.sync_lost_stock_alerts.get(alertId);
+          if (!existingAlert || existingAlert.stock >= 0) {
+            const name = (await db.products.get(pl.product_id))?.name ?? "Produit";
+            await db.transaction("rw", db.sync_lost_stock_alerts, async () => {
+              await db.sync_lost_stock_alerts.put({
+                id: alertId,
+                product_id: pl.product_id,
+                device_id: pl.device_id,
+                stock: pl.stock,
+                threshold: 0,
+                severity: "warning",
+                title: "Conflit de stock",
+                detail: `Survente sur ${name} : le stock passe à ${pl.stock} (${pl.quantity ?? "?"} unité(s) au-delà du disponible)`,
                 to: "/stocks",
                 created_at: Date.now(),
               });

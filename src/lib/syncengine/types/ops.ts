@@ -16,7 +16,10 @@ export type OpType =
   | "device.leave"
   | "catalogue.snapshot"
   | "catalogue.request"
-  | "stock.low";
+  | "stock.low"
+  | "stock.conflict"
+  | "stock.reserve"
+  | "stock.release";
 
 /** Une opération du journal. Idempotente : rejouée, elle ne doit produire qu'UN effet. */
 export interface SyncOp {
