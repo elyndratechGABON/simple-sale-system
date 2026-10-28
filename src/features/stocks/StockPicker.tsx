@@ -37,7 +37,7 @@ export function StockPicker({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher un produit…"
-          className="pl-9 pr-12 h-10"
+          className="pl-9 pr-12 h-11 rounded-xl bg-muted/50 border-none focus:border-none focus-visible:ring-primary/30"
           autoFocus
         />
       </div>

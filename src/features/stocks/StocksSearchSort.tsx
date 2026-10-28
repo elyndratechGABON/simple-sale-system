@@ -25,13 +25,13 @@ export function StocksSearchSort({
   return (
     <div className="space-y-4">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Rechercher un produit…"
           aria-label="Rechercher un produit"
-          className="h-14 rounded-xl bg-card pl-11 md:text-base"
+          className="h-11 rounded-xl bg-muted/50 border-none pl-9 focus:border-none focus-visible:ring-primary/30 md:text-base"
         />
       </div>
 
