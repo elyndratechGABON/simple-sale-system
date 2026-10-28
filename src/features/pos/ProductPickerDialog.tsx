@@ -59,17 +59,26 @@ export function ProductPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle>
-            Table {tableLabel} — {items.length > 0 ? formatFCFA(total) : "—"}
-          </DialogTitle>
+          <DialogTitle>Table {tableLabel}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="overflow-y-auto max-h-[60vh]">
+        {/* `--page-gutter` neutralisé : les rangées de chips du panneau tirent des
+            marges négatives pensées pour la page, et dans la largeur fixe
+            de la modale elles généraient la scrollbar horizontale. */}
+        <div
+          className="grid w-full min-w-0 gap-4 overflow-hidden lg:grid-cols-[1fr_320px] [&_*]:max-w-full"
+          style={{ ["--page-gutter" as string]: "0px" }}
+        >
+          <div className="min-w-0 w-full overflow-hidden">
+            <div className="pt-1"/>
             <ProductPanel pos={pos} onProductSelect={addProduct} />
           </div>
 
-          <div className="space-y-2 overflow-y-auto max-h-[60vh]">
+          <div className="min-w-0 space-y-2 overflow-y-auto max-h-[60vh]">
+            {/* Titre « Articles » détaché du titre de la modale */}
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">
+              Articles{items.length > 0 ? ` — ${formatFCFA(total)}` : ""}
+            </p>
             {items.map((item) => (
               <PickerItemRow
                 key={item.id}
@@ -79,6 +88,9 @@ export function ProductPickerDialog({
                 onRemove={() => remove(item.id)}
               />
             ))}
+            {items.length === 0 && (
+              <p className="text-sm text-muted-foreground">Aucun article pour l'instant.</p>
+            )}
           </div>
         </div>
 
