@@ -1,5 +1,6 @@
-import { useRef } from "react";
-import { Check } from "lucide-react";
+import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { formatFCFA } from "@/lib/format";
@@ -10,10 +11,11 @@ import { bulkUpdateCost, type Product } from "@/lib/db";
  *
  * COPIE ASSUMÉE de `CostBatchRow` (règle des 3 : on extrait quand un 3ᵉ usage apparaît,
  * pas avant). Différences : deux colonnes de lecture en plus — quantité vendue et prix —
- * pour que le vendeur voie ce que son chiffre procured.
+ * pour que le vendeur voie ce que son chiffre a produit.
  *
- * ENREGISTREMENT AU BLUR, jamais débouncé : un debounce écrit pendant la frappe (« 2 »
- * puis « 20 » au lieu de « 20 000 ») — cf. ERR-UI-001.
+ * RÈGLE : le coût est saisi À LA CRÉATION du produit (`ProductForm`). Ici on ne
+ * l'AFFICHE qu'en lecture seule. Seule exception : coût = 0 (jamais renseigné) —
+ * un petit bouton crayon révèle un input de saisie à la demande.
  */
 export function ProductCostRow({
   product,
@@ -25,6 +27,8 @@ export function ProductCostRow({
   revenue: number;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
   const saved = product.cost > 0 ? String(product.cost) : "";
 
   async function commit() {
@@ -32,28 +36,26 @@ export function ProductCostRow({
     if (!input) return;
     const raw = input.value.trim();
     const cost = Number(raw);
-    // Vide, illisible ou négatif : on restaure la valeur connue plutôt que d'écrire un 0
-    // qui effacerait un coût saisi.
     if (raw === "" || Number.isNaN(cost) || cost < 0) {
-      input.value = saved;
+      setEditing(false);
       return;
     }
-    if (cost === product.cost) return;
-
+    if (cost === product.cost) {
+      setEditing(false);
+      return;
+    }
     try {
       const updated = await bulkUpdateCost([product.id], cost);
       if (updated === 0) {
-        // Produit supprimé entre-temps : `bulkUpdateCost` l'ignore en silence.
-        input.value = saved;
         toast.warning("Produit introuvable, coût non enregistré.");
         return;
       }
       toast.success(`${product.name} : coût ${formatFCFA(cost)}`);
+      void qc.invalidateQueries({ queryKey: ["products"] });
+      setEditing(false);
     } catch {
       // Exception (transaction interrompue). L'écran doit dire la VRAIE valeur : sans
-      // retour arrière, l'input affiche « 20000 » alors que rien n'a été écrit — même
-      // classe de mensonge que le debounce, donc même correction.
-      input.value = saved;
+      // retour arrière, l'input afficherait « 20000 » alors que rien n'a été écrit.
       toast.error("Coût non enregistré.");
     }
   }
@@ -68,26 +70,41 @@ export function ProductCostRow({
         {formatFCFA(product.price)}
       </span>
       <div className="flex items-center gap-2">
-        <Input
-          ref={inputRef}
-          type="number"
-          min="0"
-          step="0.01"
-          inputMode="decimal"
-          defaultValue={saved}
-          placeholder="Coût (FCFA)"
-          aria-label={`Coût de ${product.name}`}
-          className="h-9 w-32 text-right tabular-nums bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-            if (e.key === "Escape") {
-              e.currentTarget.value = saved;
-              e.currentTarget.blur();
-            }
-          }}
-        />
+        {/* Coût renseigné : lecture seule. Coût 0 (non renseigné) : le crayon révèle
+            la saisie — c'est la SEULE voie de correction depuis cet écran. */}
         {product.cost > 0 && <Check className="h-4 w-4 shrink-0 text-primary" />}
+        {product.cost <= 0 && !editing && (
+          <button
+            type="button"
+            aria-label={`Renseigner le coût de ${product.name}`}
+            onClick={() => setEditing(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-dashed text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {(product.cost <= 0 && editing) && (
+          <Input
+            ref={inputRef}
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            defaultValue={saved}
+            placeholder="Coût (FCFA)"
+            aria-label={`Coût de ${product.name}`}
+            autoFocus
+            className="h-9 w-32 text-right tabular-nums bg-muted/50 border-border/50 focus:border-primary focus:ring-primary/20"
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                e.currentTarget.value = saved;
+                e.currentTarget.blur();
+              }
+            }}
+          />
+        )}
       </div>
       {/* Lecture seule : ce que la catégorie a rapporté, pour situer le coût saisi. */}
       <span className="text-right tabular-nums font-medium">{formatFCFA(revenue)}</span>
