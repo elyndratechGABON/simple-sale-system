@@ -70,6 +70,11 @@ export function addOneToLine(
 ): CartResult {
   const cur = cart[key];
   if (!cur) return { cart, refused: false };
+  // Un service n'a pas de stock : aucune garde de quantité, même si sa fiche
+  // traîne un stock fini d'avant le suivi.
+  if (p?.type === "service") {
+    return { cart: { ...cart, [key]: { ...cur, qty: cur.qty + 1 } }, refused: false };
+  }
   const v = p ? variantOf(p, cur.variant_id) : undefined;
   const stock = v?.stock ?? p?.stock;
   if (stock !== undefined && cur.qty + 1 > stock + 1e-9) return { cart, refused: true };

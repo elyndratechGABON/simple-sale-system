@@ -35,7 +35,7 @@ export const POSProductCard = memo(function POSProductCard({
   className?: string;
 }) {
   // Stock INFINI (prestation, service) : pas d'alerte de rupture possible.
-  const unlimited = !Number.isFinite(product.stock);
+  const unlimited = product.type === "service" || !Number.isFinite(product.stock);
   const remaining = unlimited ? Number.POSITIVE_INFINITY : product.stock - inCart;
   const out = !unlimited && remaining <= 0;
   const low = !unlimited && !out && remaining <= (product.min_stock ?? 5);
