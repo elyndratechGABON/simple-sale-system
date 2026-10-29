@@ -1,4 +1,5 @@
 import { ROLE_LABELS } from "@/lib/syncengine/pairing";
+import { useSearch } from "@tanstack/react-router";
 import { useAccess } from "@/hooks/use-access";
 import { usePreferences } from "@/hooks/use-preferences";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,13 @@ export function SettingsPage() {
   const { role } = useAccess();
   const accountLabel = `Compte ${ROLE_LABELS[role]}`;
 
+  const ONGLETS = ["identite", "caisse", "equipe", "systeme", "donnees", "compte"] as const;
+  type Onglet = (typeof ONGLETS)[number];
+  const q = useSearch({ strict: false }) as { tab?: string };
+  // ?tab=xxx : le rappel de sauvegarde (BackupReminder) pointe l'onglet Données.
+  // Onglet inconnu = repli « identite » — un lien brisé n'ouvre jamais un onglet vide.
+  const initialTab: Onglet = ONGLETS.includes(q.tab as Onglet) ? (q.tab as Onglet) : "identite";
+
   return (
     <div className="mx-auto w-full max-w-7xl px-[var(--page-gutter)] py-4">
       <div className="mb-5">
@@ -36,7 +44,7 @@ export function SettingsPage() {
       </div>
 
       <div className="relative">
-        <Tabs defaultValue="identite">
+        <Tabs defaultValue={initialTab}>
           <TabsList className="w-full max-w-full justify-start overflow-x-auto rounded-full bg-muted p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:rounded-full">
             <TabsTrigger
               value="identite"
