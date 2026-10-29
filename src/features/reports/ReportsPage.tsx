@@ -35,7 +35,7 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-4 py-4">
+    <div className="mx-auto w-full max-w-7xl space-y-4 px-[var(--page-gutter)] py-4">
       <header>
         <h1 className="text-page-title flex items-center gap-2 font-bold">
           <BarChart3 className="h-6 w-6 shrink-0 text-primary" /> Comptabilité
@@ -60,7 +60,7 @@ export function ReportsPage() {
       {/* Un seul onglet monté à la fois : `DataTab` et `ProfitTab` portent chacun leurs
           requêtes, inutile de payer les deux pour l'affichage d'un seul. */}
       {onglet === "donnees" ? (
-        <div className="space-y-4">
+        <div className="mx-auto w-full max-w-5xl space-y-4">
           {!isLoading ? (
             <DataTab
               items={items}
@@ -92,7 +92,7 @@ export function ReportsPage() {
           )}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="mx-auto w-full max-w-5xl space-y-4">
           {/* Trois KPI, pas quatre : le bénéfice est devenu la CONCLUSION de l'onglet, dans le
               bloc final de `ProfitTab` — l'afficher aussi en haut aurait mis le même
               chiffre deux fois sur le même écran. `DataTab` porte de même ses deux KPI
@@ -100,9 +100,15 @@ export function ReportsPage() {
           <div className="flat-card grid grid-cols-3 divide-x divide-border p-0">
             {isLoading ? (
               <>
-                <div className="p-3 py-4"><Skeleton className="h-10" /></div>
-                <div className="p-3 py-4"><Skeleton className="h-10" /></div>
-                <div className="p-3 py-4"><Skeleton className="h-10" /></div>
+                <div className="p-3 py-4">
+                  <Skeleton className="h-10" />
+                </div>
+                <div className="p-3 py-4">
+                  <Skeleton className="h-10" />
+                </div>
+                <div className="p-3 py-4">
+                  <Skeleton className="h-10" />
+                </div>
               </>
             ) : (
               <>
