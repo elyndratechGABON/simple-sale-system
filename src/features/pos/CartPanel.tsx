@@ -49,6 +49,9 @@ export function CartPanel({ pos }: { pos: PosController }) {
           {pos.activeTable ? (
             <>
               <Utensils className="h-5 w-5 shrink-0" />
+              <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs font-semibold shrink-0">
+                Table
+              </span>
               {renaming ? (
                 <Input
                   value={draft}
@@ -82,6 +85,9 @@ export function CartPanel({ pos }: { pos: PosController }) {
           ) : (
             <>
               <ShoppingCart className="h-5 w-5 shrink-0" /> Panier
+              <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-semibold shrink-0">
+                Comptoir
+              </span>
             </>
           )}
         </h2>
