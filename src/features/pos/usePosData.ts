@@ -13,6 +13,14 @@ import {
 import { usePreferences } from "@/hooks/use-preferences";
 import type { Target } from "@/lib/pos/types";
 
+/** Ce que la carte d'une table affiche en plus du montant : tournées + produits. */
+export interface TableVisualInfo {
+  /** Tournées distinctes : les groupes d'items par `ordered_at`. */
+  rounds: number;
+  /** Produits consommés (dédupliqués, nom+filt photo), pour les avatars. */
+  products: { id: string; name: string; photo?: string }[];
+}
+
 /**
  * Données de la caisse : requêtes React Query et projections pures.
  * `target` ne sert qu'à résoudre la table active — jamais recopiée dans l'état local.
@@ -55,6 +63,16 @@ export function usePosData(target: Target) {
     queryKey: ["sale_items", activeTable?.id],
     queryFn: () => getSaleItems(activeTable!.id),
     enabled: activeTable !== null,
+  });
+
+  // Lignes de TOUTES les tables ouvertes : la carte de chaque table de l'écran
+  // Tables affiche ses tournées et ses produits (avatars), pas seulement l'addition
+  // active (mission cartes de tables — Étape 1).
+  const openIds = useMemo(() => openTables.map((t) => t.id).join(","), [openTables]);
+  const { data: allTableItems = [] } = useQuery({
+    queryKey: ["sale_items", "open_tables", openIds],
+    queryFn: () => getSaleItemsForSales(openTables.map((t) => t.id)),
+    enabled: openTables.length > 0,
   });
 
   const categories = useMemo(() => {
@@ -116,6 +134,37 @@ export function usePosData(target: Target) {
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
   }, [tableItems]);
 
+  /** Tournées + produits PAR TABLE OUVERTE : les données des cartes du plan de salle. */
+  const tableVisuals = useMemo(() => {
+    const byTable = new Map<
+      string,
+      { rounds: Set<string>; products: Map<string, { name: string; photo?: string }> }
+    >();
+    const byProduct = new Map(products.map((p) => [p.id, p]));
+    for (const item of allTableItems) {
+      let rec = byTable.get(item.sale_id);
+      if (!rec) {
+        rec = { rounds: new Set(), products: new Map() };
+        byTable.set(item.sale_id, rec);
+      }
+      // Le nombre de TOURNÉES = groupes d'items distincts par `ordered_at` — exactement
+      // la clé de `computePeriodStats` ().
+      rec.rounds.add(String(item.ordered_at ?? 0));
+      if (item.product_id && !rec.products.has(item.product_id)) {
+        const p = byProduct.get(item.product_id);
+        rec.products.set(item.product_id, { name: item.name, photo: p?.photo });
+      }
+    }
+    const info = new Map<string, TableVisualInfo>();
+    for (const [saleId, rec] of byTable) {
+      info.set(saleId, {
+        rounds: rec.rounds.size,
+        products: [...rec.products.entries()].map(([id, v]) => ({ id, ...v })),
+      });
+    }
+    return info;
+  }, [allTableItems, products]);
+
   return {
     isService,
     hasTables,
@@ -129,5 +178,6 @@ export function usePosData(target: Target) {
     popular,
     floorPlan,
     rounds,
+    tableVisuals,
   };
 }
