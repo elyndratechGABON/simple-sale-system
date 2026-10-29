@@ -98,16 +98,34 @@ test("seules les catégories VENDUES en service figurent dans serviceCategories"
   expect(r.servicesSold).toHaveLength(1);
 });
 
-test("une ligne sans fiche (libre ou orpheline) n'entre dans aucun compte", () => {
+test("une ligne LIBRE n'entre dans aucun compte, un produit supprimé si", () => {
   const r = periodProfit(
     [produit("p1")],
-    [ligne({ id: "a" }), ligne({ id: "b", product_id: "fantome", quantity: 9 })],
+    [
+      ligne({ id: "a" }), // ligne libre : pas de fiche
+      ligne({
+        id: "b",
+        product_id: "fantome",
+        quantity: 9,
+        price_at_sale: 1000,
+        cost_at_sale: 700,
+        category_at_sale: "Snack",
+      }),
+    ],
   );
 
-  expect(r.productMargin).toBe(0);
+  // Le produit supprimé garde son coût figé : 9 × (1000 − 700) = 2 700.
+  expect(r.productMargin).toBe(2700);
   expect(r.serviceRevenue).toBe(0);
   expect(r.serviceCategories).toEqual([]);
-  expect(r.categoryRevenue).toEqual({});
+  expect(r.categoryRevenue).toEqual({ Snack: 9000 });
+});
+
+test("un produit supprimé ne compte pas dans le filet « sans coût » : rien n'est saisissable", () => {
+  const r = periodProfit([], [ligne({ id: "a", product_id: "fantome", cost_at_sale: 0 })]);
+
+  expect(r.productMargin).toBe(500);
+  expect(r.soldWithoutCost).toBe(0);
 });
 
 test("un produit vendu sans coût d'achat est compté — le filet « surestimé » est fondé", () => {

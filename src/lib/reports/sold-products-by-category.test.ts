@@ -52,15 +52,41 @@ test("une ligne libre est ignorée — pas de fiche, pas de coût à saisir", ()
   expect(groups.size).toBe(0);
 });
 
-test("une ligne dont le produit est absent du catalogue est ignorée", () => {
-  // Le vrai cas atteignable : produit supprimé, ou identifiant orphelin. Ignoré SANS
-  // trace — son coût ne sera jamais saisissable, et seule l'alerte de la page le signale.
+test("un produit supprimé du catalogue reste compté, catégorie figée à la vente", () => {
+  // Le vrai cas : « riz tchiep » vendu puis supprimé. La ligne de vente ne doit JAMAIS
+  // être ignorée sous prétexte que `product_id` ne figure plus dans `products`.
   const groups = soldProductsByCategory(
     [produit("p1")],
-    [ligne({ id: "a", product_id: "fantome" }), ligne({ id: "b", product_id: "p1" })],
+    [
+      ligne({
+        id: "a",
+        product_id: "fantome",
+        name: "Riz tchiep",
+        quantity: 2,
+        price_at_sale: 1000,
+        cost_at_sale: 700,
+        category_at_sale: "Snack",
+      }),
+      ligne({ id: "b", product_id: "p1" }),
+    ],
   );
 
-  expect(nomDe(groups, "Boisson")).toEqual(["p1"]);
+  const list = groups.get("Snack")!;
+  expect(list).toHaveLength(1);
+  expect(list[0]).toMatchObject({ quantity: 2, revenue: 2000, orphan: true });
+  expect(list[0].product).toMatchObject({
+    id: "fantome",
+    name: "Riz tchiep",
+    cost: 700,
+    category: "Snack",
+  });
+  expect(groups.get("Boisson")).toHaveLength(1);
+});
+
+test("une catégorie absente de la vente retombe sur « Autre »", () => {
+  const groups = soldProductsByCategory([], [ligne({ id: "a", product_id: "fantome" })]);
+
+  expect([...groups.keys()]).toEqual(["Autre"]);
 });
 
 test("les lignes d'une catégorie sont triées par quantité décroissante", () => {

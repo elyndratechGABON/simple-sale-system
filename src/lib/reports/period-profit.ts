@@ -61,7 +61,9 @@ export function periodProfit(products: Product[], items: SaleItem[]): PeriodProf
         servicesSold.push(sold);
       } else {
         productMargin += sold.revenue - sold.product.cost * sold.quantity;
-        if (!sold.product.cost) soldWithoutCost += 1;
+        // Un produit supprimé garde son coût figé à la vente : plus rien à saisir, donc
+        // pas de « bénéfice surestimé » à signaler pour lui.
+        if (!sold.orphan && !sold.product.cost) soldWithoutCost += 1;
       }
     }
     if (aService) serviceCategories.add(category);

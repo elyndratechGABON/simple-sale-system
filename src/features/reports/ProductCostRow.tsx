@@ -16,15 +16,20 @@ import { bulkUpdateCost, type Product } from "@/lib/db";
  * RÈGLE : le coût est saisi À LA CRÉATION du produit (`ProductForm`). Ici on ne
  * l'AFFICHE qu'en lecture seule. Seule exception : coût = 0 (jamais renseigné) —
  * un petit bouton crayon révèle un input de saisie à la demande.
+ *
+ * `readOnly` verrouille la ligne : produit SUPPRIMÉ du catalogue, il n'existe plus de
+ * fiche à mettre à jour. Le coût affiché est celui figé à la vente (`cost_at_sale`).
  */
 export function ProductCostRow({
   product,
   quantitySold,
   revenue,
+  readOnly = false,
 }: {
   product: Product;
   quantitySold: number;
   revenue: number;
+  readOnly?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
@@ -32,6 +37,7 @@ export function ProductCostRow({
   const saved = product.cost > 0 ? String(product.cost) : "";
 
   async function commit() {
+    if (readOnly) return;
     const input = inputRef.current;
     if (!input) return;
     const raw = input.value.trim();
@@ -73,7 +79,15 @@ export function ProductCostRow({
         {/* Coût renseigné : lecture seule. Coût 0 (non renseigné) : le crayon révèle
             la saisie — c'est la SEULE voie de correction depuis cet écran. */}
         {product.cost > 0 && <Check className="h-4 w-4 shrink-0 text-primary" />}
-        {product.cost <= 0 && !editing && (
+        {product.cost <= 0 && readOnly && (
+          <span
+            className="text-xs text-muted-foreground"
+            title="Produit supprimé : coût non renseigné"
+          >
+            —
+          </span>
+        )}
+        {product.cost <= 0 && !readOnly && !editing && (
           <button
             type="button"
             aria-label={`Renseigner le coût de ${product.name}`}
@@ -83,7 +97,7 @@ export function ProductCostRow({
             <Pencil className="h-3.5 w-3.5" />
           </button>
         )}
-        {(product.cost <= 0 && editing) && (
+        {product.cost <= 0 && editing && !readOnly && (
           <Input
             ref={inputRef}
             type="number"

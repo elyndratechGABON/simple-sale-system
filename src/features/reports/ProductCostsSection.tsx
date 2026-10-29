@@ -18,7 +18,8 @@ import { ProductCostRow } from "./ProductCostRow";
  * ligne.
  *
  * Le regroupement vient de `soldProductsByCategory` : uniquement ce qui a été VENDU sur la
- * période (cf. ce fichier pour les exclusions : ligne libre, produit absent du catalogue).
+ * période (cf. ce fichier pour la seule exclusion : ligne libre). Les produits SUPPRIMÉS
+ * figurent dans leur propre groupe, en lecture seule : leur coût est figé à la vente.
  */
 export function ProductCostsSection({
   products,
@@ -39,18 +40,23 @@ export function ProductCostsSection({
       .sort((a, b) => b.revenue - a.revenue);
   }, [products, items]);
 
-  // Même prédicat que `useCostAlerts` : un coût absent ou nul est un coût manquant.
+  // Même prédicat que `useCostAlerts` : un coût absent ou nul est un coût manquant —
+  // SAUF pour un produit supprimé, dont le coût (figé à la vente) n'est plus modifiable.
   // On découpe par groups, l'ordre par chiffre d'affaires est conservé à l'intérieur.
-  const [sansCout, avecCout] = useMemo(() => {
+  const [sansCout, avecCout, supprimes] = useMemo(() => {
     const sans: typeof groups = [];
     const avec: typeof groups = [];
+    const supprimes: typeof groups = [];
     for (const group of groups) {
-      const manquants = group.list.filter((e) => !(e.product.cost > 0));
-      const renseignes = group.list.filter((e) => e.product.cost > 0);
+      const disparus = group.list.filter((e) => e.orphan);
+      const restants = group.list.filter((e) => !e.orphan);
+      const manquants = restants.filter((e) => !(e.product.cost > 0));
+      const renseignes = restants.filter((e) => e.product.cost > 0);
       if (manquants.length > 0) sans.push({ ...group, list: manquants });
       if (renseignes.length > 0) avec.push({ ...group, list: renseignes });
+      if (disparus.length > 0) supprimes.push({ ...group, list: disparus });
     }
-    return [sans, avec];
+    return [sans, avec, supprimes];
   }, [groups]);
 
   if (groups.length === 0) {
@@ -64,14 +70,20 @@ export function ProductCostsSection({
   return (
     <div className="space-y-4">
       {[
-        { titre: "Sans coût", liste: sansCout },
-        { titre: "Avec coût", liste: avecCout },
-      ].map(({ titre, liste }) =>
+        { titre: "Sans coût", liste: sansCout, note: undefined },
+        { titre: "Avec coût", liste: avecCout, note: undefined },
+        {
+          titre: "Produits supprimés",
+          liste: supprimes,
+          note: "Coût figé au moment de la vente — lecture seule.",
+        },
+      ].map(({ titre, liste, note }) =>
         liste.length === 0 ? null : (
           <section key={titre}>
             <h3 className="mb-1 text-sm font-semibold">
               {titre} ({liste.reduce((n, g) => n + g.list.length, 0)})
             </h3>
+            {note && <p className="mb-1 text-xs text-muted-foreground">{note}</p>}
             {liste.map((group) => (
               <div key={group.category} className="mb-2 last:mb-0">
                 <p className="mb-1 text-xs text-muted-foreground">{group.category}</p>
@@ -82,6 +94,7 @@ export function ProductCostsSection({
                       product={entry.product}
                       quantitySold={entry.quantity}
                       revenue={entry.revenue}
+                      readOnly={entry.orphan}
                     />
                   ))}
                 </div>
