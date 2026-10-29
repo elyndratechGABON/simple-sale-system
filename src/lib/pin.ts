@@ -91,11 +91,20 @@ export type PinResult = "ok" | "wrong" | "locked" | "unset";
  * Un PIN non choisi n'est pas « 1234 par défaut » : c'est `unset`, que l'interface
  * traite en demandant d'en créer un. Le défaut historique laissait 4 chiffres devinables
  * devant deux actions à effet financier.
+ *
+ * DÉFAUT `0010` (mission sécurité — Étape 4.3) : un PIN non posé accepte le code
+ * d'usine de la boutique ; `PinDialog` invite à en créer un personnalisé à la première
+ * utilisation réussie. Résultat "ok" au code d'usine reste un PIN vrai — mais la carte
+ * rappelle de le personnaliser.
  */
 export async function verifyPin(input: string): Promise<PinResult> {
   if (typeof window === "undefined") return "unset";
   const stored = window.localStorage.getItem(KEY_HASH);
-  if (!stored) return "unset";
+  if (!stored) {
+    // Défaut boutique : le code d'usine `0010` est valide tant qu'aucun code personnalisé
+    // n'a été posé. La constante reste ici, PAS dans l'UI — un seul endroit fait foi.
+    return input.trim() === "0010" ? "ok" : "unset";
+  }
 
   const locked = pinLockRemainingMs();
   if (locked > 0) return "locked";

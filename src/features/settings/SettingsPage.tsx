@@ -15,6 +15,7 @@ import { InstallCard } from "./InstallCard";
 import { BackupCard } from "./BackupCard";
 import { DeleteShopCard } from "./DeleteShopCard";
 import { PinCard } from "./PinCard";
+import { RecoveryPinCard } from "./RecoveryPinCard";
 import { ResignCard } from "./ResignCard";
 import { SubscriptionCard } from "./SubscriptionCard";
 
@@ -104,6 +105,7 @@ export function SettingsPage() {
 
           <TabsContent value="systeme" className="mt-3 grid items-start gap-4 md:grid-cols-2">
             <PinCard />
+            <RecoveryPinCard />
             <InstallCard />
           </TabsContent>
 

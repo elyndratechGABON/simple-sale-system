@@ -17,8 +17,9 @@ export function PinCard() {
           <KeyRound className="h-5 w-5" /> Code PIN d'annulation
         </h2>
         <p className="text-small text-muted-foreground">
-          Demandé avant d'annuler une vente encaissée ou une table, avec restauration du stock. Un
-          code à 4 chiffres que tout le monde devine n'annule plus rien.
+          Demandé avant d&apos;annuler une vente encaissée ou une table, avec restauration du stock.
+          Code de la boutique — personnalisable, défaut <b>0010</b> tant qu&apos;aucun code n&apos;a
+          été posé.
         </p>
         <p className="mt-2 text-small text-destructive">
           ⚠️ Conservez ce code précieusement. Il est le seul moyen de récupérer votre compte si vous
