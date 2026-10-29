@@ -87,7 +87,11 @@ export const POSProductCard = memo(function POSProductCard({
               src={product.photo}
               alt=""
               loading="lazy"
-              className="h-full w-full object-contain object-center p-1"
+              // Photo PLEINE dans le cadre : object-cover évite les bandes vides et les
+              // étirements (audit design §3). Recadrage maîtrisé par le parent
+              // (aspect-square + overflow-hidden) : la reconnaissance de l'article passe
+              // par la largeur de l'image, pas par ses marges.
+              className="h-full w-full object-cover object-center"
             />
           </div>
         ) : (

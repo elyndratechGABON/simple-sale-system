@@ -67,8 +67,9 @@ export function ProductCard({
         onOpen && "cursor-pointer hover:bg-primary/5",
       )}
     >
-      {/* ── Visuel : conteneur carré imposé (§16). `contain` et non `cover` — une
-          photo de produit ne doit jamais être rognée ni déformée. ── */}
+      {/* ── Visuel : conteneur carré imposé (§16) + overflow-hidden. `cover` plein
+          cadre — la photo remplit la case (audit design §3), le rognage reste
+          predomine sur les bandes vides et les étirements visibles. ── */}
       {has("image") && (
         <div className="relative aspect-square w-full overflow-hidden bg-muted/30">
           {product.photo ? (
@@ -76,7 +77,7 @@ export function ProductCard({
               src={product.photo}
               alt=""
               loading="lazy"
-              className="h-full w-full object-contain object-center"
+              className="h-full w-full object-cover object-center"
             />
           ) : (
             /* Même hauteur exactement qu'une image : la grille ne se décale pas. */
