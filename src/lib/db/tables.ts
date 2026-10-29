@@ -45,6 +45,30 @@ export async function openTable(label: string, clientName?: string): Promise<Sal
 }
 
 /**
+ * Renomme une table OUVERTE. Le libellé vit sur la `Sale` (`table`), donc il suit
+ * l'addition jusqu'à l'encaissement, la facture et l'historique — sans table de
+ * correspondance à maintenir.
+ *
+ * Le préfixe « Table » est retiré : tous les écrans l'ajoutent eux-mêmes à l'affichage.
+ * Refusé si l'addition est réglée : un ticket encaissé ne se réécrit pas.
+ */
+export async function renameTable(saleId: string, label: string): Promise<Sale> {
+  const db = getDB();
+  const sale = await db.sales.get(saleId);
+  if (!sale || sale.deleted_at) throw new Error("Table introuvable.");
+  if (sale.status !== "open") throw new Error("Cette addition est déjà réglée.");
+  const name = label
+    .trim()
+    .replace(/^table\s+/i, "")
+    .replace(/\s+/g, " ")
+    .slice(0, 40);
+  if (!name) throw new Error("Le nom de la table ne peut pas être vide.");
+  const updated: Sale = { ...sale, table: name, ...touch() };
+  await db.sales.put(updated);
+  return updated;
+}
+
+/**
  * Libère une table ouverte sur laquelle rien n'a encore été servi.
  *
  * Une table s'ouvre d'un tap et se libère d'un appui long : c'est le geste inverse, pas

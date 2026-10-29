@@ -17,6 +17,7 @@ import {
   payRound,
   payTable,
   addRound,
+  renameTable,
   type CartLine,
   type Sale,
 } from "@/lib/db";
@@ -146,6 +147,18 @@ export function useTableMutations(hooks: {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Le nom personnalisé vit sur la vente : l'invalidation de ["sales"] rafraîchit d'un
+  // coup le plan de salle, le panier et l'historique.
+  const renameMut = useMutation({
+    mutationFn: ({ saleId, label }: { saleId: string; label: string }) =>
+      renameTable(saleId, label),
+    onSuccess: (sale) => {
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      toast.success(`Table renommée : ${sale.table}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return {
     openMut,
     closeMut,
@@ -153,5 +166,6 @@ export function useTableMutations(hooks: {
     payRoundMut,
     addToSaleMut,
     cancelTableMut,
+    renameMut,
   };
 }
