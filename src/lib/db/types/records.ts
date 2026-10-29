@@ -120,6 +120,29 @@ export interface Charge extends SyncFields {
 }
 
 /**
+ * Archive financière AUTOMATIQUE : une image figée des chiffres d'une journée écoulée
+ * (CA, bénéfice au coût figé, ventes). Émise par `ensureFinancialSnapshot` (boot) quand
+ * la différence en jours depuis le DERNIER snapshot atteint la fréquence choisie
+ * (`Preferences.snapshotFrequency`). Journal LOCAL — le catalogue n'a pas plus à
+ * l'être : l'archive est l'historique de CET appareil, téléchargeable en PDF.
+ */
+export interface FinancialSnapshot {
+  id: string;
+  /** Minuit local du jour ARCHIVÉ. */
+  day: number;
+  /** Date de création de l'archive. */
+  created_at: number;
+  /** Chiffre d'affaires de la journée. */
+  revenue: number;
+  /** Bénéfice (ligne : coût figé à la vente, cf. `computePeriodStats`). */
+  profit: number;
+  /** Nombre de ventes. */
+  salesCount: number;
+  /** Panier moyen (0 si aucune vente). */
+  averageBasket: number;
+}
+
+/**
  * Journal des mouvements de stock : chaque variation de quantité laisse une trace
  * datée et motivée, pour répondre à « pourquoi il ne me reste que 3 Coca ? ».
  * `delta` est signé : +5 réapprovisionnement, −2 vente ou correction. Journal LOCAL —

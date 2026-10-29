@@ -17,6 +17,7 @@ import {
   type UpdateAvailableDetail,
 } from "@/lib/pwa";
 import { autoCloseDay } from "@/lib/db";
+import { ensureFinancialSnapshot } from "@/lib/financial/archives";
 import { backgroundSync } from "@/lib/sync";
 import { runCriticalOpsExchange, CRITICAL_INTERVAL_MS } from "@/lib/sync/ops";
 import { loadLockState } from "@/lib/gatekeeper";
@@ -64,6 +65,10 @@ export function PwaBootstrap() {
   useEffect(() => {
     registerServiceWorker();
     requestPersistentStorage();
+    // Archives financières automatiques (mission archives — Étape 3) : au boot, si le
+    // DERNIER snapshot date d'au moins la fréquence choisie, la journée écoulée est
+    // archivée. Best-effort : le boot ne doit JAMAIS être bloqué par l'archivage.
+    void ensureFinancialSnapshot().catch(() => {});
     // Le commerçant a PARTAGÉ son reçu de paiement avec l'application (« Partager »
     // dans l'appli SMS de l'opérateur). Le texte arrive par l'URL (cf. le manifeste) :
     // on le traite exactement comme un SMS collé — il déverrouille la caisse et part

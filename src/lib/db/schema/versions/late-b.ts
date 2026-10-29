@@ -145,4 +145,19 @@ export function applyLateBVersions(db: Dexie): void {
   db.version(26).stores({
     charges: "id, kind, period_start",
   });
+
+  // Version 27 — ARCHIVES FINANCIÈRES AUTOMATIQUES.
+  //
+  // Store neuf, aucun `upgrade()` : rien à reprendre. `financial_snapshots` porte une
+  // image figée (CA, bénéfice, ventes) d'une journée écoulée, émise automatiquement à
+  // la fréquence choisie (`Preferences.snapshotFrequency`). Journal LOCAL : c'est
+  // l'historique de CET appareil — hors synchronisation, exclue du snapshot de
+  // sauvegarde (raison documentée dans snapshot-exhaustivity.test.ts). Le PDF est le
+  // canal d'export (cf. lib/financial/archives.ts).
+  //
+  // Index : `id, created_at` — la lecture dialog est « tous les snapshots, du plus
+  // récent au plus ancien », c'est `created_at` qui la porte.
+  db.version(27).stores({
+    financial_snapshots: "id, created_at",
+  });
 }

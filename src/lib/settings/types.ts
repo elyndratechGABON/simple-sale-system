@@ -114,5 +114,17 @@ export interface Preferences {
    * le prix et le nom, pas le prix d'achat ni la référence — les deux pages n'ont pas
    * les mêmes contraintes de place ni les mêmes necessités.
    */
+  /**
+   * Jeu de champs de la caisse. RÉGLAGE SÉPARÉ (22) : au comptoir on veut
+   * le prix et le nom, pas le prix d'achat ni la référence — les deux pages n'ont pas
+   * les mêmes contraintes de place ni les mêmes nécessités.
+   */
   caisseCardFields: ProductCardField[];
+  /**
+   * Fréquence d'archivage financier automatique, en JOURS (mission archives — Étape 3).
+   * À chaque boot, si la différence en jours depuis le DERNIER snapshot atteint ce
+   * nombre, `ensureFinancialSnapshot` archive la journée écoulée. Défaut : 7 (une fois
+   * par semaine). Options du dialogue d'archives : 1, 5, 7, 30.
+   */
+  snapshotFrequency?: number;
 }

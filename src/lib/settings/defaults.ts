@@ -25,4 +25,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   // d'œil sans laisser le prix absent.
   stockCardFields: [...CARD_PRESETS.standard],
   caisseCardFields: [...CARD_PRESETS.compact],
+  // Archivage financier : quatre fois par mois est un bon défaut — le commerçant
+  // a une trace hebdomadaire sans écrire 365 lignes par an.
+  snapshotFrequency: 7,
 };

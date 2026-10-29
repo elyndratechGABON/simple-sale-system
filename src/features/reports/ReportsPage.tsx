@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart3 } from "lucide-react";
+import { Archive, BarChart3 } from "lucide-react";
 import { startOfDay } from "date-fns";
 import { formatFCFA } from "@/lib/format";
 import { REVENUE_LABEL, type CalendarView } from "@/lib/reports/period";
@@ -7,6 +7,7 @@ import { useReportData } from "@/lib/reports/use-report-data";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Kpi } from "@/components/reports";
 import { CostBatch } from "./CostBatch";
@@ -14,6 +15,7 @@ import { CostAlerts } from "./CostAlerts";
 import { DataTab } from "./DataTab";
 import { PeriodNav } from "./PeriodNav";
 import { ProfitTab } from "./ProfitTab";
+import { ArchiveDialog } from "./ArchiveDialog";
 import { useCostAlerts } from "./useCostAlerts";
 
 type Onglet = "donnees" | "benefice";
@@ -24,6 +26,8 @@ export function ReportsPage() {
   const [focusedDay, setFocusedDay] = useState<number>(() => startOfDay(Date.now()).getTime());
   const [costOpen, setCostOpen] = useState(false);
   const [costSelection, setCostSelection] = useState<string[]>([]);
+  /** La modale des archives financières automatiques. */
+  const [archivesOpen, setArchivesOpen] = useState(false);
 
   // Source unique de la période : `PeriodNav` la pilote, les DEUX onglets la lisent.
   const { stats, isLoading, items, products } = useReportData(focusedDay, view);
@@ -50,12 +54,23 @@ export function ReportsPage() {
         onFocusedDayChange={setFocusedDay}
       />
 
-      <Tabs value={onglet} onValueChange={(v) => setOnglet(v as Onglet)}>
-        <TabsList>
-          <TabsTrigger value="donnees">Données</TabsTrigger>
-          <TabsTrigger value="benefice">Bénéfice</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex items-center justify-between gap-2">
+        <Tabs value={onglet} onValueChange={(v) => setOnglet(v as Onglet)}>
+          <TabsList>
+            <TabsTrigger value="donnees">Données</TabsTrigger>
+            <TabsTrigger value="benefice">Bénéfice</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {/* États financiers passés : les archives automatiques (§2/§3). */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 h-9"
+          onClick={() => setArchivesOpen(true)}
+        >
+          <Archive className="h-4 w-4 mr-1.5" /> États financiers passés
+        </Button>
+      </div>
 
       {/* Un seul onglet monté à la fois : `DataTab` et `ProfitTab` portent chacun leurs
           requêtes, inutile de payer les deux pour l'affichage d'un seul. */}
@@ -163,6 +178,9 @@ export function ReportsPage() {
           <CostBatch key={costSelection.join("|")} initialSelected={costSelection} />
         </DialogContent>
       </Dialog>
+
+      {/* Archives financières : la liste des snapshots automatiques (§2/§4). */}
+      <ArchiveDialog open={archivesOpen} onOpenChange={setArchivesOpen} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import type {
   Client,
   DayClosure,
   EmployeeHistory,
+  FinancialSnapshot,
   MonthlyOverview,
   ProductExpense,
   Setting,
@@ -35,6 +36,8 @@ export class PosDatabase extends Dexie {
   closings!: Table<ClosingImport, string>;
   employee_history!: Table<EmployeeHistory, string>;
   catalogue_requests!: Table<CatalogueRequestPending, string>;
+  /** Archives financières automatiques (mission archives — v27). */
+  financial_snapshots!: Table<FinancialSnapshot, string>;
   /** Charges de service et charges d'exploitation, saisies par période (migration v26). */
   charges!: Table<Charge, string>;
   sync_ops!: Table<SyncOp, string>;

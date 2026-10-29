@@ -22,6 +22,7 @@ const EXCLUES: Record<string, string> = {
   sync_ops: "journal d'échange, jamais restauré",
   processed_ops: "déduplication, vide de sens après restauration",
   paired_devices: "registre des appareils, reconstruit par le pairing",
+  financial_snapshots: "archives financières locales, téléchargeables en PDF",
 };
 
 const TABLES_SNAPSHOT = [
