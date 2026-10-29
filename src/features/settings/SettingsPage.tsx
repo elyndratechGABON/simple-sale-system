@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BusinessCard } from "./BusinessCard";
 import { ClusterCard } from "./ClusterCard";
 import { EmployeeIdentityCard } from "./EmployeeIdentityCard";
+import { OwnerInfoCard } from "./OwnerInfoCard";
 import { AppearanceCard } from "./AppearanceCard";
 import { TablesCard } from "./TablesCard";
 import { DevicesCard } from "./DevicesCard";
@@ -37,24 +38,42 @@ export function SettingsPage() {
       <div className="relative">
         <Tabs defaultValue="identite">
           <TabsList className="w-full max-w-full justify-start overflow-x-auto rounded-full bg-muted p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:rounded-full">
-            <TabsTrigger value="identite" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
+            <TabsTrigger
+              value="identite"
+              className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
               Identité
             </TabsTrigger>
-            <TabsTrigger value="caisse" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
+            <TabsTrigger
+              value="caisse"
+              className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
               Caisse
             </TabsTrigger>
-            <TabsTrigger value="equipe" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
+            <TabsTrigger
+              value="equipe"
+              className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
               Équipe
             </TabsTrigger>
-            <TabsTrigger value="systeme" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
+            <TabsTrigger
+              value="systeme"
+              className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
               Système
             </TabsTrigger>
-            <TabsTrigger value="compte" className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none">
+            <TabsTrigger
+              value="compte"
+              className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
               Compte
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="identite" className="mt-3 grid items-start gap-4 md:grid-cols-2">
+            {/* Employé : la fiche du patron, en tête — c'est la première question qu'il
+                a quand il atterrit sur l'écran (à qui appartient cette caisse ?). */}
+            <OwnerInfoCard />
             <EmployeeIdentityCard />
             <ClusterCard />
             <AppearanceCard />
