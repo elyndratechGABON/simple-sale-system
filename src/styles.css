@@ -104,6 +104,10 @@ body {
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-muted: var(--gold-muted);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
@@ -142,6 +146,15 @@ body {
 
 :root {
   --radius: 0.75rem;
+  /*
+   * Or premium de la marque — réservé aux accents de la landing (offres payantes).
+   * Valeurs historiques des offres, désormais en tokens : la purge des hex (audit
+   * design §2) n'en laisse plus nulle part ailleurs.
+   */
+  --gold: oklch(0.79 0.11 88); /* #d4af37 */
+  --gold-ink: oklch(0.17 0.03 88); /* #231a02 — texte AVANT el oro */
+  --gold-deep: oklch(0.45 0.07 88); /* #6e5310 */
+  --gold-muted: oklch(0.63 0.08 88); /* #a8842a */
   /*
    * Jetons de mise en page responsive — une seule source de vérité pour le chrome.
    *

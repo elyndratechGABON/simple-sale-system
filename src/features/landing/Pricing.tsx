@@ -29,7 +29,7 @@ function PlanCard({ plan, index }: { plan: PlanInfo; index: number }) {
       className={[
         "relative flex flex-col items-center justify-center rounded-[2rem] border bg-card p-8 text-center transition-shadow",
         glowShadow,
-        premium ? "border-[#d4af37]/60 shadow-[0_28px_70px_-30px_rgba(212,175,55,0.45)]" : "",
+        premium ? "border-gold/60 shadow-[0_28px_70px_-30px_rgba(212,175,55,0.45)]" : "",
         featured ? "ring-2 ring-primary/60" : "",
       ].join(" ")}
       {...fadeUp}
@@ -41,14 +41,14 @@ function PlanCard({ plan, index }: { plan: PlanInfo; index: number }) {
         </span>
       )}
       {premium && (
-        <span className="absolute -top-3.5 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#d4af37] px-4 py-1 text-xs font-bold whitespace-nowrap text-[#231a02]">
+        <span className="absolute -top-3.5 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-gold px-4 py-1 text-xs font-bold whitespace-nowrap text-gold-ink">
           <Star className="h-3.5 w-3.5 fill-current" /> Premium
         </span>
       )}
       <h3
         className={
           premium
-            ? "text-lg font-bold tracking-tight text-[#6e5310]"
+            ? "text-lg font-bold tracking-tight text-gold-deep"
             : "text-lg font-bold tracking-tight"
         }
       >
@@ -58,7 +58,7 @@ function PlanCard({ plan, index }: { plan: PlanInfo; index: number }) {
         <span
           className={
             premium
-              ? "text-4xl font-bold tracking-tight text-[#a8842a] tabular-nums"
+              ? "text-4xl font-bold tracking-tight text-gold-muted tabular-nums"
               : "text-4xl font-bold tracking-tight tabular-nums"
           }
         >

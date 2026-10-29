@@ -66,7 +66,7 @@ export async function startScannerWithOverlay(): Promise<string | null> {
   const showError = (message: string) => {
     hint.style.display = "none";
     status.textContent = message;
-    status.style.color = "#fca5a5";
+    status.style.color = "oklch(0.75 0.12 25)"; /* --danger éclairci, cf. styles.css */
     status.style.fontSize = "13px";
     retryBtn.style.display = "";
   };
