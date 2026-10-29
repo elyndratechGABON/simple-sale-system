@@ -34,12 +34,38 @@ async function normalizeCatastrophicSsrResponse(
 
   const body = await response.clone().text();
   if (!isH3SwallowedErrorBody(body)) return response;
+  // L'abort arrive parfois APRÈS la construction de la réponse : request.signal est
+  // encore propre, mais l'erreur capturée (`unhandledrejection`) raconte l'abandon —
+  // cause `aborted` / ECONNRESET. Client parti : pas d'impression, pas de page d'erreur.
+  const captured = consumeLastCapturedError();
+  if (captured && isClientAbort(captured)) return response;
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
+  console.error(captured ?? new Error(`h3 swallowed SSR error: ${body}`));
   return new Response(renderErrorPage(), {
     status: 500,
     headers: { "content-type": "text/html; charset=utf-8" },
   });
+}
+
+/** Erreur d'abandon client : « aborted » posé par undici, ECONNRESET par Node. */
+export function isClientAbort(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 10; depth += 1) {
+    if (current instanceof Error) {
+      if (current.message === "aborted") return true;
+      const code = (current as Error & { code?: unknown }).code;
+      if (code === "ECONNRESET") return true;
+      current = (current as Error & { cause?: unknown }).cause;
+      continue;
+    }
+    // Cause intermédiaire non-Error ({ cause: ... }) : on continue à traverser.
+    if (typeof current === "object" && current !== null) {
+      current = (current as { cause?: unknown }).cause;
+      continue;
+    }
+    return false;
+  }
+  return false;
 }
 
 function isH3SwallowedErrorBody(body: string): boolean {
