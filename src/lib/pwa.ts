@@ -130,6 +130,28 @@ export async function applyUpdate(registration: ServiceWorkerRegistration): Prom
   window.location.reload();
 }
 
+/**
+ * État PERSISTÉ réel de cet appareil, hors opinion : "persisted" (le navigateur
+ * garantit le stockage), "prompt" (il peut évincer IndexedDB sous pression disque,
+ * `persist()` est disponible pour accepter) ou "unsupported" (API absente, ou
+ * aucune garantie demandable).
+ *
+ * Pourquoi une FONCTION pure et pas la logique inline du hook : la règle "onerait-on
+ * de demander ?" doit être lisible, et le bandeau réel qui découvre le vrai état -
+ * testé sans navigateur.
+ */
+export type PersistedStorageStatus = "persisted" | "prompt" | "unsupported";
+
+export async function persistedStorageStatus(): Promise<PersistedStorageStatus> {
+  if (typeof navigator === "undefined") return "unsupported";
+  if (!navigator.storage?.persist) return "unsupported";
+  try {
+    return (await navigator.storage.persisted()) ? "persisted" : "prompt";
+  } catch {
+    return "unsupported";
+  }
+}
+
 export async function requestPersistentStorage(): Promise<boolean> {
   if (typeof navigator === "undefined") return false;
   if (!navigator.storage?.persist) return false;

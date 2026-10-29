@@ -28,6 +28,7 @@ import { BottomNav } from "../components/Nav";
 import { LoadingScreen } from "../components/LoadingScreen";
 import { RenewalBanner } from "../components/RenewalBanner";
 import { MaintenanceBanner } from "../components/MaintenanceBanner";
+import { PersistenceBanner } from "@/components/PersistenceBanner";
 import { SuspendedScreen } from "../components/SuspendedScreen";
 import { GatekeeperAlerts } from "../components/GatekeeperAlerts";
 import { DeleteRequestDialog } from "../components/DeleteRequestDialog";
@@ -99,6 +100,7 @@ function AppLayout() {
         <Header />
         <MaintenanceBanner />
         <RenewalBanner />
+        <PersistenceBanner />
         {/* `.app-main` (styles.css) réserve exactement `--bottomnav-h` + marge système :
             la barre d'onglets est en `fixed` sous `lg` et ne pousse rien — sans cette
             réserve elle recouvrirait la fin de chaque page (le bouton « Valider la
