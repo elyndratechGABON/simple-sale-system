@@ -136,7 +136,15 @@ export function ReportsPage() {
 
           <CostAlerts sold={sold} global={global} onOpenCostBatch={openCostBatch} />
 
-          <ProfitTab products={products} items={items} focusedDay={focusedDay} view={view} />
+          <ProfitTab
+            products={products}
+            items={items}
+            focusedDay={focusedDay}
+            view={view}
+            revenue={stats?.revenue ?? 0}
+            salesCount={stats?.salesCount ?? 0}
+            averageBasket={stats?.averageBasket ?? 0}
+          />
         </div>
       )}
 
