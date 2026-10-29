@@ -3,11 +3,13 @@ import type { PosController } from "./usePos";
 import type { Sale } from "@/lib/db";
 
 interface TablesGridProps {
-  pos: Pick<PosController, "floorPlan" | "closeMut" | "hasTables">;
+  pos: Pick<PosController, "floorPlan" | "closeMut" | "hasTables" | "tableVisuals">;
   onTableTap: (label: string, sale: Sale | null) => void;
+  /** Encaissement direct depuis la carte — le même checkout que les factures en cours. */
+  onEncaisser: (sale: Sale) => void;
 }
 
-export function TablesGrid({ pos, onTableTap }: TablesGridProps) {
+export function TablesGrid({ pos, onTableTap, onEncaisser }: TablesGridProps) {
   if (!pos.hasTables) return null;
 
   return (
@@ -21,6 +23,14 @@ export function TablesGrid({ pos, onTableTap }: TablesGridProps) {
           disabled={false}
           onClick={() => onTableTap(label, table)}
           onLongPress={table ? () => pos.closeMut.mutate(table.id) : undefined}
+          info={table ? pos.tableVisuals.get(table.id) : undefined}
+          onEncaisser={
+            table
+              ? () => {
+                  onEncaisser(table);
+                }
+              : undefined
+          }
         />
       ))}
     </div>

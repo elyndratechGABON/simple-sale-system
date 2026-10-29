@@ -47,7 +47,11 @@ export function TablesView({ pos }: TablesViewProps) {
 
   return (
     <div className="h-full flex flex-col gap-6">
-      <TablesGrid pos={pos} onTableTap={(label, sale) => setTableMenu({ label, sale })} />
+      <TablesGrid
+        pos={pos}
+        onTableTap={(label, sale) => setTableMenu({ label, sale })}
+        onEncaisser={checkout}
+      />
 
       <InProgressBills pos={pos} onCheckout={checkout} />
 
