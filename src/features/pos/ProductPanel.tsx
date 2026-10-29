@@ -46,8 +46,10 @@ export function ProductPanel({
           </div>
         )}
       </div>
-      {/* Recherche : la grille se resserre pendant la frappe (même recette que Stocks). */}
-      <div className="relative mt-3">
+      {/* Recherche : la grille se resserre pendant la frappe (même recette que Stocks).
+          La barre est cappée (`max-w-md`) : à ne pas contraindre, elle poussait la grille
+          hors de sa colonne (minmax(0, 1fr) l'élargissait à l'infini). */}
+      <div className="relative mt-3 w-full max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={pos.search}
