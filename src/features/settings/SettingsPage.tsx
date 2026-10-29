@@ -13,8 +13,8 @@ import { TablesCard } from "./TablesCard";
 import { DevicesCard } from "./DevicesCard";
 import { InstallCard } from "./InstallCard";
 import { BackupCard } from "./BackupCard";
-import { PinCard } from "./PinCard";
 import { DeleteShopCard } from "./DeleteShopCard";
+import { PinCard } from "./PinCard";
 import { ResignCard } from "./ResignCard";
 import { SubscriptionCard } from "./SubscriptionCard";
 

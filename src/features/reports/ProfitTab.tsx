@@ -161,7 +161,7 @@ export function ProfitTab({
               </span>
             </span>
             <span>
-              CA prestations&nbsp;
+              CA service&nbsp;
               <span className="font-medium text-foreground tabular-nums">
                 {formatFCFA(serviceRevenue)}
               </span>
