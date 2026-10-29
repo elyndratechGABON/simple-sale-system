@@ -81,7 +81,8 @@ function AppLayout() {
     // premier cycle des lettres (dernière lettre : 13 × 0,06 s + 1,6 s ≈ 2,4 s ;
     // marge de respiration → 2,8 s). La bascule vers l'app attend aussi le profil,
     // mais ne peut JAMAIS partir avant l'animation complète.
-    const intro = new Promise((r) => setTimeout(r, 2_800));
+    // L'animation PREMIUM dure ~2,2 s (fond + fondu + barre) ; synchroniser l'attente.
+    const intro = new Promise((r) => setTimeout(r, 2_200));
     const profileReady = ensureShopProfile(getPreferences().workspaceName);
     void Promise.all([intro, profileReady]).then(async () => {
       // Petit instant de respiration après l'animation, avant la bascule vers l'app.

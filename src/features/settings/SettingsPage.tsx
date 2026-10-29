@@ -32,7 +32,7 @@ export function SettingsPage() {
   const initialTab: Onglet = ONGLETS.includes(q.tab as Onglet) ? (q.tab as Onglet) : "identite";
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-[var(--page-gutter)] py-4">
+    <div className="mx-auto w-full max-w-7xl px-4 overflow-x-hidden py-4">
       <div className="mb-5">
         <div className="flex items-center gap-2">
           <h1 className="text-page-title font-bold">Paramètres</h1>
