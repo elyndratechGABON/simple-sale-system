@@ -29,10 +29,12 @@ export interface ProductCreatedPayload {
 }
 export interface ProductUpdatedPayload {
   product_id: string;
+  // `photo` voyage elle aussi (image déjà réduite en webp ~256 px, cf. patches.ts) :
+  // c'est elle qui synchronise l'image entre propriétaire et employé, en `product.updated`.
   fields: Partial<
     Omit<
       import("@/lib/db").Product,
-      "id" | "stock" | "photo" | keyof import("@/lib/db").SyncFields | "last_op"
+      "id" | "stock" | keyof import("@/lib/db").SyncFields | "last_op"
     >
   >;
 }
