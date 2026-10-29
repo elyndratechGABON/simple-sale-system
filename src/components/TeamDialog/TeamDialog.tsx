@@ -8,7 +8,7 @@
 // endroit ; le détail d'un vendeur y vit une seule fois.
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, UserRound, Users } from "lucide-react";
+import { ArrowLeft, UserRound, Users, UserX } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -17,9 +17,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { formatFCFA } from "@/lib/format";
-import { approveDevice } from "@/lib/syncengine/pairing";
+import { approveDevice, revokeEmployeeDevice } from "@/lib/syncengine/pairing";
 import type { PairedDevice } from "@/lib/syncengine/types";
 import { usePendingCatalogueRequests } from "@/hooks/use-pending-catalogue-requests";
 import { EmployeeResults } from "./EmployeeResults";
@@ -154,6 +164,34 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
     toast.success("Écran approuvé — rôle employé.");
   }
 
+  // LICENCIEMENT (propriétaire) : la fiche du pair est effacée chez tout le monde via
+  // l'op `device.leave` signée par principal. Confirmation obligatoire : le geste est
+  // irreversible du point de vue du registre (l'employé devra repasser l'appairage).
+  const [licenciementOuvert, setLicenciementOuvert] = useState(false);
+  const [busyLicenciement, setBusyLicenciement] = useState(false);
+
+  const canLicencier =
+    !!selected &&
+    !!(identity?.role === "owner") &&
+    selected.id !== identity?.deviceId &&
+    selected.status === "paired";
+
+  async function licencier() {
+    if (!selected || !canLicencier) return;
+    setBusyLicenciement(true);
+    try {
+      await revokeEmployeeDevice(selected);
+      await qc.invalidateQueries({ queryKey: ["paired_devices"] });
+      toast.success(`${selected.device_name || "Employé"} retiré de la boutique.`);
+      setLicenciementOuvert(false);
+      close();
+    } catch {
+      toast.error("Licenciement non propagé — réessayez à la prochaine synchronisation.");
+    } finally {
+      setBusyLicenciement(false);
+    }
+  }
+
   function close() {
     setSelectedId(null);
     onOpenChange(false);
@@ -193,7 +231,54 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
         </DialogHeader>
 
         {selected ? (
-          <EmployeeResults device={selected} />
+          <>
+            <EmployeeResults device={selected} />
+            {canLicencier && (
+              <>
+                <div className="border-t pt-3">
+                  <Button
+                    variant="destructive"
+                    className="w-full sm:w-auto"
+                    onClick={() => setLicenciementOuvert(true)}
+                  >
+                    <UserX className="h-4 w-4 mr-2" /> Licencier
+                  </Button>
+                </div>
+                <AlertDialog open={licenciementOuvert} onOpenChange={setLicenciementOuvert}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Retirer {selected.device_name || "cet employé"} ?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription asChild>
+                        <div className="space-y-2">
+                          <p>
+                            Voulez-vous vraiment retirer cet employé de la boutique ? Sa caisse
+                            quittera le groupe : plus aucune synchronisation, et sa place
+                            d&apos;appareil est rendue au compte.
+                          </p>
+                          <p className="font-medium">
+                            L&apos;employé devra être réappairé pour revenir.
+                          </p>
+                        </div>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => void licencier()}
+                        disabled={busyLicenciement}
+                        aria-busy={busyLicenciement}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Retirer l&apos;employé
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+          </>
         ) : (
           <div className="space-y-3">
             {/* Sélecteur de période */}

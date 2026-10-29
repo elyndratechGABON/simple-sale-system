@@ -2,7 +2,7 @@ import { emitOp } from "../ops";
 import { ensureIdentity, isSharedGroup, resetDeviceIdentity } from "../identity";
 import { runOpsExchange } from "@/lib/sync";
 import { closeEmployeeHistory, getDB, getShopProfile, listProducts, purgeAllData } from "@/lib/db";
-import type { DeviceLeavePayload } from "../types";
+import type { DeviceLeavePayload, PairedDevice } from "../types";
 import { resetGatekeeper } from "@/lib/gatekeeper";
 import { releaseSeat } from "@/lib/gatekeeper/seat";
 import { savePreferences } from "@/lib/settings";
@@ -122,4 +122,39 @@ export async function leaveShop(): Promise<void> {
   await departFromGroup();
   await finalizeLeave();
   await resetDeviceIdentity(); // Nouvelle identité = l'orchestrateur voit un NOUVEL appareil
+}
+
+/**
+ * LICENCIEMENT par le propriétaire : l'op `device.leave` est signée PAR LE PRINCIPAL,
+ * visée `org_device_id` = l'employé. Le même miroir que la démission — op vérifiée par
+ * SA signature déjà épinglée chez tous les pairs — mais c'est le PATRON qui décide, pas
+ * l'écran partant. La fiche de l'écran disparaît du registre de tout le monde (y compris
+ * celle de l'employé lui-même) et sa place (quota orchestrateur) est rendue.
+ *
+ * Le stock de l'employé NE REVIENT PAS automatiquement : son inventaire lui appartient
+ * (il l'a complété à la main), et une restitution surprise casserait ses comptages.
+ */
+export async function revokeEmployeeDevice(
+  peer: { id: string; server_device_id?: string },
+): Promise<void> {
+  const identity = await ensureIdentity();
+  if (!isSharedGroup(identity.shopId)) return;
+  const db = getDB();
+  await db.transaction("rw", [db.sync_ops, db.settings], async () => {
+    await emitOp(db, identity, {
+      type: "device.leave",
+      entity_id: peer.id,
+      payload: {
+        org_device_id: peer.id,
+        // L'identifiant SERVEUR de l'employé : sans lui, la place (quota) ne se
+        // libère pas et « nombre limite d'appareils » frappe au prochain essai.
+        ...(peer.server_device_id ? { server_device_id: peer.server_device_id } : {}),
+      },
+    });
+  });
+  if (peer.server_device_id) await releaseSeat(peer.server_device_id);
+  // Pousser l'outbox immédiatement : le licenciement doit S'APPLIQUER avant que l'écran
+  // évincé ne pousse autre chose (ses ops suivantes seraient de toute façon refusées
+  // — sa fiche est effacée chez le principal — mais autant être propre dans le lot).
+  await runOpsExchange();
 }
