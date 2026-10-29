@@ -62,8 +62,19 @@ export const POSProductCard = memo(function POSProductCard({
       <button
         type="button"
         onClick={add}
+        // Alternative clavier à l'appui long (audit design §3) : Maj+Entrée ouvre la
+        // saisie manuelle de la quantité, pour qui n'a pas d'écran tactile.
+        onKeyDown={(e) => {
+          if (!onLongPress || out) return;
+          if (e.key === "Enter" && e.shiftKey) {
+            e.preventDefault();
+            onLongPress(product);
+          }
+        }}
         disabled={out}
         aria-label={`Ajouter ${product.name} au panier`}
+        title={`Ajouter au panier — Maj+Entrée : quantité manuelle${out ? " — rupture" : ""}`}
+        aria-keyshortcuts="Shift+Enter"
         className={cn(
           "flex flex-1 flex-col text-left",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
