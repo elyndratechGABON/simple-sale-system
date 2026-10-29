@@ -1,7 +1,9 @@
 import type { FC } from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CategorySelect } from "@/components/CategorySelect";
 import { PhotoAndPricing } from "./PhotoAndPricing";
 import { ProductTypeSelector } from "./ProductTypeSelector";
@@ -96,8 +98,31 @@ export const ProductFormFields: FC<{ form: ProductFormState }> = ({ form }) => {
         <CategorySelect value={category} onChange={setCategory} />
       </div>
 
-      {/* Variantes */}
-      {showVariants && <VariantEditor form={form} />}
+      {/* Variantes : repliées par défaut (Collapsible) — le formulaire tient dans le
+          viewport ; la section s'ouvre d'elle-même si on édite un produit qui EN A déjà. */}
+      {showVariants && (
+        <Collapsible
+          defaultOpen={form.variants.length > 0}
+          className="rounded-lg border border-border/50 px-3 py-2"
+        >
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 text-left">
+            <span className="flex items-center gap-2">
+              <span className="text-xs font-medium">Variantes</span>
+              {form.variants.length > 0 && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                  {form.variants.length}
+                </span>
+              )}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="pt-2">
+              <VariantEditor form={form} />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   );
 };
