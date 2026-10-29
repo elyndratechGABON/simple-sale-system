@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Utensils } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Utensils } from "lucide-react";
 import { FreeLineDialog } from "@/components/pos";
 import { PinDialog } from "@/components/PinDialog";
 import { CloseDayDialog } from "@/components/CloseDayDialog";
@@ -28,6 +29,9 @@ export function PosPage() {
   const { features } = usePreferences();
   const showTables = features?.tables ?? false;
   const { isOwner } = useAccess();
+  // Colonne Catégories (desktop) repliable : plus d'espace à la grille quand le
+  // vendeur n'en a plus besoin. Défaut : ouverte.
+  const [showCategories, setShowCategories] = useState(true);
 
   return (
     <div
@@ -70,14 +74,43 @@ export function PosPage() {
             </button>
           </div>
         )}
+        {/* Repli de la colonne Catégories (desktop uniquement : sous xl elle n'existe pas). */}
+        <button
+          type="button"
+          onClick={() => setShowCategories((v) => !v)}
+          aria-pressed={!showCategories}
+          aria-label={
+            showCategories
+              ? "Masquer la colonne des catégories"
+              : "Afficher la colonne des catégories"
+          }
+          title={showCategories ? "Masquer les catégories (desktop)" : "Afficher les catégories"}
+          className="hidden xl:flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+        >
+          {showCategories ? (
+            <PanelLeftClose className="h-4 w-4" />
+          ) : (
+            <PanelLeftOpen className="h-4 w-4" />
+          )}
+        </button>
       </header>
 
       {pos.mode === "tables" ? (
         <TablesView pos={pos} />
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]">
-            <CategoriesColumn pos={pos} />
+          <div
+            className={cn(
+              "grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] xl:transition-[grid-template-columns] xl:duration-300",
+              // Desktop : avec/sans colonne catégories. La transition anime le
+              // rétrécissement de la colonne (bas-'xl' templates), faute de quoi
+              // un lever se produit instantanément.
+              showCategories
+                ? "xl:grid-cols-[minmax(200px,20%)_minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(210px,18%)_minmax(0,1fr)_minmax(360px,26%)]"
+                : "xl:grid-cols-[minmax(0,1fr)_minmax(320px,28%)] 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,26%)]",
+            )}
+          >
+            {showCategories && <CategoriesColumn pos={pos} />}
             <ProductPanel pos={pos} />
             <CartPanel pos={pos} />
           </div>
