@@ -1,5 +1,8 @@
 import { alive, getDB, touch, uid } from "./internal";
+import { emitOp } from "../syncengine/ops";
+import { getIdentity } from "../syncengine/identity";
 import type { Sale } from "./types/sales";
+import type { TableOpenedPayload } from "../syncengine/types";
 
 // ---------- Tables (additions ouvertes) ----------
 //
@@ -40,7 +43,19 @@ export async function openTable(label: string, clientName?: string): Promise<Sal
     ...(clientName ? { client_name: clientName } : {}),
     ...touch(),
   };
-  await getDB().sales.put(sale);
+  const db = getDB();
+  // Produit + op dans UNE transaction : l'addition est là, l'annonce EST PARTIE — ou
+  // ni l'un ni l'autre. Pas de fiche "ouvert" sans son op P2P `table.opened` chez les
+  // pairs (deux serveurs viseraient la même table sans le savoir).
+  await db.transaction("rw", db.sales, db.sync_ops, db.settings, async () => {
+    await db.sales.put(sale);
+    const payload: TableOpenedPayload = { label, sale };
+    await emitOp(db, getIdentity(), {
+      type: "table.opened",
+      entity_id: sale.id,
+      payload,
+    });
+  });
   return sale;
 }
 

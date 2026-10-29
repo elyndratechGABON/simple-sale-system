@@ -141,3 +141,13 @@ export interface CatalogueSnapshotPayload {
 export interface CatalogueRequestPayload {
   requester_id: string;
 }
+
+/** Une table vient d'être OUVERTE par un pair (mission sync tables — Étape 2) : le
+ *  récepteur crée localement la `Sale` au statut "open" et le plan de salle affiche
+ *  « occupée » — deux serveurs ne peuvent plus viser la même addition sans le savoir. */
+export interface TableOpenedPayload {
+  /** Libellé de table pour le toast de réception (utile à l'écran, pas au moteur). */
+  label: string;
+  /** La fiche de l'addition ouverte, telle que l'émetteur l'a écrite. */
+  sale: import("@/lib/db").Sale;
+}

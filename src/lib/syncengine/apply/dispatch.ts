@@ -12,6 +12,7 @@ import {
 } from "./products";
 import { applySaleCancelled, applySaleCreated } from "./sales";
 import { applyStockReleaseOp, applyStockReserveOp } from "../reservations";
+import { applyTableOpened } from "./tables-p2p";
 
 export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
   switch (op.type) {
@@ -149,6 +150,14 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       // Les catégories personnalisées vivent dans les préférences (localStorage, par
       // appareil). Convergence différée à un futur store partagé : l'op est côtée
       // acquittée, l'émetteur ne renverra pas la même création indéfiniment.
+      break;
+    case "table.opened":
+      // Un serveur vient d'OUVRIR une table : le pair la voit immédiatement « occupée »
+      // dans son plan de salle, un second serveur ne peut plus viser la même addition
+      // sans le savoir. L'op porte le libellé de table — pas de store partagé à écrire :
+      // la fiche ouverte vit chez l'émetteur, le récepteur ne fait que marquer un
+      // réservation-ish dans son plan local (cf. applyTableOpened).
+      await applyTableOpened(db, op);
       break;
   }
 }

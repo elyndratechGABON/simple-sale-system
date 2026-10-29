@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import { getSaleItems, type Sale } from "@/lib/db";
+import { Button } from "@/components/ui/button";
 import { TablesGrid } from "./TablesGrid";
 import { InProgressBills } from "./InProgressBills";
 import { TableMenuDialog } from "./TableMenuDialog";
@@ -47,6 +49,13 @@ export function TablesView({ pos }: TablesViewProps) {
 
   return (
     <div className="h-full flex flex-col gap-6">
+      {/* « + Nouvelle table » : un libellé de PLUS dans le plan de salle (préférences) —
+          le geste du patron qui ajoute un poste, directement sur l'écran Tables (§2). */}
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={() => pos.addTable()}>
+          <Plus className="h-3.5 w-3.5 mr-1.5" /> Nouvelle table
+        </Button>
+      </div>
       <TablesGrid
         pos={pos}
         onTableTap={(label, sale) => setTableMenu({ label, sale })}

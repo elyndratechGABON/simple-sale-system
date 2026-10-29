@@ -20,6 +20,7 @@ export type OpType =
   | "stock.conflict"
   | "stock.reserve"
   | "stock.release"
+  | "table.opened"
   | "webrtc.offer"
   | "webrtc.answer";
 
