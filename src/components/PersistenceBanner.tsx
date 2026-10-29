@@ -1,5 +1,6 @@
-import { Database } from "lucide-react";
+import { Database, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { usePersistentStorage } from "@/hooks/use-persistent-storage";
 
@@ -38,5 +39,50 @@ export function PersistenceBanner() {
         Autoriser
       </Button>
     </div>
+  );
+}
+
+/**
+ * Badge « Stockage sécurisé » : affiché quand `navigator.storage.persisted()` répond
+ * vrai — le navigateur GARANTIT la conservation des données de cet appareil. Réactif
+ * (le statut se lit au hook) : après acceptation, aucune résuelle ne grise le badge
+ * tant que l'app n'est pas rechargée.
+ */
+export function PersistenceBadge() {
+  const { status, grant } = usePersistentStorage();
+
+  if (status === "loading") {
+    return (
+      <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+        <Database className="h-3 w-3" /> Stockage…
+      </Badge>
+    );
+  }
+  if (status === "persisted") {
+    return (
+      <Badge className="gap-1.5">
+        <ShieldCheck className="h-3 w-3" /> Stockage sécurisé
+      </Badge>
+    );
+  }
+  if (status === "unsupported") {
+    return (
+      <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+        <Database className="h-3 w-3" /> Stockage non persistant (navigateur)
+      </Badge>
+    );
+  }
+  // prompt : propose l'activation directement depuis le badge.
+  return (
+    <Badge variant="outline" className="gap-1.5">
+      <Database className="h-3 w-3" /> Stockage non sécurisé
+      <button
+        type="button"
+        className="font-semibold underline underline-offset-2"
+        onClick={() => void grant()}
+      >
+        Sécuriser
+      </button>
+    </Badge>
   );
 }

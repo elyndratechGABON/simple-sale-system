@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Save, Upload } from "lucide-react";
+import { AlertTriangle, FolderSync, HardDriveDownload, Save, Upload } from "lucide-react";
 import {
   backupFilename,
   buildBackupBlob,
@@ -8,10 +8,13 @@ import {
   restoreBackup,
   type BackupSummary,
 } from "@/lib/exports/json";
+import { configureAutoSave, daysSinceBackup, recordBackup, saveBackupNow } from "@/lib/backup";
+import { canPickDirectory, getDocumentsDirectoryName } from "@/lib/files";
 import type { DatabaseSnapshot } from "@/lib/db";
 import { describeSaveResult, saveDocument } from "@/lib/files";
 import { RestoreShopCard } from "@/components/RestoreShopCard";
 import { Button } from "@/components/ui/button";
+import { PersistenceBadge } from "@/components/PersistenceBanner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +36,40 @@ export function BackupCard() {
     snapshot: DatabaseSnapshot;
     summary: BackupSummary;
   } | null>(null);
+  // Dossier configuré pour la sauvegarde automatique (desktop), nom affiché.
+  const [dossier, setDossier] = useState<string | null>(null);
+  const [derniereJours, setDerniereJours] = useState<number | null>(null);
+
+  // Nom du dossier et date de la dernière sauvegarde : lus HORS du rendu (SSR).
+  useEffect(() => {
+    void getDocumentsDirectoryName().then(setDossier);
+    const d = daysSinceBackup();
+    setDerniereJours(Number.isFinite(d) ? d : null);
+  }, []);
+
+  function majEtat() {
+    const d = daysSinceBackup();
+    setDerniereJours(Number.isFinite(d) ? d : null);
+  }
+
+  async function configurerAuto() {
+    const name = await configureAutoSave();
+    if (name) {
+      setDossier(name);
+      majEtat();
+      toast.success(`Sauvegarde automatique configurée dans « ${name} ».`);
+    }
+  }
+
+  const autoSaveMut = useMutation({
+    mutationFn: () => saveBackupNow(),
+    onSuccess: (saved) => {
+      if (!saved) return;
+      toast.success(describeSaveResult(saved.result, saved.filename));
+      majEtat();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const saveMut = useMutation({
     mutationFn: async () => {
@@ -40,7 +77,12 @@ export function BackupCard() {
       const filename = backupFilename();
       return { result: await saveDocument(blob, filename), filename };
     },
-    onSuccess: ({ result, filename }) => toast.success(describeSaveResult(result, filename)),
+    // Le CTA manuel date aussi la sauvegarde : export et auto partagent la même horloge.
+    onSuccess: ({ result, filename }) => {
+      recordBackup();
+      majEtat();
+      toast.success(describeSaveResult(result, filename));
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -72,7 +114,17 @@ export function BackupCard() {
         <h2 className="text-title flex items-center gap-2">
           <Save className="h-5 w-5" /> Sauvegarde et restauration
         </h2>
+        <p className="text-small text-muted-foreground">
+          {derniereJours === null
+            ? "Aucune sauvegarde sur cet appareil."
+            : `Dernière sauvegarde : il y a ${derniereJours} jour${derniereJours > 1 ? "s" : ""}.`}
+        </p>
       </header>
+
+      {/* État du STOCKAGE (badge réactif, cf. mission sauvegarde auto — Étape 1). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <PersistenceBadge />
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <Button
@@ -82,6 +134,21 @@ export function BackupCard() {
         >
           <Save className="h-4 w-4 mr-2" /> Sauvegarder
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => autoSaveMut.mutate()}
+          disabled={autoSaveMut.isPending}
+        >
+          <HardDriveDownload className="h-4 w-4 mr-2" /> Sauvegarder maintenant
+        </Button>
+        {/* File System Access est desktop-only : sur téléphone le bouton se cache,
+            le canal automatique (Capacitor/partage/téléchargement) prend le relais. */}
+        {canPickDirectory() && (
+          <Button variant="outline" onClick={() => void configurerAuto()}>
+            <FolderSync className="h-4 w-4 mr-2" />
+            {dossier ? `Dossier : ${dossier}` : "Configurer la sauvegarde automatique"}
+          </Button>
+        )}
         <Button variant="outline" onClick={() => fileRef.current?.click()}>
           <Upload className="h-4 w-4 mr-2" /> Restaurer un fichier
         </Button>
