@@ -1,4 +1,4 @@
-import { ImagePlus, Trash2 } from "lucide-react";
+import { Camera, ImagePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,13 +6,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { ProductFormState } from "./useProductForm";
 
-/** Bloc « Photo » — et, par héritage de sa structure d'origine, le prix et les seuils de
- *  stock qu'il contient. Le div imbriqué est volontairement conservé tel quel. */
+/**
+ * Photo, prix et gestion du stock, resserrés : le formulaire doit tenir sur un écran
+ * mobile sans scroller. Avant : une carte « Gestion du stock » empilée sous les prix ;
+ * après : le toggle illimité sur la ligne du titre, stock et seuil côte à côte.
+ */
 export function PhotoAndPricing({ form }: { form: ProductFormState }) {
   const {
     photo,
     setPhoto,
     photoInputRef,
+    cameraInputRef,
     photoBusy,
     handlePhoto,
     price,
@@ -29,22 +33,29 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
     setMinStock,
   } = form;
 
+  /** Deux inputs cachés : `capture=environment` déclenche l'APN, l'autre la galerie. */
+  function pickCamera() {
+    cameraInputRef.current?.click();
+  }
+  function pickGallery() {
+    photoInputRef.current?.click();
+  }
+
   return (
-    <div className="space-y-3">
-      {/* Photo section */}
+    <div className="space-y-2.5">
+      {/* Photo : deux gestes explicites. Un seul bouton ouvrait toujours la galerie —
+          sur téléphone, la prise de photo directe est le chemin le plus court. */}
       <div>
-        <Label htmlFor="photo" className="text-sm">
-          Photo du produit
-        </Label>
-        <div className="mt-1 flex items-center gap-2.5">
+        <Label className="text-xs font-medium">Photo du produit</Label>
+        <div className="mt-1 flex items-center gap-2">
           {photo ? (
-            <div className="relative h-12 w-12 shrink-0 rounded-lg border bg-muted/40">
+            <div className="relative h-10 w-10 shrink-0 rounded-lg border bg-muted/40">
               <img
                 src={photo}
                 alt=""
-                className="h-12 w-12 rounded-lg object-cover"
-                width={48}
-                height={48}
+                className="h-10 w-10 rounded-lg object-cover"
+                width={40}
+                height={40}
               />
               <Button
                 type="button"
@@ -57,24 +68,32 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
               </Button>
             </div>
           ) : (
-            <label
-              htmlFor="photo"
-              className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 transition-colors hover:border-primary/50 hover:bg-primary/5"
-            >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30">
               <ImagePlus className="h-5 w-5 text-muted-foreground" />
-            </label>
+            </span>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <Button
               type="button"
               variant="outline"
               size="sm"
               disabled={photoBusy}
-              onClick={() => photoInputRef.current?.click()}
-              className="h-9 text-xs"
+              onClick={pickCamera}
+              className="h-8 text-xs"
+            >
+              <Camera className="h-3.5 w-3.5 mr-1.5" />
+              Prendre une photo
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={photoBusy}
+              onClick={pickGallery}
+              className="h-8 text-xs"
             >
               <ImagePlus className="h-3.5 w-3.5 mr-1.5" />
-              {photoBusy ? "…" : photo ? "Changer" : "Ajouter une photo"}
+              Galerie
             </Button>
             {photo && (
               <Button
@@ -82,7 +101,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setPhoto(undefined)}
-                className="h-9 text-xs"
+                className="h-8 text-xs"
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1.5 text-destructive" />
                 Retirer
@@ -91,18 +110,24 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
           </div>
         </div>
         <input
-          ref={photoInputRef}
-          id="photo"
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           className="hidden"
           onChange={handlePhoto}
         />
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePhoto}
+        />
       </div>
 
-      {/* Prix et coût d'achat */}
-      <div className={cn("space-y-1.5", productType === "product" && "grid grid-cols-2 gap-2")}>
+      {/* Prix et coût sur la même ligne (produit) : une ligne pleine en moins. */}
+      <div className={cn("grid gap-2", productType === "product" ? "grid-cols-2" : "grid-cols-1")}>
         <div>
           <Label htmlFor="price" className="text-xs font-medium">
             Prix de vente *
@@ -113,7 +138,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
             value={price}
             onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
             placeholder="Ex : 300"
-            className="mt-0.5 h-9 text-sm"
+            className="mt-0.5 h-10 text-sm"
           />
         </div>
         {productType === "product" && (
@@ -127,75 +152,64 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
               value={cost}
               onChange={(e) => setCost(e.target.value.replace(/\D/g, ""))}
               placeholder="Optionnel"
-              className="mt-0.5 h-9 text-sm"
+              className="mt-0.5 h-10 text-sm"
             />
           </div>
         )}
       </div>
-
       {productType === "product" && (
         <p className="text-[10px] text-muted-foreground">
           Optionnel — sans cette valeur, le bénéfice sera surestimé.
         </p>
       )}
 
-      {/* Section Gestion du stock pour les produits */}
-      {productType === "product" && (
-        <div className="rounded-lg border border-border bg-muted/30 p-2 space-y-1.5">
+      {/* Stock (produit sans variante) : toggle à droite du titre, stock et seuil
+          côtoyés sur une grille 2 colonnes — l'encart à bord est supprimé. */}
+      {productType === "product" && variants.length === 0 && (
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              Gestion du stock
-            </Label>
-            {variants.length > 0 && (
-              <span className="text-[10px] text-muted-foreground">Géré par variante</span>
-            )}
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="unlimited"
+                checked={unlimited}
+                onCheckedChange={(v) => setUnlimited(Boolean(v))}
+              />
+              <Label htmlFor="unlimited" className="cursor-pointer text-xs font-medium">
+                Stock illimité
+              </Label>
+            </div>
           </div>
-
-          {variants.length === 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label htmlFor="stock" className="text-xs">
+                Stock initial
+              </Label>
+              <Input
+                id="stock"
+                inputMode="numeric"
+                value={stock}
+                onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
+                placeholder="Ex : 50"
+                disabled={unlimited}
+                className="mt-0.5 h-10 text-sm"
+              />
+            </div>
+            {!unlimited && (
               <div>
-                <Label htmlFor="stock" className="text-xs">
-                  Stock initial
+                <Label htmlFor="min-stock" className="text-xs">
+                  Seuil d'alerte (5)
                 </Label>
                 <Input
-                  id="stock"
+                  id="min-stock"
                   inputMode="numeric"
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Ex : 50"
-                  disabled={unlimited}
-                  className="mt-0.5 h-8 text-xs"
+                  value={minStock}
+                  onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
+                  placeholder="5"
+                  className="mt-0.5 h-10 text-sm"
                 />
               </div>
-
-              <div className="flex items-center gap-2 pt-1 sm:pt-4">
-                <Checkbox
-                  id="unlimited"
-                  checked={unlimited}
-                  onCheckedChange={(v) => setUnlimited(Boolean(v))}
-                />
-                <Label htmlFor="unlimited" className="cursor-pointer text-xs font-medium">
-                  Stock illimité
-                </Label>
-              </div>
-
-              {!unlimited && (
-                <div className="sm:col-span-2">
-                  <Label htmlFor="min-stock" className="text-xs">
-                    Seuil d'alerte (par défaut : 5)
-                  </Label>
-                  <Input
-                    id="min-stock"
-                    inputMode="numeric"
-                    value={minStock}
-                    onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
-                    placeholder="5"
-                    className="mt-0.5 h-8 text-xs"
-                  />
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

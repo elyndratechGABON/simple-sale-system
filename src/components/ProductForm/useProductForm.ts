@@ -67,6 +67,9 @@ export function useProductForm({
   // Photo libre du produit ou service : dataURL webp réduit, purement local.
   const [photo, setPhoto] = useState<string | undefined>(editing?.photo);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  // Gammes distinctes : l'appareil photo du téléphone doit se déclencher (capture) SANS
+  // passer par la galerie — deux inputs, moment un bouton par geste.
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
 
   // Variantes (vêtements) : liste éditable, câblée à `productVariant`.
@@ -137,6 +140,7 @@ export function useProductForm({
     } finally {
       setPhotoBusy(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
     }
   }
 
@@ -217,6 +221,7 @@ export function useProductForm({
     photo,
     setPhoto,
     photoInputRef,
+    cameraInputRef,
     photoBusy,
     variants,
     showVariants,

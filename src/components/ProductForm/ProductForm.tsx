@@ -24,31 +24,35 @@ export function ProductForm({
   const form = useProductForm({ editing, onClose, defaultCategory, defaultType });
 
   return (
-    <DialogContent className="max-w-2xl max-h-[95vh] sm:max-h-[92vh] overflow-y-auto px-4 py-4 sm:px-6">
-      <DialogHeader className="pb-4">
+    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto px-4 py-0 sm:px-0">
+      {/* Titre et footer STICKY : sur un écran petit, le formulaire peut éventuellement
+          scroller — le vendeur garde alors le titre ET le CTA en portée de regard. */}
+      <DialogHeader className="sticky top-0 z-10 rounded-t-xl bg-background px-4 py-3 sm:px-6">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Package className="h-5 w-5 text-primary" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Package className="h-4 w-4 text-primary" />
           </div>
-          <div>
-            <DialogTitle className="text-lg font-semibold text-foreground">
+          <div className="min-w-0">
+            <DialogTitle className="text-base font-semibold text-foreground">
               {editing ? "Modifier le produit" : "Nouveau produit"}
             </DialogTitle>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground">
               Renseignez les informations essentielles.
             </p>
           </div>
         </div>
       </DialogHeader>
-      <ProductFormFields form={form} />
-      <DialogFooter className="pt-4 border-t">
-        <Button variant="ghost" onClick={onClose} className="w-full sm:w-auto">
+      <div className="px-4 sm:px-6">
+        <ProductFormFields form={form} />
+      </div>
+      <DialogFooter className="sticky bottom-0 z-10 mt-0 border-t bg-background px-4 py-3 sm:px-6">
+        <Button variant="ghost" onClick={onClose} className="w-full sm:w-auto h-10">
           Annuler
         </Button>
         <Button
           onClick={() => form.saveMut.mutate()}
           disabled={form.saveMut.isPending}
-          className="w-full sm:w-auto h-11 rounded-lg"
+          className="w-full sm:w-auto h-10 rounded-lg"
         >
           {form.saveMut.isPending
             ? "Enregistrement…"

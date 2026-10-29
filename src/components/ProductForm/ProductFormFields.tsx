@@ -55,7 +55,7 @@ export const ProductFormFields: FC<{ form: ProductFormState }> = ({ form }) => {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Ex : Regab 65 cl"
-          className="h-9 text-sm"
+          className="h-10 text-sm"
         />
       </div>
 
