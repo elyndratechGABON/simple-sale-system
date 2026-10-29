@@ -165,7 +165,8 @@ export function BackupCard() {
       </div>
       <p className="text-small text-muted-foreground">
         Les préférences (nom, couleur, dossier, PIN) ne sont pas incluses : elles sont propres à cet
-        appareil.
+        appareil. Le fichier peut être envoyé sur WhatsApp ou gardé dans le téléphone de votre choix
+        — c'est lui qui restaure la boutique sur un appareil neuf.
       </p>
 
       {/* La RESTAURATION SERVEUR : la copie d'archive de l'orchestrateur. C'est le

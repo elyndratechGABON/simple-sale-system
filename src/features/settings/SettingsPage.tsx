@@ -63,6 +63,12 @@ export function SettingsPage() {
               Système
             </TabsTrigger>
             <TabsTrigger
+              value="donnees"
+              className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
+            >
+              Données
+            </TabsTrigger>
+            <TabsTrigger
               value="compte"
               className="shrink-0 whitespace-nowrap rounded-full min-h-11 shadow-none data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-none"
             >
@@ -90,8 +96,13 @@ export function SettingsPage() {
 
           <TabsContent value="systeme" className="mt-3 grid items-start gap-4 md:grid-cols-2">
             <PinCard />
-            <BackupCard />
             <InstallCard />
+          </TabsContent>
+
+          {/* Onglet Données : la sauvegarde-miroir du téléphone (export/import) et la
+              restauration serveur. Le rappel « 7 jours » pointe ICI. */}
+          <TabsContent value="donnees" className="mt-3 grid items-start gap-4 md:grid-cols-2">
+            <BackupCard />
           </TabsContent>
 
           <TabsContent value="compte" className="mt-3 grid items-start gap-4 md:grid-cols-2">
