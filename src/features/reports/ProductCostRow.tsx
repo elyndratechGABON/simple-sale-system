@@ -70,7 +70,7 @@ export function ProductCostRow({
     <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 border-b py-2 text-sm last:border-b-0 items-center">
       <span className="min-w-0 truncate font-medium">{product.name}</span>
       <span className="text-right text-muted-foreground tabular-nums whitespace-nowrap">
-        <span className="bg-gray-200 px-2 rounded text-xs font-medium">{quantitySold}</span>
+        <span className="bg-muted px-2 rounded text-xs font-medium">{quantitySold}</span>
       </span>
       <span className="text-right text-muted-foreground tabular-nums whitespace-nowrap">
         {formatFCFA(product.price)}

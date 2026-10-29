@@ -72,7 +72,7 @@ export function CartPanel({ pos }: { pos: PosController }) {
                     onClick={startRename}
                     aria-label={`Renommer la table ${pos.activeTable.table}`}
                     title="Renommer la table"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>

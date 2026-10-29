@@ -56,7 +56,7 @@ export function ProductPanel({
           onChange={(e) => pos.setSearch(e.target.value)}
           placeholder="Rechercher un article…"
           aria-label="Rechercher un article"
-          className="h-11 rounded-xl pl-9 pr-10 bg-muted/50 border-none focus:border-none focus-visible:ring-primary/30"
+          className="h-11 rounded-xl pl-9 pr-10 bg-muted/50 focus:ring-2 focus:ring-primary"
         />
       </div>
       {/* Catégories : grille de cartes sous 1280 px. Au-dessus, elles vivent dans la

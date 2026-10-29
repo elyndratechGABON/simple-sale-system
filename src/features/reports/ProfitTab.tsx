@@ -118,7 +118,9 @@ export function ProfitTab({
           <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Marge produits</span>
-              <span className="tabular-nums font-medium bg-gray-200 px-2 rounded">{formatFCFA(productMargin)}</span>
+              <span className="tabular-nums font-medium bg-muted px-2 rounded">
+                {formatFCFA(productMargin)}
+              </span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">CA des prestations</span>
