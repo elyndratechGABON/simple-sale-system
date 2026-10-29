@@ -10,9 +10,11 @@ import {
   markCatalogueRequestSnapshotSent,
 } from "../../db";
 import { emitShareOps, markSharePublished, pairedEmployees } from "../sharing";
+import { announceDevice } from "../pairing";
 import { releaseSeat } from "@/lib/gatekeeper/seat";
 import type {
   CatalogueRequestPayload,
+  DeviceAnnouncePayload,
   DeviceApprovePayload,
   DeviceLeavePayload,
   SyncOp,
@@ -164,6 +166,24 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     const cibles: string[] = [];
 
     if (identity.role !== "employee") {
+      // Le propriétaire re-annonce sa présence AVEC le code du nouveau venu : le pair
+      // pour qui notre première annonce est arrivée trop tôt (avant qu'il rejoigne le
+      // groupe) ne peut pas vérifier nos ops — son groupe était déjà peuplé à la
+      // réception, donc la clé publique n'a jamais été épinglée chez lui. Le code de
+      // paire qu'il VIENT de ressaisir est la preuve qu'il détient (fenêtre de 12 h) :
+      // dans une contre-annonce, il fait épingler notre clé chez lui, et accepter
+      // ensuite TOUTES nos ops, `product.created` en tête.
+      const codes = new Set<string>();
+      for (const op of foreign) {
+        if (op.type !== "device.announce" || knownBefore.has(op.entity_id)) continue;
+        const code = (op.payload as DeviceAnnouncePayload | undefined)?.pair_code;
+        if (code) codes.add(code);
+      }
+      for (const code of codes) {
+        await announceDevice(code, { force: true });
+      }
+      if (codes.size > 0) await pousserOutbox(client, identity.shopId);
+
       for (const demande of fresh) {
         const id = (demande.payload as CatalogueRequestPayload | undefined)?.requester_id;
         if (id && !cibles.includes(id)) cibles.push(id);

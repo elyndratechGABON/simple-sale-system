@@ -2,6 +2,7 @@ import { getDB, getShopProfile } from "../../db";
 import { emitOp } from "../ops";
 import { ensureIdentity, getDeviceKeys, isSharedGroup } from "../identity";
 import { PAIRING_KEYS, ANNOUNCE_FORMAT } from "../types";
+import { rememberPairCodeProof } from "./code";
 import type { DeviceRole, PairedDevice } from "../types";
 
 /** Les deux champs de fiche que le patriarche voit dans « Activité du personnel ». */
@@ -24,7 +25,10 @@ function profileFingerprint(name: string, phone: string): string {
  * boutique (scan du QR, adoption du groupe du relais) réautorise la présentation —
  * l'écran annoncé ailleurs ne doit pas rester muet dans son nouveau monde.
  */
-export async function announceDevice(pairCode?: string): Promise<void> {
+export async function announceDevice(
+  pairCode?: string,
+  opts: { force?: boolean } = {},
+): Promise<void> {
   const identity = await ensureIdentity();
   if (!isSharedGroup(identity.shopId)) return;
   const db = getDB();
@@ -47,7 +51,7 @@ export async function announceDevice(pairCode?: string): Promise<void> {
   // l'autre — pour toujours.
   const formatChanged =
     (await db.settings.get(PAIRING_KEYS.announcedFormat))?.value !== ANNOUNCE_FORMAT;
-  if (alreadyAnnounced && !formatChanged) {
+  if (alreadyAnnounced && !formatChanged && !opts.force) {
     // Un code est à USAGE UNIQUE : une seconde présentation avec le même code
     // n'apporterait rien (et le patron l'aurait déjà vu).
     if (pairCode) return;
@@ -75,6 +79,11 @@ export async function announceDevice(pairCode?: string): Promise<void> {
     });
     await db.settings.put({ key: PAIRING_KEYS.announcedFormat, value: ANNOUNCE_FORMAT });
   });
+  // L'ÉMOUVENUIL qui s'est présenté AVEC un code retient ce code comme preuve
+  // d'invitation (fenêtre 12 h) : c'est elle qui lui fera accepter la contre-annonce
+  // du propriétaire (cf. `exchangeOps`) — et donc TOUTES ses ops suivantes,
+  // `product.created` comprise. Le propriétaire a déjà le code (il l'a généré).
+  if (pairCode) await rememberPairCodeProof(pairCode);
 }
 
 /**

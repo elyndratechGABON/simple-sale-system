@@ -52,6 +52,20 @@ async function rememberRecentCode(code: string): Promise<void> {
 }
 
 /**
+ * Mémorise un code de paire comme PREUVE d'invitation, sans le poser comme code actif.
+ *
+ * Utilisé par l'EMPLOYÉ qui vient de le ressaisir (`announceDevice(code)`) : le code ne
+ * sera jamais affiché ni r'uttilisable chez lui, mais il reste la preuve que SON
+ * principal l'a invité dans la fenêtre (12 h). C'est elle qui fait accepter la
+ * contre-annonce du propriétaire (cf. `exchangeOps`) — donc pincer SA clé publique, et
+ * accepter ensuite TOUTES ses ops, `product.created` comprise.
+ */
+export async function rememberPairCodeProof(code: string): Promise<void> {
+  if (!code) return;
+  await rememberRecentCode(code);
+}
+
+/**
  * Ce code est-il une preuve d'invitation encore valable ?
  *
  * - le code ACTIF, tant qu'il n'a pas expiré (10 min) ;
