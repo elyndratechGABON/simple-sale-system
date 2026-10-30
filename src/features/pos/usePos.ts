@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { nextTableLabel, type Target } from "@/lib/pos/types";
 import type { Product } from "@/lib/db";
-import type { ParseResult } from "@/lib/voice/parser";
 import { savePreferences } from "@/lib/settings";
 import { useCart } from "@/lib/pos/use-cart";
 import { useSaleMutations } from "@/lib/pos/use-sale-mutations";
@@ -128,37 +127,6 @@ export function usePos() {
     cart.addOne(p);
   }
 
-  function applyVoice(result: ParseResult) {
-    if (result.command === "clear-all") {
-      resetCart();
-      toast.success("Panier vidé");
-      return;
-    }
-    if (result.command === "clear-last") {
-      const last = cart.lines[cart.lines.length - 1];
-      if (last) {
-        cart.removeLineByKey(last);
-        toast.success(`${last.name} retiré`);
-      } else {
-        toast.info("Le panier est déjà vide");
-      }
-      return;
-    }
-    const added: string[] = [];
-    for (const m of result.matches) {
-      cart.addQty(m.product, m.qty);
-      added.push(
-        `${Number.isInteger(m.qty) ? m.qty : m.qty.toLocaleString("fr-FR")} × ${m.product.name}`,
-      );
-    }
-    if (added.length > 0) toast.success(`Ajouté : ${added.join(", ")}`);
-    if (result.unknown.length > 0) {
-      toast.warning(`Non reconnu : ${result.unknown.join(", ")}`, { duration: 7000 });
-    } else if (added.length === 0 && !result.command) {
-      toast.info("Rien à ajouter — reformulez la commande");
-    }
-  }
-
   return {
     ...ui,
     ...data,
@@ -171,6 +139,5 @@ export function usePos() {
     selectTarget,
     resetCart,
     onProductClick,
-    applyVoice,
   };
 }
