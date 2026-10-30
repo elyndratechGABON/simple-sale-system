@@ -45,31 +45,36 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
     <div className="space-y-2.5">
       {/* Photo : deux gestes explicites. Un seul bouton ouvrait toujours la galerie —
           sur téléphone, la prise de photo directe est le chemin le plus court. */}
+      {/* Photo et suppression séparée sous la miniature (audit UI §4) : plus de bouton
+          flottant risquant un clic malencontreux sur la photo. */}
       <div>
         <Label className="text-xs font-medium">Photo du produit</Label>
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-1.5 flex flex-col gap-2.5">
           {photo ? (
-            <div className="relative h-10 w-10 shrink-0 rounded-lg border bg-muted/40">
-              <img
-                src={photo}
-                alt=""
-                className="h-10 w-10 rounded-lg object-cover"
-                width={40}
-                height={40}
-              />
+            <div className="flex items-center gap-3">
+              <div className="relative h-14 w-14 shrink-0 rounded-lg border bg-muted/40 overflow-hidden">
+                <img
+                  src={photo}
+                  alt=""
+                  className="h-14 w-14 rounded-lg object-cover"
+                  width={56}
+                  height={56}
+                />
+              </div>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/50 text-white hover:bg-black/70"
+                variant="outline"
+                size="sm"
                 onClick={() => setPhoto(undefined)}
+                className="h-9 text-xs text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
               >
-                <Trash2 className="h-2.5 w-2.5" />
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Supprimer la photo
               </Button>
             </div>
           ) : (
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30">
-              <ImagePlus className="h-5 w-5 text-muted-foreground" />
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30">
+              <ImagePlus className="h-6 w-6 text-muted-foreground" />
             </span>
           )}
           <div className="flex flex-wrap gap-1.5">
@@ -79,7 +84,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
               size="sm"
               disabled={photoBusy}
               onClick={pickCamera}
-              className="h-8 text-xs"
+              className="h-9 text-xs"
             >
               <Camera className="h-3.5 w-3.5 mr-1.5" />
               Prendre une photo
@@ -90,23 +95,11 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
               size="sm"
               disabled={photoBusy}
               onClick={pickGallery}
-              className="h-8 text-xs"
+              className="h-9 text-xs"
             >
               <ImagePlus className="h-3.5 w-3.5 mr-1.5" />
               Galerie
             </Button>
-            {photo && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setPhoto(undefined)}
-                className="h-8 text-xs"
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5 text-destructive" />
-                Retirer
-              </Button>
-            )}
           </div>
         </div>
         <input
@@ -126,8 +119,13 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
         />
       </div>
 
-      {/* Prix et coût sur la même ligne (produit) : une ligne pleine en moins. */}
-      <div className={cn("grid gap-2", productType === "product" ? "grid-cols-2" : "grid-cols-1")}>
+      {/* Prix et coût sur une colonne (mobile) ou deux (sm+) : évite l'écrasement sur très petits écrans (§4.3). */}
+      <div
+        className={cn(
+          "grid gap-2",
+          productType === "product" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1",
+        )}
+      >
         <div>
           <Label htmlFor="price" className="text-xs font-medium">
             Prix de vente *
@@ -179,7 +177,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
               </Label>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <Label htmlFor="stock" className="text-xs">
                 Stock initial
