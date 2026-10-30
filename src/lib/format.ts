@@ -1,10 +1,10 @@
 export function formatFCFA(value: number): string {
-  if (!Number.isFinite(value)) return "∞";
+  if (!Number.isFinite(value)) return "—";
   const rounded = Math.round(value);
   const str = Math.abs(rounded)
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, "\u00A0");
-  return `${rounded < 0 ? "-" : ""}${str}\u00A0F`;
+  return `${rounded < 0 ? "-" : ""}${str}\u00A0F CFA`;
 }
 
 /** Montant ultra-court pour une cellule de calendrier : « 950 », « 1,5k » (FCFA). */
