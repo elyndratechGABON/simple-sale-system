@@ -85,9 +85,7 @@ export function FieldLine({
 
     case "category":
       return (
-        <p className="truncate text-xs leading-tight text-muted-foreground">
-          {product.category}
-        </p>
+        <p className="truncate text-xs leading-tight text-muted-foreground">{product.category}</p>
       );
 
     case "cost":

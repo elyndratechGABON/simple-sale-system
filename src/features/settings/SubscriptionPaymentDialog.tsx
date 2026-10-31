@@ -55,7 +55,8 @@ export function SubscriptionPaymentDialog({
         {/* Numéro à copier */}
         <div className="mt-4 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Envoyez le montant de <strong className="font-bold">{formatFCFA(plan.price)}</strong> FCFA à ce numéro :
+            Envoyez le montant de <strong className="font-bold">{formatFCFA(plan.price)}</strong>{" "}
+            FCFA à ce numéro :
           </p>
           <div className="flex items-center gap-2">
             <span className="text-3xl font-bold">076505254</span>

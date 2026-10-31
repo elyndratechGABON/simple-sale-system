@@ -111,8 +111,8 @@ export function EmployeeIdentityCard() {
         </div>
       ) : (
         <p className="text-body text-muted-foreground">
-          Rien à déclarer : le nom du patron et celui de la boutique sont déjà transmis à
-          chaque synchronisation.
+          Rien à déclarer : le nom du patron et celui de la boutique sont déjà transmis à chaque
+          synchronisation.
         </p>
       )}
     </div>

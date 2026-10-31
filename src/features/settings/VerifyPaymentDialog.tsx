@@ -1,11 +1,23 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { refreshAccountQuota } from "@/lib/gatekeeper/account";
 import { parsePaymentSms } from "@/lib/payments/sms-parser";
 
-export function VerifyPaymentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+export function VerifyPaymentDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const [sms, setSms] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -82,23 +94,15 @@ export function VerifyPaymentDialog({ open, onOpenChange }: { open: boolean; onO
         />
 
         <div className="flex gap-2 mt-4">
-          <Button
-            disabled={verifying || !sms.trim()}
-            onClick={handleVerify}
-          >
+          <Button disabled={verifying || !sms.trim()} onClick={handleVerify}>
             {verifying ? "Vérification…" : "Vérifier"}
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Annuler
           </Button>
         </div>
 
-        {message && (
-          <p className="mt-3 text-sm text-muted-foreground">{message}</p>
-        )}
+        {message && <p className="mt-3 text-sm text-muted-foreground">{message}</p>}
       </DialogContent>
     </Dialog>
   );

@@ -67,7 +67,11 @@ export function CheckoutDialog({ pos }: { pos: PosController }) {
                     +{formatFCFA(amt)}
                   </Button>
                 ))}
-                <Button variant="ghost" className="h-11 min-[400px]:h-8 px-3" onClick={() => pos.setCashGiven("")}>
+                <Button
+                  variant="ghost"
+                  className="h-11 min-[400px]:h-8 px-3"
+                  onClick={() => pos.setCashGiven("")}
+                >
                   Vider
                 </Button>
               </div>

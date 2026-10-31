@@ -25,15 +25,12 @@ export function PairingCodeDisplay({ pairCode, minutesLeft }: PairingCodeDisplay
             >
               Copier
             </button>
-            <span className="text-xs text-muted-foreground">
-              {minutesLeft} min restants
-            </span>
+            <span className="text-xs text-muted-foreground">{minutesLeft} min restants</span>
           </div>
         </div>
       )}
       <p className="text-xs font-medium text-muted-foreground">
-        L'employé scanne le QR, entre son nom puis ce code temporaire : il est ajouté à la
-        boutique.
+        L'employé scanne le QR, entre son nom puis ce code temporaire : il est ajouté à la boutique.
       </p>
     </div>
   );

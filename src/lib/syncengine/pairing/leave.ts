@@ -134,9 +134,10 @@ export async function leaveShop(): Promise<void> {
  * Le stock de l'employé NE REVIENT PAS automatiquement : son inventaire lui appartient
  * (il l'a complété à la main), et une restitution surprise casserait ses comptages.
  */
-export async function revokeEmployeeDevice(
-  peer: { id: string; server_device_id?: string },
-): Promise<void> {
+export async function revokeEmployeeDevice(peer: {
+  id: string;
+  server_device_id?: string;
+}): Promise<void> {
   const identity = await ensureIdentity();
   if (!isSharedGroup(identity.shopId)) return;
   const db = getDB();

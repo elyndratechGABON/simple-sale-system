@@ -48,9 +48,7 @@ export function StocksChipFilters({
     { key: "low", label: "Stock faible", count: lowCount },
     // « Rupture » ne prend la place que quand il y a DE quoi voir : alerter d'une
     // absence pour rien était du bruit dans la rangée de filtres.
-    ...(outCount > 0
-      ? [{ key: "out" as const, label: "Rupture", count: outCount }]
-      : []),
+    ...(outCount > 0 ? [{ key: "out" as const, label: "Rupture", count: outCount }] : []),
   ];
   const STATUS_ICON: Record<StatusFilter, LucideIcon> = {
     all: LayoutGrid,

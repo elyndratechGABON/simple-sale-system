@@ -85,9 +85,7 @@ export async function payTable(saleId: string, cashGiven: number): Promise<Sale>
       total,
       cash_given: cashGiven,
       change_due: cashGiven - total,
-      ...(sellerLabel
-        ? { seller_name: sellerLabel, seller_device_id: identity.deviceId }
-        : {}),
+      ...(sellerLabel ? { seller_name: sellerLabel, seller_device_id: identity.deviceId } : {}),
       ...touch(),
     };
     await db.sales.put(settled);
@@ -156,9 +154,7 @@ export async function payRound(
       customers_count: 1,
       table: sale.table,
       status: "paid",
-      ...(sellerLabel
-        ? { seller_name: sellerLabel, seller_device_id: identity.deviceId }
-        : {}),
+      ...(sellerLabel ? { seller_name: sellerLabel, seller_device_id: identity.deviceId } : {}),
       ...touch(),
     };
     await db.sales.put(settled);

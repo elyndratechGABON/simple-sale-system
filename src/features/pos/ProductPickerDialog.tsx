@@ -70,7 +70,7 @@ export function ProductPickerDialog({
           style={{ ["--page-gutter" as string]: "0px" }}
         >
           <div className="min-w-0 w-full overflow-hidden">
-            <div className="pt-1"/>
+            <div className="pt-1" />
             <ProductPanel pos={pos} onProductSelect={addProduct} />
           </div>
 

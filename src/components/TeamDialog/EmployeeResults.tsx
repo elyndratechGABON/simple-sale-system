@@ -228,10 +228,7 @@ export function EmployeeResults({ device }: { device: PairedDevice }) {
                     <Package className="h-3.5 w-3.5" /> Produits vendus
                   </p>
                   {dayProducts.map((p) => (
-                    <div
-                      key={p.name}
-                      className="flex items-center justify-between gap-3 text-sm"
-                    >
+                    <div key={p.name} className="flex items-center justify-between gap-3 text-sm">
                       <span className="min-w-0 flex-1 truncate">{p.name}</span>
                       <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
                         {p.qty}

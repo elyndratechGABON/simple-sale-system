@@ -149,7 +149,6 @@ export function useCart(products: Product[]) {
       desired.set(regKey, (desired.get(regKey) ?? 0) + entry.qty);
     }
     void syncMyReservations(desired, getCachedIdentity());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, products]);
 
   return {

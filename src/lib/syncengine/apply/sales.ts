@@ -21,9 +21,7 @@ export async function applySaleCreated(db: PosDatabase, op: SyncOp): Promise<voi
         // Variante : le stock a quitté la VARIANTE sur la caisse émettrice (comme
         // `applyStockDelta`) — le pair doit ajuster la même, pas le stock global.
         const variant = item.variant_id && p.variants?.find((v) => v.id === item.variant_id);
-        const newStock = variant
-          ? (variant.stock ?? 0) - item.quantity
-          : p.stock - item.quantity;
+        const newStock = variant ? (variant.stock ?? 0) - item.quantity : p.stock - item.quantity;
         await db.products.put(
           variant
             ? {

@@ -48,44 +48,44 @@ export function DashboardOverview({ data }: { data: DashboardData }) {
           </div>
         </div>
       ) : (
-      <div className="flat-card bg-primary text-primary-foreground">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <p className="text-small font-medium text-primary-foreground/90">
-              Synthèse de l'activité
-            </p>
-            <div className="text-display tracking-tight text-primary-foreground tabular-nums">
-              <AnimatedCounter value={todayRev} format={formatFCFA} />
+        <div className="flat-card bg-primary text-primary-foreground">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-small font-medium text-primary-foreground/90">
+                Synthèse de l'activité
+              </p>
+              <div className="text-display tracking-tight text-primary-foreground tabular-nums">
+                <AnimatedCounter value={todayRev} format={formatFCFA} />
+              </div>
+              <p className="text-small text-primary-foreground/80">Solde aujourd'hui • encaissé</p>
             </div>
-            <p className="text-small text-primary-foreground/80">Solde aujourd'hui • encaissé</p>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
+              <Wallet className="h-6 w-6 text-white" />
+            </div>
           </div>
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20">
-            <Wallet className="h-6 w-6 text-white" />
+          <div className="mt-5 grid grid-cols-3 gap-2 divide-x divide-white/20 pt-4">
+            <div className="px-2 py-3 text-center min-w-0">
+              <span className="block text-small truncate text-primary-foreground/90">Ventes</span>
+              <span className="mt-1 block text-title font-bold text-primary-foreground tabular-nums">
+                <AnimatedCounter value={todaySalesCount} format={(n) => String(n)} />
+              </span>
+            </div>
+            <div className="px-2 py-3 text-center min-w-0">
+              <span className="block text-small truncate text-primary-foreground/90">Clients</span>
+              <span className="mt-1 block text-title font-bold text-primary-foreground tabular-nums">
+                <AnimatedCounter value={todayCustomers ?? 0} format={(n) => String(n)} />
+              </span>
+            </div>
+            <div className="px-2 py-3 text-center min-w-0">
+              <span className="block text-small truncate text-primary-foreground/90">
+                Panier moyen
+              </span>
+              <span className="mt-1 block text-title font-bold text-primary-foreground tabular-nums">
+                <AnimatedCounter value={avgPanier ?? 0} format={formatFCFA} />
+              </span>
+            </div>
           </div>
         </div>
-        <div className="mt-5 grid grid-cols-3 gap-2 divide-x divide-white/20 pt-4">
-          <div className="px-2 py-3 text-center min-w-0">
-            <span className="block text-small truncate text-primary-foreground/90">Ventes</span>
-            <span className="mt-1 block text-title font-bold text-primary-foreground tabular-nums">
-              <AnimatedCounter value={todaySalesCount} format={(n) => String(n)} />
-            </span>
-          </div>
-          <div className="px-2 py-3 text-center min-w-0">
-            <span className="block text-small truncate text-primary-foreground/90">Clients</span>
-            <span className="mt-1 block text-title font-bold text-primary-foreground tabular-nums">
-              <AnimatedCounter value={todayCustomers ?? 0} format={(n) => String(n)} />
-            </span>
-          </div>
-          <div className="px-2 py-3 text-center min-w-0">
-            <span className="block text-small truncate text-primary-foreground/90">
-              Panier moyen
-            </span>
-            <span className="mt-1 block text-title font-bold text-primary-foreground tabular-nums">
-              <AnimatedCounter value={avgPanier ?? 0} format={formatFCFA} />
-            </span>
-          </div>
-        </div>
-      </div>
       )}
 
       {catalogueEmpty && !data.isLoading && (

@@ -5,12 +5,7 @@
 // L'état vit dans `useDevicePairingDialog`, le QR dans `QRBlock`, l'affichage du code
 // temporaire dans `PairingCodeDisplay`, la liste des écrans dans `PairedDevicesPanel`.
 import { MonitorSmartphone } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { QRBlock } from "@/components/pairing/QRBlock";
 import { PairingCodeDisplay } from "@/components/pairing/PairingCodeDisplay";
 import { PairedDevicesPanel } from "@/components/pairing/PairedDevicesPanel";
@@ -38,11 +33,17 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
         {d.hasAnyAccount && (
           <div className="mt-2 rounded-lg border p-3 text-left">
             <p className="text-sm font-medium">
-              <span>{d.pairedCount} {d.pairedCount === 1 ? "appareil" : "appareils"} connecté(s) </span> /
-              <span>{d.quota?.maxDevices ?? "∞"} {d.quota?.maxDevices === 1 ? "écran" : "écrans"}</span>
+              <span>
+                {d.pairedCount} {d.pairedCount === 1 ? "appareil" : "appareils"} connecté(s){" "}
+              </span>{" "}
+              /
+              <span>
+                {d.quota?.maxDevices ?? "∞"} {d.quota?.maxDevices === 1 ? "écran" : "écrans"}
+              </span>
             </p>
             <p className="text-xs text-muted-foreground">
-              Le propriétaire dispose de {d.quota?.maxDevices ?? "illimité"} place(s) sur son abonnement.
+              Le propriétaire dispose de {d.quota?.maxDevices ?? "illimité"} place(s) sur son
+              abonnement.
             </p>
           </div>
         )}
@@ -64,10 +65,10 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
         ) : d.profile?.accountKeyword ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             Cet écran a rejoint le compte
-            <span className="font-medium text-foreground">par mot clé de récupération</span> :
-            il n'a pas le téléphone ni le nom du compte, que le QR transporte. Depuis un écran
-            qui détient le compte (téléphone + mot de passe), ouvrez ici « Ajouter un appareil »
-            pour partager le code QR.
+            <span className="font-medium text-foreground">par mot clé de récupération</span> : il
+            n'a pas le téléphone ni le nom du compte, que le QR transporte. Depuis un écran qui
+            détient le compte (téléphone + mot de passe), ouvrez ici « Ajouter un appareil » pour
+            partager le code QR.
           </p>
         ) : (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -80,9 +81,7 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
 
         {d.hasAnyAccount && (
           <div className="mt-4 space-y-3 rounded-xl border p-4">
-            {d.isOwner && (
-              <PairingCodeDisplay pairCode={d.pairCode} minutesLeft={d.minutesLeft} />
-            )}
+            {d.isOwner && <PairingCodeDisplay pairCode={d.pairCode} minutesLeft={d.minutesLeft} />}
 
             <PairedDevicesPanel
               isOwner={d.isOwner}
