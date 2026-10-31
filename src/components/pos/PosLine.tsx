@@ -64,7 +64,7 @@ export function PosLine({ line, isService, onRemoveOne, onAddOne, onRemove }: Po
       />
       <div className="flex-1 min-w-0 pointer-events-none">
         <div className="font-medium truncate flex items-center gap-1.5">
-          {line.name}
+          {line.variant ? `${line.name} - ${line.variant}` : line.name}
           {isService && line.productType && (
             <span
               className={cn(

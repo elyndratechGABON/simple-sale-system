@@ -14,6 +14,7 @@ export type VariantDraft = {
   price: string;
   cost: string;
   stock: string;
+  photo?: string;
 };
 
 function draftId(): string {
@@ -81,6 +82,7 @@ export function useProductForm({
         price: v.price !== undefined ? String(v.price) : "",
         cost: v.cost !== undefined ? String(v.cost) : "",
         stock: v.stock !== undefined ? String(v.stock) : "",
+        ...(v.photo ? { photo: v.photo } : {}),
       })) ?? [],
   );
 
@@ -110,6 +112,7 @@ export function useProductForm({
         price: v.price !== undefined ? String(v.price) : "",
         cost: v.cost !== undefined ? String(v.cost) : "",
         stock: v.stock !== undefined ? String(v.stock) : "",
+        ...(v.photo ? { photo: v.photo } : {}),
       })) ?? [],
     );
   }, [editing, defaultCategory, defaultType, hasWeightInput]);
@@ -126,6 +129,20 @@ export function useProductForm({
   }
   function removeVariant(id: string) {
     setVariants((vs) => vs.filter((v) => v.id !== id));
+  }
+
+  /** Photo D'UNE variante : même pipeline `fileToScaledDataUrl` que la photo produit. */
+  async function handleVariantPhoto(variantId: string, event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const { dataUrl } = await fileToScaledDataUrl(file);
+      updateVariant(variantId, { photo: dataUrl });
+    } catch {
+      toast.error("Impossible d'utiliser cette image.");
+    } finally {
+      if (event.target) event.target.value = "";
+    }
   }
 
   async function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
@@ -154,6 +171,7 @@ export function useProductForm({
               ...(v.price ? { price: Number(v.price) } : {}),
               ...(v.cost ? { cost: Number(v.cost) } : {}),
               ...(v.stock ? { stock: Number(v.stock) } : {}),
+              ...(v.photo ? { photo: v.photo } : {}),
             }))
           : undefined;
       const p = {
@@ -230,6 +248,7 @@ export function useProductForm({
     addVariant,
     updateVariant,
     removeVariant,
+    handleVariantPhoto,
     handlePhoto,
     saveMut,
   };

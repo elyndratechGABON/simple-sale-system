@@ -14,7 +14,7 @@ export function VariantPickerDialog({ pos }: { pos: PosController }) {
           <DialogTitle>{product?.name} — choisir une variante</DialogTitle>
         </DialogHeader>
         {product && (
-          <div className="grid gap-2">
+          <div className="grid gap-2 max-h-[65dvh] overflow-y-auto">
             {(product.variants ?? []).map((v) => {
               const cur = pos.cart[cartKey(product, v.id)]?.qty ?? 0;
               const stockOk = !Number.isFinite(v.stock) || cur < (v.stock ?? 0);
@@ -28,13 +28,21 @@ export function VariantPickerDialog({ pos }: { pos: PosController }) {
                     pos.setVariantPicker(null);
                   }}
                   className={cn(
-                    "flex items-center justify-between rounded-xl border bg-card px-4 py-3 text-left",
+                    "flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-left",
                     "hover:border-primary active:scale-[0.98]",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     !stockOk && "opacity-50 cursor-not-allowed",
                   )}
                 >
-                  <span>
+                  {/* Photo PROPRE à la variante si elle en a une, sinon photo du produit. */}
+                  {(v.photo ?? product.photo) ? (
+                    <img
+                      src={v.photo ?? product.photo}
+                      alt=""
+                      className="h-11 w-11 shrink-0 rounded-lg border bg-muted/30 object-cover"
+                    />
+                  ) : null}
+                  <span className="flex-1 min-w-0 break-words">
                     {v.name}
                     {v.size ? ` · ${v.size}` : ""}
                     {v.color ? ` · ${v.color}` : ""}
