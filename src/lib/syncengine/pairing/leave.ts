@@ -154,6 +154,20 @@ export async function revokeEmployeeDevice(peer: {
     });
   });
   if (peer.server_device_id) await releaseSeat(peer.server_device_id);
+  // APPLICATION LOCALE IMMÉDIATE : l'op vient d'être émise PAR CE principal. Ne pas
+  // attendre son retour par le relais — un échange raté (hors ligne, relais mou) laisserait
+  // l'employé affiché indéfiniment. Idempotent : quand l'op revient, la fiche est déjà
+  // `revoked` et l'application ne change rien de visible.
+  const existing = await db.paired_devices.get(peer.id);
+  if (existing) {
+    const now = Date.now();
+    await db.paired_devices.put({
+      ...existing,
+      status: "revoked",
+      revoked_at: now,
+      updated_at: now,
+    });
+  }
   // Pousser l'outbox immédiatement : le licenciement doit S'APPLIQUER avant que l'écran
   // évincé ne pousse autre chose (ses ops suivantes seraient de toute façon refusées
   // — sa fiche est effacée chez le principal — mais autant être propre dans le lot).

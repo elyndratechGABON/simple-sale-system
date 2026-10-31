@@ -22,6 +22,11 @@ export async function applyDeviceAnnounce(db: PosDatabase, op: SyncOp): Promise<
   // (12 h) survit au sommeil du téléphone du patron : le code affiché expire en
   // 10 minutes, la preuve, non.
   const codeOk = await knownPairCode(pl.pair_code);
+  // TOMBSTONE : un écran LICENCIÉ ne rentre pas par une simple re-annonce — sa fiche
+  // reste enterrée tant que le principal n'a pas délivré un NOUVEAU code de paire.
+  // (Un employé révoqué depuis plus de 12 h viendrait re-s'annoncer avec son ancien
+  // code périmé : knownPairCode le refuse déjà ; ici on verrouille la fenêtre pleine.)
+  if (existing.status === "revoked" && !codeOk) return;
   const wasPaired = existing.status === "paired";
   const firstSighting = !existing.role && !existing.status;
 
@@ -100,15 +105,25 @@ export async function applyDeviceApprove(db: PosDatabase, op: SyncOp): Promise<v
 }
 
 /**
- * Départ d'un appareil : sa fiche du registre est EFFACÉE sur tout le groupe.
- * Révoque en même temps la clé publique épinglée (elle vit sur la fiche) — après le
- * départ, plus aucune op de cet appareil ne peut plus être vérifiée. Idempotent :
- * rejouée, l'op ne trouve plus rien à effacer.
+ * Départ d'un appareil : sa fiche devient TOMBSTONE (`status: "revoked"`) au lieu
+ * d'être effacée. La clé publique épinglée reste — c'est elle qui permet de refuser
+ * les ops suivantes du partant — et la pochette empêche une re-annonce (le code de
+ * paire reste prouvable jusqu'à 12 h) de ressusciter un écran qui a été LICENCIÉ.
+ * Idempotent : rejouée, l'op trouve une fiche déjà `revoked` et la re-titre au même
+ * instant, sans rien changer de visible.
  */
 export async function applyDeviceLeave(db: PosDatabase, op: SyncOp): Promise<void> {
   const pl = op.payload as DeviceLeavePayload;
   // `org_device_id` est la seule source de la cible : l'op porte le PARTANT, jamais
   // l'écran qui l'applique (même modèle que `device.approve`).
   if (!pl?.org_device_id) return;
-  await db.paired_devices.delete(pl.org_device_id);
+  const existing = await db.paired_devices.get(pl.org_device_id);
+  if (!existing) return; // jamais connu ici : rien à enterrer, rien à ressusciter
+  const now = Date.now();
+  await db.paired_devices.put({
+    ...existing,
+    status: "revoked",
+    revoked_at: now,
+    updated_at: now,
+  });
 }

@@ -40,7 +40,11 @@ export async function resolveTrustedKeys(
     if (proved) keys.set(pl.device_id ?? op.device_id, pl.public_key);
   }
   for (const peer of await db.paired_devices.toArray()) {
-    if (peer.public_key && !keys.has(peer.id)) keys.set(peer.id, peer.public_key);
+    // Tombstone : un écran révoqué n'autorise plus AUCUNE op — sa clé reste connue
+    // (pour distinguer l'usurpation de l'écran légitime) mais ne compte plus comme
+    // signataire autorisé : ses blooms suivants sont refusés.
+    if (peer.public_key && peer.status !== "revoked" && !keys.has(peer.id))
+      keys.set(peer.id, peer.public_key);
   }
   return keys;
 }

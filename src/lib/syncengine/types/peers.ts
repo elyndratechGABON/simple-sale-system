@@ -27,8 +27,13 @@ export interface PairedDevice {
   role?: DeviceRole;
   public_key?: string;
   last_seen?: number;
-  /** `paired` dès que l'appairage compte tenu du code ou d'une approbation ; `pending` sinon. */
-  status?: "pending" | "paired";
+  /** `paired` dès que l'appairage compte tenu du code ou d'une approbation ; `pending` sinon.
+   *  `revoked` = pochette funéraire (tombstone) : l'écran a été licencié — sa fiche reste
+   *  au registre pour S'OPPOSER à sa résurrection par une re-annonce, mais n'apparaît
+   *  plus nulle part. */
+  status?: "pending" | "paired" | "revoked";
+  /** Horodatage du licenciement. Posé par `device.leave` (côté et tiré), jamais effacé. */
+  revoked_at?: number;
   /** Horodatage du moment où l'appareil est devenu `paired`. Stable une fois posé. */
   paired_at?: number;
   /** `device_id` serveur (fiche boutique) de l'appareil : la cible exacte du `bless` qui

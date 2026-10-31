@@ -30,7 +30,12 @@ export async function listPairedDevices(shopId: string): Promise<PairedDevice[]>
   const device = await getDB().paired_devices.where("shop_id").equals(shopId).sortBy("updated_at");
   const moi = currentDeviceId();
   const pairs = device.reverse();
-  return moi ? pairs.filter((p) => p.id !== moi) : pairs;
+  return pairs.filter(
+    (p) =>
+      // Tombstone : un écran révoqué ne s'affiche nulle part, mais SA fiche reste au
+      // registre pour s'opposer à sa résurrection (cf. `applyDeviceLeave`).
+      p.status !== "revoked" && (moi ? p.id !== moi : true),
+  );
 }
 
 /**

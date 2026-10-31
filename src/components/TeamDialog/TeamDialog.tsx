@@ -30,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatFCFA } from "@/lib/format";
 import { approveDevice, revokeEmployeeDevice } from "@/lib/syncengine/pairing";
+import { invalidateDeviceQueries } from "@/lib/syncengine/peers";
 import type { PairedDevice } from "@/lib/syncengine/types";
 import { usePendingCatalogueRequests } from "@/hooks/use-pending-catalogue-requests";
 import { EmployeeResults } from "./EmployeeResults";
@@ -181,7 +182,9 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
     setBusyLicenciement(true);
     try {
       await revokeEmployeeDevice(selected);
-      await qc.invalidateQueries({ queryKey: ["paired_devices"] });
+      // Registre + compteur d'écrans + rôle : tout ce qui lit le départ est
+      // recalculé d'un coup (voir `DEVICE_DEPENDENT_QUERIES`).
+      await invalidateDeviceQueries(qc);
       toast.success(`${selected.device_name || "Employé"} retiré de la boutique.`);
       setLicenciementOuvert(false);
       close();

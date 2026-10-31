@@ -63,12 +63,16 @@ async function shopNameForSnapshot(): Promise<string | undefined> {
   return undefined;
 }
 
-/** Les pairs employés réellement appairés, hors soi-même. */
+/** Les pairs employés réellement appairés, hors soi-même. Un écran RÉVOQUÉ
+ *  (tombstone) ne reçoit plus rien : sa fiche au registre ne sert qu'à s'opposer à sa
+ *  résurrection. */
 export async function pairedEmployees(shopId: string): Promise<PairedDevice[]> {
   return getDB()
     .paired_devices.where("shop_id")
     .equals(shopId)
-    .filter((p) => p.status !== "pending" && p.id !== getIdentity().deviceId)
+    .filter(
+      (p) => p.status !== "pending" && p.status !== "revoked" && p.id !== getIdentity().deviceId,
+    )
     .toArray();
 }
 
