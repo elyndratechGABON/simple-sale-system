@@ -22,7 +22,7 @@ export function OwnerInfoCard() {
       <Store className="h-5 w-5 shrink-0 text-primary" />
       <div className="min-w-0 text-sm">
         <p className="text-small text-muted-foreground">Propriétaire de la boutique</p>
-        <p className="truncate font-medium text-foreground">
+        <p className="font-medium text-foreground whitespace-normal break-words">
           {owner} <span className="text-muted-foreground">— {phone}</span>
         </p>
       </div>

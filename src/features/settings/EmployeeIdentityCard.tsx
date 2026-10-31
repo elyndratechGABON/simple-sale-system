@@ -71,7 +71,7 @@ export function EmployeeIdentityCard() {
         <h2 className="text-title flex items-center gap-2">
           <UserRound className="h-5 w-5" /> Qui utilise cette caisse
         </h2>
-        <p className="text-small text-muted-foreground">
+        <p className="text-small text-muted-foreground whitespace-normal break-words">
           {estEmploye
             ? "Votre nom et votre numéro apparaissent chez le patron et dans la console Elyndra, à côté de cet écran."
             : "Cet écran est le vôtre : il est identifié par le nom de la boutique et le nom du patron."}

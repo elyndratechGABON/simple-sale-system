@@ -52,13 +52,15 @@ export function ClusterCard() {
             <ClusterIcon className="h-5 w-5 text-primary" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-body font-semibold truncate">
+            <p className="text-body font-semibold whitespace-normal break-words">
               {clusterConfig.label.split("/")[0].trim()}
               {cluster === "personnalise" && customDomain && (
                 <span className="font-normal text-muted-foreground"> — {customDomain}</span>
               )}
             </p>
-            <p className="text-small text-muted-foreground truncate">{clusterConfig.description}</p>
+            <p className="text-small text-muted-foreground whitespace-normal break-words">
+              {clusterConfig.description}
+            </p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-haspopup="dialog">
             Modifier <ChevronRight className="h-4 w-4" />
