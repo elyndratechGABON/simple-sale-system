@@ -156,7 +156,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
         )}
       </div>
       {productType === "product" && (
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[10px] text-muted-foreground break-words">
           Optionnel — sans cette valeur, le bénéfice sera surestimé.
         </p>
       )}

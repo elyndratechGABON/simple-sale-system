@@ -39,7 +39,7 @@ export function SettingsPage() {
           <h1 className="text-page-title font-bold">Paramètres</h1>
           <Badge variant="secondary">{accountLabel}</Badge>
         </div>
-        <p className="text-sm text-muted-foreground max-w-2xl">
+        <p className="text-sm text-muted-foreground max-w-2xl break-words min-w-0">
           Boutique, caisse, équipe et données - tout ce que l'onboarding a demandé.
         </p>
       </div>
