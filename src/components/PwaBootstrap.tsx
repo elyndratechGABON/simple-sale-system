@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   registerServiceWorker,
   requestPersistentStorage,
+  persistedStorageStatus,
   UPDATE_EVENT,
   type UpdateAvailableDetail,
 } from "@/lib/pwa";
@@ -65,6 +66,16 @@ export function PwaBootstrap() {
   useEffect(() => {
     registerServiceWorker();
     requestPersistentStorage();
+    // Vérifie stockage persistant au démarrage : si l'utilisateur accepte, les données
+    // (historique des ventes, paramètres) ne seront plus évincées par le navigateur.
+    void persistedStorageStatus().then((s) => {
+      if (s === "persisted") {
+        toast("Stockage sécurisé activé", {
+          description: "Vos données sont protégées même en cas de pression disque.",
+          duration: 5000,
+        });
+      }
+    });
     // Archives financières automatiques (mission archives — Étape 3) : au boot, si le
     // DERNIER snapshot date d'au moins la fréquence choisie, la journée écoulée est
     // archivée. Best-effort : le boot ne doit JAMAIS être bloqué par l'archivage.

@@ -17,6 +17,7 @@ import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
+import { VitePWA } from "vite-pwa";
 
 export default defineConfig({
   // L'ORDRE COMPTE : tanstackStart génère les entrées que viteReact transforme ensuite.
@@ -38,6 +39,28 @@ export default defineConfig({
       },
     }),
     viteReact(),
+    VitePWA({
+      register: true,
+      includeAssets: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+      runtimeCaching: [
+        {
+          urlPattern: "^https?:\\/\\/[^\\/]+\\/",
+          handler: "NetworkFirst",
+          options: {
+            dryRun: true,
+            cacheName: "assets",
+          },
+        },
+        {
+          urlPattern: "/",
+          handler: "NetworkFirst",
+          options: {
+            dryRun: true,
+            cacheName: "navigation",
+          },
+        },
+      ],
+    }),
   ],
   resolve: {
     alias: { "@": `${process.cwd()}/src` },
