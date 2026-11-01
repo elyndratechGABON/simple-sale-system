@@ -23,6 +23,23 @@ export async function listOpenTables(): Promise<Sale[]> {
 }
 
 export async function openTable(label: string, clientName?: string): Promise<Sale> {
+  const db = getDB();
+  // DÉDUPLICATION : réutiliser la table existante si elle est déjà ouverte
+  const existing = await db.sales
+    .where("table")
+    .equals(label)
+    .and((s) => s.status === "open" && !s.deleted_at)
+    .first();
+  if (existing) {
+    // Table déjà ouverte : rafraîchir son op P2P si besoin, mais on la rend
+    // disponible immédiatement sans en créer une nouvelle.
+    await emitOp(db, getIdentity(), {
+      type: "table.opened",
+      entity_id: existing.id,
+      payload: { label, sale: existing },
+    });
+    return existing;
+  }
   const now = Date.now();
   const sale: Sale = {
     id: uid(),
@@ -43,7 +60,6 @@ export async function openTable(label: string, clientName?: string): Promise<Sal
     ...(clientName ? { client_name: clientName } : {}),
     ...touch(),
   };
-  const db = getDB();
   // Produit + op dans UNE transaction : l'addition est là, l'annonce EST PARTIE — ou
   // ni l'un ni l'autre. Pas de fiche "ouvert" sans son op P2P `table.opened` chez les
   // pairs (deux serveurs viseraient la même table sans le savoir).
