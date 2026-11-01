@@ -13,6 +13,9 @@ import {
 import { usePreferences } from "@/hooks/use-preferences";
 import type { Target } from "@/lib/pos/types";
 
+/** Nombre maximum d'éléments affichés dans les listes (popular, history). */
+const LIMIT_ITEMS = 50;
+
 /** Ce que la carte d'une table affiche en plus du montant : tournées + produits. */
 export interface TableVisualInfo {
   /** Tournées distinctes : les groupes d'items par `ordered_at`. */
@@ -102,7 +105,7 @@ export function usePosData(target: Target) {
       .map(([id, q]) => ({ product: byProduct.get(id), amount: q }))
       .filter((x) => x.product)
       .sort((a, b) => b.amount - a.amount)
-      .slice(0, 8)
+      .slice(0, LIMIT_ITEMS)
       .map((x) => x.product as Product);
   }, [todayItems, products]);
 
