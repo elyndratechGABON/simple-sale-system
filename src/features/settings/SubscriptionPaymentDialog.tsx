@@ -37,12 +37,33 @@ export function SubscriptionPaymentDialog({
     window.location.href = "tel:*150*2%23";
   };
 
-  /** Double vérification : WhatsApp vers le numéro de référence, SMS collé pré-rempli. */
-  const handleDoubleCheck = () => {
-    const text = encodeURIComponent(sms.trim());
+  /** Double vérification : envoi à l'orchestrateur + WhatsApp avec SMS collé. */
+  const handleDoubleCheck = async () => {
+    const text = sms.trim();
     if (!text) return;
-    const url = `https://wa.me/24176505254?text=${text}`;
+    // Action 1 : envoyer à l'orchestrateur
+    try {
+      await fetch("/api/v1/subscriptions/request-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          shop_id: "shop_123", // TODO: remplacer par le shop_id réel
+          sms_text: text,
+        }),
+      });
+      toast.success("Message envoyé à l'orchestrateur", {
+        description: "Vérifiez WhatsApp pour confirmation.",
+      });
+    } catch (e) {
+      toast.error("Erreur envoi orchestrateur");
+    }
+    // Action 2 : ouvrir WhatsApp avec le SMS pré-rempli
+    const url = `https://wa.me/24176505254?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank", "noopener,noreferrer");
+    // Fermer le dialog
+    onClose();
   };
 
   return (
