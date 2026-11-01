@@ -118,11 +118,14 @@ export function TableCard({
               {/* Tournées : le compteur distingue « consommé et parti » de « encore au
                   bar » — l'info du service, pas une métadonnée. */}
               {rounds > 1 && (
-                <span className="flex shrink-0 items-center gap-1 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+                <span className="flex items-center gap-2 rounded-full bg-orange-100 px-2 py-1 text-[10px] font-semibold text-orange-700">
                   <Layers className="h-3 w-3" />
                   {rounds} tourn{rounds > 1 ? "ées" : "ée"}
                 </span>
               )}
+              <span className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring z-10">
+                <CreditCard className="h-4 w-4" strokeWidth={2.5} />
+              </span>
             </span>
             {(avatars.length > 0 || table.opened_at) && (
               <span className="flex items-center justify-between gap-2 pt-0.5">
@@ -184,7 +187,7 @@ export function TableCard({
           }}
           aria-label={`Encaisser la table ${label} — ${formatFCFA(table.total)}`}
           title="Encaisser maintenant"
-          className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="absolute bottom-1 right-1 flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring z-20"
         >
           <CreditCard className="h-4 w-4" strokeWidth={2.5} />
         </button>
