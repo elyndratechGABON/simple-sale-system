@@ -14,42 +14,29 @@ export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promi
   // réalignement, la caisse employé garderait le stock de son premier import pour
   // toujours, et le « transfert de stock » n'aurait lieu qu'une fois dans la vie.
   //
-  // Réaligner, oui ; écraser, non. L'instantané est DATED (le `updated_at` que le
-  // propriétaire a posé sur sa fiche) et n'est retenu que s'il est plus récent que ce
-  // que l'appareil sait déjà : un instantané périmé, pris avant une vente que cet
-  // écran a déjà comptée, ne peut donc pas ressusciter des unités vendues. Les
-  // deltas restent le canal des mouvements, l'instantané celui de l'état.
+  // Le snapshot est la source de vérité ABSOLUE pour la synchro initiale.
+  // On utilise bulkPut pour écraser/insérer tous les produits d'un coup,
+  // en écartant la vérification updated_at qui est un piège pour la synchro initiale.
   const pl = op.payload as CatalogueSnapshotPayload;
   // Partage ciblé : le propriétaire peut envoyer un sous-catalogue différent à chaque
   // employé. Tout le groupe voit les mêmes ops au relais (il est aveugle), donc c'est
   // ICI qu'on décide : un instantané qui porte un destinataire et qui n'est pas le
   // mien ne s'applique pas. Sans `target_device_id`, c'est le broadcasting historique.
   if (pl?.target_device_id && pl.target_device_id !== getIdentity().deviceId) return;
-  for (const p of pl?.products ?? []) {
-    if (!p?.id || p.deleted_at) continue;
-    const existing = await db.products.get(p.id);
-    if (!existing) {
-      // Bootstrap : la fiche est celle du propriétaire, `updated_at` compris — c'est
-      // cette date qui decidera, à l'import suivant, si son stock est plus frais.
-      // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
-      await db.products.put(enforceServiceUnlimited({ ...p }));
-      continue;
-    }
-    if (existing.deleted_at) continue;
-    if (!(p.updated_at > existing.updated_at)) continue;
-    // Stock illimité : l'instantané ne peut pas le porter (JSON n'a pas d'infini,
-    // il y voyage en `null`) — on n'y touche donc pas.
-    const stock = Number.isFinite(p.stock) ? p.stock : existing.stock;
-    const variants = p.variants?.map((v) => ({ ...v }));
-    if (stock === existing.stock && sameVariantStocks(variants, existing.variants)) continue;
-    await db.products.put(
-      enforceServiceUnlimited({
-        ...existing,
-        stock,
-        ...(variants ? { variants } : {}),
-        ...touch(),
-      }),
-    );
+
+  // --- ÉTAPE 1 : bulkPut de tous les produits du snapshot (source de vérité absolue) ---
+  const productsToImport = pl?.products?.filter((p) => p?.id && !p.deleted_at) ?? [];
+  await db.products.bulkPut(productsToImport.map((p) => enforceServiceUnlimited({ ...p })));
+
+  // --- ÉTAPE 2 : supprimer les produits qui ont été retirés du snapshot (marquage deleted_at) ---
+  const snapshotProductIds = new Set(productsToImport.map((p) => p.id));
+  // Récupérer tous les produits non supprimés de l'employé
+  const allExistingProducts = await db.products.toArray();
+  const nonDeleted = allExistingProducts.filter((p) => !p.deleted_at);
+  // Garder uniquement ceux qui ne sont plus dans le snapshot
+  const existingProducts = nonDeleted.filter((p) => !snapshotProductIds.has(p.id));
+  for (const existing of existingProducts) {
+    await db.products.update(existing.id, { deleted_at: Date.now() });
   }
   // Le relais est aussi le garant du NOM de la boutique : si ce nouvel écran est
   // encore sur le placeholder « Ma boutique » (fiche jamais écrite à l'onboarding,
