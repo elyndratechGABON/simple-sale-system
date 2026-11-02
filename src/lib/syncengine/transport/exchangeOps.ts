@@ -168,8 +168,15 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     for (const op of remote) {
       if (op.type === "catalogue.snapshot") {
         const pl = op.payload as { target_device_id?: string; products?: unknown[] };
-        console.info(
-          `[relais] snapshot reçu de ${op.device_id.slice(0, 8)}… (${pl?.products?.length ?? 0} produit(s), cible : ${pl?.target_device_id || "tous"})`,
+        console.log(
+          "[pull] Snapshot reçu :",
+          op.id,
+          "source :",
+          op.device_id,
+          "cible :",
+          pl?.target_device_id || "tous",
+          "produits :",
+          pl?.products?.length ?? 0,
         );
       }
     }
@@ -252,6 +259,25 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     }
 
     const { applied } = await applyRemoteOps(foreign);
+
+    // Diagnostic APRÈS la transaction Dexie : logger depuis `applyCatalogueSnapshot`
+    // (appelé dans cette transaction) peut provoquer un commit prématuré. La décision
+    // de ciblage est répétée ici, hors transaction, et `processed_ops` confirme la fin.
+    for (const op of foreign) {
+      if (op.type !== "catalogue.snapshot") continue;
+      const pl = op.payload as { target_device_id?: string; products?: { id?: string }[] };
+      const target = pl?.target_device_id?.trim().toLowerCase();
+      const matches = !target || target === identity.deviceId.trim().toLowerCase();
+      const imported = matches && Boolean(await getDB().processed_ops.get(op.id));
+      console.log(
+        imported ? "[apply] Application de" : "[apply] Snapshot non appliqué — cible différente :",
+        imported
+          ? (pl?.products?.filter((p) => p?.id).length ?? 0)
+          : (pl?.target_device_id ?? "tous"),
+        imported ? "produits depuis le snapshot" : `appareil courant ${identity.deviceId}`,
+        op.id,
+      );
+    }
 
     // Nouvelle arrivée au groupe : elle a droit à son stock, mais celui qu'on lui a choisi.
     const peers = await pairedEmployees(identity.shopId);

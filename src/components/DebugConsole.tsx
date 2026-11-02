@@ -37,6 +37,7 @@ export function DebugConsole() {
     const originalLog = console.log;
     const originalError = console.error;
     let id = 0;
+    const pendingEntries: LogEntry[] = [];
     const append = (level: LogEntry["level"], args: unknown[]) => {
       const entry = {
         id: ++id,
@@ -44,7 +45,10 @@ export function DebugConsole() {
         message: formatArgs(args),
         at: new Date().toLocaleTimeString(),
       };
-      setLogs((current) => [...current, entry].slice(-20));
+      // Ne jamais déclencher React depuis un console.log appelé à l'intérieur d'une
+      // transaction Dexie : une mise à jour synchrone peut interrompre la transaction
+      // IndexedDB (`PrematureCommitError`). Le buffer est vidé après la pile courante.
+      pendingEntries.push(entry);
     };
 
     console.log = (...args: unknown[]) => {
@@ -56,7 +60,14 @@ export function DebugConsole() {
       append("error", args);
     };
 
+    const flushTimer = window.setInterval(() => {
+      if (pendingEntries.length === 0) return;
+      const batch = pendingEntries.splice(0);
+      setLogs((current) => [...current, ...batch].slice(-20));
+    }, 200);
+
     return () => {
+      window.clearInterval(flushTimer);
       console.log = originalLog;
       console.error = originalError;
     };

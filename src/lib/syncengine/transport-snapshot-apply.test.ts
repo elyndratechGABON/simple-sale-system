@@ -70,6 +70,38 @@ describe("transport P2P via relais", () => {
     expect((await listProducts()).find((p) => p.id === "p1")?.stock).toBe(15);
   });
 
+  it("accepte la cible device_id avec espaces et casse différente", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const id = getIdentity();
+    const relay = makeRelay();
+
+    const snapOp = await relay.asPeer({
+      id: "snap:cible-normalisee",
+      device_id: "proprietaire",
+      payload: {
+        target_device_id: ` ${id.deviceId.toUpperCase()} `,
+        products: [
+          {
+            id: "p1",
+            name: "Coca 1L",
+            price: 600,
+            cost: 300,
+            category: "Boisson",
+            stock: 15,
+            updated_at: 0,
+            sync_status: "local",
+          },
+        ],
+      },
+      status: "synced",
+    });
+
+    await applyRemoteOpsSigned([await announceOpFor("proprietaire"), snapOp]);
+    expect((await listProducts()).find((p) => p.id === "p1")?.stock).toBe(15);
+  });
+
   it("applique un snapshot du catalogue sur un écran neuf (stock absolu)", async () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
