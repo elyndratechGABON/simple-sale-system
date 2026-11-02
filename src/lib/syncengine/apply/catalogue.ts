@@ -29,8 +29,12 @@ export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promi
   // employé. Tout le groupe voit les mêmes ops au relais (il est aveugle), donc c'est
   // ICI qu'on décide : un instantané qui porte un destinataire et qui n'est pas le
   // mien ne s'applique pas. Sans `target_device_id`, c'est le broadcasting historique.
-  const targetDeviceId = pl?.target_device_id?.trim().toLowerCase();
-  const currentDeviceId = getIdentity().deviceId.trim().toLowerCase();
+  const targetDeviceId = String(pl?.target_device_id ?? "")
+    .trim()
+    .toLowerCase();
+  const currentDeviceId = String(getIdentity().deviceId ?? "")
+    .trim()
+    .toLowerCase();
   if (targetDeviceId && targetDeviceId !== currentDeviceId) {
     return;
   }

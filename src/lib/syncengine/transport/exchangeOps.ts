@@ -266,15 +266,36 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     for (const op of foreign) {
       if (op.type !== "catalogue.snapshot") continue;
       const pl = op.payload as { target_device_id?: string; products?: { id?: string }[] };
-      const target = pl?.target_device_id?.trim().toLowerCase();
-      const matches = !target || target === identity.deviceId.trim().toLowerCase();
-      const imported = matches && Boolean(await getDB().processed_ops.get(op.id));
+      const target = String(pl?.target_device_id ?? "")
+        .trim()
+        .toLowerCase();
+      const current = String(identity.deviceId ?? "")
+        .trim()
+        .toLowerCase();
+      const matches = !target || target === current;
+      const processed = Boolean(await getDB().processed_ops.get(op.id));
+      const source = await getDB().paired_devices.get(op.device_id);
       console.log(
-        imported ? "[apply] Application de" : "[apply] Snapshot non appliqué — cible différente :",
-        imported
-          ? (pl?.products?.filter((p) => p?.id).length ?? 0)
-          : (pl?.target_device_id ?? "tous"),
-        imported ? "produits depuis le snapshot" : `appareil courant ${identity.deviceId}`,
+        "[apply] Snapshot diagnostic :",
+        matches
+          ? processed
+            ? "appliqué/déjà traité"
+            : "cible OK, non traité (vérifier confiance/signature)"
+          : "cible différente",
+        "cible :",
+        pl?.target_device_id ?? "tous",
+        "appareil :",
+        identity.deviceId,
+        "produits :",
+        pl?.products?.filter((p) => p?.id).length ?? 0,
+        "signature :",
+        Boolean(op.sig),
+        "source connue :",
+        Boolean(source),
+        "clé source :",
+        Boolean(source?.public_key),
+        "op traitée :",
+        processed,
         op.id,
       );
     }
