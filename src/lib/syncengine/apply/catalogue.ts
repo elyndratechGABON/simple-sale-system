@@ -2,7 +2,7 @@ import type { PosDatabase } from "../../db";
 import { getPreferences, savePreferences } from "../../settings";
 import { enforceServiceUnlimited } from "../../db/products";
 import { getIdentity } from "../identity";
-import type { CatalogueSnapshotPayload, SyncOp } from "../types";
+import type { CatalogueAckPayload, CatalogueSnapshotPayload, SyncOp } from "../types";
 import { touch } from "./helpers";
 
 export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promise<void> {
@@ -50,4 +50,27 @@ export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promi
       });
     }
   }
+}
+
+/**
+ * ACK de l'EMPLOYÉ (mission badge — Étape 4) : il a APPLIQUÉ l'instantané portant
+ * `batch_id`. Chez le PATRON, l'op snapshot de sa propre outbox qui porte ce batch_id
+ * est PURGÉE — le badge de l'employé passe d'« En cours » (orange) à « À jour » (vert)
+ * au prochain invalidation de `["share_pending"]` (faite par `invalidateSyncQueries`).
+ *
+ * Recherche : les ops `catalogue.snapshot` PENDING de l'outbox, peu nombreuses depuis
+ * la purge d'urgence et le push par lots — un filtre mémoire suffit, pas d'index.
+ * Idempotent : un rejeu d'ACK ne trouve plus rien, ne supprime rien d'autre.
+ */
+export async function applyCatalogueAck(db: PosDatabase, op: SyncOp): Promise<void> {
+  const batchId = (op.payload as CatalogueAckPayload | undefined)?.batch_id;
+  if (!batchId) return;
+  const pendantes = await db.sync_ops.where("status").equals("pending").toArray();
+  const acquittees = pendantes.filter(
+    (o) =>
+      o.type === "catalogue.snapshot" &&
+      (o.payload as CatalogueSnapshotPayload | undefined)?.batch_id === batchId,
+  );
+  if (acquittees.length === 0) return;
+  await db.sync_ops.bulkDelete(acquittees.map((o) => o.id));
 }

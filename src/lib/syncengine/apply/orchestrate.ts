@@ -1,6 +1,8 @@
 import { getDB } from "../../db";
 import { invalidateSyncQueries } from "@/lib/syncengine/queries";
-import type { SyncOp } from "../types";
+import { ensureIdentity } from "../identity";
+import { emitOp } from "../ops";
+import type { CatalogueAckPayload, SyncOp } from "../types";
 import { applyOp } from "./dispatch";
 import { compareOps, resolveTrustedKeys, verifyAgainst } from "./trust";
 
@@ -47,6 +49,9 @@ export async function applyRemoteOps(
     trusted = sorted.filter((_, i) => checks[i]);
   }
 
+  // Les batch_id des snapshots APPLIQUÉS (rempli DANS la transaction, consommé après).
+  const batchesAppliques: string[] = [];
+
   const result = await db.transaction(
     "rw",
     [
@@ -62,6 +67,9 @@ export async function applyRemoteOps(
       // Le handler `stock.adjusted` journalise le mouvement chez le récepteur
       // (`recordMovement`) — absent de cette liste, la transaction échouait NotFound.
       db.stock_movements,
+      // Le handler `catalogue.ack` PURGE l'outbox du patron (l'op snapshot acquittée
+      // part de la base) — sync_ops doit être ouvert dans la transaction.
+      db.sync_ops,
     ],
     async () => {
       const seen = new Set<string>();
@@ -76,6 +84,13 @@ export async function applyRemoteOps(
         seen.add(op.id);
         await applyOp(db, op);
         await db.processed_ops.put({ id: op.id, processed_at: now });
+        // Collecte des ACK : un snapshot APPLIQUÉ qui porte un batch_id sera
+        // acquitté APRÈS la transaction (hors tx — l'émission est un await WebCrypto
+        // et une écriture sync_ops, elle n'a pas le droit d'attendre ici).
+        if (op.type === "catalogue.snapshot") {
+          const batch = (op.payload as { batch_id?: string } | undefined)?.batch_id;
+          if (batch) batchesAppliques.push(batch);
+        }
         // Appliquer une op d'un pair, c'est l'avoir rencontré : il entre au registre
         // des appareils du compte (liste « Appareils » des Paramètres, pairing).
         if (op.type === "device.announce") {
@@ -111,6 +126,25 @@ export async function applyRemoteOps(
       return { applied, skipped };
     },
   );
+
+  // ÉTAPE ACK (mission badge) : chaque snapshot APPLIQUÉ qui porte un batch_id est
+  // acquitté ICI — HORS transaction (l'émission est un await WebCrypto + écriture
+  // sync_ops, jamais dans la tx : `PrematureCommitError`). L'op `catalogue.ack` part
+  // dans NOTRE outbox : le patron la recevra, retrouvera l'op snapshot portant ce
+  // batch_id et la PURGERA — son badge passe alors d'« En cours » à « À jour ».
+  // L'archive est hors sujet : elle restaure un passé, elle ne confirme rien.
+  if (!options.fromArchive && batchesAppliques.length > 0) {
+    const identity = await ensureIdentity();
+    for (const batch_id of batchesAppliques) {
+      await db.transaction("rw", db.sync_ops, db.settings, async () => {
+        await emitOp(db, identity, {
+          type: "catalogue.ack",
+          entity_id: batch_id,
+          payload: { batch_id } satisfies CatalogueAckPayload,
+        });
+      });
+    }
+  }
 
   // Une op distante MODIFIE les mêmes tables que les mutations locales : sans ce
   // rafraîchissement, l'écran continuait d'afficher l'ancienne quantité jusqu'au

@@ -1,6 +1,6 @@
 import type { PosDatabase } from "../../db";
 import type { SyncOp } from "../types";
-import { applyCatalogueSnapshot } from "./catalogue";
+import { applyCatalogueAck, applyCatalogueSnapshot } from "./catalogue";
 import { applyChargeDeleted, applyChargeSaved } from "./charges";
 import { applyClientCreated, applyClientDeleted, applyClientUpdated } from "./clients";
 import { applyDeviceAnnounce, applyDeviceApprove, applyDeviceLeave } from "./devices";
@@ -145,6 +145,11 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       break;
     case "catalogue.snapshot":
       await applyCatalogueSnapshot(db, op);
+      break;
+    case "catalogue.ack":
+      // L'employé a appliqué l'instantané : le patron purge l'op correspondante de
+      // son outbox — le badge passe au vert (cf. applyCatalogueAck).
+      await applyCatalogueAck(db, op);
       break;
     case "category.created":
       // Les catégories personnalisées vivent dans les préférences (localStorage, par

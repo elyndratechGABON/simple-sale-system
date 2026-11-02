@@ -41,6 +41,10 @@ export const SYNC_INVALIDATED_QUERIES = [
   "account_quota",
   "clients",
   "charges",
+  // BADGE de transfert de stock (mission ACK) : un `catalogue.ack` appliqué purge
+  // une op de l'outbox du patron — le badge de l'employé passe d'« En cours » à
+  // « À jour » sans recharger la page.
+  "share_pending",
 ] as const;
 
 let cachedClient: QueryClient | null = null;

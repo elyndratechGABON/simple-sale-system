@@ -21,6 +21,7 @@ export type {
   ChargeDeletedPayload,
   ChargeSavedPayload,
   DeviceAnnouncePayload,
+  CatalogueAckPayload,
   CatalogueRequestPayload,
   CatalogueSnapshotPayload,
   CategoryCreatedPayload,
