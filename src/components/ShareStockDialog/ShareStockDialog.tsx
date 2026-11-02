@@ -19,7 +19,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { listProducts } from "@/lib/db";
+import { runOpsExchange } from "@/lib/sync";
 import {
+  publishShareNow,
   resolveSharedProducts,
   saveShareDecision,
   shareDecisionOf,
@@ -85,6 +87,11 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
         setErreur("Écran introuvable — partage annulé.");
         return;
       }
+      // Publication IMMÉDIATE de l'instantané (les produits cochés), sans attendre
+      // le prochain cycle de synchronisation. Best-effort : l'op reste dans l'outbox
+      // tant qu'elle n'est pas acquittée, le prochain cycle la repoussera sinon.
+      const emise = await publishShareNow(peer.id);
+      if (emise) void runOpsExchange().catch(() => {});
       const partages = mode === "all" ? total : choisis.length;
       onShared?.(partages);
       onOpenChange(false);

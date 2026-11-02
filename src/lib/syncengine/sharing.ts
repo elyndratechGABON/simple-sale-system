@@ -131,6 +131,23 @@ export async function markSharePublished(
   } as Partial<PairedDevice>);
 }
 
+/**
+ * Publication IMMÉDIATE pour un pair : émet son instantané (fenêtre anti-spam
+ * contournée) et marque la signature comme partie. L'appelant pousse l'outbox au
+ * relais aussitôt (`runOpsExchange`) — l'op reste en file tant qu'elle n'est pas
+ * acquittée, donc un échec réseau n'engage rien : la donnée converge de toute façon,
+ * la signature mémorisée ne dédoublonne que les réémissions inutiles.
+ */
+export async function publishShareNow(peerId: string): Promise<boolean> {
+  const db = getDB();
+  const peer = await db.paired_devices.get(peerId);
+  if (!peer) return false;
+  const part = await emitShareOps(peer, { force: true });
+  if (!part) return true; // rien à émettre : décision inchangée ou catalogue vide
+  await markSharePublished(peer.id, part.signature, part.at);
+  return true;
+}
+
 /** Enregistre la décision du propriétaire. Ne publie PAS : le transport s'en charge dans
  *  le cycle courant, ce qui évite deux allers-retours quand la décision vient de
  *  l'écran qui parle au relais. */

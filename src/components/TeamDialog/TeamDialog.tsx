@@ -8,7 +8,7 @@
 // endroit ; le détail d'un vendeur y vit une seule fois.
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, UserRound, Users, UserX } from "lucide-react";
+import { ArrowLeft, PackageOpen, UserRound, Users, UserX } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -33,6 +33,7 @@ import { approveDevice, revokeEmployeeDevice } from "@/lib/syncengine/pairing";
 import { invalidateDeviceQueries } from "@/lib/syncengine/peers";
 import type { PairedDevice } from "@/lib/syncengine/types";
 import { usePendingCatalogueRequests } from "@/hooks/use-pending-catalogue-requests";
+import { ShareStockDialog } from "@/components/ShareStockDialog/ShareStockDialog";
 import { EmployeeResults } from "./EmployeeResults";
 import { RecentActivity } from "./RecentActivity";
 import { RoleBadge } from "./RoleBadge";
@@ -171,6 +172,9 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
   const [licenciementOuvert, setLicenciementOuvert] = useState(false);
   const [busyLicenciement, setBusyLicenciement] = useState(false);
 
+  // TRANSFERT DE STOCK (propriétaire) : régler ce que CET employé reçoit du catalogue.
+  const [partageOuvert, setPartageOuvert] = useState(false);
+
   const canLicencier =
     !!selected &&
     !!(identity?.role === "owner") &&
@@ -193,6 +197,17 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
     } finally {
       setBusyLicenciement(false);
     }
+  }
+
+  /** Transfert de stock validé : le dialogue a mémorisé la décision et émis
+   *  l'instantané ; ici on rafraîchit le registre (signature mémorisée). */
+  async function apresPartage(count: number) {
+    await invalidateDeviceQueries(qc);
+    toast.success(
+      count > 0
+        ? `Stock transféré à ${selected?.device_name || "l'employé"} (${count} produit${count > 1 ? "s" : ""}).`
+        : "Stock transféré à l'employé.",
+    );
   }
 
   function close() {
@@ -238,15 +253,35 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
             <EmployeeResults device={selected} />
             {canLicencier && (
               <>
-                <div className="border-t pt-3">
+                <div className="space-y-2 border-t pt-3">
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => setPartageOuvert(true)}
+                  >
+                    <PackageOpen className="h-4 w-4 mr-2" /> Transférer de la boutique
+                  </Button>
                   <Button
                     variant="destructive"
-                    className="w-full sm:w-auto"
+                    className="w-full sm:w-auto sm:ml-2"
                     onClick={() => setLicenciementOuvert(true)}
                   >
                     <UserX className="h-4 w-4 mr-2" /> Licencier
                   </Button>
                 </div>
+                {/* Partage du stock : ce que CET écran recevra du catalogue du patron. */}
+                <ShareStockDialog
+                  open={partageOuvert}
+                  onOpenChange={setPartageOuvert}
+                  peer={
+                    identity?.role === "owner" &&
+                    selected.id !== identity.deviceId &&
+                    selected.status === "paired"
+                      ? selected
+                      : null
+                  }
+                  onShared={(c) => void apresPartage(c)}
+                />
                 <AlertDialog open={licenciementOuvert} onOpenChange={setLicenciementOuvert}>
                   <AlertDialogContent>
                     <AlertDialogHeader>
