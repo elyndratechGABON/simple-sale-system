@@ -268,7 +268,7 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
                     className="w-full sm:w-auto"
                     onClick={() => setPartageOuvert(true)}
                   >
-                    <PackageOpen className="h-4 w-4 mr-2" /> Transférer de la boutique
+                    <PackageOpen className="h-4 w-4 mr-2" /> Transférer du stock
                   </Button>
                   <Button
                     variant="destructive"
