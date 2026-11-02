@@ -24,22 +24,37 @@ async function catalogSignature(): Promise<string> {
 /** Republie, pour CHAQUE écran employé, le sous-catalogue que le propriétaire lui a
  *  choisi — et lui seulement. Avant, un changement de catalogue repartait en un instantané
  *  que TOUT le groupe appliquait : un employé ne pouvait donc pas être privé d'un article.
- *  `emitShareOps` ne sort que si le sous-catalogue de ce pair a changé depuis son dernier
- *  envoi RÉUSSI, et la signature n'est mémorisée qu'après le push (un échec n'enferme pas
- *  le relais sur un catalogue périmé). Pousse sur-le-champ (mini-push de fin de rotation)
- *  pour que le relais la détienne dès ce cycle. */
+ *
+ * Republication gated par `catalogSignature` : SA part (le catalogue du propriétaire)
+ * a-t-elle changé depuis le dernier envoi RÉUSSI ? Sans cette garde, un `force` à
+ * l'aveugle réémittait un instantané identique à CHAQUE rotation — un doublon par
+ * cycle, mesuré par transport-share/transport-employee. La signature n'est
+ * mémorisée qu'après un push réussi : un échec ne borne rien. À l'intérieur,
+ * `emitShareOps` (sans force) dédoublonne PAR PAIR sur `shared_signature`. Pousse
+ * sur-le-champ (mini-push de fin de rotation) pour que le relais la détienne dès
+ * ce cycle. */
 export async function publishFreshCatalog(
   client: TransportClient,
   identity: SyncIdentity,
 ): Promise<void> {
   if (identity.role === "employee") return;
   const db = getDB();
+  // Le catalogue local a-t-il changé depuis la dernière publication RÉUSSIE ?
+  // Sinon : rien à republier — les pairs reçoivent exactement ce qu'ils ont déjà.
+  const signature = await catalogSignature();
+  const last = String((await db.settings.get(KEY_LAST_CATALOG_SIG))?.value ?? "");
+  const premierePublication = last === "";
+  if (!premierePublication && last === signature) return;
+
   const peers = await pairedEmployees(identity.shopId);
   const parts: { peerId: string; signature: string; at: number }[] = [];
   for (const peer of peers) {
-    const part = await emitShareOps(peer, { force: true });
+    const part = await emitShareOps(peer);
     if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
   }
+  // La fenêtre anti-spam PAR ÉCRAN a serré la main sur tout : rien ne part, mais la
+  // signature locale reste NON acquittée — la rotation suivante réessaie (cf. la
+  // promesse de convergence au-dessus : rien n'est mémorisé avant un envoi parti).
   if (parts.length === 0) return;
 
   const pending = await listPendingOps(identity.shopId);
@@ -48,6 +63,7 @@ export async function publishFreshCatalog(
     if (await client.push(identity.shopId, signed)) {
       await markOpsSynced(pending.map((o) => o.id));
       for (const part of parts) await markSharePublished(part.peerId, part.signature, part.at);
+      await db.settings.put({ key: KEY_LAST_CATALOG_SIG, value: signature });
     }
   }
 }

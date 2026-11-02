@@ -3,7 +3,7 @@ import { getPreferences, savePreferences } from "../../settings";
 import { enforceServiceUnlimited } from "../../db/products";
 import { getIdentity } from "../identity";
 import type { CatalogueSnapshotPayload, SyncOp } from "../types";
-import { sameVariantStocks, touch } from "./helpers";
+import { touch } from "./helpers";
 
 export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promise<void> {
   // L'instantané est le BOOTSTRAP d'un écran qui rejoint — les produits qu'il ne
@@ -14,9 +14,16 @@ export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promi
   // réalignement, la caisse employé garderait le stock de son premier import pour
   // toujours, et le « transfert de stock » n'aurait lieu qu'une fois dans la vie.
   //
-  // Le snapshot est la source de vérité ABSOLUE pour la synchro initiale.
-  // On utilise bulkPut pour écraser/insérer tous les produits d'un coup,
-  // en écartant la vérification updated_at qui est un piège pour la synchro initiale.
+  // Le snapshot est la SOURCE DE VÉRITÉ ABSOLUE : un `bulkPut` écrase et insère le
+  // catalogue porté par l'op sans comparaison d'`updated_at` — un piège pour la
+  // synchro initiale (un produit créé à la même date, ou plus récent par erreur de
+  // fuseau, était silencieusement ignoré). Les ventes ne sont PAS concernées : l'op
+  // ne cible que `products` (cf. apply.ts dispatch — la vente arrive par sale.*).
+  //
+  // ABSENCE ≠ SUPPRESSION (cf. AGENTS.md) : un produit local absent du snapshot
+  // n'est jamais supprimé — le partage n'ajoute et n'actualise que. Un produit
+  // retiré explicitement par le propriétaire voyage DANS le payload avec son
+  // `deleted_at` : le bulkPut ci-dessous écrit cette pierre tombale telle quelle.
   const pl = op.payload as CatalogueSnapshotPayload;
   // Partage ciblé : le propriétaire peut envoyer un sous-catalogue différent à chaque
   // employé. Tout le groupe voit les mêmes ops au relais (il est aveugle), donc c'est
@@ -24,20 +31,8 @@ export async function applyCatalogueSnapshot(db: PosDatabase, op: SyncOp): Promi
   // mien ne s'applique pas. Sans `target_device_id`, c'est le broadcasting historique.
   if (pl?.target_device_id && pl.target_device_id !== getIdentity().deviceId) return;
 
-  // --- ÉTAPE 1 : bulkPut de tous les produits du snapshot (source de vérité absolue) ---
-  const productsToImport = pl?.products?.filter((p) => p?.id && !p.deleted_at) ?? [];
+  const productsToImport = pl?.products?.filter((p) => p?.id) ?? [];
   await db.products.bulkPut(productsToImport.map((p) => enforceServiceUnlimited({ ...p })));
-
-  // --- ÉTAPE 2 : supprimer les produits qui ont été retirés du snapshot (marquage deleted_at) ---
-  const snapshotProductIds = new Set(productsToImport.map((p) => p.id));
-  // Récupérer tous les produits non supprimés de l'employé
-  const allExistingProducts = await db.products.toArray();
-  const nonDeleted = allExistingProducts.filter((p) => !p.deleted_at);
-  // Garder uniquement ceux qui ne sont plus dans le snapshot
-  const existingProducts = nonDeleted.filter((p) => !snapshotProductIds.has(p.id));
-  for (const existing of existingProducts) {
-    await db.products.update(existing.id, { deleted_at: Date.now() });
-  }
   // Le relais est aussi le garant du NOM de la boutique : si ce nouvel écran est
   // encore sur le placeholder « Ma boutique » (fiche jamais écrite à l'onboarding,
   // ou QR généré AVANT cette correction), le nom transmis par le membre principal

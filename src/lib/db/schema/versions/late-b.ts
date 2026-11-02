@@ -160,4 +160,14 @@ export function applyLateBVersions(db: Dexie): void {
   db.version(27).stores({
     financial_snapshots: "id, created_at",
   });
+
+  // Version 28 — INDEX `table` SUR `sales` (correctif SchemaError).
+  //
+  // `openTable()` déduplique par `.where("table").equals(label)`, mais l'index `table`
+  // n'avait jamais été ajouté au store `sales` : toute ouverture de table levait
+  // « SchemaError: KeyPath table on object store sales is not indexed ». L'index ne
+  // touche IPA données — aucun `upgrade()`, Dexie indexe les fiches existantes de lui-même.
+  db.version(28).stores({
+    sales: "id, timestamp, status, client_name, client_id, table, updated_at",
+  });
 }
