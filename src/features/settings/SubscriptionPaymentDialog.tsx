@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 
 import { formatFCFA } from "@/lib/format";
+import { getOrchestratorUrl } from "@/lib/sync";
+import { ensureIdentity } from "@/lib/syncengine/identity";
 
 /** Dialog de paiement d'abonnement : USSD + WhatsApp, sans validation par l'administration.
  *  Flux : instructions de paiement (numéro + USSD) → « J'ai payé » → zone de collage du
@@ -37,32 +39,51 @@ export function SubscriptionPaymentDialog({
     window.location.href = "tel:*150*2%23";
   };
 
-  /** Double vérification : envoi à l'orchestrateur + WhatsApp avec SMS collé. */
+  /** Double vérification : WhatsApp D'ABORD puis dépôt à l'orchestrateur.
+   *
+   *  L'ordre n'est pas esthétique : `window.open` ne part que dans le GESTE
+   *  utilisateur — un `await` avant l'ouverture fait bloquer le popup par le
+   *  navigateur. Le dépôt orchestrateur est best-effort et non-bloquant.
+   */
   const handleDoubleCheck = async () => {
     const text = sms.trim();
     if (!text) return;
-    // Action 1 : envoyer à l'orchestrateur
-    try {
-      await fetch("/api/v1/subscriptions/request-payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          shop_id: "shop_123", // TODO: remplacer par le shop_id réel
-          sms_text: text,
-        }),
-      });
-      toast.success("Message envoyé à l'orchestrateur", {
-        description: "Vérifiez WhatsApp pour confirmation.",
-      });
-    } catch (e) {
-      toast.error("Erreur envoi orchestrateur");
-    }
-    // Action 2 : ouvrir WhatsApp avec le SMS pré-rempli
+    // Action 1 : WhatsApp, dans le geste utilisateur.
     const url = `https://wa.me/24176505254?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank", "noopener,noreferrer");
-    // Fermer le dialog
+
+    // Action 2 : dépôt orchestrateur (non-bloquant). La route canonique est
+    // `/api/v1/requests` : le serveur résout lui-même le COMPTE via le device_id
+    // (aucun shop_id a forger — l'ancien appel forgeait « shop_123 »), crée la demande
+    // et la diffuse au dashboard pour validation HUMAINE (le SMS reste « à valider »,
+    // c'est voulu — cf. payments/proof). Le SMS brut voyage dans `note`.
+    void (async () => {
+      try {
+        const base = getOrchestratorUrl();
+        if (!base) return;
+        const identity = await ensureIdentity();
+        const res = await fetch(`${base}/api/v1/requests`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            device_id: identity.deviceId,
+            plan_name: plan.name,
+            plan_price: plan.price,
+            note: `Vérification double (SMS joint) : ${text}`.slice(0, 500),
+          }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        toast.success("Demande envoyée à l'orchestrateur", {
+          description: "Poursuivez sur WhatsApp en attendant la validation.",
+        });
+      } catch {
+        toast.error("Orchestrateur injoignable", {
+          description:
+            "La preuve a été déposée sur WhatsApp — elle pourra être retransmise plus tard.",
+        });
+      }
+    })();
+
     onClose();
   };
 
