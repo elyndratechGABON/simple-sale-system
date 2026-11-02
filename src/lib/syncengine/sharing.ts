@@ -28,28 +28,46 @@ export function shareDecisionOf(peer: PairedDevice): { mode: ShareMode; productI
     : { mode: "all", productIds: [] };
 }
 
-/** Les produits que le propriétaire a choisis pour CET écran. Les produits PRIVÉS
- *  (`is_private`, toggle du formulaire propriétaire) sont exclus de CETTE résolution —
- *  même si la décision du pair dit « tout le stock », un produit marqué privé n'est
- *  jamais le stock "de l'équipe". */
+/** Les produits que le propriétaire a choisis pour CET écran.
+ *
+ *  Filtage DOUBLE (mission Étape 4.1) — la déduction est faite ICI une seule fois, et
+ *  tout le moteur (emitShareOps, publishFreshCatalog, publishShareNow) en hérite :
+ *   1. produits PRIVÉS (`is_private`, toggle du formulaire) exclus — même si la
+ *      décision dit « tout le stock », un produit privé ne quitte jamais son écran ;
+ *   2. produits NON SÉLECTIONNÉS (mode « sélection ») exclus — la décision du pair
+ *      fait foi, l'id absent de `shared_product_ids` n'est pas envoyé.
+ *
+ *  Les TOMBSTONES (`deleted_at`) des produits qui restaient dans la sélection / le
+ *  mode tout REPARTENT dans le payload : l'absence seule ne supprime rien chez
+ *  l'employé (AGENTS.md), la suppression partagée doit donc voyager comme valeur
+ *  explicite pour que sa fiche meurt chez lui aussi. */
 export async function resolveSharedProducts(peer: PairedDevice): Promise<Product[]> {
-  const all = (await listProducts()).filter((p) => !p.is_private);
+  const db = getDB();
+  const vivants = (await listProducts()).filter((p) => !p.is_private);
   const { mode, productIds } = shareDecisionOf(peer);
-  if (mode === "all") return all;
-  // Les ids disparus du catalogue sont ignorés sans bruit : une sélection périmée ne doit
-  // pas faire échouer le partage, elle en retire simplement l'article.
-  const garder = new Set(productIds);
-  return all.filter((p) => garder.has(p.id));
+  const garder = mode === "all" ? null : new Set(productIds);
+  const partis = garder ? vivants.filter((p) => garder.has(p.id)) : vivants;
+  // Tombstones du périmètre du pair : produits déjà morts, jamais privés, dont la
+  // suppression — une fois arrivée au relais — tue la fiche locale chez lui. Le
+  // rejeu est idempotent : applyCatalogueSnapshot réécrit la tombstone telle quelle.
+  const morts = (await db.products.toArray()).filter(
+    (p) => p.deleted_at && !p.is_private && (garder ? garder.has(p.id) : true),
+  );
+  return [...partis, ...morts];
 }
 
 /** Empreinte du sous-catalogue : « ce que je lui ai déjà envoyé a-t-il changé ? ».
  * Inclut le stock global + CHAQUE stock de variante, sinon une variante déplacée
- * (total inchangé) ne déclencherait pas de réenvoi. */
+ * (total inchangé) ne déclencherait pas de réenvoi. Inclut AUSSI la mort : la
+ * tombstone d'un produit part arrive à la MÊME empreinte (id:stock:prix) que le
+ * produit vivant — sans le marqueur la réémission de suppression était tuée
+ * par le dédoublonnage, et l'employé gardait la fiche pour toujours. */
 export function signatureOf(products: Product[]): string {
   return products
     .map((p) => {
       const vars = p.variants?.map((v) => `${v.id}:${v.stock ?? "inf"}`).join(",");
-      return `${p.id}:${Number.isFinite(p.stock) ? p.stock : "inf"}:${p.price}${vars ? `|${vars}` : ""}`;
+      const mort = p.deleted_at ? ":del" : "";
+      return `${p.id}:${Number.isFinite(p.stock) ? p.stock : "inf"}:${p.price}${mort}${vars ? `|${vars}` : ""}`;
     })
     .sort()
     .join("|");

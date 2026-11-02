@@ -4,6 +4,7 @@ import { alive, getDB, touch, uid } from "./internal";
 import { productPatch } from "./patches";
 import { recordMovement } from "./stock";
 import type { Product, ProductVariant, SyncFields } from "./types/sync";
+import type { PairedDevice } from "../syncengine/types";
 
 // ---------- Products ----------
 export async function listProducts(): Promise<Product[]> {
@@ -46,7 +47,7 @@ export function enforceServiceUnlimited<T extends { type?: string; stock: number
 }
 
 export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Promise<Product> {
-  await ensureIdentity();
+  const identity = await ensureIdentity();
   const product = enforceServiceUnlimited(normalizeVariantStock({ ...p, id: uid(), ...touch() }));
   const db = getDB();
   // Produit PRIVÉ du propriétaire : il reste sur CET écran — l'op `product.created` qui
@@ -61,6 +62,7 @@ export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Pro
     db.stock_movements,
     db.sync_ops,
     db.settings,
+    db.paired_devices,
     async () => {
       await db.products.put(product);
       // Stock initial > 0 : une trace de création, sinon le premier réapprovisionnement
@@ -84,6 +86,20 @@ export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Pro
           entity_id: product.id,
           payload: { product },
         });
+        // Toggle « Partager avec mon équipe » = ON PAR DÉFAUT : un produit public créé
+        // par le patron rejoint automatiquement la sélection de CHAQUE employé qui
+        // partage en mode « sélection » — sinon il n'arriverait jamais (la sélection
+        // est persistée et immuable), l'employé ne verrait que les anciens articles.
+        const peers = await db.paired_devices.where("shop_id").equals(identity.shopId).toArray();
+        for (const peer of peers) {
+          if (peer.status !== "paired" || peer.share_mode !== "selection") continue;
+          const liste = peer.shared_product_ids ?? [];
+          if (liste.includes(product.id)) continue;
+          await db.paired_devices.update(peer.id, {
+            shared_product_ids: [...liste, product.id],
+            updated_at: Date.now(),
+          } as Partial<PairedDevice>);
+        }
       }
     },
   );
@@ -147,13 +163,18 @@ export async function deleteProduct(id: string): Promise<void> {
   const db = getDB();
   const p = await db.products.get(id);
   if (!p) return;
+  // Un produit PRIVÉ du propriétaire n'est jamais parti vers les employés : sa
+  // tombstone ne repart pas — les pairs n'ont rien à supprimer, l'op serait du bruit.
+  const priver = p.is_private === true && getIdentity().role === "owner";
   await db.transaction("rw", db.products, db.sync_ops, db.settings, async () => {
     await db.products.put({ ...p, ...touch(), deleted_at: Date.now() });
-    await emitOp(db, getIdentity(), {
-      type: "product.deleted",
-      entity_id: id,
-      payload: { product_id: id },
-    });
+    if (!priver) {
+      await emitOp(db, getIdentity(), {
+        type: "product.deleted",
+        entity_id: id,
+        payload: { product_id: id },
+      });
+    }
   });
 }
 
