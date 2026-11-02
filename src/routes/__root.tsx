@@ -15,6 +15,7 @@ import { type ReactNode, useEffect } from "react";
 import appCss from "../styles.css?url";
 import { PwaBootstrap } from "../components/PwaBootstrap";
 import { Toaster } from "sonner";
+import { Analytics } from "@vercel/analytics/react";
 
 export function NotFoundComponent() {
   return (
@@ -93,14 +94,33 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Application de caisse offline-first pensée pour les business gabonais : ventes, stocks, commandes et rapports — vos données restent sur votre appareil.",
       },
-      { property: "og:title", content: "ECAISSE — Pilotez votre business" },
+      {
+        property: "og:title",
+        content: "ELYNDRA CAISSE — Gérez votre business. Vendez plus simplement.",
+      },
       {
         property: "og:description",
         content:
-          "ECAISSE centralise vos ventes, vos stocks et le suivi de votre activité — sans connexion requise.",
+          "Caisse, stocks, clients et rapports : ELYNDRA CAISSE centralise votre activité — sans connexion requise.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://elyndracaisse.vercel.app/" },
+      // Belle carte au partage WhatsApp/Facebook : l'image doit être une URL ABSOLUE
+      // (les crawlers ne résolvent pas les relatives), format ~1,91:1 (1200×630).
+      { property: "og:image", content: "https://elyndracaisse.vercel.app/logo-header.png" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
+      {
+        name: "twitter:title",
+        content: "ELYNDRA CAISSE — Gérez votre business. Vendez plus simplement.",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Caisse, stocks, clients et rapports : ELYNDRA CAISSE centralise votre activité — sans connexion requise.",
+      },
+      { name: "twitter:image", content: "https://elyndracaisse.vercel.app/logo-header.png" },
       { name: "theme-color", content: "#059669" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
@@ -188,6 +208,10 @@ function RootComponent() {
         <Outlet />
         <PwaBootstrap />
         <Toaster richColors position="top-center" />
+        {/* Analytics Vercel : comptage des visites injecté par l'hébergeur en
+            production, inerte en local — zéro configuration, zéro consentement
+            supplémentaire (données dépersonnalisées). Hors du reducer d'animation. */}
+        <Analytics />
       </MotionConfig>
     </QueryClientProvider>
   );
