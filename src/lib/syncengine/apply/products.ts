@@ -1,6 +1,7 @@
 import type { PosDatabase } from "../../db";
 import { enforceServiceUnlimited } from "../../db/products";
 import { recordMovement } from "../../db/stock";
+import { uid } from "../../db/internal";
 import { getIdentity } from "../identity";
 import type {
   ProductCreatedPayload,
@@ -8,16 +9,39 @@ import type {
   StockAdjustedPayload,
   SyncOp,
 } from "../types";
+import type { Product } from "../../db/types/sync";
 import { touch } from "./helpers";
 
 export async function applyProductCreated(db: PosDatabase, op: SyncOp): Promise<void> {
   const pl = op.payload as ProductCreatedPayload;
   if (!pl?.product?.id || pl.product.deleted_at) return;
-  // Upsert : le rejeu d'un pair ne doit pas écraser une suppression locale.
-  const existing = await db.products.get(pl.product.id);
-  if (existing?.deleted_at) return;
-  // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
-  await db.products.put(enforceServiceUnlimited(pl.product));
+  const etranger = !!op.device_id && op.device_id !== getIdentity().deviceId;
+  // Un produit créé PAR UN AUTRE écran n'est jamais privé : l'employé n'a pas le droit
+  // de créer du privé (le champ ne naît que par le toggle du formulaire propriétaire).
+  // Le retrait est défensif — un payload qui forgerait le flag est neutralisé ici.
+  const entrant: Product = etranger ? { ...pl.product, is_private: undefined } : { ...pl.product };
+  const existing = await db.products.get(entrant.id);
+  if (!existing) {
+    // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
+    await db.products.put(enforceServiceUnlimited(entrant));
+    return;
+  }
+  // Upsert : le rejeu de son PROPRE produit n'écrase pas une suppression locale.
+  if (existing.deleted_at) return; // pierre tombale locale : elle fait foi
+  if (!etranger) return;
+  // CONFLIT D'ID (rare) : la clé est déjà celle d'un produit VIVANT détenu par un
+  // AUTRE appareil. Personne ne perd sa fiche : l'entrant arrive avec un nom DISTINCT
+  // (« nom (employé) ») et une clé NEUVE — la clé d'origine est référencée ailleurs
+  // (ventes, mouvements), on ne réétiquette jamais rien.
+  const peer = await db.paired_devices.get(op.device_id);
+  const detail = peer?.device_name?.trim() || "employé";
+  await db.products.put(
+    enforceServiceUnlimited({
+      ...entrant,
+      id: uid(),
+      name: `${entrant.name} (${detail})`,
+    }),
+  );
 }
 
 export async function applyProductUpdated(db: PosDatabase, op: SyncOp): Promise<void> {
