@@ -1,5 +1,5 @@
 import type { Product } from "@/lib/db";
-import { type ProductCardField } from "@/lib/card-display";
+import { type ProductCardField, cardPhotoOf } from "@/lib/card-display";
 import { cn } from "@/lib/utils";
 import { Package } from "lucide-react";
 import { FieldLine } from "./FieldLine";
@@ -39,6 +39,9 @@ export function ProductCard({
 }) {
   const has = (f: ProductCardField) => fields.includes(f);
   const isService = state === "service";
+  // Image de la carte : la première variante illustrée d'abord, sinon la photo du
+  // produit (cf. cardPhotoOf) — les variantes illustrées ne sont plus invisibles.
+  const visuel = cardPhotoOf(product);
 
   // Rupture se dit en toutes lettres : « 0 » se lit comme un stock réellement vide,
   // l'utilisateur doit comprendre que la fiche est à recommander.
@@ -72,9 +75,9 @@ export function ProductCard({
           predomine sur les bandes vides et les étirements visibles. ── */}
       {has("image") && (
         <div className="relative aspect-square w-full overflow-hidden bg-muted/30">
-          {product.photo ? (
+          {visuel ? (
             <img
-              src={product.photo}
+              src={visuel}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover object-center"

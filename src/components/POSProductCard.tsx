@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Package, Plus } from "lucide-react";
 import type { Product } from "@/lib/db";
+import { cardPhotoOf } from "@/lib/card-display";
 import { formatFCFA } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,10 @@ export const POSProductCard = memo(function POSProductCard({
   const remaining = unlimited ? Number.POSITIVE_INFINITY : product.stock - inCart;
   const out = !unlimited && remaining <= 0;
   const low = !unlimited && !out && remaining <= (product.min_stock ?? 5);
+
+  // L'image de la carte : la première variante illustrée d'abord — sinon la photo
+  // du produit (posItem) — cf. cardPhotoOf.
+  const visuel = cardPhotoOf(product);
 
   const add = () => {
     if (out) return;
@@ -81,10 +86,10 @@ export const POSProductCard = memo(function POSProductCard({
           out ? "cursor-not-allowed" : "active:scale-[0.985] transition-transform",
         )}
       >
-        {product.photo ? (
+        {visuel ? (
           <div className="aspect-square w-full overflow-hidden border-b bg-muted/30">
             <img
-              src={product.photo}
+              src={visuel}
               alt=""
               loading="lazy"
               // Photo PLEINE dans le cadre : object-cover évite les bandes vides et les

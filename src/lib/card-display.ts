@@ -100,6 +100,23 @@ export function presetFields(preset: keyof typeof CARD_PRESETS): ProductCardFiel
 }
 
 /**
+ * L'image représentative d'un produit sur une carte.
+ *
+ * Une variante peut porter SA photo (ex: la robe en rouge) : la seule règle
+ * systématique « on affiche product.photo » faisait croire que les variantes
+ * n'existaient pas — la carte du parent ressortait son image même quand une
+ * déclinaison avait son visuel propre. Ici : si UNE variante en porte une,
+ * c'est la première qui gagne — sinon on retombe sur la photo du produit,
+ * et sur l'absence si personne n'a d'image.
+ */
+export function cardPhotoOf(product: {
+  photo?: string;
+  variants?: ReadonlyArray<{ photo?: string }>;
+}): string | undefined {
+  return product.variants?.find((v) => v.photo)?.photo ?? product.photo;
+}
+
+/**
  * Déplace un champ d'un cran. Toucher deux fois le même bouton ramène à la position
  * de départ — alternative mobile au drag & drop, sans dépendance et sans gesture
  * à interpréter au doigt dans une liste dense.

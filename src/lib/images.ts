@@ -59,6 +59,21 @@ export async function fileToScaledBlob(
 }
 
 /**
+ * Blob → dataURL persistant. Les objets URL temporaires (`createObjectURL`) meurent au
+ * rechargement : une photo enregistrée en blob:... était une image qui disparaissait à
+ * chaque réouverture de la caisse, et les variantes retombaient sur l'image du parent.
+ * Le dataURL, lui, survit en IndexedDB... et voyage chez les pairs.
+ */
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error("Image illisible"));
+    fr.readAsDataURL(blob);
+  });
+}
+
+/**
  * Ré-encode un dataURL existant (Base64 legacy) selon la charte : max 500 px,
  * JPEG qualité 0.7. Les dataURL `webp` (ancien pipeline 256 px q0.85) et les
  * données trop larges sont réduits ; un dataURL JPEG déjà conforme repasse

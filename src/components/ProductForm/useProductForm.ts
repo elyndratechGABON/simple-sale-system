@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { addProduct, updateProduct, type Category, type Product } from "@/lib/db";
 import { runOpsExchange } from "@/lib/sync";
-import { fileToScaledBlob } from "@/lib/images";
+import { fileToScaledBlob, blobToDataUrl } from "@/lib/images";
 import { getIdentity } from "@/lib/syncengine/identity";
 import { usePreferences } from "@/hooks/use-preferences";
 
@@ -149,20 +149,15 @@ export function useProductForm({
     setVariants((vs) => vs.filter((v) => v.id !== id));
   }
 
-  /** Photo D'UNE variante : pipeline de compression via fileToScaledBlob,
-   *  retour en dataURL string pour compatibilité DB. */
+  /** Photo D'UNE variante : pipeline de compression (Blob transitoire) puis retour
+   *  en dataURL PERSISTANT — un blob URL mourrait au rechargement et la variante
+   *  retomberait sur la photo du produit parent. */
   async function handleVariantPhoto(variantId: string, event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
       const { blob } = await fileToScaledBlob(file);
-      // Convertir Blob → dataURL string
-      const url = await new Promise<string>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img.src);
-        img.onerror = () => resolve("");
-        img.src = URL.createObjectURL(blob);
-      });
+      const url = await blobToDataUrl(blob);
       updateVariant(variantId, { photo: url });
     } catch {
       toast.error("Impossible d'utiliser cette image.");
@@ -177,13 +172,7 @@ export function useProductForm({
     setPhotoBusy(true);
     try {
       const { blob } = await fileToScaledBlob(file);
-      // Convertir Blob → dataURL string pour le stockage en DB
-      const url = await new Promise<string>((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve(img.src);
-        img.onerror = () => resolve("");
-        img.src = URL.createObjectURL(blob);
-      });
+      const url = await blobToDataUrl(blob);
       setPhoto(url);
     } catch {
       toast.error("Impossible d'utiliser cette image.");
