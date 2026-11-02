@@ -25,8 +25,8 @@ export function DebugConsole() {
     const debugRequested = new URLSearchParams(window.location.search).get("debug") === "1";
     let storedDebug = false;
     try {
-      storedDebug = window.sessionStorage.getItem("eca_debug") === "1";
-      if (debugRequested) window.sessionStorage.setItem("eca_debug", "1");
+      storedDebug = window.localStorage.getItem("eca_debug") === "1";
+      if (debugRequested) window.localStorage.setItem("eca_debug", "1");
     } catch {
       // Le paramètre URL reste utilisable si le stockage du navigateur est bloqué.
     }

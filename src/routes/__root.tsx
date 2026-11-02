@@ -168,7 +168,7 @@ function RootShell({ children }: { children: ReactNode }) {
         />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(new URLSearchParams(location.search).get("debug")==="1")sessionStorage.setItem("eca_debug","1")}catch(_){}})();`,
+            __html: `(function(){try{if(new URLSearchParams(location.search).get("debug")==="1")localStorage.setItem("eca_debug","1")}catch(_){}})();`,
           }}
         />
       </head>
