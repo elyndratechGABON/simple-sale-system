@@ -16,6 +16,7 @@ import appCss from "../styles.css?url";
 import { PwaBootstrap } from "../components/PwaBootstrap";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/react";
+import { DebugConsole } from "../components/DebugConsole";
 
 export function NotFoundComponent() {
   return (
@@ -207,6 +208,7 @@ function RootComponent() {
             casserait l'hydratation partout ailleurs. Voir l'en-tête de `_app.tsx`. */}
         <Outlet />
         <PwaBootstrap />
+        <DebugConsole />
         <Toaster richColors position="top-center" />
         {/* Analytics Vercel : comptage des visites injecté par l'hébergeur en
             production, inerte en local — zéro configuration, zéro consentement

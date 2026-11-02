@@ -83,6 +83,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
   const release = await syncSemaphore.acquire();
   try {
     const identity = getIdentity();
+    console.log("[identity] Appareil courant :", identity.deviceId, "boutique :", identity.shopId);
     if (!isSharedGroup(identity.shopId)) return { pushed: 0, applied: 0, skipped: 0, remote: 0 };
 
     // Check if this device is paired (not pending) - skip sync if still pending
@@ -156,6 +157,12 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     startWebRtcMesh();
 
     const remote = await client.pull(identity.shopId, identity.deviceId);
+    console.log(
+      "[pull] Opérations reçues du relais :",
+      remote.length,
+      "device_id :",
+      identity.deviceId,
+    );
     // DIAGNOSTIC (flux patron→employé) : on veut voir l'instantané ARRIVER —
     // uniquement lui, sinon chaque rotation créerait du bruit.
     for (const op of remote) {
