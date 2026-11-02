@@ -5,6 +5,7 @@ import { uid } from "../../db/internal";
 import { getIdentity } from "../identity";
 import type {
   ProductCreatedPayload,
+  ProductImageUpdatedPayload,
   ProductUpdatedPayload,
   StockAdjustedPayload,
   SyncOp,
@@ -51,6 +52,34 @@ export async function applyProductUpdated(db: PosDatabase, op: SyncOp): Promise<
   if (!existing || existing.deleted_at) return;
   // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
   await db.products.put(enforceServiceUnlimited({ ...existing, ...pl.fields, ...touch() }));
+}
+
+export async function applyProductImageUpdated(db: PosDatabase, op: SyncOp): Promise<void> {
+  const payload = op.payload as ProductImageUpdatedPayload | undefined;
+  if (!payload?.product_id || typeof payload.image_base64 !== "string") return;
+  const target = String(payload.target_device_id ?? "")
+    .trim()
+    .toLowerCase();
+  const current = String(getIdentity().deviceId ?? "")
+    .trim()
+    .toLowerCase();
+  if (!target || target !== current) return;
+
+  const product = await db.products.get(payload.product_id);
+  if (!product || product.deleted_at) return;
+  if (payload.variant_id) {
+    const variants = product.variants ?? [];
+    if (!variants.some((variant) => variant.id === payload.variant_id)) return;
+    await db.products.put({
+      ...product,
+      variants: variants.map((variant) =>
+        variant.id === payload.variant_id ? { ...variant, photo: payload.image_base64 } : variant,
+      ),
+      ...touch(),
+    });
+    return;
+  }
+  await db.products.update(payload.product_id, { photo: payload.image_base64 });
 }
 
 export async function applyProductDeleted(db: PosDatabase, op: SyncOp): Promise<void> {

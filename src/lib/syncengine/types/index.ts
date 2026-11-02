@@ -30,6 +30,7 @@ export type {
   DeviceApprovePayload,
   DeviceLeavePayload,
   ProductCreatedPayload,
+  ProductImageUpdatedPayload,
   ProductUpdatedPayload,
   SaleCancelledPayload,
   SaleCreatedPayload,

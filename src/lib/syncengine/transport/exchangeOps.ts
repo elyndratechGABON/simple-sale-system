@@ -17,7 +17,7 @@ import {
   listPendingCatalogueRequests,
   markCatalogueRequestSnapshotSent,
 } from "../../db";
-import { emitShareOps, markSharePublished, pairedEmployees } from "../sharing";
+import { emitShareOps, pairedEmployees } from "../sharing";
 import { announceDevice } from "../pairing";
 import { releaseSeat } from "@/lib/gatekeeper/seat";
 import type {
@@ -195,8 +195,6 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         (d) => d.id,
       ),
     );
-    let newcomerAnnounced = false;
-
     for (const op of remoteBusiness) {
       if (op.device_id === identity.deviceId) {
         skipped++;
@@ -214,9 +212,6 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       // annonce consommée localement n'arrivait jamais à `applyRemoteOps` — donc la clé
       // publique du pair n'était jamais PINsée, et toutes ses ops suivantes se
       // faisaient refuser. Une seule porte : `applyOp`.
-      if (op.type === "device.announce" && !knownBefore.has(op.entity_id)) {
-        newcomerAnnounced = true;
-      }
       foreign.push(op);
     }
 
@@ -327,50 +322,9 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         const id = (demande.payload as CatalogueRequestPayload | undefined)?.requester_id;
         if (id && !cibles.includes(id)) cibles.push(id);
       }
-      // Les parts de catalogue à publier MAINTENANT : le nouvel arrivant, et les
-      // pairs jamais servis. `parts` est la mémoire de ce qui part — l'empreinte de
-      // publication n'est mémorisée qu'APRÈS un push réussi (cf. `markSharePublished`),
-      // sinon la rotation suivante republierait le même instantané.
-      const parts: { peerId: string; signature: string; at: number }[] = [];
-      if (newcomerAnnounced) {
-        // L'op d'annonce est dans `foreign` : le nouveau pair est donc déjà enregistré.
-        for (const peer of peers) if (!cibles.includes(peer.id)) cibles.push(peer.id);
-        // LE NOUVEAU PAIR A DROIT À SON STOCK, tout de suite. C'est un envoi
-        // délibéré, pas un effet de bord de la republication : `publishFreshCatalog`
-        // ne republie que si le catalogue du propriétaire a CHANGÉ — un écran qui
-        // rejoint un commerce déjà en service (le catalogue a donc déjà été publié à
-        // l'écran précédent) n'aurait jamais rien reçu.
-        for (const op of foreign) {
-          if (op.type !== "device.announce") continue;
-          if (knownBefore.has(op.entity_id)) continue;
-          const peer = peers.find((p) => p.id === op.entity_id);
-          if (!peer) continue;
-          const part = await emitShareOps(peer);
-          if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
-        }
-      }
-      // Un pair qui n'a JAMAIS reçu de catalogue n'a pas son stock : on le sert,
-      // quoi qu'il arrive. C'est la reprise après un incident — une annonce
-      // appliquée sans instantané, un écran arrivé pendant une coupure, un
-      // propriétaire qui n'avait pas bougé son catalogue depuis.
-      for (const peer of peers) {
-        if (peer.shared_published_at) continue;
-        if (parts.some((p) => p.peerId === peer.id)) continue;
-        const part = await emitShareOps(peer);
-        if (part) parts.push({ peerId: peer.id, signature: part.signature, at: part.at });
-      }
-      // L'outbox part tout de suite : sans ce mini-push, l'instantané resterait dans
-      // la file (la publication automatique ne se fait que si le catalogue a changé,
-      // et c'est précisément le cas où il n'a pas bougé).
-      if (parts.length > 0 && (await pousserOutbox(client, identity.shopId))) {
-        for (const p of parts) await markSharePublished(p.peerId, p.signature, p.at);
-      }
-
-      // Appareils fraîchement approuvés : envoi IMMÉDIAT du snapshot (hors throttle).
-      for (const deviceId of freshApproves) {
-        const peer = peers.find((p) => p.id === deviceId);
-        if (peer) await emitShareOps(peer);
-      }
+      // L'appairage ne transfère aucun stock automatiquement. Le propriétaire choisit
+      // explicitement « Transférer du stock » ; les catalogue.request confirmées plus
+      // bas restent une action explicite du propriétaire, distincte du scan/approval.
       // Demandes d'import fraîches (catalogue.request) : on les enregistre en attente
       // de confirmation du propriétaire. L'UI affichera une boîte de confirmation.
       for (const deviceId of cibles) {
@@ -395,8 +349,8 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
         }
       }
     } else {
-      // Les snapshots pour les nouveaux approuvés (device.approve) viennent d'être écrits
-      // dans l'outbox : on les pousse TOUT DE SUITE.
+      // À l'approbation, pousser les opérations locales déjà en attente (annonce/profil),
+      // mais ne pas déclencher un transfert de catalogue : seul le bouton manuel le fait.
       if (freshApproves.length > 0) {
         const pendingNow = await listPendingOps(identity.shopId);
         if (pendingNow.length > 0) {

@@ -6,7 +6,7 @@ import { addProduct, addStock, createSale, getDB, listSales, setShopAccount } fr
 import { ensureIdentity, getIdentity, setIdentityRole } from "./identity";
 import { announceDevice } from "./pairing";
 import { exchangeOps } from "./transport";
-import { saveShareDecision } from "./sharing";
+import { publishShareNow, saveShareDecision } from "./sharing";
 import { ACCOUNT, LINE, freshDevice, makeRelay, pairPeer } from "./transport-helpers";
 
 describe("transport P2P via relais", () => {
@@ -49,6 +49,7 @@ describe("transport P2P via relais", () => {
         .filter((p) => p.target_device_id === "yves");
     };
 
+    await publishShareNow("yves");
     await exchangeOps(relay.client);
     expect(await partsPourYves()).toHaveLength(1);
 
@@ -105,6 +106,7 @@ describe("transport P2P via relais", () => {
     // sous-catalogue de SA fiche (par défaut : tout, comme avant ce choix par employé).
     await pairPeer(employeeId);
 
+    await publishShareNow(employeeId);
     await exchangeOps(relay.client);
     const remote = await relay.client.pull(getIdentity().shopId, ownerId);
     const snapshots = remote.filter((o) => o.type === "catalogue.snapshot");

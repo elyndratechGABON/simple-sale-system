@@ -22,12 +22,11 @@ export function shortDeviceId(deviceId: string): string {
 // ── Allègement des payloads (anti-crash mémoire, mission outbox) ─────────────────
 // Une photo dataURL pèse 30-80 Ko ; `product.created` portait le produit ENTIER (photo
 // comprise), et un catalogue s'accumulait en outbox : 3746 ops = 173 Mo de RAM au
-// démarrage. Les images vivent DANS la table `products` locale (IndexedDB, lue en
-// continu par les écrans) — elles ne voyagent plus dans le journal d'ops.
+// démarrage. Les images ne voyagent pas dans les payloads génériques ; le transfert
+// explicite utilise `image_base64` dans une op ciblée `product.image_updated`.
 //
-// Le scrub est génériquel et borné en profondeur : toute clé `photo`/`image` portant
-// un dataURL est retirée, à tous les niveaux (produit, variantes, snapshot de
-// catalogue). Un rejeu n'a rien à reconstruire : l'image n'a jamais été du canal ops.
+// Le scrub est générique et borné en profondeur : toute clé `photo`/`image` portant
+// un dataURL est retirée, à tous les niveaux. `image_base64` de l'op dédiée est préservé.
 const SCRUB_DEPTH = 4;
 
 function allegerPayload(value: unknown, depth = 0): unknown {

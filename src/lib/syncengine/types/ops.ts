@@ -1,6 +1,7 @@
 export type OpType =
   | "product.created"
   | "product.updated"
+  | "product.image_updated"
   | "product.deleted"
   | "stock.adjusted"
   | "sale.created"

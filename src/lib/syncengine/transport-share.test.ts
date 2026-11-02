@@ -6,7 +6,7 @@ import { ensureIdentity, getDeviceKeys, getIdentity } from "./identity";
 import { exchangeOps } from "./transport";
 import { listPendingOps } from "./outbox";
 import { signAll } from "./ops";
-import { saveShareDecision } from "./sharing";
+import { publishShareNow, saveShareDecision } from "./sharing";
 import type { SyncOp } from "./types";
 import { generatePairingCode } from "./pairing";
 import { ACCOUNT, freshDevice, makeRelay, pairPeer } from "./transport-helpers";
@@ -42,6 +42,8 @@ describe("transport P2P via relais", () => {
     await saveShareDecision("fatu", "all", []);
     await saveShareDecision("yves", "selection", [pain.id]);
 
+    await publishShareNow("fatu");
+    await publishShareNow("yves");
     await exchangeOps(relay.client);
     const remote = await relay.client.pull(id.shopId, id.deviceId);
     const snaps = remote.filter((o) => o.type === "catalogue.snapshot");
@@ -59,16 +61,24 @@ describe("transport P2P via relais", () => {
     // restent dans la table products de chaque écran, jamais dans le journal d'ops).
     expect(fatou?.products.find((p) => p.id === coca.id)?.stock).toBe(15);
     expect(fatou?.products.find((p) => p.id === coca.id)?.photo).toBeUndefined();
+    const imageOp = remote.find(
+      (op) =>
+        op.type === "product.image_updated" &&
+        (op.payload as { target_device_id?: string }).target_device_id === "fatu",
+    );
+    expect(imageOp?.entity_id).toBe(coca.id);
+    expect((imageOp?.payload as { image_base64?: string }).image_base64).toBe(
+      "data:image/webp;base64,test",
+    );
+    expect(remote.findIndex((op) => op.type === "catalogue.snapshot")).toBeLessThan(
+      remote.findIndex((op) => op.type === "product.image_updated"),
+    );
 
     const yves = partages.find((p) => p.target_device_id === "yves");
     expect(yves?.products.map((p) => p.id)).toEqual([pain.id]);
   });
 
-  it("un écran qui rejoint reçoit le stock même si le catalogue n'a pas changé", async () => {
-    // Le cas vécu : un commerce déjà en service (le catalogue a donc déjà été publié
-    // au premier employé) voit arriver un second écran. La republication ne se fait
-    // QUE si le catalogue a changé — donc le nouvel écran ne recevait RIEN, et le
-    // patron se demandait pourquoi le stock ne partait pas.
+  it("un écran qui rejoint ne reçoit pas de stock avant le transfert manuel", async () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
@@ -111,19 +121,25 @@ describe("transport P2P via relais", () => {
     await exchangeOps(relay.client);
     const remote = await relay.client.pull(id.shopId, id.deviceId);
     const snapshots = remote.filter((o) => o.type === "catalogue.snapshot");
-    const pourGuillaume = snapshots.find(
-      (o) => (o.payload as { target_device_id?: string }).target_device_id === "guillaume",
-    );
+    expect(
+      snapshots.some(
+        (o) => (o.payload as { target_device_id?: string }).target_device_id === "guillaume",
+      ),
+    ).toBe(false);
+
+    await publishShareNow("guillaume");
+    await exchangeOps(relay.client);
+    const afterManualTransfer = await relay.client.pull(id.shopId, id.deviceId);
+    const pourGuillaume = afterManualTransfer
+      .filter((o) => o.type === "catalogue.snapshot")
+      .find((o) => (o.payload as { target_device_id?: string }).target_device_id === "guillaume");
     expect(pourGuillaume).toBeDefined();
     expect(
       (pourGuillaume!.payload as { products: Array<{ name: string }> }).products.map((p) => p.name),
     ).toContain("Coca 1L");
   });
 
-  it("un pair jamais servi reçoit son stock à la rotation suivante", async () => {
-    // La reprise : un pair appairé mais jamais servi (annonce appliquée sans
-    // instantané, arrivée pendant une coupure) doit être servi dès la rotation
-    // suivante, même si le catalogue du propriétaire n'a pas bougé.
+  it("un pair jamais servi attend le déclenchement manuel du transfert", async () => {
     await freshDevice();
     await setShopAccount(ACCOUNT);
     await ensureIdentity();
@@ -141,10 +157,19 @@ describe("transport P2P via relais", () => {
 
     await exchangeOps(relay.client);
     const remote = await relay.client.pull(id.shopId, id.deviceId);
-    const pourJacques = remote
+    const auto = remote
       .filter((o) => o.type === "catalogue.snapshot")
       .find((o) => (o.payload as { target_device_id?: string }).target_device_id === "jacques");
-    expect(pourJacques).toBeDefined();
+    expect(auto).toBeUndefined();
+
+    await publishShareNow("jacques");
+    await exchangeOps(relay.client);
+    const afterManualTransfer = await relay.client.pull(id.shopId, id.deviceId);
+    expect(
+      afterManualTransfer
+        .filter((o) => o.type === "catalogue.snapshot")
+        .some((o) => (o.payload as { target_device_id?: string }).target_device_id === "jacques"),
+    ).toBe(true);
   });
 
   it("le propriétaire republie à chaque employé, et seulement quand SA part change", async () => {
@@ -164,6 +189,7 @@ describe("transport P2P via relais", () => {
       category: "Boisson",
       stock: 10,
     });
+    await publishShareNow("fatu");
     await exchangeOps(relay.client);
     expect(relay.count(id.shopId)).toBe(2); // product.created + son instantané
     expect((await listPendingOps(id.shopId)).length).toBe(0); // tout poussé et acquitté

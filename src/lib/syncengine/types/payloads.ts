@@ -29,14 +29,21 @@ export interface ProductCreatedPayload {
 }
 export interface ProductUpdatedPayload {
   product_id: string;
-  // `photo` voyage elle aussi (image déjà réduite en webp ~256 px, cf. patches.ts) :
-  // c'est elle qui synchronise l'image entre propriétaire et employé, en `product.updated`.
+  // L'allègement global retire `photo` des `product.updated` ; les images sont envoyées
+  // uniquement via `ProductImageUpdatedPayload`, après un snapshot de partage manuel.
   fields: Partial<
     Omit<
       import("@/lib/db").Product,
       "id" | "stock" | keyof import("@/lib/db").SyncFields | "last_op"
     >
   >;
+}
+/** Image d'un produit partagée après le snapshot, séparément pour garder celui-ci léger. */
+export interface ProductImageUpdatedPayload {
+  product_id: string;
+  image_base64: string;
+  target_device_id: string;
+  variant_id?: string;
 }
 export interface ClientCreatedPayload {
   client: import("@/lib/db").Client;

@@ -125,6 +125,13 @@ export async function emitShareOps(
   if (!opts.force && now - (peer.shared_published_at ?? 0) < REPUBLISH_MIN_INTERVAL_MS) return null;
 
   const shopName = await shopNameForSnapshot();
+  // Les images ne voyagent pas dans le snapshot : un snapshot reste petit et rapide.
+  // Elles sont émises immédiatement après en ops ciblées `product.image_updated`.
+  const snapshotProducts = products.map((product) => ({
+    ...product,
+    photo: undefined,
+    variants: product.variants?.map((variant) => ({ ...variant, photo: undefined })),
+  }));
   // BATCH_ID (mission badge ACK) : chaque publication porte son identité de transfert.
   // L'employé la rend dans son op `catalogue.ack` — le patron purge alors CETTE op de
   // son outbox et le badge de l'employé passe d'« En cours » à « À jour ».
@@ -133,7 +140,7 @@ export async function emitShareOps(
       ? crypto.randomUUID()
       : `batch_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const payload: CatalogueSnapshotPayload = {
-    products,
+    products: snapshotProducts,
     target_device_id: peer.id,
     batch_id,
     ...(shopName ? { shop: { storeName: shopName } } : {}),
@@ -143,6 +150,36 @@ export async function emitShareOps(
   // transaction qui n'ouvre pas ce store échoue dessus.
   await db.transaction("rw", db.sync_ops, db.settings, async () => {
     await emitOp(db, identity, { type: "catalogue.snapshot", entity_id: "catalog", payload });
+    // L'ordre d'émission est garanti : d'abord le catalogue sans images, puis les
+    // images correspondantes, toutes adressées au même employé. Le `seq` monotone
+    // conserve cet ordre au rejeu et l'outbox les pousse dans le même cycle.
+    for (const product of products) {
+      if (product.deleted_at) continue;
+      if (typeof product.photo === "string" && product.photo) {
+        await emitOp(db, identity, {
+          type: "product.image_updated",
+          entity_id: product.id,
+          payload: {
+            product_id: product.id,
+            image_base64: product.photo,
+            target_device_id: peer.id,
+          },
+        });
+      }
+      for (const variant of product.variants ?? []) {
+        if (typeof variant.photo !== "string" || !variant.photo) continue;
+        await emitOp(db, identity, {
+          type: "product.image_updated",
+          entity_id: product.id,
+          payload: {
+            product_id: product.id,
+            image_base64: variant.photo,
+            target_device_id: peer.id,
+            variant_id: variant.id,
+          },
+        });
+      }
+    }
   });
   return { signature, count: products.length, at: now };
 }

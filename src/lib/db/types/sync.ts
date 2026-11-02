@@ -79,8 +79,8 @@ export interface Product extends SyncFields {
   unit?: "piece" | "kg" | "liter" | "meter";
   /**
    * Photo du produit ou service, en dataURL (webp réduit). Champ optionnel sans index :
-   * aucun upgrade(), les fiches existantes le lisent `undefined`. Reste local — la
-   * synchronisation n'envoie que des agrégats, jamais le catalogue.
+   * aucun upgrade(), les fiches existantes le lisent `undefined`. Lors d'un transfert
+   * manuel, l'image voyage dans une op ciblée `product.image_updated`, après le snapshot.
    */
   photo?: string;
   /**

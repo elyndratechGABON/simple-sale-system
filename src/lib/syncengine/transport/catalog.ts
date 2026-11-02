@@ -46,7 +46,12 @@ export async function publishFreshCatalog(
   const premierePublication = last === "";
   if (!premierePublication && last === signature) return;
 
-  const peers = await pairedEmployees(identity.shopId);
+  // Première synchronisation = appairage uniquement : aucun transfert automatique.
+  // Un partage manuel (`publishShareNow`) pose `shared_published_at`; les cycles
+  // suivants pourront alors republier les changements de catalogue à ces pairs.
+  const peers = (await pairedEmployees(identity.shopId)).filter(
+    (peer) => peer.shared_published_at !== undefined,
+  );
   const parts: { peerId: string; signature: string; at: number }[] = [];
   for (const peer of peers) {
     const part = await emitShareOps(peer);

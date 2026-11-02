@@ -7,6 +7,7 @@ import { applyDeviceAnnounce, applyDeviceApprove, applyDeviceLeave } from "./dev
 import {
   applyProductCreated,
   applyProductDeleted,
+  applyProductImageUpdated,
   applyProductUpdated,
   applyStockAdjusted,
 } from "./products";
@@ -21,6 +22,9 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       break;
     case "product.updated":
       await applyProductUpdated(db, op);
+      break;
+    case "product.image_updated":
+      await applyProductImageUpdated(db, op);
       break;
     case "product.deleted":
       await applyProductDeleted(db, op);

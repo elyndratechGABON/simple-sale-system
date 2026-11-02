@@ -15,6 +15,7 @@ import {
 } from "../db";
 import { ensureIdentity, getIdentity } from "./identity";
 import { exchangeOps } from "./transport";
+import { publishShareNow } from "./sharing";
 import { saveShareDecision } from "./sharing";
 import { ACCOUNT, freshDevice, makeRelay, pairPeer } from "./transport-helpers";
 import type { CatalogueSnapshotPayload } from "./types";
@@ -53,6 +54,7 @@ describe("scénario complet de partage de stock", () => {
     // Il sélectionne TROIS produits pour l'employé A.
     await saveShareDecision("employe", "selection", [ids[0], ids[1], ids[2]]);
 
+    await publishShareNow("employe");
     await exchangeOps(relay.client);
     let parts = await partsPour(relay, "employe");
     expect(parts).toHaveLength(1);
