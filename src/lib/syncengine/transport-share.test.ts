@@ -55,9 +55,10 @@ describe("transport P2P via relais", () => {
 
     const fatou = partages.find((p) => p.target_device_id === "fatu");
     expect(fatou?.products.map((p) => p.id).sort()).toEqual([coca.id, pain.id].sort());
-    // Le stock ABSOLU courant (10 + 5 de réappro) et la photo voyagent bien.
+    // Le stock ABSOLU courant voyage ; la photo NON (mission anti-crash : les images
+    // restent dans la table products de chaque écran, jamais dans le journal d'ops).
     expect(fatou?.products.find((p) => p.id === coca.id)?.stock).toBe(15);
-    expect(fatou?.products.find((p) => p.id === coca.id)?.photo).toBe(coca.photo);
+    expect(fatou?.products.find((p) => p.id === coca.id)?.photo).toBeUndefined();
 
     const yves = partages.find((p) => p.target_device_id === "yves");
     expect(yves?.products.map((p) => p.id)).toEqual([pain.id]);

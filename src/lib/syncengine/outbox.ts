@@ -41,3 +41,45 @@ export async function purgeSyncedOps(olderThanMs: number): Promise<void> {
     .primaryKeys();
   if (ids.length > 0) await db.sync_ops.bulkDelete(ids);
 }
+
+// ── Purge d'URGENCE (anti-crash, mission mémoire) ────────────────────────────────
+// Une outbox qui gonfle sans borne (3746 ops = 173 Mo avec les photos embarquées)
+// fait crasher l'application au démarrage : toute lecture complète (`toArray`) charge
+// TOUT en RAM. Au boot, au-delà du seuil, on ne garde que les ops LES PLUS RÉCENTES
+// — le démarrage redevient instantané. Les ops purgées avant leur push ne partent
+// pas au relais : c'est le prix de la stabilité, payé une fois (les écritures métier,
+// elles, restent dans les tables locales — seule la PROPAGATION est perdue).
+const OUTBOX_SATURATION = 200;
+const OUTBOX_GARDE = 50;
+
+export async function purgeOutboxEmergency(): Promise<number> {
+  const db = getDB();
+  const total = await db.sync_ops.count();
+  if (total <= OUTBOX_SATURATION) return 0;
+  console.warn(
+    `[outbox] saturée (${total} ops) — purge d'urgence, garde des ${OUTBOX_GARDE} dernières.`,
+  );
+  // `orderBy` (index created_at) + offset : on ne charge QUE les clés au-delà de la
+  // garde — jamais le contenu, c'est le seul moyen de purger sans crasher.
+  const aSupprimer = await db.sync_ops
+    .orderBy("created_at")
+    .reverse()
+    .offset(OUTBOX_GARDE)
+    .primaryKeys();
+  await db.sync_ops.bulkDelete(aSupprimer);
+  console.warn(`[outbox] ${aSupprimer.length} op(s) supprimée(s), démarrage dégonflé.`);
+  return aSupprimer.length;
+}
+
+/** Lecture LIMITÉE de l'outbox (mission anti-crash) : le push part par petits lots
+ *  (20 ops) — jamais `toArray()` complet, qui charge tout en RAM d'un coup. L'ordre
+ *  de la clé (`device:seq`) suit la création par appareil : les plus anciennes
+ *  sortent en premier. */
+export async function listPendingOpsBatch(shopId: string, limit = 20): Promise<SyncOp[]> {
+  return getDB()
+    .sync_ops.where("shop_id")
+    .equals(shopId)
+    .filter((o) => o.status === "pending")
+    .limit(limit)
+    .toArray();
+}

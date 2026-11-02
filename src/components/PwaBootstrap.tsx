@@ -25,6 +25,7 @@ import { loadLockState } from "@/lib/gatekeeper";
 import { unlockFromPaymentSms } from "@/lib/offline-unlock";
 import { clearSharedSmsUrl, extractSharedSms } from "@/lib/payments/share-target";
 import { withRetry } from "@/lib/syncengine/retry";
+import { purgeOutboxEmergency } from "@/lib/syncengine/outbox";
 import { migrateLegacyPhotos } from "@/lib/images";
 import { toast } from "sonner";
 
@@ -66,7 +67,12 @@ export function PwaBootstrap() {
   }, []);
   useEffect(() => {
     registerServiceWorker();
-    requestPersistentStorage();
+    // STOCKAGE PERSISTANT (mission mémoire — Étape 4) : `persist()` est demandé au
+    // boot ; le log dit clairement si le navigateur protège les données (IndexedDB
+    // non évincable sous pression disque) — c'est la première pierre de la stabilité.
+    void requestPersistentStorage().then((granted) => {
+      console.log("Stockage persistant :", granted ? "Accordé" : "Refusé");
+    });
     // Vérifie stockage persistant au démarrage : si l'utilisateur accepte, les données
     // (historique des ventes, paramètres) ne seront plus évincées par le navigateur.
     void persistedStorageStatus().then((s) => {
@@ -77,6 +83,13 @@ export function PwaBootstrap() {
         });
       }
     });
+    // PURGE D'URGENCE DE L'OUTBOX (mission anti-crash — Étape 1) : au-delà de 200 ops
+    // (3746 ops = 173 Mo avec les photos), le démarrage crashait en chargeant tout en
+    // RAM. Avant LA PREMIÈRE synchronisation : on ne garde que les 50 dernières ops,
+    // le boot redevient instantané. Best-effort : un échec de purge ne bloque rien.
+    void purgeOutboxEmergency().catch((e) =>
+      console.error("[boot] purge d'urgence de l'outbox échouée :", e),
+    );
     // Archives financières automatiques (mission archives — Étape 3) : au boot, si le
     // DERNIER snapshot date d'au moins la fréquence choisie, la journée écoulée est
     // archivée. Best-effort : le boot ne doit JAMAIS être bloqué par l'archivage.

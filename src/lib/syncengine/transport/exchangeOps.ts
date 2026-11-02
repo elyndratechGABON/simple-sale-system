@@ -2,7 +2,7 @@ import { syncSemaphore } from "../semaphore";
 import { applyRemoteOps } from "../apply";
 import { isSharedGroup, getIdentity } from "../identity";
 import { signAll } from "../ops";
-import { listPendingOps, markOpsSynced } from "../outbox";
+import { listPendingOps, listPendingOpsBatch, markOpsSynced } from "../outbox";
 import {
   getDB,
   addCatalogueRequest,
@@ -64,18 +64,28 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     // transaction Dexie ne survit pas à cet await. L'outbox reste donc le journal brut
     // (atomique avec l'écriture métier) et la signature n'apparaît que sur le réseau —
     // où elle est la seule preuve d'origine acceptée à la réception.
-    const pending = await listPendingOps(identity.shopId);
+    //
+    // PUSH PAR LOTS DE 20 (mission anti-crash) : JAMAIS de lecture complète de
+    // l'outbox — 3746 ops chargées d'un coup = crash mémoire. On pousse petit lot
+    // par petit lot ; un échec réseau (timeout, relais HS) interrompt la boucle et
+    // le reste repart au prochain cycle.
+    const TAILLE_LOT = 20;
     let pushed = 0;
-    if (pending.length > 0) {
-      const signed = await signAll(pending);
+    for (;;) {
+      const lot = await listPendingOpsBatch(identity.shopId, TAILLE_LOT);
+      if (lot.length === 0) break;
+      const signed = await signAll(lot);
       // FAN-OUT direct : le lot signé part aussi sur les canaux WebRTC ouverts
       // (LAN) — la latence passe de deux rotations relais à un aller-retour local.
       // Le push relais garde le cycle : rattrapage des pairs hors LAN, retrouvaille.
       forwardToPeers(signed);
       if (await client.push(identity.shopId, signed)) {
-        await markOpsSynced(pending.map((o) => o.id));
-        pushed = pending.length;
+        await markOpsSynced(lot.map((o) => o.id));
+        pushed += lot.length;
+      } else {
+        break; // réseau/relais en échec : on s'arrête là, pas de martelage
       }
+      if (lot.length < TAILLE_LOT) break; // dernier lot
     }
 
     startWebRtcMesh();
