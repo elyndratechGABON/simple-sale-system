@@ -131,4 +131,64 @@ describe("synchro 3 niveaux — présence du patron", () => {
     expect(state.held ?? 0).toBe(0);
     expect(await listSentOps(shopId)).toHaveLength(0);
   });
+
+  it("SCÉNARIO 3 — TTL 7 jours : une op `sent` trop vieille repasse `pending` et re-part au relais", async () => {
+    const shopId = await enEmploye();
+    await uneVenteEnAttente(shopId);
+    const relay = makeRelay();
+    await exchangeOps(relay.client); // patron offline → `sent`
+    const avant = (await listSentOps(shopId))[0];
+    expect(avant).toBeDefined();
+
+    // Vieillir l'horodatage au-delà du TTL (7 j + 1 h), comme le ferait le temps réel.
+    await getDB().sync_ops.update(avant!.id, {
+      sent_at: Date.now() - 7.1 * 24 * 60 * 60 * 1000,
+    });
+
+    const state = await exchangeOps(relay.client); // toujours offline
+
+    // Aucune vente lâchée : l'op a été repoussée (re-`sent`, l'ACK attend le patron).
+    expect(state.pushed).toBeGreaterThan(0);
+    expect(await listPendingOps(shopId)).toHaveLength(0);
+    expect((await listSentOps(shopId)).map((o) => o.id)).toContain(avant!.id);
+    expect((await listSentOps(shopId))[0]!.sent_at!).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it("SCÉNARIO 4 — LE RETOUR DU PATRON : les `sent` rebasculent et repartent DU MÊME cycle, acquittées", async () => {
+    const shopId = await enEmploye();
+    await uneVenteEnAttente(shopId);
+    const relay = makeRelay();
+    await exchangeOps(relay.client); // patron offline → `sent`
+    expect((await listSentOps(shopId)).length).toBeGreaterThan(0);
+
+    // Le patron REVIENT : l'API presence le voit.
+    const client: TransportClient = {
+      ...relay.client,
+      presence: async (s) => (s === shopId ? { online: ["patron"] } : null),
+    };
+
+    const state = await exchangeOps(client);
+
+    expect(state.held ?? 0).toBe(0);
+    // L'op a rebasculé `pending`, été repoussée puis acquittée : plus rien en `sent`
+    // ni en `pending`, et le relais conserve son dépôt (idempotent, pas de doublon).
+    expect(await listSentOps(shopId)).toHaveLength(0);
+    expect(await listPendingOps(shopId)).toHaveLength(0);
+    expect(relay.count(shopId)).toBeGreaterThan(0);
+  });
+
+  it("NEUTRE — un propriétaire qui pousse n'a pas de presence à vérifier : chemin direct intact", async () => {
+    await freshDevice();
+    await setShopAccount(ACCOUNT);
+    await ensureIdentity();
+    const shopId = getIdentity().shopId;
+    await uneVenteEnAttente(shopId);
+    const relay = makeRelay();
+
+    const state = await exchangeOps(relay.client);
+
+    expect(state.pushed).toBeGreaterThan(0);
+    expect(state.held ?? 0).toBe(0);
+    expect(await listSentOps(shopId)).toHaveLength(0);
+  });
 });

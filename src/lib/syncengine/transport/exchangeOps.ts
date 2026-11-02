@@ -2,7 +2,15 @@ import { syncSemaphore } from "../semaphore";
 import { applyRemoteOps } from "../apply";
 import { isSharedGroup, getIdentity } from "../identity";
 import { signAll } from "../ops";
-import { listPendingOps, listPendingOpsBatch, markOpsSent, markOpsSynced } from "../outbox";
+import {
+  downgradeStaleSentOps,
+  listPendingOps,
+  listPendingOpsBatch,
+  listSentOps,
+  markOpsSent,
+  markOpsSynced,
+  rebateSentOps,
+} from "../outbox";
 import {
   getDB,
   addCatalogueRequest,
@@ -50,6 +58,11 @@ async function pousserOutbox(client: TransportClient, shopId: string): Promise<b
 // Un relais muet (ni présence, ni preuve de vie) signifie le patron injoignable :
 // on part en scénario 2, on ne perd JAMAIS silence pour absence de signal.
 const PRESENCE_ONLINE_MS = 2 * 60_000;
+
+// TTL du rattrapage : le même contrat que le relais (`OPS_TTL_MS`, 7 jours). Au-delà,
+// les copies `sent` sont SANS ACK quand le relais a déjà supprimé ses propres backups :
+// le drain re-part de zéro, la vente ne SAUTE jamais.
+const SENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function isOwnerOnline(client: TransportClient, shopId: string): Promise<boolean> {
   const db = getDB();
@@ -100,6 +113,21 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     let ownerOnline = true;
     if (identity.role === "employee") {
       ownerOnline = await isOwnerOnline(client, identity.shopId);
+      // RATTRAPAGE (scénarios 3 & 4) — AVANT le drain, du réalimentant les copies
+      // `sent` sans ACK :
+      //   - patron ONLINE (retour de connexion) → TOUTES les `sent` repartent, le
+      //     drain de ce cycle les re-pousse (et les acquitte, cf. ci-dessous) ;
+      //   - relais muet / patron absent → SEULES les `sent` plus vieilles que le TTL
+      //     7 j retournent en file : le relais a déjà purgé ses copies expirées.
+      //   Rien ne se supprime côté caisse : tant qu'il n'y a PAS d'ACK, l'op reste.
+      const sent = await listSentOps(identity.shopId);
+      if (sent.length > 0) {
+        if (ownerOnline) {
+          await rebateSentOps(identity.shopId);
+        } else {
+          await downgradeStaleSentOps(identity.shopId, SENT_TTL_MS);
+        }
+      }
     }
     for (;;) {
       const lot = await listPendingOpsBatch(identity.shopId, TAILLE_LOT);

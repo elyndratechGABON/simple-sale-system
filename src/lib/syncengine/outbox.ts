@@ -56,6 +56,42 @@ export async function listSentOps(shopId: string): Promise<SyncOp[]> {
     .toArray();
 }
 
+/** SCÉNARIO 4 — LE RETOUR DU PATRON : dès qu'il est `online` au relais, les copies
+ *  `sent` (envoyées, jamais acquittées) rebasculent `pending`. Le drain de CE cycle
+ *  les repousse immédiatement et, le patron étant devant la caisse, les acquitte
+ *  (`synced`) — l'attente ne s'éternise pas en `sent`. */
+export async function rebateSentOps(shopId: string): Promise<number> {
+  return rebasculer(shopId, () => true);
+}
+
+/** SCÉNARIO 3 — LE RELAIS COUPE LE FIL : au-delà de `olderThanMs` (7 j, le TTL du
+ *  relais), les copies `sent` sans ACK repassent `pending`. Les docs expirées ont été
+ *  supprimées par le relais : le prochain drain re-pousse le puzzle entier et rien
+ *  n'est perdu — tant qu'il n'y a PAS d'ACK, la vente reste dans l'outbox locale. */
+export async function downgradeStaleSentOps(shopId: string, olderThanMs: number): Promise<number> {
+  const cutoff = Date.now() - olderThanMs;
+  return rebasculer(shopId, (o) => (o.sent_at ?? o.created_at) < cutoff);
+}
+
+/** Le corps commun des deux scénarios : sélection par prédicat, rebasage
+ *  `sent → pending` (on efface `sent_at` — l'horodatage retrouvera son sens au
+ *  prochain départ), comptage pour les tests. */
+async function rebasculer(shopId: string, garder: (op: SyncOp) => boolean): Promise<number> {
+  const db = getDB();
+  const sent = await listSentOps(shopId);
+  const cibles = sent.filter(garder);
+  if (cibles.length === 0) return 0;
+  await db.transaction("rw", db.sync_ops, async () => {
+    for (const op of cibles) {
+      const row = await db.sync_ops.get(op.id);
+      if (row && row.status === "sent") {
+        await db.sync_ops.put({ ...row, status: "pending", sent_at: undefined });
+      }
+    }
+  });
+  return cibles.length;
+}
+
 /** Purge les ops ACQUITTÉES plus âgées que `olderThanMs`. Sans danger : une op purgée qui
  *  serait redélivrée par le relais est simplement sautée par `processed_ops`. */
 export async function purgeSyncedOps(olderThanMs: number): Promise<void> {
