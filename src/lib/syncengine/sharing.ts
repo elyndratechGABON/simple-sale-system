@@ -125,9 +125,17 @@ export async function emitShareOps(
   if (!opts.force && now - (peer.shared_published_at ?? 0) < REPUBLISH_MIN_INTERVAL_MS) return null;
 
   const shopName = await shopNameForSnapshot();
+  // BATCH_ID (mission badge ACK) : chaque publication porte son identité de transfert.
+  // L'employé la rend dans son op `catalogue.ack` — le patron purge alors CETTE op de
+  // son outbox et le badge de l'employé passe d'« En cours » à « À jour ».
+  const batch_id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `batch_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const payload: CatalogueSnapshotPayload = {
     products,
     target_device_id: peer.id,
+    batch_id,
     ...(shopName ? { shop: { storeName: shopName } } : {}),
   };
   const db = getDB();

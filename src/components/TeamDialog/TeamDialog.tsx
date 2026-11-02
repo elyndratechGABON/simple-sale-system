@@ -37,6 +37,7 @@ import { ShareStockDialog } from "@/components/ShareStockDialog/ShareStockDialog
 import { EmployeeResults } from "./EmployeeResults";
 import { RecentActivity } from "./RecentActivity";
 import { RoleBadge } from "./RoleBadge";
+import { ShareBadge } from "./ShareBadge";
 import { TeamListPanel } from "./TeamListPanel";
 import { isOwnSale } from "./helpers";
 import { useActivityData } from "./useActivityData";
@@ -200,9 +201,11 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
   }
 
   /** Transfert de stock validé : le dialogue a mémorisé la décision et émis
-   *  l'instantané ; ici on rafraîchit le registre (signature mémorisée). */
+   *  l'instantané ; ici on rafraîchit le registre (signature mémorisée) et le
+   *  BADGE de transfert (orange « En cours… » tant que l'ACK ne revient pas). */
   async function apresPartage(count: number) {
     await invalidateDeviceQueries(qc);
+    await qc.invalidateQueries({ queryKey: ["share_pending"] });
     toast.success(
       count > 0
         ? `Stock transféré à ${selected?.device_name || "l'employé"} (${count} produit${count > 1 ? "s" : ""}).`
@@ -234,6 +237,12 @@ export function TeamDialog({ open, onOpenChange, initialDeviceId }: TeamDialogPr
               <UserRound className="h-5 w-5 shrink-0 text-primary" />
               <span className="truncate">{selected.device_name || "Écran sans nom"}</span>
               <RoleBadge role={selected.role} />
+              {/* État du transfert de stock vers CET écran : orange (snapshot en
+                  attente de push/ACK) ou vert (à jour). Invalide au clic Partager
+                  (clé ["share_pending"]) puis à la réception des ACK. */}
+              {identity?.role === "owner" && selected.id !== identity.deviceId && (
+                <ShareBadge deviceId={selected.id} />
+              )}
             </DialogTitle>
           ) : (
             <>

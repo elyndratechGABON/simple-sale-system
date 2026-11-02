@@ -133,6 +133,17 @@ export interface CatalogueSnapshotPayload {
    *  d'avant). Présent, l'écran visé l'applique, tous les AUTRES l'ignorent — c'est ce
    *  qui permet de partager un choix différent à chaque employé. */
   target_device_id?: string;
+  /** Identité du TRANSFERT (mission badge ACK) : posée à l'émission, rendue telle
+   *  quelle par l'employé dans son op `catalogue.ack` — le patron y retrouve et
+   *  PURGE l'op de son outbox, et le badge passe d'« En cours » à « À jour ». */
+  batch_id?: string;
+}
+
+/** L'employé a APPLIQUÉ l'instantané : la confirmation remonte au propriétaire.
+ *  Le `batch_id` est la seule charge utile — il désigne l'op de l'outbox patron à
+ *  supprimer (le badge passe au vert sans relecture de catalogue). */
+export interface CatalogueAckPayload {
+  batch_id: string;
 }
 
 /** Demande d'un instantané FRIS du catalogue : émise par l'écran qui importe le stock du

@@ -16,6 +16,7 @@ export type OpType =
   | "device.leave"
   | "catalogue.snapshot"
   | "catalogue.request"
+  | "catalogue.ack"
   | "stock.low"
   | "stock.conflict"
   | "stock.reserve"
