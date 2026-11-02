@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { addProduct, updateProduct, type Category, type Product } from "@/lib/db";
 import { runOpsExchange } from "@/lib/sync";
-import { fileToScaledDataUrl } from "@/lib/images";
+import { fileToScaledBlob } from "@/lib/images";
 import { usePreferences } from "@/hooks/use-preferences";
 
 // Brouillon de variante dans le formulaire : prix/stock gardés en texte pour la saisie,
@@ -65,7 +65,9 @@ export function useProductForm({
     editing?.type ?? defaultType ?? "product",
   );
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
-  // Photo libre du produit ou service : dataURL webp réduit, purement local.
+  // Photo libre du produit ou service : dataURL webp réduit, stockée en DB.
+  // Le pipeline de compression passe par un Blob intermédiaire (fileToScaledBlob)
+  // mais la valeur conservée en état et en DB reste une dataURL string.
   const [photo, setPhoto] = useState<string | undefined>(editing?.photo);
   const photoInputRef = useRef<HTMLInputElement>(null);
   // Gammes distinctes : l'appareil photo du téléphone doit se déclencher (capture) SANS
@@ -131,13 +133,21 @@ export function useProductForm({
     setVariants((vs) => vs.filter((v) => v.id !== id));
   }
 
-  /** Photo D'UNE variante : même pipeline `fileToScaledDataUrl` que la photo produit. */
+  /** Photo D'UNE variante : pipeline de compression via fileToScaledBlob,
+   *  retour en dataURL string pour compatibilité DB. */
   async function handleVariantPhoto(variantId: string, event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const { dataUrl } = await fileToScaledDataUrl(file);
-      updateVariant(variantId, { photo: dataUrl });
+      const { blob } = await fileToScaledBlob(file);
+      // Convertir Blob → dataURL string
+      const url = await new Promise<string>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img.src);
+        img.onerror = () => resolve("");
+        img.src = URL.createObjectURL(blob);
+      });
+      updateVariant(variantId, { photo: url });
     } catch {
       toast.error("Impossible d'utiliser cette image.");
     } finally {
@@ -150,8 +160,15 @@ export function useProductForm({
     if (!file) return;
     setPhotoBusy(true);
     try {
-      const { dataUrl } = await fileToScaledDataUrl(file);
-      setPhoto(dataUrl);
+      const { blob } = await fileToScaledBlob(file);
+      // Convertir Blob → dataURL string pour le stockage en DB
+      const url = await new Promise<string>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img.src);
+        img.onerror = () => resolve("");
+        img.src = URL.createObjectURL(blob);
+      });
+      setPhoto(url);
     } catch {
       toast.error("Impossible d'utiliser cette image.");
     } finally {

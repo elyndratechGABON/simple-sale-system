@@ -7,10 +7,13 @@ import { cn } from "@/lib/utils";
 import type { ProductFormState } from "./useProductForm";
 
 /**
- * Photo, prix et gestion du stock, resserrés : le formulaire doit tenir sur un écran
- * mobile sans scroller. Avant : une carte « Gestion du stock » empilée sous les prix ;
- * après : le toggle illimité sur la ligne du titre, stock et seuil côte à côte.
+ * Renvoie l'URL de la photo à afficher. La photo est un dataURL string —
+ * cible directe `<img src>`, aucun object URL nécessaire.
  */
+function photoUrl(photo: string | undefined): string {
+  return photo || "";
+}
+
 export function PhotoAndPricing({ form }: { form: ProductFormState }) {
   const {
     photo,
@@ -33,6 +36,8 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
     setMinStock,
   } = form;
 
+  const photoUrlString = photoUrl(photo);
+
   /** Deux inputs cachés : `capture=environment` déclenche l'APN, l'autre la galerie. */
   function pickCamera() {
     cameraInputRef.current?.click();
@@ -54,7 +59,7 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
             <div className="flex items-center gap-3">
               <div className="relative h-14 w-14 shrink-0 rounded-lg border bg-muted/40 overflow-hidden">
                 <img
-                  src={photo}
+                  src={photoUrlString}
                   alt=""
                   className="h-14 w-14 rounded-lg object-cover"
                   width={56}

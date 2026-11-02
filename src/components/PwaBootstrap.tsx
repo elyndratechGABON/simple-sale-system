@@ -25,6 +25,7 @@ import { loadLockState } from "@/lib/gatekeeper";
 import { unlockFromPaymentSms } from "@/lib/offline-unlock";
 import { clearSharedSmsUrl, extractSharedSms } from "@/lib/payments/share-target";
 import { withRetry } from "@/lib/syncengine/retry";
+import { migrateLegacyPhotos } from "@/lib/images";
 import { toast } from "sonner";
 
 // Relance de la synchronisation d'arrière-plan : toutes les minutes tant que l'app est
@@ -80,6 +81,19 @@ export function PwaBootstrap() {
     // DERNIER snapshot date d'au moins la fréquence choisie, la journée écoulée est
     // archivée. Best-effort : le boot ne doit JAMAIS être bloqué par l'archivage.
     void ensureFinancialSnapshot().catch(() => {});
+    // Migration photos legacy (audit OOM — Étape 2) : re-encode les dataURL non-JPEG
+    // (ancien webp 256 px) vers la charte 500 px / JPEG 0.7, produit et variantes.
+    // Une seule fois par appareil (flag localStorage), fire-and-forget : le boot
+    // n'attend pas — mais l'invalidation rafraîchit l'affichage si des photos ont changé.
+    const PHOTO_MIGRATION_KEY = "photo_migration_500_jpeg";
+    if (!globalThis.localStorage.getItem(PHOTO_MIGRATION_KEY)) {
+      void migrateLegacyPhotos()
+        .then((n) => {
+          globalThis.localStorage.setItem(PHOTO_MIGRATION_KEY, "1");
+          if (n > 0) void queryClient.invalidateQueries({ queryKey: ["products"] });
+        })
+        .catch(() => {});
+    }
     // Le commerçant a PARTAGÉ son reçu de paiement avec l'application (« Partager »
     // dans l'appli SMS de l'opérateur). Le texte arrive par l'URL (cf. le manifeste) :
     // on le traite exactement comme un SMS collé — il déverrouille la caisse et part
