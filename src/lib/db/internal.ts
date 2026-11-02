@@ -20,6 +20,14 @@ export async function resetDBForTests(): Promise<void> {
   if (db) await db.delete();
 }
 
+/** Supprime toute la base locale puis oublie son instance Dexie. Le prochain `getDB()`
+ *  recrée une base fraîche avec le schéma courant. Réservé à la suppression totale. */
+export async function deleteLocalDatabase(): Promise<void> {
+  const db = instance ?? new PosDatabase();
+  instance = null;
+  await db.delete();
+}
+
 export const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()

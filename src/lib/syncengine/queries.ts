@@ -65,6 +65,11 @@ export function clearQueryClient(): void {
   cachedClient = null;
 }
 
+/** Efface immédiatement toutes les lectures en RAM lors d'une suppression totale. */
+export function clearQueryCache(): void {
+  cachedClient?.clear();
+}
+
 /**
  * Rafraîchit les lectures concernées. Silencieux si aucun client n'est enregistré :
  * la modification est faite dans IndexedDB, l'écran qui se remontera lira la bonne

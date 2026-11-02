@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, Trash2 } from "lucide-react";
-import { getShopProfile, purgeAllData } from "@/lib/db";
+import { getShopProfile, purgeEntireDevice } from "@/lib/db";
 import { deleteShopRemote, releaseSeat, resetGatekeeper } from "@/lib/gatekeeper";
 import { departFromGroup } from "@/lib/syncengine/pairing";
 import { flushPendingRelease } from "@/lib/gatekeeper";
@@ -31,7 +31,7 @@ import { toast } from "sonner";
  * 2. departFromGroup() : stock restitué + device.leave + releaseSeat()
  * 3. flushPendingRelease() : pousse les ops vers le relais
  * 4. Délai court (2s) : laisse le temps aux ops de partir
- * 5. purgeAllData() : nettoie IndexedDB local
+ * 5. purgeEntireDevice() : supprime toute la base Dexie, les stockages navigateur et le cache React Query
  * 6. resetDeviceIdentity() : nouveau deviceId + nouvelles clés + efface fingerprint
  * 7. resetGatekeeper() : nettoie verrous + fingerprint
  * 7. savePreferences({ onboarded: false }) : réinitialise l'onboarding
@@ -77,7 +77,7 @@ export function DeleteShopCard() {
       await new Promise((r) => setTimeout(r, 2000));
 
       // 6. Purger tout localement (uniquement si releaseSeat a réussi)
-      await purgeAllData();
+      await purgeEntireDevice();
 
       // 7. Nouvelle identité complète (deviceId + clés + fingerprint effacé)
       await resetDeviceIdentity();

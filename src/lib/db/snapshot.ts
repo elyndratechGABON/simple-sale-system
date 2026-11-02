@@ -1,4 +1,4 @@
-import { getDB } from "./internal";
+import { deleteLocalDatabase, getDB } from "./internal";
 import type {
   Charge,
   Client,
@@ -152,4 +152,23 @@ export async function purgeAllData(): Promise<void> {
       ]);
     },
   );
+}
+
+/** Suppression définitive de CET appareil : toutes les tables Dexie, les deux stockages
+ *  navigateur et le cache React Query (images comprises). Utilisée uniquement par
+ *  « Supprimer la boutique » ; les départs ordinaires conservent leur historique local. */
+export async function purgeEntireDevice(): Promise<void> {
+  await deleteLocalDatabase();
+  try {
+    if (typeof localStorage !== "undefined") localStorage.clear();
+  } catch {
+    // Stockage navigateur indisponible (mode privé / politique du navigateur).
+  }
+  try {
+    if (typeof sessionStorage !== "undefined") sessionStorage.clear();
+  } catch {
+    // Le nettoyage Dexie reste effectué même si sessionStorage est bloqué.
+  }
+  const { clearQueryCache } = await import("@/lib/syncengine/queries");
+  clearQueryCache();
 }
