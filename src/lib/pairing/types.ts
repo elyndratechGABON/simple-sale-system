@@ -40,6 +40,9 @@ export interface PairingPayload {
   /** Rôle assigné par le propriétaire au moment du partage (employé).
    *  Optionnel : absent dans les QR générés avant cette fonctionnalité. */
   role?: DeviceRole;
+  /** Identité et clé publique du propriétaire : épinglées par l'employé au scan du QR. */
+  owner_device_id?: string;
+  public_key?: string;
 }
 
 export type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"> & {
@@ -48,6 +51,9 @@ export type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"
   role?: DeviceRole;
   /** Jeton de partage (QR v2) : réclamé au relais une fois le compte posé. Absent des QR v1. */
   token?: string;
+  /** Clé de vérification du propriétaire, présente sur les QR nouvellement émis. */
+  owner_device_id?: string;
+  public_key?: string;
 };
 
 export interface SharePayload {
@@ -58,6 +64,9 @@ export interface SharePayload {
   name: string;
   account_phone: string;
   pair_code: string;
+  /** Clé publique du propriétaire à épingler chez l'employé qui scanne ce QR. */
+  owner_device_id?: string;
+  public_key?: string;
   shop?: Partial<PairingShopConfig>;
   role?: DeviceRole;
 }

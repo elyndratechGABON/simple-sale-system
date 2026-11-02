@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import { getPreferences } from "@/lib/settings";
 import { announceDevice, pairCodeExpiry, sessionCode } from "@/lib/syncengine/pairing";
+import { ensureIdentity, getDeviceKeys } from "@/lib/syncengine/identity";
 import type { ShopProfile } from "@/lib/db";
 import type { SyncIdentity } from "@/lib/syncengine/types";
 
@@ -63,6 +64,8 @@ export function useQrPayload({
         }
         await announceDevice().catch(() => {});
         if (cancelled) return;
+        const ownerIdentity = await ensureIdentity();
+        const ownerPublicKey = getDeviceKeys().publicKey;
         // Jeton de partage : frappe au relais (pas de mot de passe dans le QR).
         // Si le relais est inaccessible, aucun QR n'est émis : le mot de passe ne
         // doit JAMAIS se retrouver dans un QR.
@@ -147,6 +150,8 @@ export function useQrPayload({
             account_phone: profile?.accountPhone || profile?.phone || "",
             pair_code: code,
             role: "employee" as const,
+            owner_device_id: ownerIdentity.deviceId,
+            public_key: ownerPublicKey,
             ...(shopStoreName
               ? {
                   shop: {

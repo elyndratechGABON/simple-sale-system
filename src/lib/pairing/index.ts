@@ -16,6 +16,6 @@
 //
 // (types.ts) formes des payloads ; (build.ts) fabrication et lecture du QR ;
 // (apply.ts) redemption du jeton et application de la boutique.
-export { applyPairingShop, redeemShareToken } from "./apply";
+export { applyPairingShop, redeemShareToken, savePairingOwnerKey } from "./apply";
 export { buildPairingPayload, parsePairingPayload } from "./build";
 export type { PairingPayload, PairingShopConfig, PairingShopInfo, SharePayload } from "./types";

@@ -1,4 +1,9 @@
-import { applyPairingShop, parsePairingPayload, redeemShareToken } from "@/lib/pairing";
+import {
+  applyPairingShop,
+  parsePairingPayload,
+  redeemShareToken,
+  savePairingOwnerKey,
+} from "@/lib/pairing";
 import { savePreferences } from "@/lib/settings";
 import { getShopProfile, saveShopProfile, setShopAccount, setShopAccountId } from "@/lib/db";
 import {
@@ -109,6 +114,12 @@ export async function runJoinScan(
   }
 
   await refreshShopId();
+
+  // Le QR du patron transporte désormais sa clé publique. L'épingler localement au
+  // scan permet de vérifier immédiatement les snapshots signés, même si son annonce
+  // device.announce a été purgée ou n'est pas encore arrivée au relais.
+  const pairedIdentity = await ensureIdentity();
+  await savePairingOwnerKey(pairedIdentity.shopId, parsed.owner_device_id, parsed.public_key);
 
   // Le mécanisme de catalogue snapshot est déjà activé par le flux de sync
   // existant : lors du prochain échange d'opérations (handshake + pull/push),

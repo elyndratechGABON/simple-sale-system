@@ -2,6 +2,7 @@ import { getShopProfile } from "@/lib/db";
 import { getPreferences } from "@/lib/settings";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { getPairingToken } from "@/lib/syncengine/pairing";
+import { ensureIdentity, getDeviceKeys } from "@/lib/syncengine/identity";
 import type { DeviceRole } from "@/lib/syncengine/types";
 import type { PairingPayload, PairingShopInfo, SharePayload } from "./types";
 
@@ -12,6 +13,8 @@ export async function buildPairingPayload(role?: DeviceRole): Promise<string | n
   if (!profile?.accountPhone || !profile.accountPassword) return null;
   const prefs = getPreferences();
   const pairCode = await getPairingToken();
+  const ownerIdentity = await ensureIdentity();
+  const ownerPublicKey = getDeviceKeys().publicKey;
   const payload: PairingPayload = {
     v: 1,
     app: "ecaisse",
@@ -20,6 +23,8 @@ export async function buildPairingPayload(role?: DeviceRole): Promise<string | n
     phone: profile.accountPhone,
     password: profile.accountPassword,
     ...(pairCode ? { pair_code: pairCode } : {}),
+    owner_device_id: ownerIdentity.deviceId,
+    public_key: ownerPublicKey,
     ...(role && role !== "owner" ? { role } : {}),
     shop: {
       storeName: prefs.workspaceName || profile.storeName,
@@ -60,6 +65,9 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
           phone: (d.phone ?? "").trim(),
           password: d.password ?? "",
           pair_code: typeof d.pair_code === "string" ? d.pair_code.trim() : undefined,
+          owner_device_id:
+            typeof d.owner_device_id === "string" ? d.owner_device_id.trim() : undefined,
+          public_key: typeof d.public_key === "string" ? d.public_key : undefined,
           role:
             rawRole === "employee" || rawRole === "manager" || rawRole === "owner"
               ? rawRole === "owner"
@@ -86,6 +94,9 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
           phone: s.account_phone ?? "",
           password: "", // aucun mot de passe — le handshake passera par lien/bénédiction
           pair_code: s.pair_code.trim(),
+          owner_device_id:
+            typeof s.owner_device_id === "string" ? s.owner_device_id.trim() : undefined,
+          public_key: typeof s.public_key === "string" ? s.public_key : undefined,
           role:
             s.role === "employee" || s.role === "owner"
               ? s.role === "owner"

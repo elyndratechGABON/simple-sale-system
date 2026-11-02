@@ -3,6 +3,7 @@ import { getPreferences, savePreferences } from "@/lib/settings";
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import type { PairingShopConfig } from "./types";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { getDB } from "@/lib/db";
 
 /** Réclame le jeton au relais (redeem) — renvoie la boutique et le code. */
 export async function redeemShareToken(
@@ -64,6 +65,32 @@ export async function applyPairingShop(shop?: Partial<PairingShopConfig>): Promi
     // plus aucun QR v1 n'est en circulation.
     features: { tables: shop.tablesEnabled ?? prefs.features?.tables ?? false },
     tablesEnabled: shop.tablesEnabled ?? prefs.tablesEnabled,
+  });
+  return true;
+}
+
+/** Épingle la clé du propriétaire portée par son QR chez l'appareil invité. Le token
+ *  de partage fixe déjà la boutique ; l'identifiant + la clé viennent du QR scanné,
+ *  affiché par le patron au moment de l'appairage. */
+export async function savePairingOwnerKey(
+  shopId: string,
+  ownerDeviceId?: string,
+  publicKey?: string,
+): Promise<boolean> {
+  const id = ownerDeviceId?.trim();
+  if (!shopId || !id || !publicKey?.trim()) return false;
+  const db = getDB();
+  const existing = await db.paired_devices.get(id);
+  const now = Date.now();
+  await db.paired_devices.put({
+    ...existing,
+    id,
+    shop_id: shopId,
+    role: "owner",
+    public_key: publicKey,
+    status: "paired",
+    paired_at: existing?.paired_at ?? now,
+    updated_at: now,
   });
   return true;
 }
