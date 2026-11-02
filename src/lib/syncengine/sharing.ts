@@ -171,6 +171,11 @@ export async function publishShareNow(peerId: string): Promise<number> {
   const part = await emitShareOps(peer, { force: true });
   if (!part) return 0; // rien à émettre : décision inchangée ou catalogue résolu vide
   await markSharePublished(peer.id, part.signature, part.at);
+  // DIAGNOSTIC (mission flux patron→employé) : le clic « Transférer » laisse une
+  // trace exacte — quoi, combien, vers qui.
+  console.info(
+    `[partage] snapshot émis : ${part.count} produit(s) → « ${peer.device_name || peerId} » (${peerId.slice(0, 8)}…)`,
+  );
   return part.count;
 }
 

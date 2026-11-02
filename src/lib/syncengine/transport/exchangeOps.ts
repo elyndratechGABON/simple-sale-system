@@ -81,6 +81,16 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     startWebRtcMesh();
 
     const remote = await client.pull(identity.shopId, identity.deviceId);
+    // DIAGNOSTIC (flux patron→employé) : on veut voir l'instantané ARRIVER —
+    // uniquement lui, sinon chaque rotation créerait du bruit.
+    for (const op of remote) {
+      if (op.type === "catalogue.snapshot") {
+        const pl = op.payload as { target_device_id?: string; products?: unknown[] };
+        console.info(
+          `[relais] snapshot reçu de ${op.device_id.slice(0, 8)}… (${pl?.products?.length ?? 0} produit(s), cible : ${pl?.target_device_id || "tous"})`,
+        );
+      }
+    }
     const foreign: SyncOp[] = [];
     let skipped = 0;
 
