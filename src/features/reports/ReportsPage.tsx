@@ -88,7 +88,14 @@ export function ReportsPage() {
               <Skeleton className="h-40" />
             </>
           )}
-          {!isLoading && stats && stats.topProducts.length > 0 && (
+          {isLoading ? (
+            <div className="flat-card p-3 sm:p-4 space-y-2">
+              <Skeleton className="h-4 w-28" />
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-5" />
+              ))}
+            </div>
+          ) : stats && stats.topProducts.length > 0 ? (
             <div className="flat-card p-3 sm:p-4 space-y-1.5">
               <h2 className="text-title font-semibold">Top produits</h2>
               {stats.topProducts.slice(0, 5).map((p, i) => (
@@ -104,7 +111,7 @@ export function ReportsPage() {
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
       ) : (
         <div className="mx-auto w-full max-w-5xl space-y-4">
@@ -149,17 +156,32 @@ export function ReportsPage() {
             )}
           </div>
 
-          <CostAlerts sold={sold} global={global} onOpenCostBatch={openCostBatch} />
+          {/* Pendant le chargement, on n'affiche NI les alertes NI le bilan : des
+              « 0 FCFA » et un net figé à zéro ressemblaient à un bug (mission Étape 4).
+              Les skeletons gardent chaque bloc à sa hauteur habituelle. */}
+          {isLoading ? (
+            <>
+              <Skeleton className="h-20" />
+              <div className="flat-card p-3 sm:p-4 space-y-2">
+                <Skeleton className="h-8 w-40" />
+                <Skeleton className="h-24" />
+              </div>
+            </>
+          ) : (
+            <>
+              <CostAlerts sold={sold} global={global} onOpenCostBatch={openCostBatch} />
 
-          <ProfitTab
-            products={products}
-            items={items}
-            focusedDay={focusedDay}
-            view={view}
-            revenue={stats?.revenue ?? 0}
-            salesCount={stats?.salesCount ?? 0}
-            averageBasket={stats?.averageBasket ?? 0}
-          />
+              <ProfitTab
+                products={products}
+                items={items}
+                focusedDay={focusedDay}
+                view={view}
+                revenue={stats?.revenue ?? 0}
+                salesCount={stats?.salesCount ?? 0}
+                averageBasket={stats?.averageBasket ?? 0}
+              />
+            </>
+          )}
         </div>
       )}
 
