@@ -166,6 +166,11 @@ function RootShell({ children }: { children: ReactNode }) {
             __html: `(function(){window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__pwaInstallEvent=e;window.dispatchEvent(new Event("pwa-install-captured"));});window.__pwaInstallCaptureArmed=true;})();`,
           }}
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(new URLSearchParams(location.search).get("debug")==="1")sessionStorage.setItem("eca_debug","1")}catch(_){}})();`,
+          }}
+        />
       </head>
       <body>
         {children}

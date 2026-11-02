@@ -17,15 +17,22 @@ function formatArgs(args: unknown[]): string {
 }
 
 export function DebugConsole() {
-  const enabled =
-    import.meta.env.DEV ||
-    (typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("debug") === "1");
+  const [enabled, setEnabled] = useState(import.meta.env.DEV);
   const [open, setOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   useEffect(() => {
-    if (!enabled) return;
+    const debugRequested = new URLSearchParams(window.location.search).get("debug") === "1";
+    let storedDebug = false;
+    try {
+      storedDebug = window.sessionStorage.getItem("eca_debug") === "1";
+      if (debugRequested) window.sessionStorage.setItem("eca_debug", "1");
+    } catch {
+      // Le paramètre URL reste utilisable si le stockage du navigateur est bloqué.
+    }
+    const active = import.meta.env.DEV || debugRequested || storedDebug;
+    if (!active) return;
+    setEnabled(true);
 
     const originalLog = console.log;
     const originalError = console.error;
@@ -53,7 +60,7 @@ export function DebugConsole() {
       console.log = originalLog;
       console.error = originalError;
     };
-  }, [enabled]);
+  }, []);
 
   if (!enabled) return null;
 
@@ -63,7 +70,20 @@ export function DebugConsole() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Ouvrir les logs de débogage"
-        className="fixed bottom-4 right-4 z-[100] rounded-full bg-red-600 px-3 py-2 text-xs font-bold text-white shadow-lg"
+        style={{
+          position: "fixed",
+          right: "max(16px, env(safe-area-inset-right))",
+          bottom: "max(16px, env(safe-area-inset-bottom))",
+          zIndex: 2147483647,
+          border: 0,
+          borderRadius: 9999,
+          background: "#dc2626",
+          color: "white",
+          padding: "10px 14px",
+          fontSize: 12,
+          fontWeight: 800,
+          boxShadow: "0 4px 16px #0006",
+        }}
       >
         DEBUG
       </button>
