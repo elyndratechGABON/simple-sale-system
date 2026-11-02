@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { addProduct, updateProduct, type Category, type Product } from "@/lib/db";
 import { runOpsExchange } from "@/lib/sync";
 import { fileToScaledBlob } from "@/lib/images";
+import { getIdentity } from "@/lib/syncengine/identity";
 import { usePreferences } from "@/hooks/use-preferences";
 
 // Brouillon de variante dans le formulaire : prix/stock gardés en texte pour la saisie,
@@ -19,6 +20,12 @@ export type VariantDraft = {
 
 function draftId(): string {
   return `v_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
+/** L'appareil est-il le PROPRIÉTAIRE ? Lu au moment T (role jamais muté en cours de
+ *  vie du formulaire) ; gardé hors hook pour ne pas apparaître dans les deps d'effet. */
+function isOwner(): boolean {
+  return getIdentity().role === "owner";
 }
 
 export function useProductForm({
@@ -65,6 +72,14 @@ export function useProductForm({
     editing?.type ?? defaultType ?? "product",
   );
   const [serialNumber, setSerialNumber] = useState(editing?.serialNumber ?? "");
+  // Rôle de l'appareil : le toggle de partage n'existe que pour le PROPRIÉTAIRE —
+  // un employé ne peut pas créer de produit privé, ce que l'écran ne propose jamais.
+  const estProprietaire = isOwner();
+  // Partage avec l'équipe : ON par défaut. Décoché → `is_private: true` au save,
+  // et le produit est exclu des instantanés comme des op P2P émises par le patron.
+  // À l'édition, on repart de l'état PERSISTÉ (privé → toggle OFF).
+  const [partage, setPartage] = useState(!estProprietaire || !(editing?.is_private ?? false));
+
   // Photo libre du produit ou service : dataURL webp réduit, stockée en DB.
   // Le pipeline de compression passe par un Blob intermédiaire (fileToScaledBlob)
   // mais la valeur conservée en état et en DB reste une dataURL string.
@@ -106,6 +121,7 @@ export function useProductForm({
     setUnit(editing?.unit ?? (hasWeightInput ? "kg" : "piece"));
     setProductType(editing?.type ?? defaultType ?? "product");
     setSerialNumber(editing?.serialNumber ?? "");
+    setPartage(!isOwner() || !(editing?.is_private ?? false));
     setPhoto(editing?.photo);
     setVariants(
       editing?.variants?.map((v) => ({
@@ -211,6 +227,9 @@ export function useProductForm({
         serialNumber: serialNumber.trim() || undefined,
         unit,
         photo,
+        // Le toggle n'est pas l'écran de l'employé : son produit part toujours vers le
+        // patron (`is_private` absent). Le patron décoche → produit marqué privé.
+        is_private: estProprietaire && !partage ? true : undefined,
         ...(variantsOut ? { variants: variantsOut } : {}),
       };
       if (!p.name) throw new Error("Nom requis");
@@ -258,6 +277,9 @@ export function useProductForm({
     photoInputRef,
     cameraInputRef,
     photoBusy,
+    estProprietaire,
+    partage,
+    setPartage,
     variants,
     showVariants,
     hasSerialNumber,

@@ -28,9 +28,12 @@ export function shareDecisionOf(peer: PairedDevice): { mode: ShareMode; productI
     : { mode: "all", productIds: [] };
 }
 
-/** Les produits que le propriétaire a choisis pour CET écran. */
+/** Les produits que le propriétaire a choisis pour CET écran. Les produits PRIVÉS
+ *  (`is_private`, toggle du formulaire propriétaire) sont exclus de CETTE résolution —
+ *  même si la décision du pair dit « tout le stock », un produit marqué privé n'est
+ *  jamais le stock "de l'équipe". */
 export async function resolveSharedProducts(peer: PairedDevice): Promise<Product[]> {
-  const all = await listProducts();
+  const all = (await listProducts()).filter((p) => !p.is_private);
   const { mode, productIds } = shareDecisionOf(peer);
   if (mode === "all") return all;
   // Les ids disparus du catalogue sont ignorés sans bruit : une sélection périmée ne doit

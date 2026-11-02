@@ -49,6 +49,10 @@ export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Pro
   await ensureIdentity();
   const product = enforceServiceUnlimited(normalizeVariantStock({ ...p, id: uid(), ...touch() }));
   const db = getDB();
+  // Produit PRIVÉ du propriétaire : il reste sur CET écran — l'op `product.created` qui
+  // porterait son stock initial aux pairs n'est PAS émise (un employé ne peut pas créer
+  // de produit privé : le champ ne naît que par le toggle du formulaire propriétaire).
+  const priver = product.is_private === true && getIdentity().role === "owner";
   // Produit + op dans UNE transaction : un produit présent sans son op de création ne
   // pourrait jamais arriver seul sur un autre appareil.
   await db.transaction(
@@ -71,14 +75,16 @@ export async function addProduct(p: Omit<Product, "id" | keyof SyncFields>): Pro
           created_at: Date.now(),
         });
       }
-      // Le stock ABSOLU part dans la création : il est le point de départ (`STOCK_INITIAL`)
-      // à partir duquel les pairs appliqueront les deltas. Pas d'op `stock.adjusted` ici,
-      // ce serait compter le stock initial deux fois.
-      await emitOp(db, getIdentity(), {
-        type: "product.created",
-        entity_id: product.id,
-        payload: { product },
-      });
+      if (!priver) {
+        // Le stock ABSOLU part dans la création : il est le point de départ (`STOCK_INITIAL`)
+        // à partir duquel les pairs appliqueront les deltas. Pas d'op `stock.adjusted` ici,
+        // ce serait compter le stock initial deux fois.
+        await emitOp(db, getIdentity(), {
+          type: "product.created",
+          entity_id: product.id,
+          payload: { product },
+        });
+      }
     },
   );
   return product;
@@ -118,8 +124,9 @@ export async function updateProduct(p: Product): Promise<void> {
       // Le stock N'EST PAS propagé par `product.updated` : il passe exclusivement par les
       // deltas (`stock.adjusted`). Une correction de comptage est un choix local — l'écart
       // réel entre le stock en rayon et le delta comptable se fige au prochain inventaire.
+      // Un produit PRIVÉ du propriétaire ne voyage pas non plus, y compris ses retouches.
       const fields = productPatch(previous, next);
-      if (fields) {
+      if (fields && !(next.is_private === true && getIdentity().role === "owner")) {
         await emitOp(db, getIdentity(), {
           type: "product.updated",
           entity_id: next.id,

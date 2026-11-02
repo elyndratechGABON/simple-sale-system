@@ -15,6 +15,9 @@ export const SYNC_EXCLUDED = new Set([
   "deleted_at",
   "sync_status",
   "last_op",
+  // Le flag "privé" est une décision DU PROPRIÉTAIRE sur SON écran : il ne voyage pas
+  // — c'est l'absence d'op/snapshot qui décide de la diffusion, pas un champ copié.
+  "is_private",
 ]);
 
 export function productPatch(

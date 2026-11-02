@@ -84,6 +84,14 @@ export interface Product extends SyncFields {
    */
   photo?: string;
   /**
+   * Produit PRIVÉ du propriétaire : jamais partagé aux employés — ni par
+   * `catalogue.snapshot` (résolu hors du payload), ni par op P2P
+   * (`product.created`/`updated` non émis quand l'émetteur est le propriétaire).
+   * `undefined` = partagé par défaut. Un employé ne peut pas créer de produit privé :
+   * ce champ n'est posé que par le formulaire du propriétaire.
+   */
+  is_private?: boolean;
+  /**
    * Seuil « stock faible » propre au produit. Absent = seuil global de 5 (cf.
    * src/lib/alerts.ts). Sans index : aucun upgrade nécessaire, les fiches existantes
    * le lisent `undefined`.

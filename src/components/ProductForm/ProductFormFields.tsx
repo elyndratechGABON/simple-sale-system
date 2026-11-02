@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CategorySelect } from "@/components/CategorySelect";
 import { PhotoAndPricing } from "./PhotoAndPricing";
@@ -29,10 +30,37 @@ export const ProductFormFields: FC<{ form: ProductFormState }> = ({ form }) => {
     setCategory,
     showVariants,
     hasSerialNumber,
+    estProprietaire,
+    partage,
+    setPartage,
   } = form;
 
   return (
     <div className="space-y-2.5">
+      {/* Partage avec l'équipe — PROPRIÉTAIRE SEULEMENT. ON par défaut ; décoché, le
+          produit enregistré porte `is_private: true` et ne quitte jamais cet écran
+          (ni snapshot, ni op P2P). Un employé ne voit pas ce réglage : ce qu'il crée
+          part toujours vers le patron. */}
+      {estProprietaire && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5">
+          <div className="min-w-0">
+            <Label htmlFor="partage-equipe" className="text-xs font-medium">
+              Partager ce produit avec mon équipe
+            </Label>
+            <p className="text-[10px] text-muted-foreground">
+              {partage
+                ? "Il apparaîtra sur les caisses de vos employés."
+                : "Il restera uniquement sur cette caisse."}
+            </p>
+          </div>
+          <Switch
+            id="partage-equipe"
+            checked={partage}
+            onCheckedChange={(v) => setPartage(Boolean(v))}
+          />
+        </div>
+      )}
+
       {/* Le type commande quels champs existent : le choisir EN PREMIER */}
       <div className="space-y-1">
         <Label className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">

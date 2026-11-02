@@ -64,14 +64,19 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
 
   const filtres = useMemo(() => {
     const q = recherche.trim().toLowerCase();
-    return (produits ?? []).filter(
-      (p) => !q || p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q),
-    );
+    // Les produits PRIVÉS du patron ne sont PAS partageables : ni proposés, ni comptés
+    // dans le « tout le stock » — ils ne quittent jamais son écran (déjà exclu du
+    // moteur via resolveSharedProducts ; ici on les masque aussi du choix).
+    return (produits ?? [])
+      .filter((p) => !p.is_private)
+      .filter(
+        (p) => !q || p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q),
+      );
   }, [produits, recherche]);
 
   if (!peer) return null;
   const nom = peer.device_name?.trim() || "cet écran";
-  const total = produits?.length ?? 0;
+  const total = (produits ?? []).filter((p) => !p.is_private).length;
 
   function basculer(id: string) {
     setChoisis((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
