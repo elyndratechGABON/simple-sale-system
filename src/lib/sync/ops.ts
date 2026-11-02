@@ -46,20 +46,30 @@ export async function runOpsExchange(): Promise<SyncState | null> {
   // qui veulent un transport injectent `exchangeOps(makeRelay().client)` directement.
   if (import.meta.env.VITEST) return null;
   // MODE MAINTENANCE : les caisses cessent de pousser/tirer leurs opérations. Elles
-  // encassent toujours (hors ligne d'abord) ; leurs opérations restent en file et
+  // encaissent toujours (hors ligne d'abord) ; leurs opérations restent en file et
   // repartiront à la levée du mode.
   if (await isMaintenanceOn()) return null;
   const identity = await ensureIdentity();
-  if (!isSharedGroup(identity.shopId)) return null; // caisse jamais inscrite → rien à partager
+  if (!isSharedGroup(identity.shopId)) {
+    // DIAGNOSTIC : un écran jamais inscrit (groupe `d_`) qui pousserait ne ferait
+    // que du bruit — mais un écran INSCRIT qui se voit refuser ici a un problème.
+    console.warn("[runOpsExchange] groupe non partagé, échange abandonné", identity.shopId);
+    return null;
+  }
   const url = getOpsRelayUrl();
-  if (!url) return null;
+  if (!url) {
+    console.warn("[runOpsExchange] aucun relais configuré, échange abandonné");
+    return null;
+  }
   try {
     const state = await exchangeOps(relayTransport(url, fetch, getOpsToken()));
     // Le TTL s'applique à chaque rotation réussie — paresseux, donc gratuit.
     await purgeSyncedOps(OPS_TTL_MS);
     return state;
-  } catch {
-    // L'échange est un plus, jamais un goulot.
+  } catch (e) {
+    // L'échange est un plus, jamais un goulot — mais il laisse une TRACE : un
+    // « la sync ne fait rien » doit toujours trouver son échec en console.
+    console.error("[runOpsExchange] échec de l'échange avec le relais :", e);
     return null;
   }
 }

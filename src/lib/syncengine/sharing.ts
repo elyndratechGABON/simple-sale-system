@@ -158,15 +158,20 @@ export async function markSharePublished(
  * relais aussitôt (`runOpsExchange`) — l'op reste en file tant qu'elle n'est pas
  * acquittée, donc un échec réseau n'engage rien : la donnée converge de toute façon,
  * la signature mémorisée ne dédoublonne que les réémissions inutiles.
+ *
+ * @returns le NOMBRE de produits partis dans l'instantané — `0` quand rien n'a été
+ *  émis (catalogue résolu vide, écran introuvable). L'appelant peut ainsi distinguer
+ *  « parti » d'« émis » — l'ancien booléen renvoyait `true` même sur une émission
+ *  nulle : le dialogue affichait un succès sans qu'aucune op ne parte.
  */
-export async function publishShareNow(peerId: string): Promise<boolean> {
+export async function publishShareNow(peerId: string): Promise<number> {
   const db = getDB();
   const peer = await db.paired_devices.get(peerId);
-  if (!peer) return false;
+  if (!peer) return 0;
   const part = await emitShareOps(peer, { force: true });
-  if (!part) return true; // rien à émettre : décision inchangée ou catalogue vide
+  if (!part) return 0; // rien à émettre : décision inchangée ou catalogue résolu vide
   await markSharePublished(peer.id, part.signature, part.at);
-  return true;
+  return part.count;
 }
 
 /** Enregistre la décision du propriétaire. Ne publie PAS : le transport s'en charge dans

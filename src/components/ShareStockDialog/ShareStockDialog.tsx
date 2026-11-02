@@ -8,6 +8,7 @@
 // ici plutôt que laissé à découvrir.
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Boxes, Check } from "lucide-react";
 import {
   Dialog,
@@ -92,15 +93,35 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
         setErreur("Écran introuvable — partage annulé.");
         return;
       }
-      // Publication IMMÉDIATE de l'instantané (les produits cochés), sans attendre
-      // le prochain cycle de synchronisation. Best-effort : l'op reste dans l'outbox
-      // tant qu'elle n'est pas acquittée, le prochain cycle la repoussera sinon.
-      const emise = await publishShareNow(peer.id);
-      if (emise) void runOpsExchange().catch(() => {});
+      // Publication IMMÉDIATE de l'instantané (les produits cochés), puis poussée
+      // OBSERVÉE au relais : on attend le résultat au lieu d'un `void` muet — c'est
+      // ce silence qui faisait croire à un bouton mort (les gardes de l'échange —
+      // maintenance, relais non configuré — renvoyaient null sans un mot).
+      const partis = await publishShareNow(peer.id);
+      if (partis === 0) {
+        // Rien n'est parti : la sélection résolue est vide (catalogue privé/vide).
+        setErreur("Aucun produit à transférer — la sélection est vide.");
+        return;
+      }
+      let pousse = false;
+      try {
+        const state = await runOpsExchange();
+        pousse = (state?.pushed ?? 0) > 0;
+      } catch (e) {
+        // Diagnostic visible : l'échange a échoué (réseau, relais) — on le logue
+        // pour qu'un « le bouton ne fait rien » ait toujours une trace en console.
+        console.error("[ShareStockDialog] poussée du snapshot échouée :", e);
+      }
+      if (!pousse) {
+        // L'op est DANS l'outbox : elle partira au prochain cycle de sync (60 s),
+        // mais l'utilisateur mérite de le savoir plutôt qu'un succès mensonger.
+        toast.warning("Transfert enregistré — envoi au prochain cycle de synchronisation.");
+      }
       const partages = mode === "all" ? total : choisis.length;
       onShared?.(partages);
       onOpenChange(false);
-    } catch {
+    } catch (e) {
+      console.error("[ShareStockDialog] partage échoué :", e);
       setErreur("Le partage n'a pas pu être enregistré.");
     } finally {
       setBusy(false);
