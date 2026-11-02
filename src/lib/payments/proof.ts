@@ -20,6 +20,7 @@
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
 import { getSetting, setSetting } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { ensureIdentity, getDeviceKeys } from "@/lib/syncengine/identity";
 import { signProof } from "@/lib/syncengine/identity/crypto";
 
@@ -102,7 +103,7 @@ export async function sendPendingProofs(): Promise<boolean> {
   let envoye = false;
   for (const proof of pending) {
     try {
-      const res = await fetch(`${base}/api/v1/payments/proof`, {
+      const res = await fetchWithTimeout(`${base}/api/v1/payments/proof`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -2,6 +2,7 @@ import { saveShopProfile } from "@/lib/db";
 import { getPreferences, savePreferences } from "@/lib/settings";
 import { getOpsRelayUrl, getOrchestratorUrl } from "@/lib/sync";
 import type { PairingShopConfig } from "./types";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 /** Réclame le jeton au relais (redeem) — renvoie la boutique et le code. */
 export async function redeemShareToken(
@@ -16,7 +17,7 @@ export async function redeemShareToken(
   try {
     const relay = getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? "");
     const url = (relay || "").replace(/\/$/, "") + "/api/v1/share/redeem";
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

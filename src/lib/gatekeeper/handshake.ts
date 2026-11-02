@@ -3,6 +3,7 @@ import { getOrchestratorUrl } from "@/lib/sync";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
 import { devicePublicKey } from "@/lib/payments/proof";
 import { toast } from "sonner";
+import { fetchWithTimeout, isTimeoutError, timeoutMessage } from "@/lib/fetch-with-timeout";
 import { applyAccountMetadata, handleHandshakeRefusal, lockDecision } from "./handshake-support";
 import { applyCommand, getAppliedIds, setAppliedIds } from "./commands";
 import { clearKeywordClaim, getKeywordClaim } from "./keyword";
@@ -19,6 +20,10 @@ import {
   SETTING_MAINTENANCE,
 } from "./settings";
 import type { AdminCommand, HandshakeResult, LockReason, SubscriptionRequestStatus } from "./types";
+
+/** Toast anti-spam : un timeout est annoncé UNE fois par fenêtre de 5 minutes, pas
+ *  à chaque cycle de synchronisation toutes les 60 secondes. */
+let handshakeTimeoutPrevenu = false;
 
 // ── Handshake ─────────────────────────────────────────────────────────────────────
 export async function handshake(): Promise<HandshakeResult> {
@@ -41,7 +46,7 @@ export async function handshake(): Promise<HandshakeResult> {
     const identity = await ensureIdentity();
 
     try {
-      const res = await fetch(`${url}/api/v1/handshake`, {
+      const res = await fetchWithTimeout(`${url}/api/v1/handshake`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -186,7 +191,19 @@ export async function handshake(): Promise<HandshakeResult> {
         status: data.status,
         reason: reason ?? undefined,
       };
-    } catch {
+    } catch (e) {
+      // TIMEOUT ≠ coupure franche : un réseau mort échoue vite (fetch rejeté sous
+      // la seconde), un serveur qui traîne prend 15 s. Un toast ici, mais rare :
+      // pendant un serverless qui redémarre, chaque minute de syncthing... toast au
+      // premier timeout SEULEMENT (drapeau module), sinon un orchestrateur lent
+      // cracherait le toast à chaque cycle de sync de toutes les caisses.
+      if (isTimeoutError(e) && !handshakeTimeoutPrevenu) {
+        handshakeTimeoutPrevenu = true;
+        toast.error(timeoutMessage());
+        setTimeout(() => {
+          handshakeTimeoutPrevenu = false;
+        }, 5 * 60_000);
+      }
       return { ok: false, sync_allowed: false, status: "unknown", reason: "network" };
     }
   } // fin boucle de retry (max 2 tentatives)

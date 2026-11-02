@@ -1,6 +1,7 @@
 import { getShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { getDeviceFingerprint } from "@/lib/device-fingerprint";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 /**
  * Libération en attente : la suppression a eu lieu HORS LIGNE.
@@ -83,7 +84,7 @@ export async function releaseSeat(
   // pourrait pas détacher l'empreinte.
   const empreinte = fingerprint ?? (await getDeviceFingerprint().catch(() => null));
   try {
-    const res = await fetch(`${base}/api/v1/devices/release`, {
+    const res = await fetchWithTimeout(`${base}/api/v1/devices/release`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -143,7 +144,7 @@ export async function flushPendingRelease(): Promise<boolean> {
   const base = getOrchestratorUrl();
   if (!base) return false;
   try {
-    const res = await fetch(`${base}/api/v1/devices/release`, {
+    const res = await fetchWithTimeout(`${base}/api/v1/devices/release`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

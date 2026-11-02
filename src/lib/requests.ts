@@ -7,6 +7,7 @@
 // la validation prolonge le compte exactement comme une « Prolongation » manuelle.
 import { getShopProfile } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
+import { fetchWithTimeout, isTimeoutError, timeoutMessage } from "@/lib/fetch-with-timeout";
 
 export interface SubscriptionRequestInput {
   planName: string;
@@ -25,7 +26,7 @@ export async function submitSubscriptionRequest(
   if (!profile) return { ok: false, error: "Aucune boutique enregistrée sur cet appareil." };
   if (!url) return { ok: false, error: "Aucun serveur de synchronisation configuré." };
   try {
-    const res = await fetch(`${url}/api/v1/requests`, {
+    const res = await fetchWithTimeout(`${url}/api/v1/requests`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -41,10 +42,17 @@ export async function submitSubscriptionRequest(
     });
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      // 429 = plafond de débit de l'orchestrateur (rate-limiter) : le message serveur
+      // est déjà clair, on le laisse passer tel quel.
       return { ok: false, error: data?.error ?? "Le serveur a refusé la demande." };
     }
     return { ok: true };
   } catch (e) {
+    if (isTimeoutError(e))
+      return {
+        ok: false,
+        error: timeoutMessage(),
+      };
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Impossible de contacter le serveur.",

@@ -3,6 +3,7 @@ import { getOrchestratorUrl } from "@/lib/sync";
 import { handshake } from "./handshake";
 import { APP_ORIGIN, SETTING_GRACE_ENDS_AT, SETTING_QUOTA, SETTING_REQUEST } from "./settings";
 import type { AccountQuota, SubscriptionRequestStatus } from "./types";
+import { fetchWithTimeout, isTimeoutError, timeoutMessage } from "@/lib/fetch-with-timeout";
 
 export async function getAccountQuota(): Promise<AccountQuota | null> {
   return (await getSetting<AccountQuota>(SETTING_QUOTA)) ?? null;
@@ -89,7 +90,7 @@ export async function blessEmployeeDevice(
   const base = getOrchestratorUrl();
   if (!base) return { ok: false, message: "Orchestrateur non configuré sur cet écran." };
   try {
-    const res = await fetch(`${base}/api/v1/account/bless`, {
+    const res = await fetchWithTimeout(`${base}/api/v1/account/bless`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -109,7 +110,8 @@ export async function blessEmployeeDevice(
       return { ok: false, message: data?.error ?? `Serveur : ${res.status}.` };
     }
     return { ok: true };
-  } catch {
+  } catch (e) {
+    if (isTimeoutError(e)) return { ok: false, message: timeoutMessage() };
     return { ok: false, message: "Orchestrateur injoignable — nouvel essai au prochain cycle." };
   }
 }
@@ -133,7 +135,7 @@ export async function syncData(data: unknown, appOrigin = APP_ORIGIN): Promise<b
   const url = getOrchestratorUrl();
   if (!url) return false;
   try {
-    const res = await fetch(`${url}/api/v1/sync-data`, {
+    const res = await fetchWithTimeout(`${url}/api/v1/sync-data`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

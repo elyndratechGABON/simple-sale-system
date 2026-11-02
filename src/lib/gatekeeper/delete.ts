@@ -2,6 +2,7 @@ import { getSetting, setSetting } from "@/lib/db";
 import { getOrchestratorUrl } from "@/lib/sync";
 import { SETTING_DELETE_REQUEST } from "./settings";
 import type { DeleteAccountRequest } from "./types";
+import { fetchWithTimeout, isTimeoutError, timeoutMessage } from "@/lib/fetch-with-timeout";
 
 export async function getDeleteAccountRequest(): Promise<DeleteAccountRequest | null> {
   return (await getSetting<DeleteAccountRequest>(SETTING_DELETE_REQUEST)) ?? null;
@@ -27,7 +28,7 @@ export async function deleteShopRemote(
   const url = getOrchestratorUrl();
   if (!url) return { ok: false, error: "Aucun serveur de synchronisation configuré." };
   try {
-    const res = await fetch(`${url}/api/v1/shops/${encodeURIComponent(deviceId)}`, {
+    const res = await fetchWithTimeout(`${url}/api/v1/shops/${encodeURIComponent(deviceId)}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ store_name: storeName }),
@@ -41,10 +42,15 @@ export async function deleteShopRemote(
     return { ok: true };
   } catch (e) {
     // CORS, réseau coupé, timeout — le serveur est injoignable mais la purge locale
-    // reste utile : l'utilisateur ne doit pas rester bloqué sur un serveur HS.
+    // reste utile : l'utilisateur ne doit pas rester bloqué sur un serveur HS. Le
+    // message distingue un VRAI timeout (« trop de temps ») d'une coupure franche.
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Impossible de contacter le serveur.",
+      error: isTimeoutError(e)
+        ? timeoutMessage()
+        : e instanceof Error
+          ? e.message
+          : "Impossible de contacter le serveur.",
     };
   }
 }
