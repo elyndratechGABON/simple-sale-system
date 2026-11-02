@@ -16,6 +16,8 @@ import type { TransportClient } from "./types";
  *  ne fait que TÉLÉCHARGER (bande montante rapide) : il garde le timeout court. */
 const FETCH_TIMEOUT_MS = 10_000;
 const PUSH_TIMEOUT_MS = 45_000;
+// Plafond d'un paquet de push (~700 Ko) : sous les limites serveur, découpe le lot.
+const PUSH_CHUNK_BYTES = 700_000;
 
 export function relayTransport(
   baseUrl: string,
@@ -44,22 +46,46 @@ export function relayTransport(
   return {
     async push(shopId: string, ops: SyncOp[]): Promise<boolean> {
       if (ops.length === 0) return true;
-      try {
-        const body = JSON.stringify({ shop_id: shopId, ops });
+      // DÉCOUPAGE PAR TAILLE (anti-400) : un lot de 20 ops peut porter plusieurs Mo
+      // (photos dataURL des `catalogue.snapshot`) — au-delà du plafond, le relais
+      // refermait la requête avant d'avoir lu le JSON (400 sans trace de la cause).
+      // Chaque paquet vise ~700 Ko ; l'idempotence du relais (ON CONFLICT DO
+      // NOTHING) autorise le re-push intégral si un paquet suivant échoue.
+      const envoyer = async (paquet: SyncOp[]): Promise<boolean> => {
+        const body = JSON.stringify({ shop_id: shopId, ops: paquet });
         const res = await timedFetch(`${baseUrl}/api/v1/ops`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
           body,
         });
         if (!res.ok) {
-          // DIAGNOSTIC : un push qui échoue devait laisser une trace — taille du
-          // corps (limite Vercel : 4,5 Mo par requête), statut du relais. Sans ce
-          // log, « les produits n'arrivent jamais » était indépendable.
+          // DIAGNOSTIC : taille du corps et statut du relais — sinon « les
+          // produits n'arrivent jamais » est indépendable.
           console.error(
-            `[relais] push refusé : ${res.status} (${ops.length} op(s), ${(body.length / 1024).toFixed(0)} Ko)`,
+            `[relais] push refusé : ${res.status} (${paquet.length} op(s), ${(body.length / 1024).toFixed(0)} Ko)`,
           );
         }
         return res.ok;
+      };
+      try {
+        const paquets: SyncOp[][] = [];
+        let courant: SyncOp[] = [];
+        let taille = 60; // coque {shop_id, ops}
+        for (const op of ops) {
+          const poids = JSON.stringify(op).length + 2;
+          if (taille + poids > PUSH_CHUNK_BYTES && courant.length > 0) {
+            paquets.push(courant);
+            courant = [];
+            taille = 60;
+          }
+          courant.push(op);
+          taille += poids;
+        }
+        if (courant.length > 0) paquets.push(courant);
+        for (const paquet of paquets) {
+          if (!(await envoyer(paquet))) return false;
+        }
+        return true;
       } catch (e) {
         console.error("[relais] push échoué (réseau/timeout) :", e);
         return false;
