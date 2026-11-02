@@ -149,12 +149,28 @@ export function useProductForm({
     setVariants((vs) => vs.filter((v) => v.id !== id));
   }
 
+  /** Plafond AVANT compression : une photo brute d'appareil photo peut faire 50 Mo,
+   *  et le pipeline (`createObjectURL` → Image → canvas) la charge ENTIÈREMENT en RAM
+   *  (puis la décode en bitmap plein format) avant de la réduire — un upload géant
+   *  devient un crash « Out of Memory » de l'onglet. On refuse AVANT de lire. */
+  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 Mo
+
+  function fichierTropLourd(file: File): boolean {
+    if (file.size <= MAX_UPLOAD_BYTES) return false;
+    toast.error("L'image est trop lourde (max 5 Mo). Veuillez choisir une image plus légère.");
+    return true;
+  }
+
   /** Photo D'UNE variante : pipeline de compression (Blob transitoire) puis retour
    *  en dataURL PERSISTANT — un blob URL mourrait au rechargement et la variante
    *  retomberait sur la photo du produit parent. */
   async function handleVariantPhoto(variantId: string, event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (fichierTropLourd(file)) {
+      if (event.target) event.target.value = "";
+      return;
+    }
     try {
       const { blob } = await fileToScaledBlob(file);
       const url = await blobToDataUrl(blob);
@@ -169,6 +185,11 @@ export function useProductForm({
   async function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (fichierTropLourd(file)) {
+      if (photoInputRef.current) photoInputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
+      return;
+    }
     setPhotoBusy(true);
     try {
       const { blob } = await fileToScaledBlob(file);
