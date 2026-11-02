@@ -2,7 +2,7 @@ import { syncSemaphore } from "../semaphore";
 import { applyRemoteOps } from "../apply";
 import { isSharedGroup, getIdentity } from "../identity";
 import { signAll } from "../ops";
-import { listPendingOps, listPendingOpsBatch, markOpsSynced } from "../outbox";
+import { listPendingOps, listPendingOpsBatch, markOpsSent, markOpsSynced } from "../outbox";
 import {
   getDB,
   addCatalogueRequest,
@@ -44,6 +44,26 @@ async function pousserOutbox(client: TransportClient, shopId: string): Promise<b
   return true;
 }
 
+// PRESENCE (mission 3 niveaux) : « le patron est online » = son écran existe — l'API
+// `/api/v1/presence` du relais est la source première — ou, repli, il a TIRÉ récemment
+// chez le relais (2 min : le cycle de synchro est d'une minute, l'amplitude le couvre).
+// Un relais muet (ni présence, ni preuve de vie) signifie le patron injoignable :
+// on part en scénario 2, on ne perd JAMAIS silence pour absence de signal.
+const PRESENCE_ONLINE_MS = 2 * 60_000;
+
+async function isOwnerOnline(client: TransportClient, shopId: string): Promise<boolean> {
+  const db = getDB();
+  const owner = (await db.paired_devices.where("shop_id").equals(shopId).toArray()).find(
+    (d) => d.role === "owner" && d.status !== "revoked",
+  );
+  if (!owner) return true; // personne à joindre connu : comportement historique (direct)
+  const presence = await client.presence?.(shopId);
+  if (presence) return presence.online.includes(owner.id);
+  const seen = ((await client.peers?.(shopId)) ?? []).find((p) => p.device_id === owner.id);
+  if (!seen) return false;
+  return Date.now() - seen.last_pulled_at < PRESENCE_ONLINE_MS;
+}
+
 /** Cycle complet d'un appareil : pousse son outbox, tire ce que les autres ont laissé,
  *  rejoue les ops étrangères. Jamais bloquant : tout est déjà protégé en amont. */
 export async function exchangeOps(client: TransportClient): Promise<SyncState> {
@@ -71,6 +91,16 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     // le reste repart au prochain cycle.
     const TAILLE_LOT = 20;
     let pushed = 0;
+    let held = 0;
+    // DECISION D'ENTAME (scénario 1 vs 2) : une fois par cycle — pas par lot — le client
+    // demande au relais SI le patron est online (API presence, repli preuve de vie).
+    // Online    → direct : le push passe, l'ACK vient vite, ops acquittées (`synced`).
+    // Offline   → le push passe QUAND MÊME (relais temporaire, TTL 7 j côté relais),
+    //             mais la copie locale reste `sent` : elle attend l'ACK du patron.
+    let ownerOnline = true;
+    if (identity.role === "employee") {
+      ownerOnline = await isOwnerOnline(client, identity.shopId);
+    }
     for (;;) {
       const lot = await listPendingOpsBatch(identity.shopId, TAILLE_LOT);
       if (lot.length === 0) break;
@@ -80,7 +110,14 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
       // Le push relais garde le cycle : rattrapage des pairs hors LAN, retrouvaille.
       forwardToPeers(signed);
       if (await client.push(identity.shopId, signed)) {
-        await markOpsSynced(lot.map((o) => o.id));
+        if (ownerOnline) {
+          await markOpsSynced(lot.map((o) => o.id));
+        } else {
+          // SCÉNARIO 2 : au relais mais SANS ACK — la copie reste dans l'outbox, `sent`,
+          // jusqu'à l'ACK du patron (ou rattrapage 7 j → rebasculement `pending`).
+          await markOpsSent(lot.map((o) => o.id));
+          held += lot.length;
+        }
         pushed += lot.length;
       } else {
         break; // réseau/relais en échec : on s'arrête là, pas de martelage
@@ -310,7 +347,7 @@ export async function exchangeOps(client: TransportClient): Promise<SyncState> {
     if (identity.role !== "employee") {
       await publishFreshCatalog(client, identity);
     }
-    return { pushed, applied, skipped, remote: foreign.length };
+    return { pushed, applied, skipped, remote: foreign.length, held };
   } finally {
     release();
   }

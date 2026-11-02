@@ -11,6 +11,10 @@
 //                                                     relais trace la fraîcheur par appareil
 //                                                     et ne libère jamais de place tant
 //                                                     qu'un appareil présent n'a pas tiré.
+//   GET  /api/v1/presence?shop_id=…                 → { online: device_id[] } : QUI est en
+//                                                     ligne à l'instant (le patron, p. ex.).
+//                                                     Optionnel : un client moyennant son absence
+//                                                     retombe sur `/api/v1/ops/peers`.
 // En production le relais exige le secret `x-ops-token` (VITE_OPS_TOKEN à l'emploi) ; un
 // relais sans jeton configuré (dev, orchestrateur historique) reste ouvert.
 //

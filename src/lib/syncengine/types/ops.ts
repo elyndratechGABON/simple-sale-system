@@ -38,8 +38,15 @@ export interface SyncOp {
   /** JSON-serialisable. Les lignes de vente partent DANS l'op, jamais ailleurs. */
   payload: unknown;
   created_at: number;
-  /** Cycle de vie dans l'outbox local. */
-  status: "pending" | "synced";
+  /** Cycle de vie dans l'outbox local — les 3 niveaux de la synchro :
+   *  `pending` = jamais partie (push en échec, ou rattrapage après TTL) ; `sent` =
+   *  au relais mais SANS ACK du patron (scénario 2 — le patron était offline, le relais
+   *  stocke seul) ; `synced` = acquittée (scénario 1 : patron online au push, ou venir
+   *  de `sent` une fois le patron revenu tirer). */
+  status: "pending" | "sent" | "synced";
+  /** Quand l'op est partie au relais SANS ACK (`status === "sent"`). Sert au
+   *  rattrapage : une op `sent` sans ACK depuis plus de 7 jours repasse `pending`. */
+  sent_at?: number;
   /**
    * Signature RSA-OAEP/SHA-256, base64, de `signableBody()` par la clé PRIVÉE de
    * `device_id`. Vérifiée à l'application contre la clé publique pairée.

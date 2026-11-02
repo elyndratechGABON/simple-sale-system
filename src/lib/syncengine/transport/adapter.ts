@@ -97,5 +97,22 @@ export function relayTransport(
         return [];
       }
     },
+    // API PRESENCE : le relais dit QUI est en ligne (`online: device_id[]`).
+    // `null` partout où l'endpoint est absent (404, relais muet, réseau) : le client,
+    // lui, retombe sur la preuve de vie de `peers()` — le patron doit rester joignable
+    // à l'employé même si ce relais-là n'a pas encore la présence dans son interface.
+    async presence(shopId: string): Promise<{ online: string[] } | null> {
+      try {
+        const res = await timedFetch(
+          `${baseUrl}/api/v1/presence?shop_id=${encodeURIComponent(shopId)}`,
+          { headers: authHeaders },
+        );
+        if (!res.ok) return null;
+        const data = (await res.json().catch(() => null)) as { online?: string[] } | null;
+        return data && Array.isArray(data.online) ? { online: data.online.map((id) => id) } : null;
+      } catch {
+        return null;
+      }
+    },
   };
 }

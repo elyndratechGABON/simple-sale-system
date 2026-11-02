@@ -27,6 +27,12 @@ export interface TransportClient {
    * écran. Optionnel : un relais qui ne sait pas le dire ne casse rien.
    */
   peers?(shopId: string): Promise<{ device_id: string; last_pulled_at: number }[]>;
+  /**
+   * API PRESENCE du relais : QUI est en ligne à l'instant (`GET /api/v1/presence`
+   * → `{ online: device_id[] }`). `null` = le relais n'expose pas cette API (ou est
+   * muet) — le client retombe alors sur la preuve de vie `peers()`. Optionnel aussi.
+   */
+  presence?(shopId: string): Promise<{ online: string[] } | null>;
 }
 
 /** Bilan d'un cycle d'échange, pour l'UI (indicateur de sync) et les tests. */
@@ -39,4 +45,6 @@ export interface SyncState {
   skipped: number;
   /** Ops étrangères présentes chez le relais (dont celles déjà appliquées). */
   remote: number;
+  /** Ops poussées au relais SANS ACK du patron (scénario 2 — copie locale `sent`). */
+  held?: number;
 }

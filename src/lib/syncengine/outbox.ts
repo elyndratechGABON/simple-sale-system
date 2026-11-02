@@ -16,17 +16,44 @@ export async function listPendingOps(shopId: string): Promise<SyncOp[]> {
     .toArray();
 }
 
-/** Acquitte des ops localement : la transmission d'un pair est confirmée. */
+/** Acquitte des ops localement : la transmission d'un pair est confirmée — soit le patron
+ *  était online au push (scénario 1), soit un op `sent` du scénario 2 vient de recevoir
+ *  son ACK (le patron est revenu tirer). */
 export async function markOpsSynced(ids: string[]): Promise<void> {
   const db = getDB();
   await db.transaction("rw", db.sync_ops, async () => {
     for (const id of ids) {
       const op = await db.sync_ops.get(id);
-      if (op && op.status === "pending") {
+      if (op && op.status !== "synced") {
         await db.sync_ops.put({ ...op, status: "synced" });
       }
     }
   });
+}
+
+/** SCÉNARIO 2 — le patron est NOT online : l'op part quand même au relais (relais
+ *  temporaire), mais la copie LOCALE reste dans l'outbox en `sent`. Elle n'est ni
+ *  appliquée ni perdue : l'ACK du patron (quand il reviendra tirer) la fera passer
+ *  `synced`, et le TTL rattrapage (7 jours) la refera rebasculer `pending` le cas échéant. */
+export async function markOpsSent(ids: string[]): Promise<void> {
+  const db = getDB();
+  await db.transaction("rw", db.sync_ops, async () => {
+    for (const id of ids) {
+      const op = await db.sync_ops.get(id);
+      if (op && op.status === "pending") {
+        await db.sync_ops.put({ ...op, status: "sent", sent_at: Date.now() });
+      }
+    }
+  });
+}
+
+/** Toutes les copies `sent` d'un compte — l'op est au relais mais PAS acquittée. */
+export async function listSentOps(shopId: string): Promise<SyncOp[]> {
+  return getDB()
+    .sync_ops.where("shop_id")
+    .equals(shopId)
+    .filter((o) => o.status === "sent")
+    .toArray();
 }
 
 /** Purge les ops ACQUITTÉES plus âgées que `olderThanMs`. Sans danger : une op purgée qui
