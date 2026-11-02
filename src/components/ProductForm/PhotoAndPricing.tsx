@@ -83,24 +83,27 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
             </span>
           )}
           <div className="flex flex-wrap gap-1.5">
+            {/* Deux gestes, DEUX boutons IDENTIQUES (mission Étape 2) : même variante,
+                même taille, même largeur flexible — avant, « Galerie » en ghost
+                paraissait plus petit que « Prendre une photo ». */}
             <Button
               type="button"
               variant="outline"
               size="sm"
               disabled={photoBusy}
               onClick={pickCamera}
-              className="h-9 text-xs"
+              className="h-9 min-w-0 flex-1 text-xs justify-center"
             >
               <Camera className="h-3.5 w-3.5 mr-1.5" />
               Prendre une photo
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               disabled={photoBusy}
               onClick={pickGallery}
-              className="h-9 text-xs"
+              className="h-9 min-w-0 flex-1 text-xs justify-center"
             >
               <ImagePlus className="h-3.5 w-3.5 mr-1.5" />
               Galerie
@@ -124,13 +127,10 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
         />
       </div>
 
-      {/* Prix et coût sur une colonne (mobile) ou deux (sm+) : évite l'écrasement sur très petits écrans (§4.3). */}
-      <div
-        className={cn(
-          "grid gap-2",
-          productType === "product" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1",
-        )}
-      >
+      {/* Prix et coût CÔTE À CÔTE (mission Étape 2) : deux champs compacts sur UNE
+          ligne — le formulaire tient mieux dans le viewport. Le service n'a pas de
+          coût : son prix reste sur sa ligne. */}
+      <div className={cn("grid gap-2", productType === "product" ? "grid-cols-2" : "grid-cols-1")}>
         <div>
           <Label htmlFor="price" className="text-xs font-medium">
             Prix de vente *
