@@ -7,7 +7,7 @@ import { Pricing } from "./Pricing";
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       <LandingHeader />
       <main>
         <Hero />

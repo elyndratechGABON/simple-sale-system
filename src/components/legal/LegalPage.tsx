@@ -43,7 +43,7 @@ interface LegalPageProps {
 
 export function LegalPage({ title, lastUpdated, children }: LegalPageProps) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b bg-card/85 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3 lg:px-8">
           <Link

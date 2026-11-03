@@ -10,7 +10,7 @@ export function CategoriesColumn({ pos }: { pos: PosController }) {
   if (pos.isService || pos.categories.length === 0) return null;
   return (
     <aside className="hidden xl:block">
-      <section className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pb-4">
+      <section className="sticky top-20 max-h-[calc(100vh-6rem)] supports-[height:100dvh]:max-h-[calc(100dvh-6rem)] overflow-y-auto pb-4">
         <div className="space-y-1">
           <CategoryRail
             label="Tous"

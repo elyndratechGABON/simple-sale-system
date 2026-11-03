@@ -295,6 +295,13 @@ body {
        débordement réel est corrigé dans les composants. */
     overflow-x: clip;
   }
+
+  /* Mission responsive : une image ne déborde jamais de son conteneur (grille de
+     produits, avatars, PDF de photos). Les avatars bornent leur hauteur par
+     ailleurs — on ne touche qu'à la largeur maximale. */
+  img {
+    max-width: 100%;
+  }
 }
 
 /*
