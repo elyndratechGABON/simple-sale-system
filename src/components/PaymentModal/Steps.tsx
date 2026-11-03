@@ -138,17 +138,32 @@ export function StepOfflineSms({ flow }: { flow: PaymentFlow }) {
           </p>
         </div>
       ) : (
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => flow.setStep(2)} className="flex-1">
-            Retour
-          </Button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => flow.setStep(2)} className="flex-1">
+              Retour
+            </Button>
+            <Button
+              className="flex-1 gap-2"
+              disabled={!flow.smsText.trim() || flow.unlocking}
+              onClick={() => void flow.handleOfflineUnlock()}
+            >
+              <ScanLine className="h-4 w-4" />
+              {flow.unlocking ? "Vérification…" : "Déverrouiller"}
+            </Button>
+          </div>
+
+          {/* DOUBLE VÉRIFIER (mission tunnel) : le SMS collé part à l'orchestrateur
+              (preuve signée) ET WhatsApp s'ouvre prérempli vers le service. Un tap,
+              deux canaux — plus aucune confirmation perdue des deux côtés. */}
           <Button
-            className="flex-1 gap-2"
+            variant="secondary"
+            className="w-full gap-2"
             disabled={!flow.smsText.trim() || flow.unlocking}
-            onClick={() => void flow.handleOfflineUnlock()}
+            onClick={() => void flow.handleDoubleVerify()}
           >
-            <ScanLine className="h-4 w-4" />
-            {flow.unlocking ? "Vérification…" : "Déverrouiller"}
+            <BadgeCheck className="h-4 w-4" />
+            Double Vérifier
           </Button>
         </div>
       )}

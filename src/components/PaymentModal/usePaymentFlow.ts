@@ -2,10 +2,14 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { submitSubscriptionRequest } from "@/lib/requests";
 import { PAYMENT_WHATSAPP_NUMBER, setPaymentConfirmationPending } from "@/lib/payment-confirmation";
+import { queuePaymentSms } from "@/lib/payments/proof";
 import { unlockFromPaymentSms } from "@/lib/offline-unlock";
 import type { PlanInfo } from "@/lib/pricing";
 
 const SUPPORT_WHATSAPP = `https://wa.me/${PAYMENT_WHATSAPP_NUMBER}`;
+/** Numéro du service pour la DOUBLE VÉRIFICATION (mission tunnel de paiement) :
+ *  indicatif Gabon +241, numéro sans le 0, format international `wa.me`. */
+const DOUBLE_VERIFY_WHATSAPP = "https://wa.me/2415565145";
 
 // 1 = USSD, 2 = choix du chemin, 3 = admin, 4 = SMS offline.
 export type Step = 1 | 2 | 3 | 4;
@@ -100,6 +104,55 @@ export function usePaymentFlow({
     onOpenChange(false);
   }
 
+  /**
+   * DOUBLE VÉRIFIER (mission tunnel de paiement, après avoir collé le SMS) :
+   *   action 1 — le SMS part à l'orchestrateur (preuve signée de l'appareil) pour
+   *   qu'une trace serveur existe sans attendre le prochain cycle ;
+   *   action 2 — WhatsApp s'ouvre prérempli vers le service.
+   *
+   * WhatsApp est ouvert SYNCHRONEMENT (avant tout `await`) : un navigateur
+   * bloque une popup ouverte après un await — la preuve, elle, part en tâche de fond
+   * et reprend d'elle-même au cycle suivant si le réseau manque.
+   */
+  async function handleDoubleVerify() {
+    const sms = smsText.trim();
+    if (!sms || unlocking) return;
+    const waUrl = buildDoubleVerifyWhatsappUrl();
+    const proofPromise = queuePaymentSms(sms, "");
+    window.open(waUrl, "_blank");
+    setUnlocking(true);
+    try {
+      const envoye = await proofPromise;
+      toast.success(
+        envoye
+          ? "SMS transmis à l'administrateur — WhatsApp ouvert."
+          : "WhatsApp ouvert. Le SMS sera transmis à la synchronisation suivante (hors ligne).",
+      );
+      handleClose();
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
+  function buildDoubleVerifyWhatsappUrl(): string {
+    const planLine = selectedPlan
+      ? `Abonnement : ${selectedPlan.name} — ${selectedPlan.price.toLocaleString("fr-FR")} FCFA / ${selectedPlan.period}`
+      : "";
+    const msg = [
+      "Paiement d'abonnement — double vérification.",
+      planLine,
+      "",
+      `Boutique : ${storeName}`,
+      `Propriétaire : ${ownerName}`,
+      "",
+      "SMS de confirmation opérateur :",
+      smsText.trim(),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    return `${DOUBLE_VERIFY_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+  }
+
   function buildWhatsappUrl(): string {
     const planLine = selectedPlan
       ? `Plan : ${selectedPlan.name} — ${selectedPlan.price.toLocaleString("fr-FR")} FCFA / ${selectedPlan.period}`
@@ -142,6 +195,7 @@ export function usePaymentFlow({
     unlockedPlan,
     handleSendRequest,
     handleOfflineUnlock,
+    handleDoubleVerify,
     handleClose,
     buildWhatsappUrl,
     handleCopyReference,
