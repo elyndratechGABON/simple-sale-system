@@ -27,22 +27,29 @@ export function shortDeviceId(deviceId: string): string {
 //
 // Le scrub est générique et borné en profondeur : toute clé `photo`/`image` portant
 // un dataURL est retirée, à tous les niveaux. `image_base64` de l'op dédiée est préservé.
+// EXCEPTION VOLONTAIRE — `product.updated` : une RETOUCHE produit (changement de photo)
+// doit arriver AVEC sa nouvelle image sur les autres caisses : le champ `photo` est
+// conservé dans les `fields` et `applyProductUpdated` écrase l'ancienne image. L'image
+// est bornée au moment de la saisie (recadrée ~500 px JPEG, quelques dizaines de Ko) et
+// le transport découpe déjà par ~700 Ko — le past-rash outbox n'a pas de raison de
+// revenir. Les autres payloads (création, catalogue, ventes) restent épurés.
 const SCRUB_DEPTH = 4;
 
-function allegerPayload(value: unknown, depth = 0): unknown {
+function allegerPayload(value: unknown, depth = 0, garderPhoto = false): unknown {
   if (value === null || typeof value !== "object") return value;
   if (depth >= SCRUB_DEPTH) return value;
-  if (Array.isArray(value)) return value.map((v) => allegerPayload(v, depth + 1));
+  if (Array.isArray(value)) return value.map((v) => allegerPayload(v, depth + 1, garderPhoto));
   const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };
   for (const [key, val] of Object.entries(out)) {
     if (
       (key === "photo" || key === "image") &&
       typeof val === "string" &&
-      val.startsWith("data:image")
+      val.startsWith("data:image") &&
+      !garderPhoto
     ) {
       delete out[key];
     } else if (val !== null && typeof val === "object") {
-      out[key] = allegerPayload(val, depth + 1);
+      out[key] = allegerPayload(val, depth + 1, garderPhoto);
     }
   }
   return out;
@@ -74,7 +81,7 @@ export async function emitOp(
     seq,
     type: input.type,
     entity_id: input.entity_id,
-    payload: allegerPayload(input.payload),
+    payload: allegerPayload(input.payload, 0, input.type === "product.updated"),
     created_at: input.created_at ?? Date.now(),
     status: "pending",
   };

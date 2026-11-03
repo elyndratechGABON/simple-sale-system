@@ -1,8 +1,9 @@
-// Les photos ne voyagent PLUS dans les opérations (mission anti-crash mémoire) : un
-// dataURL pèse 30-80 Ko, et l'outbox qui les accumulait faisait crasher le démarrage
-// (3746 ops = 173 Mo). L'image vit DANS la table `products` locale (IndexedDB) ; le
-// journal d'ops transporte la fiche SANS elle. Garde-fous : la création ne porte plus
-// la photo, la mise à jour non plus — et le reste du payload reste intact.
+// Les photos ne voyagent que dans les DEUX seuls canaux d'image assumés : l'op dédiée
+// `product.image_updated` (snapshot de partage) et la RETOUCHE produit — un
+// `product.updated` porte le champ `photo` MODIFIÉ pour que les autres caisses voient
+// la nouvelle image. Toujours exclu : la CRÉATION et le `catalogue.snapshot`, qui
+// restent épurés par le scrub générique (l'anti-crash outbox touche l'accumulation,
+// pas l'op unitaire bornée). Garde-fous : créations sans image, restes de fiche intacts.
 import { describe, it, expect } from "vitest";
 import { addProduct, updateProduct } from "./db";
 import { captureSigned } from "./syncengine/__tests__/setup";
@@ -23,7 +24,7 @@ describe("photo produit : propagation P2P", () => {
       (o) => o.type === "product.created" && o.entity_id === product.id,
     );
     expect(created).toHaveLength(1);
-    // L'op transportée est ALLÉGÉE : pas un octet d'image dans le journal.
+    // L'op de création reste ALLÉGÉE : pas un octet d'image dans le journal.
     expect(photoOf((created[0].payload as { product: unknown }).product)).toBeUndefined();
     // Le reste de la fiche voyage (prix, stock) — seul l'encombrant part.
     expect((created[0].payload as { product: { price: number } }).product.price).toBe(
@@ -31,11 +32,13 @@ describe("photo produit : propagation P2P", () => {
     );
   });
 
-  it("product.updated part SANS la photo modifiée", async () => {
+  it("product.updated part AVEC la photo modifiée (écrase l'ancienne chez le pair)", async () => {
     await onAccount();
-    const product = await addProduct(PRODUCT); // sans photo
+    const ANCIENNE = "data:image/png;base64,ancienne";
+    const product = await addProduct({ ...PRODUCT, photo: ANCIENNE });
 
-    const updated = { ...product, photo: PHOTO };
+    const nouvelle = "data:image/webp;base64,nouvelle";
+    const updated = { ...product, photo: nouvelle };
     await updateProduct(updated);
 
     const ops = (await captureSigned()).filter(
@@ -43,6 +46,7 @@ describe("photo produit : propagation P2P", () => {
     );
     expect(ops).toHaveLength(1);
     const fields = (ops[0].payload as { fields: Record<string, unknown> }).fields;
-    expect(fields.photo).toBeUndefined();
+    // Le champ photo part bien : le pair écrase son ancienne image par celle-ci.
+    expect(fields.photo).toBe(nouvelle);
   });
 });

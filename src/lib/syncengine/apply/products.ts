@@ -50,6 +50,8 @@ export async function applyProductUpdated(db: PosDatabase, op: SyncOp): Promise<
   if (!pl?.product_id) return;
   const existing = await db.products.get(pl.product_id);
   if (!existing || existing.deleted_at) return;
+  // La nouvelle photo de l'op ÉCRASE l'ancienne : la retouche du pair fait foi sur
+  // l'image (le champ absent dans `fields` reste un "non-modifié", pas un effacement).
   // Le CONCEPT : une prestation (type « service ») est TOUJOURS illimitée.
   await db.products.put(enforceServiceUnlimited({ ...existing, ...pl.fields, ...touch() }));
 }

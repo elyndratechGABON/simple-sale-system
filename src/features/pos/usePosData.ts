@@ -39,9 +39,15 @@ export function usePosData(target: Target) {
   });
   // Le préfixe ["sales"] est déjà invalidé par toutes les mutations de vente — rien de
   // plus à câbler, cf. src/hooks/use-period-data.ts.
+  // TEMPS RÉEL (mission tables) : cycle de 2 s, UNIQUEMENT page visible — TanStack
+  // suspend déjà le polling en arrière-plan, on le proclame (`refetchIntervalInBackground:
+  // false`) au lieu de le laisser implicite. Les autres caisses et le patron voient les
+  // tables occupées/libres presque instantanément.
   const { data: openTables = [] } = useQuery({
     queryKey: ["sales", "open"],
     queryFn: listOpenTables,
+    refetchInterval: 2_000,
+    refetchIntervalInBackground: false,
   });
 
   // Ventes réglées du jour : alimentent les raccourcis « produits du jour », le mini-historique
@@ -49,7 +55,8 @@ export function usePosData(target: Target) {
   const { data: salesToday = [] } = useQuery({
     queryKey: ["sales", "today"],
     queryFn: listSalesToday,
-    refetchInterval: 10_000, // Auto-refresh toutes les 10s
+    refetchInterval: 2_000,
+    refetchIntervalInBackground: false,
   });
   const todayTotal = salesToday.reduce((s, x) => s + x.total, 0);
 

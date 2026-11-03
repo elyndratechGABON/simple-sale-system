@@ -29,8 +29,9 @@ export interface ProductCreatedPayload {
 }
 export interface ProductUpdatedPayload {
   product_id: string;
-  // L'allègement global retire `photo` des `product.updated` ; les images sont envoyées
-  // uniquement via `ProductImageUpdatedPayload`, après un snapshot de partage manuel.
+  // Une RETOUCHE produit voyage AVEC sa nouvelle photo (`fields.photo`), contrairement
+  // aux autres payloads génériques : l'op dédiée `product.image_updated` reste réservée
+  // au transfert APRÈS un snapshot de partage manuel.
   fields: Partial<
     Omit<
       import("@/lib/db").Product,
