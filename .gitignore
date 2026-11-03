@@ -42,3 +42,12 @@ bun.lock
 
 .aider*
 .vercel
+
+# Artefacts de développement (audits, jetables) — jamais dans le dépôt.
+/temp.txt
+/result.txt
+/listfiles.txt
+/AUDIT*.md
+opencode.json
+.claude/
+~/
