@@ -108,7 +108,7 @@ export const POSProductCard = memo(function POSProductCard({
         )}
 
         <div className="flex flex-1 flex-col gap-0.5 p-2.5">
-          <p className="line-clamp-2 text-[13px] font-medium leading-tight">{product.name}</p>
+          <p className="line-clamp-1 text-[13px] font-medium leading-tight">{product.name}</p>
           <p
             className={cn(
               "mt-auto pt-1 text-xs leading-none",
@@ -148,14 +148,14 @@ export const POSProductCard = memo(function POSProductCard({
           disabled={out}
           aria-label={`Ajouter ${product.name}`}
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
             "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             out
               ? "border border-border bg-muted text-muted-foreground"
               : "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95",
           )}
         >
-          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
         </button>
       </div>
 

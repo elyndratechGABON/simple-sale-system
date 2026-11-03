@@ -18,7 +18,7 @@ import { toast } from "sonner";
  */
 const SETTING_SHOP_LOGO = "shop_logo";
 
-export function AppearanceCard() {
+export function AppearanceCard({ showLogo = true }: { showLogo?: boolean }) {
   const qc = useQueryClient();
   const { ownerPhoto, workspaceName } = usePreferences();
   const { data: shopLogo } = useQuery({
@@ -95,13 +95,13 @@ export function AppearanceCard() {
   }
 
   return (
-    <div className="flat-card space-y-4">
+    <div className="flat-card space-y-3">
       <header className="space-y-1">
         <h2 className="text-title flex items-center gap-2">
           <Building2 className="h-5 w-5" /> Identité
         </h2>
         <p className="text-small text-muted-foreground">
-          Nom, photo de profil et logo affichés dans l'en-tête.
+          Nom, photo de profil{showLogo ? " et logo" : ""} affichés dans l'en-tête.
         </p>
       </header>
 
@@ -165,48 +165,57 @@ export function AppearanceCard() {
           />
         </div>
 
-        <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-3">
-          <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-card p-1">
-            {shopLogo ? (
-              <img
-                src={shopLogo}
-                alt="Logo actuel"
-                className="h-full w-full object-contain"
-                width={64}
-                height={64}
-              />
-            ) : (
-              <img
-                src="/logo-header.png"
-                alt="Logo par défaut"
-                className="h-full w-full object-contain"
-                width={64}
-                height={64}
-              />
-            )}
-          </span>
-          <div className="flex flex-col items-start gap-1.5">
-            <p className="text-body font-medium">Logo de la boutique</p>
-            <div className="flex flex-wrap gap-1.5">
-              <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
-                <Upload className="h-4 w-4 mr-1.5" />
-                {shopLogo ? "Changer" : "Choisir"}
-              </Button>
-              {shopLogo && (
-                <Button variant="ghost" size="sm" onClick={removeLogo} aria-label="Retirer le logo">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+        {/* LOGO : PATRON SEUL (mission Identité — sécurité visuelle de l'enseigne) ;
+            l'employé ne voit même pas la case, il ne peut changer que sa photo. */}
+        {showLogo && (
+          <div className="flex items-center gap-3 rounded-xl bg-muted/30 p-3">
+            <span className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-card p-1">
+              {shopLogo ? (
+                <img
+                  src={shopLogo}
+                  alt="Logo actuel"
+                  className="h-full w-full object-contain"
+                  width={64}
+                  height={64}
+                />
+              ) : (
+                <img
+                  src="/logo-header.png"
+                  alt="Logo par défaut"
+                  className="h-full w-full object-contain"
+                  width={64}
+                  height={64}
+                />
               )}
+            </span>
+            <div className="flex flex-col items-start gap-1.5">
+              <p className="text-body font-medium">Logo de la boutique</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button variant="outline" size="sm" onClick={() => logoInputRef.current?.click()}>
+                  <Upload className="h-4 w-4 mr-1.5" />
+                  {shopLogo ? "Changer" : "Choisir"}
+                </Button>
+                {shopLogo && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={removeLogo}
+                    aria-label="Retirer le logo"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void handleLogoFile(e)}
+              />
             </div>
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => void handleLogoFile(e)}
-            />
           </div>
-        </div>
+        )}
       </div>
       <p className="text-small text-muted-foreground">
         Images réduites au recadrage et stockées sur cet appareil.

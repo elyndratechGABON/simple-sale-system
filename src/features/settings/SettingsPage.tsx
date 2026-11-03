@@ -99,12 +99,23 @@ export function SettingsPage() {
           </TabsList>
 
           <TabsContent value="identite" className="mt-3 grid items-start gap-4 md:grid-cols-2">
-            {/* Identité visuelle en TÊTE (mission UI) : nom, logo et photo de profil —
-                ce qui identifie la boutique, d'abord. L'employé suit. */}
-            <AppearanceCard />
-            <OwnerInfoCard />
-            <EmployeeIdentityCard />
-            <ClusterCard />
+            {/* ORDRE UNIFIÉ (mission UI Identité) :
+                patron : Nom Boutique → Nom Proprio → Photo → Logo (logo = PATRON SEUL).
+                employé : Nom Boutique → Nom Proprio → Type boutique → Infos employé. */}
+            {estPatron ? (
+              <>
+                <AppearanceCard />
+                <OwnerInfoCard />
+                <ClusterCard />
+              </>
+            ) : (
+              <>
+                <AppearanceCard showLogo={false} />
+                <OwnerInfoCard />
+                <ClusterCard />
+                <EmployeeIdentityCard />
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="caisse" className="mt-3 grid items-start gap-4 md:grid-cols-2">
