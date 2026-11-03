@@ -8,12 +8,25 @@ import { createOverlay } from "./overlay";
  * « Réessayer la caméra » (nouvelle activation, peu importe le mobile) ou Annuler.
  */
 export async function startScannerWithOverlay(): Promise<string | null> {
-  const { frame, hint, status, retryBtn, cancelBtn, teardown } = createOverlay();
+  const {
+    frame,
+    hint,
+    status,
+    retryBtn,
+    cancelBtn,
+    manualBtn,
+    manualBox,
+    manualText,
+    manualOk,
+    teardown,
+  } = createOverlay();
 
   // Le qrbox doit tenir DANS le cadre, lui-même borné par le petit côté de l'écran.
+  // PHASE 1 GRAND (mission scanner QR) : plus de modules par système, un code dense
+  // (+600 caractéristiques) n'est correct que si chaque module est visible.
   const qrBoxSize = Math.max(
-    140,
-    Math.min(240, Math.floor(Math.min(window.innerWidth * 0.7, window.innerHeight * 0.45))),
+    200,
+    Math.min(320, Math.floor(Math.min(window.innerWidth * 0.75, window.innerHeight * 0.5))),
   );
 
   let resolveDecoded!: (value: string) => void;
@@ -63,6 +76,23 @@ export async function startScannerWithOverlay(): Promise<string | null> {
       cancelBtn.addEventListener("click", onCancel, { once: true });
     });
 
+  // ── Repli MANUEL (mission scanner QR) ─────────────────────────────────────────
+  // Après 5 s de scan sans lecture, le cadre a pu refuser de déchiffrer (écran de
+  // reflect, code dense) : la saisie du contenu reste disponible, la caméra vivante.
+  const openManual = () => {
+    manualBtn.style.display = "none";
+    manualBox.style.display = "flex";
+    manualText.focus();
+  };
+  const manualOnOk = () => {
+    const text = manualText.value.trim();
+    if (!text) {
+      manualText.focus();
+      return;
+    }
+    resolveDecoded(text);
+  };
+
   const showError = (message: string) => {
     hint.style.display = "none";
     status.textContent = message;
@@ -87,8 +117,15 @@ export async function startScannerWithOverlay(): Promise<string | null> {
     //    permission (puis la relâche), ce qui rend impossible l'échec silencieux iOS.
     const firstAccess = await requestCameraActivation();
 
-    const { Html5Qrcode } = await import("html5-qrcode");
-    scanner = new Html5Qrcode(frame.id);
+    const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+    // BARCODEDETECTOR NATIF quand le navigateur le propose (Android : décodage
+    // matériel, rapide et tolère les reflets) + QR_CODE seul : on ne cherche que des
+    // QR — moins de faux négatifs par image. `useBarCodeDetectorIfSupported` est lu
+    // au runtime par la lib ; le type déclaré ne le porte pas, `cast` assumé.
+    scanner = new Html5Qrcode(frame.id, {
+      useBarCodeDetectorIfSupported: true,
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+    } as import("html5-qrcode").Html5QrcodeFullConfig);
 
     for (let pass = 0; ; pass++) {
       resetStatus();
@@ -104,9 +141,21 @@ export async function startScannerWithOverlay(): Promise<string | null> {
       }
 
       // 2. Démarrage réel du flux : caméra ARRIÈRE d'abord, puis n'importe laquelle.
-      const attempts: Array<{ facingMode: string }> = [
-        { facingMode: "environment" },
-        { facingMode: "user" },
+      // HAUTE RÉSOLUTION demandée (mission scanner QR) : le flux par défaut des
+      // navigateurs = 640x480 — un QR dense découpé dans 240 px de cadre donne des
+      // modules < 1 px, indécodables pour toujours. `width/height ideal` force un
+      // flux net quand l'appareil en capable.
+      const attempts: Array<Record<string, unknown>> = [
+        {
+          facingMode: "environment",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
+        },
       ];
       let started = false;
       let lastErr: unknown = null;
@@ -158,7 +207,20 @@ export async function startScannerWithOverlay(): Promise<string | null> {
       // 3. Flux vivant : on attend un code ou l'annulation.
       hint.textContent = "Cadrez le code QR dans le cadre";
       status.textContent = "Caméra active";
-      return await Promise.race([decoded, cancelled]);
+      // Repli manuel à 5 s (regenerated à chaque passe : réessayer = fenêtre neuve).
+      manualBtn.style.display = "none";
+      manualBox.style.display = "none";
+      manualText.value = "";
+      const manualTimer = window.setTimeout(() => {
+        manualBtn.style.display = "";
+      }, 5000);
+      manualBtn.addEventListener("click", openManual);
+      manualOk.addEventListener("click", manualOnOk);
+      const result = await Promise.race([decoded, cancelled]);
+      clearTimeout(manualTimer);
+      manualBtn.removeEventListener("click", openManual);
+      manualOk.removeEventListener("click", manualOnOk);
+      return result;
     }
   } finally {
     setActiveStop(null);

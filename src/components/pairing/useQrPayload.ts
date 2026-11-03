@@ -138,35 +138,53 @@ export function useQrPayload({
           // a pu rester sur le fallback si l'onboarding ne l'avait jamais écrite.
           const prefs = getPreferences();
           const shopStoreName = prefs.workspaceName || profile?.storeName || "";
-          const payload = {
+          // PAYLOAD ULTRA-LÉGER (mission scanner QR) : un QR dense refuse de se
+          // décoder — chaque champ absent/vides d'INFORMATION est OMIT, l'objet
+          // n'emmporte que ce que l'arrivée lit réellement (join-scan/parse).
+          // Ni `customDomain` ni `customUnitType` quand ce sont les défauts, ni
+          // `url` quand l'orchestrateur n'est pas configuré.
+          const accountPhone = profile?.accountPhone || profile?.phone || "";
+          const orchestratorUrl = getOrchestratorUrl() ?? "";
+          const payload: Record<string, unknown> = {
             v: 2,
             app: "ecaisse" as const,
-            url: getOrchestratorUrl() ?? "",
             token,
-            name: prefs.workspaceName || profile?.storeName || profile?.accountName || "",
+            name: shopStoreName || profile?.accountName || "",
             // `||` (pas `??`) : accountPhone peut être défini à "" (compte créé sans saisie) —
             // un `??` garderait la chaîne vide et l'écran scanné partirait SANS compte,
             // donc sans groupe partagé (stock jamais reçu, import « n'attachée à aucun compte »).
-            account_phone: profile?.accountPhone || profile?.phone || "",
+            ...(accountPhone ? { account_phone: accountPhone } : {}),
             pair_code: code,
             role: "employee" as const,
             owner_device_id: ownerIdentity.deviceId,
             public_key: ownerPublicKey,
-            ...(shopStoreName
-              ? {
-                  shop: {
-                    storeName: shopStoreName,
-                    ownerName: profile?.ownerName ?? prefs.ownerName ?? "",
-                    phone: profile?.phone || prefs.phone || "",
-                    quarter: profile?.location ?? prefs.quarter ?? "",
-                    cluster: prefs.cluster ?? "restaurant",
-                    customDomain: prefs.customDomain ?? "",
-                    customUnitType: prefs.customUnitType ?? "unit",
-                    tablesEnabled: prefs.features?.tables ?? prefs.tablesEnabled ?? false,
-                  },
-                }
-              : {}),
           };
+          if (orchestratorUrl) payload.url = orchestratorUrl;
+          if (shopStoreName) {
+            const shop: Record<string, unknown> = {
+              storeName: shopStoreName,
+              tablesEnabled: prefs.features?.tables ?? prefs.tablesEnabled ?? false,
+            };
+            const ownerName = profile?.ownerName ?? prefs.ownerName ?? "";
+            if (ownerName) shop.ownerName = ownerName;
+            const shopPhone = profile?.phone || prefs.phone || "";
+            if (shopPhone) shop.phone = shopPhone;
+            const quarter = profile?.location ?? prefs.quarter ?? "";
+            if (quarter) shop.quarter = quarter;
+            // Cluster : ABSENT = défaut « restaurant » (le récepteur garde son fallback) ;
+            // toute autre activité, et les réglages personnalisés QUI EN DÉPENDENT, doivent
+            // voyager, sinon l'écran scanné se trouverait en mauvais métier.
+            if (prefs.cluster && prefs.cluster !== "restaurant") {
+              shop.cluster = prefs.cluster;
+              if (prefs.cluster === "personnalise") {
+                if (prefs.customDomain) shop.customDomain = prefs.customDomain;
+                if (prefs.customUnitType && prefs.customUnitType !== "unit") {
+                  shop.customUnitType = prefs.customUnitType;
+                }
+              }
+            }
+            payload.shop = shop;
+          }
           text = JSON.stringify(payload);
         }
         if (!text) throw new Error("relay-required");

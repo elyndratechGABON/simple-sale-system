@@ -29,10 +29,45 @@ export function createOverlay() {
     "color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);" +
     "border-radius:10px;padding:10px 28px;font-size:14px;cursor:pointer";
   cancelBtn.textContent = "Annuler";
-  overlay.append(frame, hint, status, retryBtn, cancelBtn);
+  // Repli MANUEL (mission scanner QR) : apparaît après 5 s sans décodage. Un QR dense
+  // peut rester illisible à l'écran (reflet, module trop fin) — la saisie du contenu
+  // (deux lignes « téléphone motdepasse », ou le texte du QR) doit toujours rester
+  // possible sans quitter la passe de scan.
+  const manualBtn = document.createElement("button");
+  manualBtn.type = "button";
+  manualBtn.style.cssText =
+    "color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);" +
+    "border-radius:10px;padding:10px 20px;font-size:14px;cursor:pointer;display:none";
+  manualBtn.textContent = "Saisir le code manuellement";
+  const manualBox = document.createElement("div");
+  manualBox.style.cssText = "display:none;flex-direction:column;align-items:center;gap:8px";
+  const manualText = document.createElement("textarea");
+  manualText.style.cssText =
+    "width:min(86vw,340px);height:90px;background:rgba(255,255,255,.1);color:#fff;" +
+    "border:1px solid rgba(255,255,255,.5);border-radius:10px;padding:8px;font-size:13px";
+  manualText.placeholder =
+    "Contenu du code : lignes « téléphone ⏎ mot de passe », ou texte du QR copié dans son écran d'origine";
+  const manualOk = document.createElement("button");
+  manualOk.type = "button";
+  manualOk.style.cssText =
+    "color:#000;background:#fff;border-radius:10px;padding:8px 24px;font-size:14px;cursor:pointer";
+  manualOk.textContent = "Valider";
+  manualBox.append(manualText, manualOk);
+  overlay.append(frame, hint, status, manualBtn, manualBox, retryBtn, cancelBtn);
   document.body.appendChild(overlay);
 
   const teardown = () => overlay.remove();
 
-  return { frame, hint, status, retryBtn, cancelBtn, teardown };
+  return {
+    frame,
+    hint,
+    status,
+    retryBtn,
+    cancelBtn,
+    manualBtn,
+    manualBox,
+    manualText,
+    manualOk,
+    teardown,
+  };
 }

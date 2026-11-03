@@ -91,7 +91,7 @@ export function QRBlock({
           <img
             src={qrDataUrl}
             alt="QR d'appairage du compte marchand"
-            className="aspect-square h-56 max-w-full rounded-lg object-contain"
+            className="aspect-square w-full max-h-80 rounded-lg object-contain"
           />
         ) : qrError ? (
           <div className="px-2 py-14 text-center">
