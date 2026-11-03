@@ -23,8 +23,6 @@ interface Store {
   ios: boolean;
   platform: InstallPlatform;
   insecure: boolean;
-  autoShown: boolean;
-  autoArmed: boolean;
   pending: Promise<InstallOutcome> | null;
   /** Attente bornée d'un (re)envoi de `beforeinstallprompt` (cf. `waitForCaptured`). */
   waiting: Promise<InstallOutcome> | null;
@@ -36,8 +34,6 @@ export const store: Store = {
   ios: false,
   platform: "desktop",
   insecure: false,
-  autoShown: false,
-  autoArmed: false,
   pending: null,
   waiting: null,
 };
@@ -67,6 +63,13 @@ export function getSnapshot(): Snapshot {
 
 /** Consomme UN événement : prompt() n'est appelable qu'une fois — tout second
  *  appel est rejeté par Chrome, d'où la normalisation systématique du résultat. */
+// ── Le prompt AUTO sur premier tap est RETIRÉ (mission boutons PWA) ────────────
+// L'ancien mécanisme appelait prompt() au PREMIER pointerdown N'IMPORTE OÙ : le
+// dialogue natif s'ouvrait pendant que le visiteur lisait ou tapait un lien, il le
+// fermait sans comprendre — et l'événement, non réémis par Chrome dans la session,
+// était PERDU. Résultat : le clic sur « Installer » tombait sur une attente muette
+// de 8 s sans événement (« le bouton ne fait rien »). L'événement est désormais
+// RÉSERVÉ au clic sur le bouton — le seul chemin qui l'appelle (`install()`).
 export function consume(e: BeforeInstallPromptEvent): Promise<InstallOutcome> {
   if (window.__pwaInstallEvent === e) window.__pwaInstallEvent = undefined;
   return e
@@ -85,25 +88,6 @@ export function consume(e: BeforeInstallPromptEvent): Promise<InstallOutcome> {
     });
 }
 
-/** Un seul écouteur de geste pour toute la page : le premier tap/clic ouvre le
- *  dialogue natif. Les clics sur un bouton « Installer » pendant que ce prompt
- *  est ouvert récupèrent SA promesse (`pending`) plutôt qu'un faux échec. */
-function armAutoGesture() {
-  if (store.autoArmed || !store.captured || store.installed || store.ios || store.autoShown) return;
-  store.autoArmed = true;
-  const onGesture = () => {
-    store.autoArmed = false;
-    store.autoShown = true;
-    const e = store.captured;
-    if (!e) return;
-    store.pending = consume(e).finally(() => {
-      store.pending = null;
-      refresh();
-    });
-  };
-  document.addEventListener("pointerdown", onGesture, { once: true, capture: true });
-}
-
 function bootstrap() {
   store.ios = isIOS();
   store.platform = detectInstallPlatform();
@@ -120,7 +104,6 @@ function bootstrap() {
     // Même signal que le script inline de `__root.tsx` : les abonnés (dont
     // `waitForCaptured`) apprennent qu'un événement vient d'arriver.
     window.dispatchEvent(new Event("pwa-install-captured"));
-    armAutoGesture();
   };
 
   const onInstalled = () => {
@@ -132,7 +115,7 @@ function bootstrap() {
 
   // L'événement a très probablement déjà EU LIEU avant ce module (Chrome le tire
   // dès sa vérification manifest+SW). Le script inline de `__root.tsx` l'a mis
-  // de côté : on le récupère ici, puis on arme le geste partagé.
+  // de côté : on le récupère ici, prêt pour le CLIC SUR LE BOUTON (cf. en-tête).
   const early = window.__pwaInstallEvent;
   if (early) store.captured = early;
 
@@ -144,7 +127,6 @@ function bootstrap() {
   });
 
   refresh();
-  armAutoGesture();
 }
 
 if (typeof window !== "undefined") {

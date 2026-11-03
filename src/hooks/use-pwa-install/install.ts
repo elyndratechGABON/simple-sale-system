@@ -2,13 +2,13 @@ import { consume, refresh, store } from "./store";
 import type { InstallOutcome } from "./types";
 
 /**
- * Attente bornée : Chrome re-émet `beforeinstallprompt` quelques secondes APRÈS
- * le chargement (une fois manifest + service worker validés), et peut le re-émettre
- * après un refus et une nouvelle interaction. Plutôt que d'abandonner le clic sur
- * place, on attend que l'événement arrive puis on ouvre le prompt automatiquement.
+ * Attente bornée : Chrome peut re-émettre `beforeinstallprompt` quelques secondes APRÈS
+ * le chargement (une fois manifest + service worker validés), et parfois après un refus.
+ * L'attente restait LARGE (8 s) : le clic paraissait mort le temps de l'attente — le
+ * délai est court maintenant, et le repli (menu ⋮ / barre d'adresse) arrive vite.
  */
 function waitForCaptured(): Promise<InstallOutcome> {
-  const TIMEOUT_MS = 8000;
+  const TIMEOUT_MS = 3000;
   return new Promise<InstallOutcome>((resolve) => {
     const onCaptured = () => {
       cleanup();
@@ -42,12 +42,11 @@ function waitForCaptured(): Promise<InstallOutcome> {
 }
 
 export async function install(): Promise<InstallOutcome> {
-  // Le geste automatique vient d'ouvrir le prompt natif sur CE clic (pointerdown
-  // précède toujours click) : rapporter son issue au lieu d'un faux échec.
+  // Le clic du bouton VIDÉ un prompt dans la fenêtre d'activation : rapporter son
+  // issue au lieu d'un faux échec.
   if (store.pending) return store.pending;
   // Événement vivant : le prompt s'ouvre immédiatement.
   if (store.captured) {
-    store.autoShown = true;
     const p = consume(store.captured);
     store.pending = p.finally(() => {
       store.pending = null;
