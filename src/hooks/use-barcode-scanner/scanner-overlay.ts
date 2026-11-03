@@ -141,20 +141,29 @@ export async function startScannerWithOverlay(): Promise<string | null> {
       }
 
       // 2. Démarrage réel du flux : caméra ARRIÈRE d'abord, puis n'importe laquelle.
-      // HAUTE RÉSOLUTION demandée (mission scanner QR) : le flux par défaut des
-      // navigateurs = 640x480 — un QR dense découpé dans 240 px de cadre donne des
-      // modules < 1 px, indécodables pour toujours. `width/height ideal` force un
-      // flux net quand l'appareil en capable.
-      const attempts: Array<Record<string, unknown>> = [
+      // CONTRAT runtime html5-qrcode (mission caméra) : l'argument 1 demandé par
+      // `createVideoConstraints` porte UNE SEULE clé (`facingMode: string`) — les
+      // résolutions n'y ont PAS leur place ('cameraIdOrConfig': exactly 1 key, found 3).
+      // La HAUTE RÉSOLUTION passe dans le 2e argument, via `videoConstraints`
+      // (MediaStreamConstraints complet) : quand il est valide, la lib ignore proprement
+      // l'argument 1 — et le flux 640×480 par défaut (modules < 1 px pour un code dense)
+      // devient un flux net 1080p.
+      const attempts: Array<{ facingMode: string; videoConstraints: MediaTrackConstraints }> = [
         {
           facingMode: "environment",
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          videoConstraints: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
         },
         {
           facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 1280 },
+          videoConstraints: {
+            facingMode: { ideal: "user" },
+            width: { ideal: 1280 },
+            height: { ideal: 1280 },
+          },
         },
       ];
       let started = false;
@@ -175,7 +184,11 @@ export async function startScannerWithOverlay(): Promise<string | null> {
             await Promise.race([
               scanner.start(
                 camera,
-                { fps: 10, qrbox: { width: qrBoxSize, height: qrBoxSize } },
+                {
+                  fps: 10,
+                  qrbox: { width: qrBoxSize, height: qrBoxSize },
+                  videoConstraints: camera.videoConstraints,
+                },
                 (decodedText) => resolveDecoded(decodedText),
                 () => {},
               ),
