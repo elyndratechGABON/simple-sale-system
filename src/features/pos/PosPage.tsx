@@ -36,7 +36,7 @@ export function PosPage() {
   return (
     <div
       className={cn(
-        "app-container space-y-4 py-4",
+        "app-container space-y-4 overflow-x-hidden py-4",
         pos.compact && (pos.activeTable !== null || pos.lines.length > 0) && "pb-20",
       )}
     >

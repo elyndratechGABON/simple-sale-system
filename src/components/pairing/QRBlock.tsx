@@ -67,10 +67,10 @@ export function QRBlock({
         <img
           src={qrDataUrl}
           alt="QR d'appairage du compte marchand"
-          className="aspect-square w-72 rounded-lg object-contain"
+          className="aspect-square w-full max-w-72 rounded-lg object-contain"
         />
       ) : (
-        <div className="flex aspect-square w-72 items-center justify-center rounded-lg border border-dashed">
+        <div className="flex aspect-square w-full max-w-72 items-center justify-center rounded-lg border border-dashed">
           <QrCode className="h-8 w-8 animate-pulse text-muted-foreground" />
         </div>
       )}
