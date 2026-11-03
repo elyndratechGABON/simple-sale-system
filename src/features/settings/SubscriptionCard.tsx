@@ -27,6 +27,9 @@ export function SubscriptionCard() {
 
   // Statut réel lu dans la licence : activé ⇢ Actif ; essai (jours restants) ⇢ Essai ;
   // échéance dépassée ⇢ Expiré. Les paliers qui ne colleraient pas retombent sur Expiré.
+  // AFFICHE PLAFONNÉ À 14 j sur l'essai (le bug « 25 jours » = 14 d'essai + une grâce
+  // serveur + un vieil héritage d'échéance) : un compte jamais payé a au PLUS 14 jours
+  // d'essai — l'écran ne peut plus montrer davantage.
   const subscriptionStatus = subscriptionFeature
     ? "Actif"
     : isExpired
@@ -56,7 +59,7 @@ export function SubscriptionCard() {
           }
         >
           {subscriptionStatus === "Essai"
-            ? `Essai — ${daysRemaining} jour${daysRemaining > 1 ? "s" : ""} restant${daysRemaining > 1 ? "s" : ""}`
+            ? `Essai — ${Math.min(daysRemaining, 14)} jour${daysRemaining > 1 ? "s" : ""} restant${daysRemaining > 1 ? "s" : ""}`
             : subscriptionStatus}
         </Badge>
       </div>
