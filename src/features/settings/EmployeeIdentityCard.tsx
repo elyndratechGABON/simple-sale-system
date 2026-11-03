@@ -43,6 +43,12 @@ export function EmployeeIdentityCard() {
 
   const estEmploye = identity?.role === "employee";
 
+  // NETTOYAGE Identité (mission UI) : pour un PATRON, cette carte n'a rien à saisir —
+  // les deux anciens paragraphes (« Cet écran est le vôtre… », « Rien à déclarer… »)
+  // ne disaient rien d'actionnable. La carte N'EXISTE PLUS pour lui : titre seul +
+  // champs, c'est tout ce qui reste pour l'employé.
+  if (!estEmploye) return null;
+
   async function enregistrer() {
     const n = nom.trim();
     const t = telephone.trim();
@@ -71,50 +77,38 @@ export function EmployeeIdentityCard() {
         <h2 className="text-title flex items-center gap-2">
           <UserRound className="h-5 w-5" /> Qui utilise cette caisse
         </h2>
-        <p className="text-small text-muted-foreground whitespace-normal break-words">
-          {estEmploye
-            ? "Votre nom et votre numéro apparaissent chez le patron et dans la console Elyndra, à côté de cet écran."
-            : "Cet écran est le vôtre : il est identifié par le nom de la boutique et le nom du patron."}
-        </p>
       </header>
 
-      {estEmploye ? (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="identite-nom">Nom</Label>
-            <Input
-              id="identite-nom"
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
-              placeholder="Ex. Jean-Baptiste"
-              autoComplete="name"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="identite-tel">Numéro (facultatif)</Label>
-            <Input
-              id="identite-tel"
-              value={telephone}
-              onChange={(e) => setTelephone(e.target.value)}
-              placeholder="Ex. 077 12 34 56"
-              inputMode="tel"
-              autoComplete="tel"
-            />
-          </div>
-          <Button onClick={() => void enregistrer()}>Enregistrer</Button>
-          {enregistre && (
-            <p className="text-small text-muted-foreground">
-              Envoyé à l&apos;orchestrateur. Sans réseau, l&apos;information partira au prochain
-              passage en ligne.
-            </p>
-          )}
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="identite-nom">Nom</Label>
+          <Input
+            id="identite-nom"
+            value={nom}
+            onChange={(e) => setNom(e.target.value)}
+            placeholder="Ex. Jean-Baptiste"
+            autoComplete="name"
+          />
         </div>
-      ) : (
-        <p className="text-body text-muted-foreground">
-          Rien à déclarer : le nom du patron et celui de la boutique sont déjà transmis à chaque
-          synchronisation.
-        </p>
-      )}
+        <div className="space-y-1">
+          <Label htmlFor="identite-tel">Numéro (facultatif)</Label>
+          <Input
+            id="identite-tel"
+            value={telephone}
+            onChange={(e) => setTelephone(e.target.value)}
+            placeholder="Ex. 077 12 34 56"
+            inputMode="tel"
+            autoComplete="tel"
+          />
+        </div>
+        <Button onClick={() => void enregistrer()}>Enregistrer</Button>
+        {enregistre && (
+          <p className="text-small text-muted-foreground">
+            Envoyé à l&apos;orchestrateur. Sans réseau, l&apos;information partira au prochain
+            passage en ligne.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

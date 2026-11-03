@@ -99,12 +99,12 @@ export function SettingsPage() {
           </TabsList>
 
           <TabsContent value="identite" className="mt-3 grid items-start gap-4 md:grid-cols-2">
-            {/* Employé : la fiche du patron, en tête — c'est la première question qu'il
-                a quand il atterrit sur l'écran (à qui appartient cette caisse ?). */}
+            {/* Identité visuelle en TÊTE (mission UI) : nom, logo et photo de profil —
+                ce qui identifie la boutique, d'abord. L'employé suit. */}
+            <AppearanceCard />
             <OwnerInfoCard />
             <EmployeeIdentityCard />
             <ClusterCard />
-            <AppearanceCard />
           </TabsContent>
 
           <TabsContent value="caisse" className="mt-3 grid items-start gap-4 md:grid-cols-2">
