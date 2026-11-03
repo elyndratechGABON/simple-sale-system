@@ -141,11 +141,11 @@ export function WelcomePage() {
           </motion.div>
         )}
 
-        {/* Écran de saisie du code — affiché après le scan QR du propriétaire */}
+        {/* « Quel est votre nom ? » — affiché après un scan QR réussi */}
         {flow.showEmployeeNameModal && (
           <EmployeeNameModal
-            code={flow.pairCodeInput}
-            onCodeChange={flow.setPairCodeInput}
+            name={flow.employeeNameInput}
+            onNameChange={flow.setEmployeeNameInput}
             onCancel={() => flow.setShowEmployeeNameModal(false)}
             onSubmit={flow.submitEmployeeName}
           />

@@ -79,7 +79,7 @@ export function QRBlock({
         <div className="flex w-full flex-col items-center gap-2">
           {/* Le code de session, TRÈS CLAIR : c'est ce que l'employé FRAPPE à la main
               quand le scan échoue (repli manuel de l'écran de scan). */}
-          <p className="font-mono text-3xl font-bold tracking-widest tabular-nums">{pairCode}</p>
+          <p className="font-mono text-4xl font-bold tracking-widest tabular-nums">{pairCode}</p>
           <div className="flex items-center justify-center gap-2">
             <Button size="sm" variant="outline" onClick={copy}>
               <Copy className="h-4 w-4 mr-1.5" /> Copier

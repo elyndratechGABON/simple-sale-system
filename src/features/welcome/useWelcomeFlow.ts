@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { getPreferences, savePreferences } from "@/lib/settings";
 import { getEmployeeId, listEmployeeHistory, type EmployeeHistory } from "@/lib/db";
-import { enterPairingCode, normPairCode } from "@/lib/syncengine/pairing";
+import { enterPairingCode, normPairCode, reannounceProfile } from "@/lib/syncengine/pairing";
 import { setIdentityEmployeeName, setIdentityEmployeePhone } from "@/lib/syncengine/identity";
 import { runJoinScan } from "./join-scan";
 
@@ -30,9 +30,35 @@ export function useWelcomeFlow() {
   const [history, setHistory] = useState<EmployeeHistory[] | null>(null);
   const [scanningJoin, setScanningJoin] = useState(false);
   const [showEmployeeNameModal, setShowEmployeeNameModal] = useState(false);
+  const [employeeNameInput, setEmployeeNameInput] = useState("");
+  // Historique conservé (scan manuel sans QR) : le code saisit reste accepté au
+  // replay d'un ancien bundle, mais plus AUCUN écran ne le demande après un scan v3.
   const [pairCodeInput, setPairCodeInput] = useState("");
   const [scannedPairCode, setScannedPairCode] = useState<string | undefined>();
+  async function submitEmployeeName() {
+    // ÉPURATION (mission scan employé) : nom SEUL — le code vient du QR (auto-annoncé
+    // au scan), pas de mot de passe, pas d'email. L'employé rejoint le groupe,
+    // puis son nom part au patron à la même annonce.
+    const name = employeeNameInput.trim();
+    if (name.length < 2) {
+      toast.error("Saisissez votre nom (au moins 2 caractères).");
+      return;
+    }
+    await setIdentityEmployeeName(name);
+    // Le patron apprend TOUT DE SUITE le nom : la ré-annonce one-shot porte le nom
+    // Immédiat (cf. reannounceProfile — le chemin de l'écran d'identité employé).
+    try {
+      await reannounceProfile();
+    } catch {
+      // Hors ligne : le nom partira au prochain handshake, rien n'est perdu.
+    }
 
+    toast.success(`Bienvenue ${name} — boutique synchronisée.`);
+    savePreferences({ onboarded: true, onboardingCompleted: true });
+    qc.invalidateQueries({ queryKey: ["preferences"] });
+    setShowEmployeeNameModal(false);
+    navigate({ to: "/pos" });
+  }
   function startCreate() {
     setJoinCreds(null);
     setJoinPairCode(undefined);
@@ -51,10 +77,12 @@ export function useWelcomeFlow() {
         toast.error("Ce code n'est pas un code d'appairage ELYNDRA.");
         return;
       }
-      // 5. Se souvient du code du QR (ou du relais) pour valider la saisie de l'employé.
+      // ÉPURATION (mission scan employé) : PLUS de question de code après un scan
+      // réussi — le jeton du QR VIENT d'être réclamé, sa preuve est valide. L'appareil
+      // s'annonce TOUT SEUL avec le code qu'il a scanné ; il ne reste qu'AU NOM
+      // à poser (cf. modale « Quel est votre nom ? »).
+      if (outcome.pairCode) await enterPairingCode(outcome.pairCode);
       setScannedPairCode(outcome.pairCode);
-      // 6. Ouvre l'écran de saisie : LE CODE de 6 caractères, rien d'autre.
-      setPairCodeInput("");
       setShowEmployeeNameModal(true);
     } catch {
       toast.error("Caméra indisponible — réessayez.");
@@ -78,39 +106,7 @@ export function useWelcomeFlow() {
     setPhase("experience");
   }
 
-  async function submitEmployeeName() {
-    const code = normPairCode(pairCodeInput);
-    if (code.length !== 6) {
-      toast.error("Saisissez le code de 6 caractères affiché sous le QR.");
-      return;
-    }
-    if (scannedPairCode && normPairCode(scannedPairCode) !== code) {
-      toast.error("Ce code ne correspond pas à celui affiché par le propriétaire.");
-      return;
-    }
-    // ÉPURATION (mission scan employé) : plus AUCUN champ nom/numéro — l'écran de
-    // scan n'accepte que le code. L'identité porte le nom de la boutique (déjà posé
-    // côté patron, appliqué au scan) ; le patron peut le renommer dans l'Équipe.
-    const name = getPreferences().workspaceName || "Employé";
-    // L'identité est posée AVANT l'annonce : sinon la première annonce — celle qui porte
-    // le code de paire, donc celle qui prouve l'appairage — partait sans nom, et le
-    // patron devait attendre un second cycle pour le savoir.
-    await setIdentityEmployeeName(name);
-
-    const result = await enterPairingCode(code);
-    if (result === "invalid") {
-      toast.error("Code invalide — vérifiez-le auprès du propriétaire.");
-      return;
-    }
-    toast.success(`Bienvenue ${name} — boutique synchronisée.`);
-    savePreferences({ onboarded: true, onboardingCompleted: true });
-    qc.invalidateQueries({ queryKey: ["preferences"] });
-    setShowEmployeeNameModal(false);
-    navigate({ to: "/pos" });
-  }
-
-  /** Depuis le carnet, repart vers un nouveau business : la machine d'onboarding en
-   *  mode « join » (scan du QR d'une caisse déjà abonnée). */
+  /** Ouvre le carnet « Mon expérience » : liste des business travaillés + durée. */
   async function joinNewBusiness() {
     setJoinCreds(null);
     setJoinPairCode(undefined);
@@ -129,6 +125,8 @@ export function useWelcomeFlow() {
     scanningJoin,
     showEmployeeNameModal,
     setShowEmployeeNameModal,
+    employeeNameInput,
+    setEmployeeNameInput,
     pairCodeInput,
     setPairCodeInput,
     startCreate,

@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Sun, Moon, Users } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
-import { getSetting } from "@/lib/db";
+import { getShopProfile, getSetting } from "@/lib/db";
 import { TopNav } from "@/components/Nav";
 import { SubscriptionsDialog } from "@/components/SubscriptionsDialog";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -32,6 +32,13 @@ const HIDDEN_ACCESS_WINDOW_MS = 2000;
 export function Header() {
   const { workspaceName, ownerName, ownerPhoto } = usePreferences();
   const { role } = useAccess();
+  // Nom AFFICHÉ : le PROPRIÉTAIRE (mission header), depuis `shop_profile` —
+  // l'échelle des préférences sert de repli et « Patron » clôt le tout.
+  const { data: profile } = useQuery({
+    queryKey: ["shop_profile"],
+    queryFn: getShopProfile,
+    staleTime: 60_000,
+  });
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(false);
   const [isDark, setIsDark] = useState(() =>
     typeof document !== "undefined" ? document.documentElement.classList.contains("dark") : false,
@@ -103,7 +110,16 @@ export function Header() {
               height={48}
             />
           </span>
-          <span className="truncate text-foreground">{workspaceName}</span>
+          <span
+            className="truncate text-foreground"
+            title={profile?.ownerName?.trim() || ownerName || "Patron"}
+          >
+            {/* Nom du PROPRIÉTAIRE (mission header) : shop_profile est la source
+                (remplie à la création du compte), l'échelle des préférences la
+                duplique ensuite. Défaut affiché « Patron » — plus jamais le nom de
+                la boutique ici. */}
+            {profile?.ownerName?.trim() || ownerName?.trim() || "Patron"}
+          </span>
         </Link>
         {/* Sous `lg`, la navigation vit dans `BottomNav` — cf. src/components/Nav.tsx. */}
         <div className="flex shrink-0 items-center gap-1">
