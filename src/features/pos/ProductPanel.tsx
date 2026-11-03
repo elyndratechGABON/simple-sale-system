@@ -81,36 +81,37 @@ export function ProductPanel({
         </section>
       )}
       <PopularStrip pos={pos} onProductSelect={onProductSelect} />
-      <div
-        className={cn(
-          "mt-5 grid gap-2.5 xs:gap-3",
-          // Sous 1280, la grille occupe toute la largeur. Au-dessus, elle vit dans la
-          // colonne centrale entre Catégories et Panier — donc elle perd une colonne.
-          pos.hasTables
-            ? "grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4"
-            : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5",
-        )}
-      >
-        {pos.filtered.map((p) => {
-          const inCart = Object.entries(pos.cart)
-            .filter(([k]) => k === p.id || k.startsWith(`${p.id}::`))
-            .reduce((s, [, e]) => s + e.qty, 0);
-          return (
-            <POSProductCard
-              key={p.id}
-              product={p}
-              inCart={inCart}
-              onAdd={onProductSelect ?? pos.onProductClick}
-              // Appui long = saisie manuelle de la quantité. C'est le seul geste de
-              // « gestion » que la caisse garde : ouvrir une fiche ferait perdre la vente.
-              onLongPress={(prod) => {
-                pos.setManualQtyProduct(prod);
-                pos.setManualQtyValue(String(pos.cart[prod.id]?.qty ?? 1));
-                pos.setManualQtyOpen(true);
-              }}
-            />
-          );
-        })}
+      {/* Container Queries (Tailwind v4, mission responsive) : le nombre de colonnes
+          suit la LARGEUR DU CONTENEUR, pas l'écran — une modale de table étroite
+          reste en 2 colonnes même sur tablette ; l'écran plein écran s'élargit. */}
+      <div className="@container mt-5">
+        <div
+          className={cn(
+            "@sm:grid-cols-3 @2xl:grid-cols-4 grid grid-cols-2 gap-2.5 xs:gap-3",
+            !pos.hasTables && "@md:grid-cols-4",
+          )}
+        >
+          {pos.filtered.map((p) => {
+            const inCart = Object.entries(pos.cart)
+              .filter(([k]) => k === p.id || k.startsWith(`${p.id}::`))
+              .reduce((s, [, e]) => s + e.qty, 0);
+            return (
+              <POSProductCard
+                key={p.id}
+                product={p}
+                inCart={inCart}
+                onAdd={onProductSelect ?? pos.onProductClick}
+                // Appui long = saisie manuelle de la quantité. C'est le seul geste de
+                // « gestion » que la caisse garde : ouvrir une fiche ferait perdre la vente.
+                onLongPress={(prod) => {
+                  pos.setManualQtyProduct(prod);
+                  pos.setManualQtyValue(String(pos.cart[prod.id]?.qty ?? 1));
+                  pos.setManualQtyOpen(true);
+                }}
+              />
+            );
+          })}
+        </div>
       </div>
       {pos.products.length > 0 && pos.filtered.length === 0 && (
         <p className="mt-3 py-10 text-center text-sm text-muted-foreground">

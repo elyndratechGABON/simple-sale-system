@@ -34,7 +34,7 @@ export function InProgressBills({ pos, onCheckout }: InProgressBillsProps) {
           >
             <div className="min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium truncate">Table {sale.table}</span>
+                <span className="min-w-0 truncate font-medium">Table {sale.table}</span>
                 <span className="font-bold text-primary tabular-nums">
                   {sale.total > 0 ? formatFCFA(sale.total) : "—"}
                 </span>

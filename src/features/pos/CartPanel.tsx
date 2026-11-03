@@ -69,7 +69,9 @@ export function CartPanel({ pos }: { pos: PosController }) {
                 />
               ) : (
                 <>
-                  <span className="truncate">Table {pos.activeTable.table}</span>
+                  {/* min-w-0 (mission responsive) : un long libellé de table rétrécit
+                      DANS l'en-tête au lieu de pousser le panneau hors de son rail. */}
+                  <span className="min-w-0 truncate">Table {pos.activeTable.table}</span>
                   <button
                     type="button"
                     onClick={startRename}

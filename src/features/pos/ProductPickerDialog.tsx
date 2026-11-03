@@ -64,33 +64,38 @@ export function ProductPickerDialog({
 
         {/* `--page-gutter` neutralisé : les rangées de chips du panneau tirent des
             marges négatives pensées pour la page, et dans la largeur fixe
-            de la modale elles généraient la scrollbar horizontale. */}
+            de la modale elles généraient la scrollbar horizontale.
+            Container Queries (mission responsive) : les DEUX colonnes ne s'ouvrent
+            que si LA MODALE a la place (@3xl = 48rem de conteneur), quel que soit
+            l'écran qui la contient. */}
         <div
-          className="grid w-full min-w-0 gap-4 overflow-hidden lg:grid-cols-[1fr_320px] [&_*]:max-w-full"
+          className="@container w-full min-w-0 overflow-hidden [&_*]:max-w-full"
           style={{ ["--page-gutter" as string]: "0px" }}
         >
-          <div className="min-w-0 w-full max-h-[60dvh] overflow-y-auto overscroll-contain scroll-slim">
-            <div className="pt-1" />
-            <ProductPanel pos={pos} onProductSelect={addProduct} />
-          </div>
+          <div className="grid min-w-0 gap-4 @3xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 w-full max-h-[60dvh] overflow-y-auto overscroll-contain scroll-slim">
+              <div className="pt-1" />
+              <ProductPanel pos={pos} onProductSelect={addProduct} />
+            </div>
 
-          <div className="min-w-0 space-y-2 overflow-y-auto max-h-[60dvh] overscroll-contain scroll-slim">
-            {/* Titre « Articles » détaché du titre de la modale */}
-            <p className="mt-2 text-sm font-semibold text-muted-foreground">
-              Articles{items.length > 0 ? ` — ${formatFCFA(total)}` : ""}
-            </p>
-            {items.map((item) => (
-              <PickerItemRow
-                key={item.id}
-                item={item}
-                onIncrease={() => increase(item.id)}
-                onDecrease={() => decrease(item.id)}
-                onRemove={() => remove(item.id)}
-              />
-            ))}
-            {items.length === 0 && (
-              <p className="text-sm text-muted-foreground">Aucun article pour l'instant.</p>
-            )}
+            <div className="min-w-0 space-y-2 overflow-y-auto max-h-[60dvh] overscroll-contain scroll-slim">
+              {/* Titre « Articles » détaché du titre de la modale */}
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">
+                Articles{items.length > 0 ? ` — ${formatFCFA(total)}` : ""}
+              </p>
+              {items.map((item) => (
+                <PickerItemRow
+                  key={item.id}
+                  item={item}
+                  onIncrease={() => increase(item.id)}
+                  onDecrease={() => decrease(item.id)}
+                  onRemove={() => remove(item.id)}
+                />
+              ))}
+              {items.length === 0 && (
+                <p className="text-sm text-muted-foreground">Aucun article pour l'instant.</p>
+              )}
+            </div>
           </div>
         </div>
 
