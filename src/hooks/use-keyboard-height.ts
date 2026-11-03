@@ -1,62 +1,44 @@
-// Détection de l'ouverture du clavier virtuel du téléphone.
+// CLAVIER VIRTUEL (mission VisualViewport) : sur mobile, un `fixed` est posé sur le
+// LAYOUT viewport — quand le clavier monte, la fenêtre visuelle rétrécit et le bas
+// (dock de navigation, footer « Valider » des modales) disparaît DERRIÈRE les touches.
+// La seule mesure fiable est le delta entre la fenêtre entière et la partie visible
+// du `visualViewport`, AU MOMENT où le clavier est levé.
 //
-// Le layout viewport ne rétrécit PAS quand le clavier s'ouvre — ni sur iOS ni sur
-// Android Chrome (mode `resizes-visual` par défaut) — donc `dvh`/`vh` ne bougent pas
-// et les éléments fixés en bas restent derrière les touches. Le seul API fiable est
-// `window.visualViewport` : sa hauteur diminue et son `offsetTop` / l'écart avec
-// `window.innerHeight` valent la hauteur du clavier.
-//
-// Le hook expose `{ isKeyboardOpen, keyboardHeight }` et, en effet de bord, écrit
-// `--kb-h` (px) sur `<html>` pour que n'importe quelle règle CSS (« dialogs à plafond
-// clavier compris », barres fixes…) s'ajuste sans passer par React.
-//
-// Seuil d'activation (100 px) : évite les faux positifs du zoom, du split-screen et
-// du repli de la barre d'adresse, qui rétrécissent aussi le visualViewport.
+// CONTRAT : renvoie `{ keyboardHeight }` ET écrit la variable CSS `--kb-h` à la
+// racine — les règles de `styles.css` (dock, padding de l'app-main, barre de résumé)
+// en dérivent, elles restent inertes tant que la valeur vaut 0 (clavier fermé).
 import { useEffect, useState } from "react";
 
-const KEYBOARD_THRESHOLD_PX = 100;
-
-export interface KeyboardHeight {
-  isKeyboardOpen: boolean;
+export interface KeyboardHeightState {
+  /** Hauteur du clavier virtuel en px. 0 si fermé (ou sur desktop). */
   keyboardHeight: number;
 }
 
-/** Hauteur estimée du clavier en px, 0 s'il est fermé. */
-function measureKeyboard(vv: VisualViewport): number {
-  const layout = window.innerHeight;
-  const visual = vv.height;
-  // iOS : la barre haute et la zone couverte par le clavier valent `offsetTop`.
-  // Android : le rétrécissement du visualViewport vs le layout vaut le clavier.
-  const height = Math.max(layout - visual, vv.offsetTop);
-  return height > KEYBOARD_THRESHOLD_PX ? height : 0;
-}
-
-export function useKeyboardHeight(): KeyboardHeight {
-  const [{ isKeyboardOpen, keyboardHeight }, setState] = useState<KeyboardHeight>({
-    isKeyboardOpen: false,
-    keyboardHeight: 0,
-  });
+export function useKeyboardHeight(): KeyboardHeightState {
+  const [kb, setKb] = useState(0);
 
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    if (!vv) return; // vieux navigateur : aucune mesure possible
 
-    const sync = () => {
-      const h = measureKeyboard(vv);
+    const update = () => {
+      // Ne compte comme clavier que la partie EN BAS (delta positif) : un zoom
+      // pincement fait varier offsetTop sans toucher au clavier.
+      const delta = window.innerHeight - vv.height - Math.max(0, vv.offsetTop);
+      const h = Math.max(0, Math.round(delta));
+      setKb(h);
       document.documentElement.style.setProperty("--kb-h", `${h}px`);
-      setState({ isKeyboardOpen: h > 0, keyboardHeight: h });
     };
 
-    vv.addEventListener("resize", sync);
-    vv.addEventListener("scroll", sync);
-    sync();
-
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
     return () => {
-      vv.removeEventListener("resize", sync);
-      vv.removeEventListener("scroll", sync);
-      document.documentElement.style.setProperty("--kb-h", "0px");
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      document.documentElement.style.removeProperty("--kb-h");
     };
   }, []);
 
-  return { isKeyboardOpen, keyboardHeight };
+  return { keyboardHeight: kb };
 }

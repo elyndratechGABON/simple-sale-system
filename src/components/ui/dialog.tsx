@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useKeyboardHeight } from "@/hooks/use-keyboard-height";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -37,56 +38,65 @@ const DialogContent = React.forwardRef<
      *  donc tous les dialogues existants sont inchangés. */
     showCloseButton?: boolean;
   }
->(({ className, children, showCloseButton = true, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    {/*
-     * Contraintes MOBILE d'abord :
-     *  - largeur `calc(100vw - 24px)` : le dialogue ne touche JAMAIS les bords,
-     *    quel que soit l'écran (fini la modale « Historique » plus large que lui) ;
-     *  - hauteur bornée à `100dvh - 24px` (repli `vh` pour les vieux navigateurs)
-     *    avec défilement VERTICAL INTERNE : un contenu long scrolle dans la modale
-     *    au lieu de sortir de l'écran ou d'être rogné ;
-     *  - rayon 20px sur téléphone (`rounded-2xl` = --radius + 8px), l'arrondi
-     *    desktop d'origine est conservé au-delà de `sm`.
-     * La croix vit SUR le conteneur non-scrollé : elle reste atteignable pendant
-     * qu'un contenu long défile dessous. Le padding et l'espacement `gap-4`
-     * migrent dans la couche interne — visuellement identique pour tous les
-     * dialogues existants, aucune classe appelante à changer.
-     */}
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 flex max-h-[calc(100vh-24px)] w-[calc(100vw-24px)] max-w-lg translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-2xl border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 supports-[height:100dvh]:max-h-[calc(100dvh-24px)] sm:rounded-lg",
-        className,
-      )}
-      {...props}
-    >
-      <div
-        className="grid min-h-0 flex-1 gap-4 overflow-x-hidden overflow-y-auto overscroll-contain p-4 sm:p-6"
-        onFocus={(e) => {
-          // CLAVIER MOBILE : quand un champ reçoit le focus, on le ramène dans la zone
-          // visible de la modale pendant que le clavier virtuel montait. Sans ce
-          // décalage, le champ restait DERRIÈRE le clavier (`fixed` centre la modale
-          // sur le layout viewport, pas sur le visual viewport rétréci).
-          const el = e.target as HTMLElement | null;
-          if (!el || el === e.currentTarget) return;
-          window.setTimeout(() => {
-            el.scrollIntoView({ block: "center", behavior: "smooth" });
-          }, 120);
-        }}
+>(({ className, children, showCloseButton = true, ...props }, ref) => {
+  // CLAVIER VIRTUEL (mission VisualViewport) : la hauteur du clavier découpait le
+  // bas du dialogue — padding-bottom dynamique dès un delta positif.
+  const { keyboardHeight: kbHeight } = useKeyboardHeight();
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      {/*
+       * Contraintes MOBILE d'abord :
+       *  - largeur `calc(100vw - 24px)` : le dialogue ne touche JAMAIS les bords,
+       *    quel que soit l'écran (fini la modale « Historique » plus large que lui) ;
+       *  - hauteur bornée à `100dvh - 24px` (repli `vh` pour les vieux navigateurs)
+       *    avec défilement VERTICAL INTERNE : un contenu long scrolle dans la modale
+       *    au lieu de sortir de l'écran ou d'être rogné ;
+       *  - rayon 20px sur téléphone (`rounded-2xl` = --radius + 8px), l'arrondi
+       *    desktop d'origine est conservé au-delà de `sm`.
+       * La croix vit SUR le conteneur non-scrollé : elle reste atteignable pendant
+       * qu'un contenu long défile dessous. Le padding et l'espacement `gap-4`
+       * migrent dans la couche interne — visuellement identique pour tous les
+       * dialogues existants, aucune classe appelante à changer.
+       */}
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 flex max-h-[calc(100vh-24px)] w-[calc(100vw-24px)] max-w-lg translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-2xl border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 supports-[height:100dvh]:max-h-[calc(100dvh-24px)] sm:rounded-lg",
+          className,
+        )}
+        {...props}
       >
-        {children}
-      </div>
-      {showCloseButton && (
-        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-full p-2 opacity-70 ring-offset-background cursor-pointer transition-opacity hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Fermer</span>
-        </DialogPrimitive.Close>
-      )}
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+        {/* CLAVIER VIRTUEL (mission VisualViewport) : le bas du dialogue peut passer
+          DERRIÈRE le clavier. Un delta positif réserve l'espace en padding — le
+          footer « Valider » remonte au-dessus du clavier. */}
+        <div
+          className="grid min-h-0 flex-1 gap-4 overflow-x-hidden overflow-y-auto overscroll-contain p-4 sm:p-6"
+          style={kbHeight > 0 ? { paddingBottom: `calc(${kbHeight}px + 1.5rem)` } : undefined}
+          onFocus={(e) => {
+            // CLAVIER MOBILE : quand un champ reçoit le focus, on le ramène dans la zone
+            // visible de la modale pendant que le clavier virtuel montait. Sans ce
+            // décalage, le champ restait DERRIÈRE le clavier (`fixed` centre la modale
+            // sur le layout viewport, pas sur le visual viewport rétréci).
+            const el = e.target as HTMLElement | null;
+            if (!el || el === e.currentTarget) return;
+            window.setTimeout(() => {
+              el.scrollIntoView({ block: "center", behavior: "smooth" });
+            }, 120);
+          }}
+        >
+          {children}
+        </div>
+        {showCloseButton && (
+          <DialogPrimitive.Close className="absolute right-3 top-3 rounded-full p-2 opacity-70 ring-offset-background cursor-pointer transition-opacity hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Fermer</span>
+          </DialogPrimitive.Close>
+        )}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
