@@ -96,6 +96,16 @@ export function QRBlock({
       <p className="text-center text-xs text-muted-foreground">
         Scannez ce code ou saisissez-le sur la caisse employé.
       </p>
+
+      {/* En attente (mission feedback patron) : une pulsation discrète sous la
+          consigne — l'écran dit qu'il VIT, sans alerter sur un rien. */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+        </span>
+        En attente de connexion…
+      </div>
     </div>
   );
 }
