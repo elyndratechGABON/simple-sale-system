@@ -7,6 +7,7 @@ import { useAccess } from "@/hooks/use-access";
 import { useSubscription } from "@/hooks/use-subscription";
 import { formatFCFA } from "@/lib/format";
 import { SubscriptionPaymentDialog } from "./SubscriptionPaymentDialog";
+import { usePaymentConfirmation } from "@/hooks/use-payment-confirmation";
 
 /** Paliers proposés à l'abonnement : ceux d'Elyndra (« Prolonger »/console admin). */
 const PLANS = [
@@ -22,6 +23,9 @@ export function SubscriptionCard() {
   const { features } = usePreferences();
   const { role } = useAccess();
   const { isExpired, daysRemaining } = useSubscription();
+  // Toast « Abonnement activé » : le poll borné tourne pendant que la carte
+  // Compte est affichée — c'est écran du payeur.
+  usePaymentConfirmation();
   const isOwner = role === "owner";
   const subscriptionFeature = features?.subscription ?? false;
 

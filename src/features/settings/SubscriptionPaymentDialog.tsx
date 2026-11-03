@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
 import { formatFCFA } from "@/lib/format";
+import { parsePaymentSms } from "@/lib/sms-payment";
 import { submitSubscriptionRequest } from "@/lib/requests";
 
 /** Dialog de paiement d'abonnement : USSD + WhatsApp, sans validation par l'administration.
@@ -24,7 +26,16 @@ export function SubscriptionPaymentDialog({
   plan: { id: string; name: string; price: number };
 }) {
   const [sms, setSms] = useState("");
+  const [payPhone, setPayPhone] = useState("");
   const [step, setStep] = useState<"pay" | "paste">("pay");
+  // ANTI-FRAUDE (mission paiement) : le SMS collé est parsé LOCALEMENT (même
+  // grammaire que le déverrouillage offline) — si un montant apparaît et ne vaut
+  // PAS le plan choisi, l'envoi est bloqué avant de polluer l'orchestrateur.
+  const parsed = parsePaymentSms(sms);
+  const montantIncorrect =
+    parsed !== null && parsed.amount !== plan.price
+      ? `Le SMS annonce ${parsed.amount.toLocaleString("fr-FR")} F, l'abonnement coûte ${plan.price.toLocaleString("fr-FR")} F.`
+      : null;
 
   const handleCopyNumber = () => {
     navigator.clipboard.writeText("076505254").then(() => {
@@ -46,9 +57,18 @@ export function SubscriptionPaymentDialog({
    */
   const handleDoubleCheck = async () => {
     const text = sms.trim();
-    if (!text) return;
+    if (!text || montantIncorrect) return;
+    // Anti-fraude : un toast ROUGE explicite quand le montant du SMS ne colle pas.
+    if (parsed && parsed.amount !== plan.price) {
+      toast.error("Le montant du SMS ne correspond pas à l'abonnement choisi.", {
+        description: `SMS : ${parsed.amount.toLocaleString("fr-FR")} F — attendu : ${plan.price.toLocaleString("fr-FR")} F.`,
+      });
+      return;
+    }
     // Action 1 : WhatsApp, dans le geste utilisateur.
-    const url = `https://wa.me/24176505254?text=${encodeURIComponent(text)}`;
+    const url = `https://wa.me/24176505254?text=${encodeURIComponent(
+      `Paiement ${plan.name} (${plan.price.toLocaleString("fr-FR")} FCFA)\nNuméro transaction : ${payPhone.trim()}\n\n${text}`,
+    )}`;
     window.open(url, "_blank", "noopener,noreferrer");
 
     // Action 2 : dépôt orchestrateur (non-bloquant) via le helper PARTAGÉ
@@ -61,7 +81,9 @@ export function SubscriptionPaymentDialog({
         planName: plan.name,
         planPrice: plan.price,
         planDevices: 0,
-        reference: "",
+        // Le numéro ayant effectué la transaction (OBLIGATOIRE, mission paiement) :
+        // c'est la référence que l'admin croise avec le SMS dans le Control Center.
+        reference: payPhone.trim(),
         note: `Vérification double (SMS joint) : ${text}`.slice(0, 500),
       });
       if (result.ok) {
@@ -127,7 +149,7 @@ export function SubscriptionPaymentDialog({
         ) : (
           <div className="mt-6 space-y-3">
             <label className="block text-sm text-muted-foreground">
-              Collez le SMS de confirmation reçu de l'opérateur.
+              Collez le SMS de confirmation reçu de l&apos;opérateur.
             </label>
             <Textarea
               placeholder="Collez le SMS reçu de l'opérateur..."
@@ -137,7 +159,36 @@ export function SubscriptionPaymentDialog({
               className="min-h-[80px]"
               autoFocus
             />
-            <Button onClick={handleDoubleCheck} disabled={!sms.trim()} className="w-full">
+            {/* Numéro DE LA TRANSACTION (obligatoire, mission paiement) : l'admin doit
+                pouvoir croiser SMS ↔ numéro sans deviner. Prérempli automatiquement
+                quand le parseur local trouve le numéro du payeur dans le SMS. */}
+            <div className="space-y-1">
+              <label className="block text-sm text-muted-foreground">
+                Numéro ayant effectué la transaction
+              </label>
+              <Input
+                type="tel"
+                inputMode="numeric"
+                placeholder="Ex : 074337844"
+                value={payPhone}
+                onChange={(e) => setPayPhone(e.target.value.replace(/[^\d+\s]/g, ""))}
+              />
+              {parsed && !payPhone.trim() && (
+                <p className="text-xs text-muted-foreground">
+                  Détecté dans le SMS : {parsed.phone}
+                </p>
+              )}
+            </div>
+            {montantIncorrect && (
+              <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+                ⚠️ {montantIncorrect} L&apos;envoi est bloqué.
+              </p>
+            )}
+            <Button
+              onClick={handleDoubleCheck}
+              disabled={!sms.trim() || !payPhone.trim() || Boolean(montantIncorrect)}
+              className="w-full"
+            >
               Double vérifier (WhatsApp)
             </Button>
           </div>
