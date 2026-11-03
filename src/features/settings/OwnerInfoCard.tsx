@@ -22,7 +22,11 @@ export function OwnerInfoCard() {
   const patron = identity?.role !== "employee";
 
   const owner = profile?.ownerName?.trim() || "Non renseigné";
-  const phone = profile?.phone?.trim() || "—";
+  // Le téléphone ne s'affiche que s'il RESSEMBLE à un numéro : un champ libre a déjà
+  // accueilli des saisies libres (« kay ») — mieux vaut ne rien afficher du tout que
+  // « BERNARD — kay ». Chiffres, +, espaces, points, tirets, 6 caractères minimum.
+  const tel = profile?.phone?.trim() ?? "";
+  const telValide = /^[+()\d\s.-]{6,}$/.test(tel);
 
   return (
     <div className="flat-card flex items-center gap-3 px-3 py-2.5 md:col-span-2">
@@ -32,7 +36,8 @@ export function OwnerInfoCard() {
           {patron ? "Propriétaire (vous)" : "Propriétaire de la boutique"}
         </p>
         <p className="font-medium text-foreground whitespace-normal break-words">
-          {owner} <span className="text-muted-foreground">— {phone}</span>
+          {owner}
+          {telValide && <span className="text-muted-foreground"> — {tel}</span>}
         </p>
       </div>
     </div>
