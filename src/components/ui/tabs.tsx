@@ -27,7 +27,11 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background cursor-pointer transition-colors transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow",
+      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background cursor-pointer transition-colors transition-shadow focus-visible:outline-none focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow",
+      // ÉTAT ACTIF = halo PERMANENT (mission onglets) : au clic, le focus est relâché
+      // (`focus-visible` ne s'applique pas) et le halo de focus mourait aussitôt — ici
+      // il vit sur `data-[state=active]`, actif au clic comme au clavier.
+      "focus-visible:ring-2 data-[state=active]:ring-2 data-[state=active]:ring-primary data-[state=active]:ring-offset-1",
       className,
     )}
     {...props}
