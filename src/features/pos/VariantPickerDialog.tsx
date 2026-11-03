@@ -14,7 +14,16 @@ export function VariantPickerDialog({ pos }: { pos: PosController }) {
           <DialogTitle>{product?.name} — choisir une variante</DialogTitle>
         </DialogHeader>
         {product && (
-          <div className="grid gap-2 max-h-[65dvh] overflow-y-auto">
+          <div className="grid gap-2 max-h-[65dvh] overflow-y-auto scroll-slim">
+            {/* Prix de BASE rappelé en tête : le marchant compare chaque déclinaison à
+                l'article simple — sinon il cherche le prix du produit quelque part
+                dans une liste de variantes. */}
+            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              Produit de base&nbsp;:{" "}
+              <span className="font-semibold text-foreground tabular-nums">
+                {formatFCFA(product.price ?? 0)}
+              </span>
+            </p>
             {(product.variants ?? []).map((v) => {
               const cur = pos.cart[cartKey(product, v.id)]?.qty ?? 0;
               const stockOk = !Number.isFinite(v.stock) || cur < (v.stock ?? 0);

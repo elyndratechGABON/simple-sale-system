@@ -358,6 +358,29 @@ body {
   }
 }
 
+/* Scrollbar TRÈS discrète des zones qui défilent beaucoup (grille de produits dans
+   la modale de table, sélecteur de variantes) : rail quasi transparent, pouce FIN,
+   ROND et TEINTÉ PRIMARY — visible au millimètre, jamais une barre informatique. */
+@utility scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) transparent;
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background-color: var(--primary);
+    opacity: 0.55;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    opacity: 0.8;
+  }
+}
+
 /* Typography utilities — nouvelle échelle */
 @utility text-display {
   font-size: var(--text-display);

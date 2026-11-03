@@ -69,12 +69,12 @@ export function ProductPickerDialog({
           className="grid w-full min-w-0 gap-4 overflow-hidden lg:grid-cols-[1fr_320px] [&_*]:max-w-full"
           style={{ ["--page-gutter" as string]: "0px" }}
         >
-          <div className="min-w-0 w-full overflow-hidden">
+          <div className="min-w-0 w-full max-h-[60dvh] overflow-y-auto overscroll-contain scroll-slim">
             <div className="pt-1" />
             <ProductPanel pos={pos} onProductSelect={addProduct} />
           </div>
 
-          <div className="min-w-0 space-y-2 overflow-y-auto max-h-[60vh]">
+          <div className="min-w-0 space-y-2 overflow-y-auto max-h-[60dvh] overscroll-contain scroll-slim">
             {/* Titre « Articles » détaché du titre de la modale */}
             <p className="mt-2 text-sm font-semibold text-muted-foreground">
               Articles{items.length > 0 ? ` — ${formatFCFA(total)}` : ""}

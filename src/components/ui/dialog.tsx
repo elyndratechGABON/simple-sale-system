@@ -62,7 +62,20 @@ const DialogContent = React.forwardRef<
       )}
       {...props}
     >
-      <div className="grid min-h-0 flex-1 gap-4 overflow-x-hidden overflow-y-auto overscroll-contain p-4 sm:p-6">
+      <div
+        className="grid min-h-0 flex-1 gap-4 overflow-x-hidden overflow-y-auto overscroll-contain p-4 sm:p-6"
+        onFocus={(e) => {
+          // CLAVIER MOBILE : quand un champ reçoit le focus, on le ramène dans la zone
+          // visible de la modale pendant que le clavier virtuel montait. Sans ce
+          // décalage, le champ restait DERRIÈRE le clavier (`fixed` centre la modale
+          // sur le layout viewport, pas sur le visual viewport rétréci).
+          const el = e.target as HTMLElement | null;
+          if (!el || el === e.currentTarget) return;
+          window.setTimeout(() => {
+            el.scrollIntoView({ block: "center", behavior: "smooth" });
+          }, 120);
+        }}
+      >
         {children}
       </div>
       {showCloseButton && (
