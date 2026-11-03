@@ -157,7 +157,9 @@ export function computePeriodStats(
     const bucket = byTable.get(s.table ?? "Comptoir");
     if (bucket) {
       bucket.salesCount += 1;
-      bucket.clients += s.customers_count ?? 1;
+      // 1 ENCAISSEMENT = 1 CLIENT (mission 1:1:1) : le nombre de personnes attablées
+      // n'est plus additionné — les rapports « clients » comptent des RÈGLEMENTS.
+      bucket.clients += 1;
     }
   }
 
@@ -170,7 +172,11 @@ export function computePeriodStats(
     profit,
     salesCount: inRange.length,
     itemsCount,
-    customersCount: inRange.reduce((s, sale) => s + (sale.customers_count ?? 1), 0),
+    // 1 vente = 1 client = 1 encaissement (mission 1:1:1) : les ventes ENCAISSÉES
+    // seulement — les tables ouvertes (`status: "open"`) n'existent pas ici, `listSales`
+    // les exclut avant le calcul. Une vente compte pour UN client, quel que soit le
+    // nombre de personnes attablées.
+    customersCount: inRange.length,
     marginRate: revenue > 0 ? profit / revenue : 0,
     averageBasket: inRange.length > 0 ? revenue / inRange.length : 0,
     bestDay: sold.reduce<DayBucket | null>((a, d) => (!a || d.revenue > a.revenue ? d : a), null),

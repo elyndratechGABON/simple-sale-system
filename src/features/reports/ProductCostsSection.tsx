@@ -9,17 +9,12 @@ import { ProductCostRow } from "./ProductCostRow";
  * Ce n'est PAS la porte principale de la saisie : le formulaire produit la porte
  * individuelle (je crée un article, je connais son coût d'achat). Ici, c'est le cas de
  * masse — un catalogue de 200 articles dont aucun coût n'est renseigné ne se remplit pas
- * avec 200 allers-retours vers l'écran Stocks. L'alerte « produits sans coût » ouvre cette
- * liste avec les articles concernés déjà cochés.
+ * avec 200 allers-retours vers l'écran Stocks.
  *
- * Deux groupes : ce qui manque, puis ce qui est déjà là. Les deux sont ÉDITABLES — le
- * batch sert aussi à corriger un coût faux, pas seulement à remplir un trou. Un article
- * renseigné à 5 000 F par erreur se corrige ici, sans repartir vers `/stocks` ligne par
- * ligne.
- *
- * Le regroupement vient de `soldProductsByCategory` : uniquement ce qui a été VENDU sur la
- * période (cf. ce fichier pour la seule exclusion : ligne libre). Les produits SUPPRIMÉS
- * figurent dans leur propre groupe, en lecture seule : leur coût est figé à la vente.
+ * UNE SEULE liste (plus de découpage « Avec coût / Sans coût ») : un produit VENDU a
+ * toujours un coût — à zéro si rien n'est saisi, un SERVICE n'en a pas. Regroupement par
+ * catégorie, dans l'ordre du chiffre d'affaires. Les produits SUPPRIMÉS de la période
+ * figurent en lecture seule : leur coût est figé à la vente.
  */
 export function ProductCostsSection({
   products,
@@ -42,21 +37,16 @@ export function ProductCostsSection({
 
   // Même prédicat que `useCostAlerts` : un coût absent ou nul est un coût manquant —
   // SAUF pour un produit supprimé, dont le coût (figé à la vente) n'est plus modifiable.
-  // On découpe par groups, l'ordre par chiffre d'affaires est conservé à l'intérieur.
-  const [sansCout, avecCout, supprimes] = useMemo(() => {
-    const sans: typeof groups = [];
-    const avec: typeof groups = [];
-    const supprimes: typeof groups = [];
+  const [vendus, supprimes] = useMemo(() => {
+    const vivants: typeof groups = [];
+    const disparus: typeof groups = [];
     for (const group of groups) {
-      const disparus = group.list.filter((e) => e.orphan);
-      const restants = group.list.filter((e) => !e.orphan);
-      const manquants = restants.filter((e) => !(e.product.cost > 0));
-      const renseignes = restants.filter((e) => e.product.cost > 0);
-      if (manquants.length > 0) sans.push({ ...group, list: manquants });
-      if (renseignes.length > 0) avec.push({ ...group, list: renseignes });
-      if (disparus.length > 0) supprimes.push({ ...group, list: disparus });
+      const vivantList = group.list.filter((e) => !e.orphan);
+      const disparuList = group.list.filter((e) => e.orphan);
+      if (vivantList.length > 0) vivants.push({ ...group, list: vivantList });
+      if (disparuList.length > 0) disparus.push({ ...group, list: disparuList });
     }
-    return [sans, avec, supprimes];
+    return [vivants, disparus];
   }, [groups]);
 
   if (groups.length === 0) {
@@ -70,8 +60,7 @@ export function ProductCostsSection({
   return (
     <div className="space-y-4">
       {[
-        { titre: "Sans coût", liste: sansCout, note: undefined },
-        { titre: "Avec coût", liste: avecCout, note: undefined },
+        { titre: "Produits vendus", liste: vendus, note: undefined },
         {
           titre: "Produits supprimés",
           liste: supprimes,

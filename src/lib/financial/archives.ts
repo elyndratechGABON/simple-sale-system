@@ -8,7 +8,7 @@
 // « Enregistrer au format PDF » sans dépendance installée. JSON téléchargé en repli
 // (popup bloquée). Journal LOCAL : les archives sont l'historique de CET appareil,
 // exclues du snapshot de sauvegarde (raison dans snapshot-exhaustivity.test.ts).
-import { getDB } from "@/lib/db";
+import { getDB, getSetting } from "@/lib/db";
 import type { FinancialSnapshot } from "@/lib/db";
 import { listSales, getSaleItemsForSales } from "@/lib/db";
 import { subDays, startOfDay } from "date-fns";
@@ -107,34 +107,85 @@ function pdfFallback(html: string, filename: string): void {
  * Génère le PDF d'un snapshot : fenêtre d'impression mise en forme (le navigateur
  * fait la conversion « Enregistrer au format PDF »). Popup bloquée = le HTML de la
  * feuille est téléchargé, imprimable depuis n'importe quel lecteur.
+ *
+ * Détail PRODUITS VENDUS du jour (quantité, prix unitaire, total) : la synthèse seule
+ * ne dit pas ce qui s'est réellement vendu — le commerçant classe ses flux ligne par
+ * ligne. En-tête PROPRE : logo de la boutique (s'il en a choisi un) + son nom ; pied de
+ * page : générateur et date d'impression. Les données produits sont lues au moment de
+ * l'impression — l'archive ne les garde pas, elles ne quittent jamais cet appareil.
  */
-export function downloadFinancialSnapshotPdf(snapshot: FinancialSnapshot): void {
+export async function downloadFinancialSnapshotPdf(snapshot: FinancialSnapshot): Promise<void> {
+  const prefs = getPreferences();
+  const shopName = prefs.workspaceName || "Ma boutique";
+  const logo = await getSetting<string>("shop_logo").catch(() => null);
+  // Ventes du jour archivé : mêmes lecteurs que le snapshot (ventes ENCAISSÉES via
+  // `listSales`, pai (`alive()`), jamais les tables ouvertes).
+  const to = snapshot.day + 86_400_000;
+  const sales = await listSales(snapshot.day, to);
+  const items = await getSaleItemsForSales(sales.map((s) => s.id));
+  const vendus = new Map<string, { name: string; quantity: number; total: number }>();
+  for (const i of items) {
+    const key = i.product_id ?? `*${i.name}`;
+    const row = vendus.get(key) ?? { name: i.name, quantity: 0, total: 0 };
+    row.quantity += i.quantity;
+    row.total += i.price_at_sale * i.quantity;
+    vendus.set(key, row);
+  }
+  const rows = [...vendus.values()].sort((a, b) => b.total - a.total);
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const produitRows = rows
+    .map((r) => {
+      const unit = r.quantity > 0 ? Math.round(r.total / r.quantity) : r.total;
+      return `<tr>
+  <td>${esc(r.name)}</td>
+  <td class="v c">${r.quantity}</td>
+  <td class="v">${formatFCFA(unit)}</td>
+  <td class="v">${formatFCFA(r.total)}</td>
+</tr>`;
+    })
+    .join("");
+  const produitsHtml = rows.length
+    ? `<h2>Produits vendus</h2>
+<table>
+  <tr><th>Produit</th><th class="v c">Qté</th><th class="v">Prix</th><th class="v">Total</th></tr>
+  ${produitRows}
+</table>`
+    : "";
+
   const label = new Date(snapshot.day).toLocaleDateString("fr-FR", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
   });
-  const intro = new Date(snapshot.created_at).toLocaleString("fr-FR");
+  const imprimé = new Date().toLocaleString("fr-FR");
   const html = `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"/><title>État financier — ${label}</title>
+<html lang="fr"><head><meta charset="utf-8"/><title>État financier — ${esc(shopName)} — ${label}</title>
 <style>
   @page { margin: 2.5rem; }
   body { font: 15px/1.5 system-ui, -apple-system, sans-serif; color: #222; margin: 0 auto; max-width: 40rem; }
-  header { border-bottom: 2px solid #0a7d54; padding-bottom: .75rem; margin-bottom: 1.5rem; }
+  header { border-bottom: 2px solid #0a7d54; padding-bottom: .75rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  header img { width: 64px; height: 64px; object-fit: contain; border-radius: 10px; }
   h1 { font-size: 1.15rem; margin: 0; }
   .lead { color: #666; margin: .25rem 0 0; }
+  h2 { font-size: .95rem; color: #0a7d54; text-transform: uppercase; letter-spacing: .06em; margin: 1.75rem 0 .5rem; }
   table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
   td, th { border-top: 1px solid #ddd; padding: .5rem 0; text-align: left; }
   th { color: #666; font-weight: 500; }
   td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th.v { text-align: right; }
+  td.c, th.c { text-align: center; }
   .big { font-size: 1.9rem; font-weight: 700; }
-  footer { margin-top: 2rem; color: #999; font-size: 12px; }
+  footer { margin-top: 2.5rem; border-top: 1px solid #ddd; padding-top: .75rem; color: #999; font-size: 12px; display: flex; justify-content: space-between; gap: 1rem; }
 </style></head>
 <body>
   <header>
-    <h1>État financier du ${label}</h1>
-    <p class="lead">Archive automatique — ELYNDRA CAISSE</p>
+    ${logo ? `<img src="${logo}" alt="Logo" />` : ""}
+    <div>
+      <h1>${esc(shopName)}</h1>
+      <p class="lead">État financier du ${label}</p>
+      <p class="lead">Archive automatique — ELYNDRA CAISSE</p>
+    </div>
   </header>
   <table>
     <tr><th>Chiffre d'affaires</th><td class="v big">${formatFCFA(snapshot.revenue)}</td></tr>
@@ -142,7 +193,8 @@ export function downloadFinancialSnapshotPdf(snapshot: FinancialSnapshot): void 
     <tr><th>Ventes</th><td class="v">${snapshot.salesCount}</td></tr>
     <tr><th>Panier moyen</th><td class="v">${formatFCFA(snapshot.averageBasket)}</td></tr>
   </table>
-  <footer>Snapshot créé le ${intro}.</footer>
+  ${produitsHtml}
+  <footer><span>Généré par ELYNDRA CAISSE</span><span>Imprimé le ${imprimé}</span></footer>
 </body></html>`;
 
   const w = window.open("", "_blank", "width=800,height=1000");

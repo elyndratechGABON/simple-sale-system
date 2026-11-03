@@ -25,7 +25,7 @@ export interface TableBucket {
    *  commande ; des tournées encaissées séparément comptent chacune pour une. */
   rounds: number;
   salesCount: number;
-  /** Personnes servies — somme des `customers_count` des ventes de la table. */
+  /** Personnes servies — UN client par encaissement (1 vente = 1 client = 1 encaissement). */
   clients: number;
 }
 
@@ -50,7 +50,7 @@ export interface PeriodStats {
   profit: number;
   salesCount: number;
   itemsCount: number;
-  /** Nombre de personnes servies. Une vente sans `customers_count` compte pour 1. */
+  /** Clients servis — UN client par vente payée (1 vente = 1 client = 1 encaissement). */
   customersCount: number;
   /** profit / revenue, dans [0,1]. 0 quand il n'y a pas de revenu. */
   marginRate: number;
