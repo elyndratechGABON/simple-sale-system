@@ -5,8 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 
 import { formatFCFA } from "@/lib/format";
-import { getOrchestratorUrl } from "@/lib/sync";
-import { ensureIdentity } from "@/lib/syncengine/identity";
+import { submitSubscriptionRequest } from "@/lib/requests";
 
 /** Dialog de paiement d'abonnement : USSD + WhatsApp, sans validation par l'administration.
  *  Flux : instructions de paiement (numéro + USSD) → « J'ai payé » → zone de collage du
@@ -52,34 +51,27 @@ export function SubscriptionPaymentDialog({
     const url = `https://wa.me/24176505254?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank", "noopener,noreferrer");
 
-    // Action 2 : dépôt orchestrateur (non-bloquant). La route canonique est
-    // `/api/v1/requests` : le serveur résout lui-même le COMPTE via le device_id
-    // (aucun shop_id a forger — l'ancien appel forgeait « shop_123 »), crée la demande
-    // et la diffuse au dashboard pour validation HUMAINE (le SMS reste « à valider »,
-    // c'est voulu — cf. payments/proof). Le SMS brut voyage dans `note`.
+    // Action 2 : dépôt orchestrateur (non-bloquant) via le helper PARTAGÉ
+    // `submitSubscriptionRequest` (lib/requests) : même route `/api/v1/requests`,
+    // même timeout, et surtout le CORPS D'ERREUR du serveur est remonté tel quel —
+    // un 400/404/409 porte le message exact, plus jamais un 403 muet lu comme
+    // « injoignable ». `console.error` journalise le statut + corps pour le debug.
     void (async () => {
-      try {
-        const base = getOrchestratorUrl();
-        if (!base) return;
-        const identity = await ensureIdentity();
-        const res = await fetch(`${base}/api/v1/requests`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            device_id: identity.deviceId,
-            plan_name: plan.name,
-            plan_price: plan.price,
-            note: `Vérification double (SMS joint) : ${text}`.slice(0, 500),
-          }),
-        });
-        if (!res.ok) throw new Error(String(res.status));
+      const result = await submitSubscriptionRequest({
+        planName: plan.name,
+        planPrice: plan.price,
+        planDevices: 0,
+        reference: "",
+        note: `Vérification double (SMS joint) : ${text}`.slice(0, 500),
+      });
+      if (result.ok) {
         toast.success("Demande envoyée à l'orchestrateur", {
           description: "Poursuivez sur WhatsApp en attendant la validation.",
         });
-      } catch {
-        toast.error("Orchestrateur injoignable", {
-          description:
-            "La preuve a été déposée sur WhatsApp — elle pourra être retransmise plus tard.",
+      } else {
+        console.error(`[orchestrateur] depos refusé : ${result.error}`);
+        toast.error("Orchestrateur a refusé la demande", {
+          description: result.error ?? "La preuve reste sur WhatsApp — à retransmettre plus tard.",
         });
       }
     })();

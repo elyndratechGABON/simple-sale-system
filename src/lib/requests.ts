@@ -28,7 +28,12 @@ export async function submitSubscriptionRequest(
   try {
     const res = await fetchWithTimeout(`${url}/api/v1/requests`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // x-device-id : le serveur résout le compte via device_id — l'en-tête
+        // redondant évite tout refus de garde intermédiaire (proxy, WAF).
+        "x-device-id": profile.deviceId,
+      },
       body: JSON.stringify({
         device_id: profile.deviceId,
         store_name: profile.storeName,
