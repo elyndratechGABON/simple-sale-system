@@ -66,14 +66,52 @@ export function useQrPayload({
         if (cancelled) return;
         const ownerIdentity = await ensureIdentity();
         const ownerPublicKey = getDeviceKeys().publicKey;
+        // META du jeton (mission QR léger) : fiche boutique + clé publique frappées
+        // AU RELAIS au moment du mint, rendues au redeem — le QR ne les porte plus.
+        const prefs = getPreferences();
+        const shopStoreName = prefs.workspaceName || profile?.storeName || "";
+        let meta: {
+          public_key: string;
+          owner_device_id: string;
+          shop: Record<string, unknown>;
+        } | null = null;
+        if (shopStoreName) {
+          const shop: Record<string, unknown> = {
+            storeName: shopStoreName,
+            tablesEnabled: prefs.features?.tables ?? prefs.tablesEnabled ?? false,
+          };
+          const ownerName = profile?.ownerName ?? prefs.ownerName ?? "";
+          if (ownerName) shop.ownerName = ownerName;
+          const shopPhone = profile?.phone || prefs.phone || "";
+          if (shopPhone) shop.phone = shopPhone;
+          const quarter = profile?.location ?? prefs.quarter ?? "";
+          if (quarter) shop.quarter = quarter;
+          // Cluster : ABSENT = « restaurant » (le récepteur garde son fallback) ;
+          // toute autre activité, avec ses réglages personnalisés, doit voyager.
+          if (prefs.cluster && prefs.cluster !== "restaurant") {
+            shop.cluster = prefs.cluster;
+            if (prefs.cluster === "personnalise") {
+              if (prefs.customDomain) shop.customDomain = prefs.customDomain;
+              if (prefs.customUnitType && prefs.customUnitType !== "unit") {
+                shop.customUnitType = prefs.customUnitType;
+              }
+            }
+          }
+          meta = {
+            public_key: ownerPublicKey,
+            owner_device_id: ownerIdentity.deviceId,
+            shop,
+          };
+        }
         // Jeton de partage : frappe au relais (pas de mot de passe dans le QR).
         // Si le relais est inaccessible, aucun QR n'est émis : le mot de passe ne
         // doit JAMAIS se retrouver dans un QR.
         let token = null;
+        const relayUrl = (getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? "")).replace(
+          /\/$/,
+          "",
+        );
         try {
-          const relayUrl = (
-            getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? "")
-          ).replace(/\/$/, "");
           // Un cold start du relais (serverless) peut jeter la première requête :
           // on réessaie une fois avant de déclarer l'émission impossible.
           for (let attempt = 0; attempt < 2 && token === null; attempt++) {
@@ -95,6 +133,7 @@ export function useQrPayload({
                 // LE code de session : le jeton frappé et le QR doivent porter le même
                 // code que celui que le patron compare à l'annonce de l'employé.
                 pair_code: code,
+                ...(meta ? { meta } : {}),
               }),
             });
             if (mintRes.ok) {
@@ -131,61 +170,18 @@ export function useQrPayload({
         }
         let text: string | null = null;
         if (token && code) {
-          // QR du jeton (v2) : pas de password, juste le token + pair_code + role=employee.
-          // La copie boutique (shop) part TOUJOURS : l'employé doit recevoir le vrai nom de
-          // la boutique (sinon il reste "Ma boutique"). storeName : le `workspaceName`
-          // d'abord (le nom saisi à la création y vit), la fiche profil ensuite — la fiche
-          // a pu rester sur le fallback si l'onboarding ne l'avait jamais écrite.
-          const prefs = getPreferences();
-          const shopStoreName = prefs.workspaceName || profile?.storeName || "";
-          // PAYLOAD ULTRA-LÉGER (mission scanner QR) : un QR dense refuse de se
-          // décoder — chaque champ absent/vides d'INFORMATION est OMIT, l'objet
-          // n'emmporte que ce que l'arrivée lit réellement (join-scan/parse).
-          // Ni `customDomain` ni `customUnitType` quand ce sont les défauts, ni
-          // `url` quand l'orchestrateur n'est pas configuré.
-          const accountPhone = profile?.accountPhone || profile?.phone || "";
-          const orchestratorUrl = getOrchestratorUrl() ?? "";
-          const payload: Record<string, unknown> = {
-            v: 2,
+          // QR v3 ULTRA-LÉGER : juste le jeton, le groupe, le code de session et
+          // l'adresse du relais — la fiche et la clé publique sont rendues au redeem
+          // (meta frappé ci-dessus). ~90 caractères au lieu de ~600 : le scan devient
+          // instantané sur n'importe quel portable.
+          text = JSON.stringify({
+            v: 3,
             app: "ecaisse" as const,
+            url: relayUrl,
             token,
-            name: shopStoreName || profile?.accountName || "",
-            // `||` (pas `??`) : accountPhone peut être défini à "" (compte créé sans saisie) —
-            // un `??` garderait la chaîne vide et l'écran scanné partirait SANS compte,
-            // donc sans groupe partagé (stock jamais reçu, import « n'attachée à aucun compte »).
-            ...(accountPhone ? { account_phone: accountPhone } : {}),
+            shop_id: identity?.shopId ?? "",
             pair_code: code,
-            role: "employee" as const,
-            owner_device_id: ownerIdentity.deviceId,
-            public_key: ownerPublicKey,
-          };
-          if (orchestratorUrl) payload.url = orchestratorUrl;
-          if (shopStoreName) {
-            const shop: Record<string, unknown> = {
-              storeName: shopStoreName,
-              tablesEnabled: prefs.features?.tables ?? prefs.tablesEnabled ?? false,
-            };
-            const ownerName = profile?.ownerName ?? prefs.ownerName ?? "";
-            if (ownerName) shop.ownerName = ownerName;
-            const shopPhone = profile?.phone || prefs.phone || "";
-            if (shopPhone) shop.phone = shopPhone;
-            const quarter = profile?.location ?? prefs.quarter ?? "";
-            if (quarter) shop.quarter = quarter;
-            // Cluster : ABSENT = défaut « restaurant » (le récepteur garde son fallback) ;
-            // toute autre activité, et les réglages personnalisés QUI EN DÉPENDENT, doivent
-            // voyager, sinon l'écran scanné se trouverait en mauvais métier.
-            if (prefs.cluster && prefs.cluster !== "restaurant") {
-              shop.cluster = prefs.cluster;
-              if (prefs.cluster === "personnalise") {
-                if (prefs.customDomain) shop.customDomain = prefs.customDomain;
-                if (prefs.customUnitType && prefs.customUnitType !== "unit") {
-                  shop.customUnitType = prefs.customUnitType;
-                }
-              }
-            }
-            payload.shop = shop;
-          }
-          text = JSON.stringify(payload);
+          });
         }
         if (!text) throw new Error("relay-required");
         const { default: QRCode } = await import("qrcode");

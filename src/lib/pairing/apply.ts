@@ -5,18 +5,29 @@ import type { PairingShopConfig } from "./types";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { getDB } from "@/lib/db";
 
-/** Réclame le jeton au relais (redeem) — renvoie la boutique et le code. */
+/** Réclame le jeton au relais (redeem) — renvoie la boutique, le code ET le `meta`
+ *  (mission QR léger) : la copie de la boutique et la clé publique du principal
+ *  vivent dans le jeton frappé, rendues ici et NON dans le QR. */
 export async function redeemShareToken(
   token: string,
   deviceId?: string,
+  /** QR v3 : l'adresse du relais voyage DANS le code — l'écran invité ne peut pas
+   *  encore connaître le bon serveur. Absent → adresse locale (QR v2 et antérieurs). */
+  relayUrl?: string,
 ): Promise<{
   shop_id?: string;
   account_name?: string;
   account_phone?: string;
   pair_code?: string;
+  /** Copie de la boutique + clé publique du principal (relais à jour). */
+  meta?: {
+    public_key?: string;
+    owner_device_id?: string;
+    shop?: PairingShopConfig;
+  };
 } | null> {
   try {
-    const relay = getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? "");
+    const relay = relayUrl || (getOpsRelayUrl ? getOpsRelayUrl() : (getOrchestratorUrl() ?? ""));
     const url = (relay || "").replace(/\/$/, "") + "/api/v1/share/redeem";
     const res = await fetchWithTimeout(url, {
       method: "POST",

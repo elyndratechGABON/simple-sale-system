@@ -4,7 +4,7 @@ import { getOrchestratorUrl } from "@/lib/sync";
 import { getPairingToken } from "@/lib/syncengine/pairing";
 import { ensureIdentity, getDeviceKeys } from "@/lib/syncengine/identity";
 import type { DeviceRole } from "@/lib/syncengine/types";
-import type { PairingPayload, PairingShopInfo, SharePayload } from "./types";
+import type { PairingPayload, PairingShopInfo, SharePayload, ShareTokenPayload } from "./types";
 
 /** Fabrique le contenu du QR depuis le profil local, ou `null` sans compte marchand.
  *  @param role  Rôle assigné au futur appareil (optionnel — absent = ancien comportement). */
@@ -50,7 +50,29 @@ export function parsePairingPayload(text: string): PairingShopInfo | null {
 
   if (trimmed.startsWith("{")) {
     try {
-      const data = JSON.parse(trimmed) as Partial<PairingPayload | SharePayload>;
+      const data = JSON.parse(trimmed) as Partial<
+        PairingPayload | SharePayload | ShareTokenPayload
+      >;
+      // QR v3 ULTRA-LÉGER (mission appairage) : token + shop_id + pair_code —
+      // le reste de l'identité vient du `meta` rendu par le redeem.
+      if (
+        data.app === "ecaisse" &&
+        (data as ShareTokenPayload).v === 3 &&
+        typeof (data as ShareTokenPayload).token === "string" &&
+        (data as ShareTokenPayload).token.length > 8 &&
+        typeof (data as ShareTokenPayload).shop_id === "string" &&
+        (data as ShareTokenPayload).shop_id!.length > 0
+      ) {
+        const s = data as ShareTokenPayload;
+        return {
+          name: "",
+          phone: "",
+          password: "",
+          pair_code: s.pair_code?.trim(),
+          token: s.token,
+          relay_url: s.url,
+        } as PairingShopInfo;
+      }
       if (
         data.app === "ecaisse" &&
         (data as Partial<PairingPayload>).phone !== undefined &&

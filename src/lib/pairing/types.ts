@@ -51,6 +51,8 @@ export type PairingShopInfo = Pick<PairingPayload, "name" | "phone" | "password"
   role?: DeviceRole;
   /** Jeton de partage (QR v2) : réclamé au relais une fois le compte posé. Absent des QR v1. */
   token?: string;
+  /** Adresse du relais PORTÉE PAR LE QR v3 (les champs proviennent du `meta` au redeem). */
+  relay_url?: string;
   /** Clé de vérification du propriétaire, présente sur les QR nouvellement émis. */
   owner_device_id?: string;
   public_key?: string;
@@ -69,4 +71,20 @@ export interface SharePayload {
   public_key?: string;
   shop?: Partial<PairingShopConfig>;
   role?: DeviceRole;
+}
+
+/** QR v3 — ULTRA-LÉGER (mission appairage) : un QR dense se refuse au scan. Le code
+ *  ne transporte que le jeton, le `shop_id` du groupe, le code de paire et l'adresse
+ *  du relais. La copie de la boutique et la clé publique du principal vivent dans le
+ *  `meta` du jeton (colonne du relais), rendues au redeem — l'échange de clés passe
+ *  par le serveur, plus par le contenu du code. */
+export interface ShareTokenPayload {
+  v: 3;
+  app: "ecaisse";
+  /** Adresse du relais à réclamer (dérive de `getOpsRelayUrl`). */
+  url: string;
+  token: string;
+  /** Groupe de partage (`s_…`) — le seul qui garantit la convergence. */
+  shop_id: string;
+  pair_code: string;
 }

@@ -39,7 +39,10 @@ export async function runJoinScan(
   // serveur — et les deux écrans ne se verraient plus, silencieusement.
   let relayShopId: string | undefined;
   if (parsed.token) {
-    const redeem = await redeemShareToken(parsed.token, identity.deviceId);
+    // QR v3 : l'adresse du relais voyage DANS le code — l'écran invité ne connaît
+    // pas encore le bon serveur. Le `meta` rendu porte la fiche boutique ET la clé
+    // publique du principal (frappées au mint, mission QR léger).
+    const redeem = await redeemShareToken(parsed.token, identity.deviceId, parsed.relay_url);
     if (redeem) {
       if (redeem.account_name) accountName = redeem.account_name;
       if (redeem.account_phone) accountPhone = redeem.account_phone;
@@ -54,6 +57,11 @@ export async function runJoinScan(
           await setShopAccountId(rawAccountId);
         }
       }
+      // Fiche boutique du propriétaire via le meta (QR v3) ; repli sur la copie
+      // embarquée des QR v2/v1 (ils restent lisibles).
+      if (redeem.meta?.shop) parsed.shop = redeem.meta.shop;
+      if (redeem.meta?.owner_device_id) parsed.owner_device_id = redeem.meta.owner_device_id;
+      if (redeem.meta?.public_key) parsed.public_key = redeem.meta.public_key;
     }
   }
   // 1. Applique la copie complète de la boutique du propriétaire.
