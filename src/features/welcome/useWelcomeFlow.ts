@@ -30,8 +30,6 @@ export function useWelcomeFlow() {
   const [history, setHistory] = useState<EmployeeHistory[] | null>(null);
   const [scanningJoin, setScanningJoin] = useState(false);
   const [showEmployeeNameModal, setShowEmployeeNameModal] = useState(false);
-  const [employeeNameInput, setEmployeeNameInput] = useState("");
-  const [employeePhoneInput, setEmployeePhoneInput] = useState("");
   const [pairCodeInput, setPairCodeInput] = useState("");
   const [scannedPairCode, setScannedPairCode] = useState<string | undefined>();
 
@@ -55,9 +53,7 @@ export function useWelcomeFlow() {
       }
       // 5. Se souvient du code du QR (ou du relais) pour valider la saisie de l'employé.
       setScannedPairCode(outcome.pairCode);
-      // 6. Ouvre un modal : nom + mot de passe temporaire (le code affiché sous le QR).
-      setEmployeeNameInput("");
-      setEmployeePhoneInput("");
+      // 6. Ouvre l'écran de saisie : LE CODE de 6 caractères, rien d'autre.
       setPairCodeInput("");
       setShowEmployeeNameModal(true);
     } catch {
@@ -83,24 +79,23 @@ export function useWelcomeFlow() {
   }
 
   async function submitEmployeeName() {
-    const name = employeeNameInput.trim();
     const code = normPairCode(pairCodeInput);
-    if (!name) return;
     if (code.length !== 6) {
-      toast.error("Saisissez le mot de passe temporaire (6 caractères, sous le QR).");
+      toast.error("Saisissez le code de 6 caractères affiché sous le QR.");
       return;
     }
     if (scannedPairCode && normPairCode(scannedPairCode) !== code) {
       toast.error("Ce code ne correspond pas à celui affiché par le propriétaire.");
       return;
     }
+    // ÉPURATION (mission scan employé) : plus AUCUN champ nom/numéro — l'écran de
+    // scan n'accepte que le code. L'identité porte le nom de la boutique (déjà posé
+    // côté patron, appliqué au scan) ; le patron peut le renommer dans l'Équipe.
+    const name = getPreferences().workspaceName || "Employé";
     // L'identité est posée AVANT l'annonce : sinon la première annonce — celle qui porte
-    // le code de paire, donc celle qui proves l'appairage — partait avec un nom et un
-    // numéro vides, et le patron devait attendre un second cycle pour les savoir.
+    // le code de paire, donc celle qui prouve l'appairage — partait sans nom, et le
+    // patron devait attendre un second cycle pour le savoir.
     await setIdentityEmployeeName(name);
-    // Facultatif : le patron voit ce numéro dans « Activité du personnel ». Absent, il
-    // affiche « Numéro non déclaré » plutôt qu'un numéro deviné.
-    if (employeePhoneInput.trim()) await setIdentityEmployeePhone(employeePhoneInput.trim());
 
     const result = await enterPairingCode(code);
     if (result === "invalid") {
@@ -134,10 +129,6 @@ export function useWelcomeFlow() {
     scanningJoin,
     showEmployeeNameModal,
     setShowEmployeeNameModal,
-    employeeNameInput,
-    setEmployeeNameInput,
-    employeePhoneInput,
-    setEmployeePhoneInput,
     pairCodeInput,
     setPairCodeInput,
     startCreate,

@@ -141,14 +141,10 @@ export function WelcomePage() {
           </motion.div>
         )}
 
-        {/* Modal du nom de l'employé — affiché après le scan QR du propriétaire */}
+        {/* Écran de saisie du code — affiché après le scan QR du propriétaire */}
         {flow.showEmployeeNameModal && (
           <EmployeeNameModal
-            name={flow.employeeNameInput}
-            phone={flow.employeePhoneInput}
             code={flow.pairCodeInput}
-            onNameChange={flow.setEmployeeNameInput}
-            onPhoneChange={flow.setEmployeePhoneInput}
             onCodeChange={flow.setPairCodeInput}
             onCancel={() => flow.setShowEmployeeNameModal(false)}
             onSubmit={flow.submitEmployeeName}
