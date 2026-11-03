@@ -2,12 +2,12 @@
 // compte marchand. La nouvelle caisse le scanne (bouton « Scanner le QR » du mode
 // « Rejoindre » à l'onboarding) et rejoint le compte au premier handshake.
 //
-// L'état vit dans `useDevicePairingDialog`, le QR dans `QRBlock`, l'affichage du code
-// temporaire dans `PairingCodeDisplay`, la liste des écrans dans `PairedDevicesPanel`.
+// ÉPURÉ (mission UI) : compteurs et explications sortis — le QR, le code âgé
+// et sa consigne tiennent la modale. La liste des écrans (PairedDevicesPanel) reste :
+// c'est là que le patron approuve. L'état vit dans `useDevicePairingDialog`.
 import { MonitorSmartphone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { QRBlock } from "@/components/pairing/QRBlock";
-import { PairingCodeDisplay } from "@/components/pairing/PairingCodeDisplay";
 import { PairedDevicesPanel } from "@/components/pairing/PairedDevicesPanel";
 import { useDevicePairingDialog } from "./useDevicePairingDialog";
 
@@ -29,60 +29,19 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
           </DialogTitle>
         </DialogHeader>
 
-        {/* Affichage du nombre d'appareils connectés */}
-        {d.hasAnyAccount && (
-          <div className="mt-2 rounded-lg border p-3 text-left">
-            <p className="text-sm font-medium">
-              <span>
-                {d.pairedCount} {d.pairedCount === 1 ? "appareil" : "appareils"} connecté(s){" "}
-              </span>{" "}
-              /
-              <span>
-                {d.quota?.maxDevices ?? "∞"} {d.quota?.maxDevices === 1 ? "écran" : "écrans"}
-              </span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Le propriétaire dispose de {d.quota?.maxDevices ?? "illimité"} place(s) sur son
-              abonnement.
-            </p>
-          </div>
-        )}
-
         {d.hasNamePhone ? (
-          <QRBlock
-            open={open}
-            hasNamePhone={d.hasNamePhone}
-            identity={d.identity}
-            profile={d.profile}
-            quota={d.quota}
-            localDeviceCount={d.localDeviceCount}
-            atCapacity={d.atCapacity}
-            isOwner={d.isOwner}
-            pairCode={d.pairCode}
-            setPairCode={d.setPairCode}
-            setCodeExpiry={d.setCodeExpiry}
-          />
-        ) : d.profile?.accountKeyword ? (
-          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Cet écran a rejoint le compte
-            <span className="font-medium text-foreground">par mot clé de récupération</span> : il
-            n'a pas le téléphone ni le nom du compte, que le QR transporte. Depuis un écran qui
-            détient le compte (téléphone + mot de passe), ouvrez ici « Ajouter un appareil » pour
-            partager le code QR.
-          </p>
-        ) : (
-          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Cet appareil n'a pas encore d'identité marchande : renseignez le nom de la
-            <span className="font-medium text-foreground">boutique</span> et son
-            <span className="font-medium text-foreground">téléphone</span> (Réglages → Boutique)
-            avant d'afficher un code QR.
-          </p>
-        )}
-
-        {d.hasAnyAccount && (
-          <div className="mt-4 space-y-3 rounded-xl border p-4">
-            {d.isOwner && <PairingCodeDisplay pairCode={d.pairCode} minutesLeft={d.minutesLeft} />}
-
+          <>
+            <QRBlock
+              open={open}
+              hasNamePhone={d.hasNamePhone}
+              identity={d.identity}
+              profile={d.profile}
+              atCapacity={d.atCapacity}
+              pairCode={d.pairCode}
+              setPairCode={d.setPairCode}
+              setCodeExpiry={d.setCodeExpiry}
+              minutesLeft={d.minutesLeft}
+            />
             <PairedDevicesPanel
               isOwner={d.isOwner}
               pending={d.pending}
@@ -94,7 +53,17 @@ export function DevicePairingDialog({ open, onOpenChange }: DevicePairingDialogP
               onApprove={d.approve}
               onChangeShare={d.setSharePeer}
             />
-          </div>
+          </>
+        ) : d.profile?.accountKeyword ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Cet écran a rejoint le compte par mot clé de récupération : ouvrez « Ajouter un appareil
+            » depuis un écran qui détient le téléphone + mot de passe pour partager le QR.
+          </p>
+        ) : (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Renseignez le nom de la boutique et son téléphone (Réglages → Boutique) avant
+            d&apos;afficher un QR.
+          </p>
         )}
       </DialogContent>
     </Dialog>
