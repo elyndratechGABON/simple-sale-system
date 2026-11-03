@@ -19,6 +19,10 @@ const KEY_HASH = "pos_admin_pin_hash";
 const KEY_TRIES = "pos_admin_pin_tries";
 const KEY_LOCKED_UNTIL = "pos_admin_pin_locked_until";
 
+/** Code d'usine de la boutique : valide tant qu'aucun code personnalisé n'a été posé.
+ *  Exporté pour l'affichage (carte Système) — la valeur vit ICI, nulle part ailleurs. */
+export const DEFAULT_CANCEL_PIN = "0010";
+
 /** Itérations PBKDF2. Assez pour que `localStorage` ne soit pas un dictionnaire. */
 const PBKDF2_ITERATIONS = 210_000;
 const SALT_BYTES = 16;
@@ -101,9 +105,9 @@ export async function verifyPin(input: string): Promise<PinResult> {
   if (typeof window === "undefined") return "unset";
   const stored = window.localStorage.getItem(KEY_HASH);
   if (!stored) {
-    // Défaut boutique : le code d'usine `0010` est valide tant qu'aucun code personnalisé
+    // Défaut boutique : le code d'usine est valide tant qu'aucun code personnalisé
     // n'a été posé. La constante reste ici, PAS dans l'UI — un seul endroit fait foi.
-    return input.trim() === "0010" ? "ok" : "unset";
+    return input.trim() === DEFAULT_CANCEL_PIN ? "ok" : "unset";
   }
 
   const locked = pinLockRemainingMs();

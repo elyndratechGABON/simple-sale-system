@@ -14,9 +14,8 @@ import { DevicesCard } from "./DevicesCard";
 import { InstallCard } from "./InstallCard";
 import { BackupCard } from "./BackupCard";
 import { DeleteShopCard } from "./DeleteShopCard";
-import { PinCard } from "./PinCard";
-import { RecoveryPinCard } from "./RecoveryPinCard";
 import { RecoveryKeywordCard } from "./RecoveryKeywordCard";
+import { CancelPinCard } from "./CancelPinCard";
 import { ResignCard } from "./ResignCard";
 import { SubscriptionCard } from "./SubscriptionCard";
 
@@ -121,11 +120,8 @@ export function SettingsPage() {
               DOM — les PIN d'annulation/récupération ne quittent pas l'écran patron). */}
           {estPatron && (
             <TabsContent value="systeme" className="mt-3 grid items-start gap-4 md:grid-cols-2">
-              <PinCard />
-              <RecoveryPinCard />
-              {/* Le code de récupération généré à la création du compte : le seul
-                  moyen de rattacher une caisse neuve après un téléphone perdu. */}
               <RecoveryKeywordCard />
+              <CancelPinCard />
               <InstallCard />
             </TabsContent>
           )}
