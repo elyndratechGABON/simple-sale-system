@@ -109,9 +109,6 @@ export const POSProductCard = memo(function POSProductCard({
 
         <div className="flex flex-1 flex-col gap-0.5 p-2.5">
           <p className="line-clamp-2 text-[13px] font-medium leading-tight">{product.name}</p>
-          <p className="text-base font-bold leading-tight text-primary tabular-nums">
-            {formatFCFA(product.price)}
-          </p>
           <p
             className={cn(
               "mt-auto pt-1 text-xs leading-none",
@@ -127,35 +124,40 @@ export const POSProductCard = memo(function POSProductCard({
         </div>
       </button>
 
-      {/* Bouton « + » explicite : sur mobile le tap sur la carte est parfois imprécis,
-          et le vendeur vise l'angle en bas à droite. Les deux cibles font la même chose,
-          donc aucune n'est un piège. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          add();
-        }}
-        onPointerDown={(e) => {
-          if (!onLongPress) return;
-          e.stopPropagation();
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          onLongPress?.(product);
-        }}
-        disabled={out}
-        aria-label={`Ajouter ${product.name}`}
-        className={cn(
-          "absolute bottom-2.5 right-2.5 flex h-10 w-10 items-center justify-center rounded-lg",
-          "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          out
-            ? "border border-border bg-muted text-muted-foreground"
-            : "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95",
-        )}
-      >
-        <Plus className="h-4 w-4" strokeWidth={2.5} />
-      </button>
+      {/* Prix + « + » dans UNE RANGÉE DE FLUX (mission Tecno) : le prix n'est plus
+          absolu SOUS le bouton vert — « 2 500 000 F CFA » sur un petit écran passait
+          dessous et disparaissait. `truncate` borne le prix à la place restante. */}
+      <div className="flex w-full items-center justify-between gap-2 px-2.5 pb-2.5">
+        <span className="min-w-0 flex-1 truncate text-base font-bold leading-tight text-primary tabular-nums">
+          {formatFCFA(product.price)}
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            add();
+          }}
+          onPointerDown={(e) => {
+            if (!onLongPress) return;
+            e.stopPropagation();
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onLongPress?.(product);
+          }}
+          disabled={out}
+          aria-label={`Ajouter ${product.name}`}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+            "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            out
+              ? "border border-border bg-muted text-muted-foreground"
+              : "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95",
+          )}
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+        </button>
+      </div>
 
       {/* Quantité déjà au panier. `aria-live` : le vendeur garde les yeux sur la grille,
           la pastille est le seul retour qu'il obtient sans quitter sa place. */}

@@ -34,7 +34,11 @@ export function LoadingScreen() {
 
       <motion.h1
         aria-label={BRAND}
-        className="relative flex flex-wrap justify-center text-3xl font-black tracking-[0.28em] text-foreground sm:text-4xl"
+        /* SPLIT TECNO (mission responsive) : chaque lettre était un ENFANT FLEX d'un
+           conteneur `flex-wrap` — il coupait au milieu d'un mot (« ELYNDRA CAISS/E »).
+           Ici : une ligne JAMAIS réplée (nowrap), taille mobile revue pour tenir dans
+           ~320px même avec le tracking large. */
+        className="relative flex justify-center whitespace-nowrap text-[1.35rem] font-black tracking-[0.15em] text-foreground sm:text-4xl sm:tracking-[0.28em] md:text-5xl"
         initial={{ opacity: 0, y: 10, filter: "blur(6px)" }}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.7, ease: "easeOut" }}
