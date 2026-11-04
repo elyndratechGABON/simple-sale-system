@@ -46,7 +46,8 @@ export function ProductPanel({
           </div>
         )}
       </div>
-      {/* Recherche : la grille se resserre pendant la frappe (même recette que Stocks).
+      {/* Recherche : l'input est fluide, la grille se resserre au silence de frappe
+          (debounce 300 ms, recette partagée avec Stocks).
           La barre est cappée (`max-w-md`) : à ne pas contraindre, elle poussait la grille
           hors de sa colonne (minmax(0, 1fr) l'élargissait à l'infini). */}
       <div className="relative mt-3 w-full max-w-md">

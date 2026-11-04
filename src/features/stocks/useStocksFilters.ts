@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Product } from "@/lib/db";
 import { stateOf, type SortKey, type StatusFilter } from "./stock-state";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 /** Recherche / filtres / tri de la page Stocks, avec les dérivés associés
  *  (résumé, produits en difficulté, liste visible) regroupés au même endroit. */
@@ -9,6 +10,9 @@ export function useStocksFilters(products: Product[], soldQtyByProduct: Map<stri
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("name");
+  // La recherche seule est debouncée : `search` reste brut pour l'input, la liste
+  // visible (filtre + tri de tout le catalogue) ne recalcule qu'au silence de frappe.
+  const debouncedSearch = useDebouncedValue(search, 300);
 
   const stats = useMemo(() => {
     let value = 0;
@@ -37,7 +41,7 @@ export function useStocksFilters(products: Product[], soldQtyByProduct: Map<stri
   );
 
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     let list = products.filter((p) => {
       if (q && !p.name.toLowerCase().includes(q) && !p.category.toLowerCase().includes(q))
         return false;
@@ -73,7 +77,7 @@ export function useStocksFilters(products: Product[], soldQtyByProduct: Map<stri
       }
     });
     return list;
-  }, [products, search, statusFilter, categoryFilter, sortBy, soldQtyByProduct]);
+  }, [products, debouncedSearch, statusFilter, categoryFilter, sortBy, soldQtyByProduct]);
 
   return {
     search,

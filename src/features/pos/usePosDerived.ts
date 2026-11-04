@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Category, PaymentMethod, Product, Sale, SaleItem } from "@/lib/db";
 import type { Cashing } from "@/lib/pos/types";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 type DerivedInput = {
   products: Product[];
@@ -16,7 +17,9 @@ type DerivedInput = {
   payMethod: PaymentMethod;
 };
 
-/** Grille filtrée + totaux d'encaissement, tous purs et recalculés à chaque frappe. */
+/** Grille filtrée + totaux d'encaissement, tous purs. La RECHERCHE seule est debouncée
+ *  (300 ms) : l'input reste fluide, la grille de centaines de cartes ne refiltre qu'au
+ *  silence de frappe — chaque frappe ne re-rend plus tout. */
 export function usePosDerived({
   products,
   isService,
@@ -30,6 +33,7 @@ export function usePosDerived({
   cashGiven,
   payMethod,
 }: DerivedInput) {
+  const debouncedSearch = useDebouncedValue(search, 300);
   const filtered = useMemo(() => {
     let list = products;
     // Cluster service : filtrer par type (prestations vs produits)
@@ -42,13 +46,14 @@ export function usePosDerived({
     if (!isService && filter !== "Tous") {
       list = list.filter((p) => p.category === filter);
     }
-    // Recherche par nom : la grille se resserre pendant la frappe, sans toucher aux états.
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
+    // Recherche par nom (debouncée) : la grille se resserre au silence de frappe,
+    // sans toucher aux états.
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase();
       list = list.filter((p) => p.name.toLowerCase().includes(q));
     }
     return list;
-  }, [products, filter, search, isService, serviceTab]);
+  }, [products, filter, debouncedSearch, isService, serviceTab]);
 
   // Total du panier
   const total = lines.reduce((s, l) => s + l.price * l.quantity, 0);
