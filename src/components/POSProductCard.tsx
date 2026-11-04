@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { Package, Plus } from "lucide-react";
+import { memo, useRef } from "react";
+import { Package, Tag } from "lucide-react";
 import type { Product } from "@/lib/db";
 import { cardPhotoOf } from "@/lib/card-display";
 import { formatFCFA } from "@/lib/format";
@@ -14,13 +14,10 @@ import { cn } from "@/lib/utils";
  * stock à savoir s'il reste quelque chose. Tout le reste lui vole de la place et le
  * ralentit — au dixième article de la journée, pas au centième.
  *
- * Le contrat tient en une phrase : un tap ajoute au panier. Pas d'ouverture de fiche,
- * pas d'ouvrir du dialogue. La fiche produit reste un outil de gestion, il vit dans Stocks.
- *
- * PHASE 2 (cahier des charges mission « cartes POS mobile ») : carte COMPACTE
- * flex-row, image 35 % à gauche, texte à droite, prix ET bouton « + » alignés en
- * bas de la colonne. Aucune bande colorée : le seul signal visuel de stock c'est
- * le TEXTE (rupture en `destructive`).
+ * Le contrat tient en une phrase : un tap n'importe où ajoute au panier — ou ouvre le
+ * sélecteur de variantes quand le produit en a (c'est le parent qui décide, via
+ * `onAdd`). Le plus long press (dépassement 500 ms au relâchement) ouvre la saisie
+ * manuelle de la quantité, jamais un ajout.
  */
 export const POSProductCard = memo(function POSProductCard({
   product,
@@ -47,61 +44,68 @@ export const POSProductCard = memo(function POSProductCard({
   // du produit (posItem) — cf. cardPhotoOf.
   const visuel = cardPhotoOf(product);
 
-  const add = () => {
+  /** Press TOP horodaté : démasque l'appui long au relâchement pour NE PAS ajouter
+   *  un article quand l'intention était d'ouvrir la quantité manuelle. */
+  const pressStart = useRef(0);
+
+  // Prix de BASE : le vrai prix du produit (le choix de variante ajuste ensuite en
+  // panier). Plus de préfixe « Dès ».
+  const priceText = formatFCFA(product.price);
+  const variantCount = product.variants?.length ?? 0;
+
+  const handleTap = () => {
+    // Appui long = intention différente (quantité manuelle) : taire l'ajout.
+    if (Date.now() - pressStart.current > 500) return;
     if (out) return;
     onAdd(product);
   };
 
-  // Prix affiché avec son libellé : le texte complet sert AUSSI au choix de taille
-  // (« Dès 8 999 FCFA » plus long qu'un simple prix → réduction en `text-sm`),
-  // le FCFA ne descend JAMAIS à la ligne (whitespace-nowrap, sans truncate).
-  const priceText =
-    (product.variants?.length ?? 0) > 0
-      ? `Dès ${formatFCFA(product.price)}`
-      : formatFCFA(product.price);
-
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={handleTap}
+      onPointerDown={() => {
+        pressStart.current = Date.now();
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onLongPress?.(product);
+      }}
+      // Alternative clavier à l'appui long (audit design §3) : Maj+Entrée ouvre la
+      // saisie manuelle de la quantité, pour qui n'a pas d'écran tactile.
+      onKeyDown={(e) => {
+        if (onLongPress && e.key === "Enter" && e.shiftKey) {
+          e.preventDefault();
+          onLongPress(product);
+          return;
+        }
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleTap();
+        }
+      }}
+      aria-label={`Ajouter ${product.name} au panier`}
+      title={`Ajouter au panier — Maj+Entrée : quantité manuelle${out ? " — rupture" : ""}`}
+      aria-keyshortcuts="Shift+Enter"
       className={cn(
-        "relative flex h-full flex-row overflow-hidden rounded-xl border border-border/50",
-        "bg-white p-3 shadow-sm transition-colors dark:bg-card",
-        out ? "opacity-60" : "hover:border-primary/50 focus-within:border-primary/60",
+        "relative flex flex-row overflow-hidden rounded-xl border border-border/50",
+        "min-h-[100px] flex-row p-3 shadow-sm transition-colors cursor-pointer",
+        "bg-card hover:bg-muted/50",
+        out
+          ? "opacity-60 cursor-not-allowed"
+          : "hover:border-primary/60 focus-visible:border-primary/60",
         className,
       )}
     >
-      {/* Zone de tap ENTIERE de la carte : un calque transparent au-dessus du contenu.
-          Un <button> dans le flux rendrait le bouton « + » imbriqué (HTML prohibé). */}
-      <button
-        type="button"
-        onClick={add}
-        // Alternative clavier à l'appui long (audit design §3) : Maj+Entrée ouvre la
-        // saisie manuelle de la quantité, pour qui n'a pas d'écran tactile.
-        onKeyDown={(e) => {
-          if (!onLongPress || out) return;
-          if (e.key === "Enter" && e.shiftKey) {
-            e.preventDefault();
-            onLongPress(product);
-          }
-        }}
-        disabled={out}
-        aria-label={`Ajouter ${product.name} au panier`}
-        title={`Ajouter au panier — Maj+Entrée : quantité manuelle${out ? " — rupture" : ""}`}
-        aria-keyshortcuts="Shift+Enter"
-        className="absolute inset-0 z-0 cursor-default focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-      />
-
-      {/* IMAGE (gauche, ~32 %) : carrée, coins arrondis, object-cover dans son cadre. */}
-      <div className="aspect-square w-[33%] shrink-0 overflow-hidden rounded-lg bg-muted/30">
+      {/* IMAGE (gauche, ~35 %) : carrée, coins arrondis, object-cover dans son cadre. */}
+      <div className="aspect-square w-[35%] shrink-0 overflow-hidden rounded-lg bg-muted/30">
         {visuel ? (
           <img
             src={visuel}
             alt=""
             loading="lazy"
             decoding="async"
-            // Photo PLEINE dans le cadre : object-cover évite les bandes vides et les
-            // étirements (audit design §3). Recadrage maîtrisé par le parent
-            // (aspect-square + overflow-hidden) : la reconnaissance de l'article passe
-            // par la largeur de l'image, pas par ses marges.
             className="h-full w-full object-cover object-center"
           />
         ) : (
@@ -112,67 +116,32 @@ export const POSProductCard = memo(function POSProductCard({
         )}
       </div>
 
-      {/* INFORMATIONS (droite) : nom (2 lignes max) + stock au sommet, prix et
-          bouton « + » cloués au bas de la colonne. Le conteneur `justify-between`
-          jette le bas EN BAS même quand le nom prend 1 ou 2 lignes. */}
-      <div className="ml-2.5 flex min-w-0 flex-1 flex-col justify-between">
-        <div className="min-w-0">
-          <p className="line-clamp-2 break-words font-semibold text-foreground text-[13px] leading-tight">
-            {product.name}
-          </p>
-        </div>
+      {/* INFORMATIONS (droite) : nom, stock, badge variantes, prix cloués au bas. */}
+      <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between">
+        <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
+          {product.name}
+        </p>
         {/* Le stock IMPRIMÉ vient du montant restant APRÈS ce qui est déjà au panier, pas
             du stock brut : afficher 8 alors qu'il ne reste que 3 après 5 au panier
-            ferait vendre un article qu'on n'a plus. Rupture/stock bas gardent leur
-            signal coloré — jamais une bande montée en bordure. */}
+            ferait vendre un article qu'on n'a plus. */}
         <p
           className={cn(
-            "text-xs text-muted-foreground",
+            "mt-0.5 text-xs text-muted-foreground",
             out && "font-medium text-destructive",
             low && "font-medium text-amber-600 dark:text-amber-400",
           )}
         >
           {out ? "Rupture" : unlimited ? "Illimité" : `Stock : ${remaining}`}
         </p>
-        {/* Prix + bouton : `flex-wrap` — quand la largeur manque (mobile 2 colonnes),
-            le prix passe sur sa propre ligne AU-DESSUS du bouton : jamais coupé,
-            jamais chevauchant. Le prix se réduit légèrement sur libellé long. */}
-        <div className="mt-1.5 flex w-full flex-wrap items-end justify-between gap-x-2 gap-y-0.5">
-          <span
-            className={cn(
-              "font-bold leading-tight text-primary tabular-nums whitespace-nowrap",
-              priceText.length > 14 ? "text-xs xs:text-[13px]" : "text-[15px] xs:text-base",
-              "min-w-0",
-            )}
-          >
-            {priceText}
+        {variantCount > 0 && (
+          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+            <Tag className="h-3 w-3" />
+            {variantCount === 1 ? "1 variante" : `${variantCount} variantes`}
           </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              add();
-            }}
-            onPointerDown={(e) => {
-              if (!onLongPress) return;
-              e.stopPropagation();
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              onLongPress?.(product);
-            }}
-            disabled={out}
-            aria-label={`Ajouter ${product.name}`}
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary",
-              "text-primary-foreground transition-colors focus-visible:outline-none",
-              "focus-visible:ring-2 focus-visible:ring-ring",
-              out ? "bg-muted text-muted-foreground" : "hover:bg-primary/90 active:scale-95",
-            )}
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-          </button>
-        </div>
+        )}
+        <span className="mt-auto pt-1 font-bold text-base text-primary tabular-nums whitespace-nowrap">
+          {priceText}
+        </span>
       </div>
 
       {/* Quantité déjà au panier. `aria-live` : le vendeur garde les yeux sur la grille,
