@@ -56,7 +56,7 @@ function TutorialProductFields({ t, onSaved }: { t: ClusterTutorialApi; onSaved:
 
   return (
     <StepShell icon={Package} title={title} description={description}>
-      <ProductFormFields form={form} />
+      <ProductFormFields form={form} isOnboarding />
       <div className="flex items-center justify-between gap-2 border-t pt-4">
         <Button variant="ghost" size="sm" onClick={() => t.setSubStep("done")}>
           {t.addedCount > 0 ? "J'ai terminé" : "Passer"}
