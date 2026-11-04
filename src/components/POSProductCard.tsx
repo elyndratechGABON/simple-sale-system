@@ -90,7 +90,7 @@ export const POSProductCard = memo(function POSProductCard({
       aria-keyshortcuts="Shift+Enter"
       className={cn(
         "relative flex flex-row overflow-hidden rounded-xl border border-border/50",
-        "min-h-[100px] flex-row p-3 shadow-sm transition-colors cursor-pointer",
+        "min-h-[84px] flex-row p-3 shadow-sm transition-colors cursor-pointer",
         "bg-card hover:bg-muted/50",
         out
           ? "opacity-60 cursor-not-allowed"
@@ -98,11 +98,11 @@ export const POSProductCard = memo(function POSProductCard({
         className,
       )}
     >
-      {/* IMAGE (gauche, ~35 %) : carrée, coins arrondis, object-cover dans son cadre.
-          `self-start` : le parent étire les enfants align-items:stretch — sans lui,
-          le carré s'allonge en bande dès que la carte est plus haute que large
-          (nom à 2 lignes). Ancre en haut : la photo reste un VRAI carré. */}
-      <div className="aspect-square w-[35%] shrink-0 self-start overflow-hidden rounded-lg bg-muted/30">
+      {/* IMAGE : cadre FIXE 56 × 56 (`h-14 w-14 shrink-0 self-center`) — la taille
+          de l'image ne dépend plus de la largeur ni de la hauteur de la carte :
+          TOUTES les cartes ont la même silhouette, quel que soit le badge, le nom
+          ou la place dans la grille. `object-cover` remplit le cadre sans déformer. */}
+      <div className="h-14 w-14 shrink-0 self-center overflow-hidden rounded-lg bg-muted/30">
         {visuel ? (
           <img
             src={visuel}
@@ -112,17 +112,18 @@ export const POSProductCard = memo(function POSProductCard({
             className="h-full w-full object-cover object-center"
           />
         ) : (
-          /* Même carré qu'une image : la carte sans photo garde sa hauteur constante. */
+          /* Même cadre qu'une image : la carte sans photo garde la même silhouette. */
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
             <Package className="h-6 w-6" />
           </div>
         )}
       </div>
 
-      {/* INFORMATIONS (droite) : respirant — p-2 + h-full ; le nom coupe sur DEUX
-          lignes (plus élégant que « degr… »), le prix plus petit si besoin. */}
-      <div className="ml-2 flex h-full p-2 min-w-0 flex-1 flex-col justify-between">
-        <p className="line-clamp-2 break-words font-semibold text-foreground text-[13px] leading-tight">
+      {/* INFORMATIONS (droite) : nom UNE ligne (truncate), stock, badge variantes,
+          prix cloués bas — chaque bloc a une hauteur constante d'une carte à
+          l'autre, d'où des rangées de la même taille partout. */}
+      <div className="ml-3 flex h-full p-2 min-w-0 flex-1 flex-col justify-between">
+        <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
           {product.name}
         </p>
         {/* Le stock IMPRIMÉ vient du montant restant APRÈS ce qui est déjà au panier, pas

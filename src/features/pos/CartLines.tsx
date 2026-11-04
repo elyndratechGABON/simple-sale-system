@@ -20,7 +20,7 @@ export function CartLines({ pos }: { pos: PosController }) {
             : "Ajoutez des articles depuis la grille."}
         </p>
       ) : (
-        <div className="relative space-y-2 max-h-64 sm:max-h-64 max-sm:max-h-[45dvh] overflow-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+        <div className="relative space-y-2 max-h-64 sm:max-h-64 max-sm:max-h-[45dvh] overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
           {/* Fondu bas : la ligne coupée au bord du rouleau annonce qu'il reste des
               choses dessous — sans queue de liste fantôme. */}
           <div

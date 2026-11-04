@@ -78,7 +78,10 @@ export function PosLine({ line, isService, onRemoveOne, onAddOne, onRemove }: Po
             </span>
           )}
         </div>
-        <div className="text-xs text-muted-foreground">
+        {/* Prix unitaire × qté : `truncate` — les espaces insécables de formatFCFA
+            empêchent ce bloc de se replier ; sans lui, le parent prenait le clair
+            minimum dans SON conteneur min-w-0 c'était la scrollbar horizontale du panier. */}
+        <div className="text-xs text-muted-foreground truncate">
           {formatFCFA(line.price)} × {line.quantity}
         </div>
       </div>
