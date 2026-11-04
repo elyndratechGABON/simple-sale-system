@@ -66,43 +66,54 @@ export function ProductPanel({
             className="h-11 rounded-xl pl-9 pr-10 bg-muted/50 focus:ring-2 focus:ring-primary"
           />
         </div>
-        {!pos.isService && pos.categories.length > 0 && (
-          <>
-            {/* Chips : défilement horizontal (pas de wrap) — la rangée reste UNE
-                ligne, la recherche garde toute sa largeur utile. */}
-            <div className="flex max-w-[42%] shrink-0 items-center gap-1.5 overflow-x-hidden">
-              <FilterChip active={pos.filter === "Tous"} onClick={() => pos.setFilter("Tous")}>
-                Tous
-              </FilterChip>
-              {pos.categories.slice(0, 4).map((c) => (
-                <FilterChip key={c} active={pos.filter === c} onClick={() => pos.setFilter(c)}>
-                  {c}
-                </FilterChip>
-              ))}
-            </div>
-            {/* « + » : déplié, TOUTES les catégories (y compris celles cachées par
-                la troncature de la rangée) s'affichent en wrap sous la recherche. */}
-            <button
-              type="button"
-              onClick={() => setMoreOpen((v) => !v)}
-              aria-expanded={moreOpen}
-              aria-label={
-                moreOpen ? "Masquer toutes les catégories" : "Afficher toutes les catégories"
-              }
-              title={moreOpen ? "Masquer les catégories" : "Voir toutes les catégories"}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-card text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-            >
-              {moreOpen ? <ChevronUp className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            </button>
-          </>
-        )}
+        {!pos.isService &&
+          pos.categories.length > 0 &&
+          (() => {
+            // Les 4 PREMIÈRES categories tiennent dans la rangée à côté de la
+            // recherche ; le reste est « caché » : le « + » n'existe que s'il y
+            // en a — et il n'affiche QUE CELLES-LÀ (jamais les déjà visibles).
+            const visible = pos.categories.slice(0, 4);
+            const hidden = pos.categories.slice(4);
+            return (
+              <>
+                <div className="flex max-w-[42%] shrink-0 items-center gap-1.5 overflow-x-hidden">
+                  <FilterChip active={pos.filter === "Tous"} onClick={() => pos.setFilter("Tous")}>
+                    Tous
+                  </FilterChip>
+                  {visible.map((c) => (
+                    <FilterChip key={c} active={pos.filter === c} onClick={() => pos.setFilter(c)}>
+                      {c}
+                    </FilterChip>
+                  ))}
+                </div>
+                {hidden.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen((v) => !v)}
+                    aria-expanded={moreOpen}
+                    aria-label={
+                      moreOpen
+                        ? "Masquer les autres catégories"
+                        : `Afficher les ${hidden.length} autres catégories`
+                    }
+                    title={
+                      moreOpen
+                        ? "Masquer les catégories"
+                        : `Afficher les ${hidden.length} catégories cachées`
+                    }
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-card text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                  >
+                    {moreOpen ? <ChevronUp className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  </button>
+                )}
+              </>
+            );
+          })()}
       </div>
-      {moreOpen && !pos.isService && pos.categories.length > 0 && (
+      {/* Déplié : UNIQUEMENT les catégories cachées par la troncature de la rangée. */}
+      {moreOpen && !pos.isService && pos.categories.length > 4 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
-          <FilterChip active={pos.filter === "Tous"} onClick={() => pos.setFilter("Tous")}>
-            Tous
-          </FilterChip>
-          {pos.categories.map((c) => (
+          {pos.categories.slice(4).map((c) => (
             <FilterChip key={c} active={pos.filter === c} onClick={() => pos.setFilter(c)}>
               {c}
             </FilterChip>
