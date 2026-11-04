@@ -98,8 +98,11 @@ export const POSProductCard = memo(function POSProductCard({
         className,
       )}
     >
-      {/* IMAGE (gauche, ~35 %) : carrée, coins arrondis, object-cover dans son cadre. */}
-      <div className="aspect-square w-[35%] shrink-0 overflow-hidden rounded-lg bg-muted/30">
+      {/* IMAGE (gauche, ~35 %) : carrée, coins arrondis, object-cover dans son cadre.
+          `self-start` : le parent étire les enfants align-items:stretch — sans lui,
+          le carré s'allonge en bande dès que la carte est plus haute que large
+          (nom à 2 lignes). Ancre en haut : la photo reste un VRAI carré. */}
+      <div className="aspect-square w-[35%] shrink-0 self-start overflow-hidden rounded-lg bg-muted/30">
         {visuel ? (
           <img
             src={visuel}

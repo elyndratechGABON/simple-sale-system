@@ -97,7 +97,10 @@ export function VirtualizedGrid<T>({
               style={{ transform: `translateY(${row.start - scrollMargin}px)` }}
             >
               {line.map((cell) => (
-                <div key={cell.key} className="min-w-0">
+                // `h-full` : la cellule épouse la hauteur de LA RANGÉE — les cartes
+                // d'une même ligne ont toutes la même taille (règle des tailles
+                // homogènes). Sans lui, chaque carte prend sa hauteur propre.
+                <div key={cell.key} className="h-full min-w-0">
                   {renderItem(cell.item)}
                 </div>
               ))}
