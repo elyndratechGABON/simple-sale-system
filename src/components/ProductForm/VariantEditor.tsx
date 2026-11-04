@@ -3,6 +3,7 @@ import { ImagePlus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatFCFA } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ProductFormState } from "./useProductForm";
 
@@ -24,6 +25,16 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
           </p>
         </div>
       </div>
+      {/* Le PRIX DU PRODUIT est la référence (mission variantes) : chaque variante
+          saisit un prix SPÉCIFIQUE, et vide = héritage. Règle affichée, plus de
+          conflit "qui écrase qui". */}
+      <p className="rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+        Prix de base (produit)&nbsp;:{" "}
+        <span className="font-semibold text-foreground tabular-nums">
+          {formatFCFA(Number(form.price) || 0)}
+        </span>{" "}
+        — laisse le prix spécifique vide pour l&apos;utiliser.
+      </p>
       <div className="space-y-2">
         {variants.map((v) => (
           <div
@@ -59,6 +70,22 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
                 value={v.name}
                 onChange={(e) => updateVariant(v.id, { name: e.target.value })}
               />
+              <div className="col-span-2 sm:col-span-3">
+                <Label htmlFor={`prix-${v.id}`} className="text-[10px] font-medium">
+                  Prix spécifique (variante)
+                </Label>
+                <Input
+                  id={`prix-${v.id}`}
+                  className="h-10"
+                  placeholder="Vide = prix de base"
+                  inputMode="numeric"
+                  value={v.price}
+                  onChange={(e) =>
+                    updateVariant(v.id, { price: e.target.value.replace(/\D/g, "") })
+                  }
+                  title="Prix spécifique — vide : le produit fait foi"
+                />
+              </div>
               <Input
                 className="h-10"
                 placeholder="Coût"
@@ -66,14 +93,6 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
                 value={v.cost}
                 onChange={(e) => updateVariant(v.id, { cost: e.target.value.replace(/\D/g, "") })}
                 title="Coût d'achat"
-              />
-              <Input
-                className="h-10"
-                placeholder="Prix"
-                inputMode="numeric"
-                value={v.price}
-                onChange={(e) => updateVariant(v.id, { price: e.target.value.replace(/\D/g, "") })}
-                title="Prix de revente"
               />
               <Input
                 className="h-10"
