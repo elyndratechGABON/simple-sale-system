@@ -93,8 +93,10 @@ export function ProductPanel({
           items={pos.filtered}
           itemKey={(p) => p.id}
           rowClass={cn(
-            "grid grid-cols-2 gap-x-2.5 xs:gap-x-3 @sm:grid-cols-3 @2xl:grid-cols-4",
-            !pos.hasTables && "@md:grid-cols-4",
+            // MOBILE = 2 colonnes FIXES (@lg = conteneur ≥ 512 px) : à 360/390/430 px
+            // la grille reste 2×N, c'est l'intérieur de la carte qui se compacte.
+            "grid grid-cols-2 gap-x-2.5 xs:gap-x-3 @lg:grid-cols-3 @2xl:grid-cols-4",
+            !pos.hasTables && "@lg:grid-cols-4",
           )}
           gapYClass="pb-2.5 xs:pb-3"
           renderItem={(p) => {

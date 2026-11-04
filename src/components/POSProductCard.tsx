@@ -64,7 +64,7 @@ export const POSProductCard = memo(function POSProductCard({
     <div
       className={cn(
         "relative flex h-full flex-row overflow-hidden rounded-xl border border-border/50",
-        "bg-white shadow-sm transition-colors dark:bg-card",
+        "bg-white p-3 shadow-sm transition-colors dark:bg-card",
         out ? "opacity-60" : "hover:border-primary/50 focus-within:border-primary/60",
         className,
       )}
@@ -90,8 +90,8 @@ export const POSProductCard = memo(function POSProductCard({
         className="absolute inset-0 z-0 cursor-default focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       />
 
-      {/* IMAGE (gauche, 35 %) : carrée, coins arrondis, object-cover dans son cadre. */}
-      <div className="aspect-square w-[35%] shrink-0 overflow-hidden rounded-lg bg-muted/30">
+      {/* IMAGE (gauche, ~32 %) : carrée, coins arrondis, object-cover dans son cadre. */}
+      <div className="aspect-square w-[33%] shrink-0 overflow-hidden rounded-lg bg-muted/30">
         {visuel ? (
           <img
             src={visuel}
@@ -107,16 +107,20 @@ export const POSProductCard = memo(function POSProductCard({
         ) : (
           /* Même carré qu'une image : la carte sans photo garde sa hauteur constante. */
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            <Package className="h-7 w-7" />
+            <Package className="h-6 w-6" />
           </div>
         )}
       </div>
 
-      {/* INFORMATIONS (droite) : nom, stock, puis prix + bouton au bas. */}
-      <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between">
-        <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
-          {product.name}
-        </p>
+      {/* INFORMATIONS (droite) : nom (2 lignes max) + stock au sommet, prix et
+          bouton « + » cloués au bas de la colonne. Le conteneur `justify-between`
+          jette le bas EN BAS même quand le nom prend 1 ou 2 lignes. */}
+      <div className="ml-2.5 flex min-w-0 flex-1 flex-col justify-between">
+        <div className="min-w-0">
+          <p className="line-clamp-2 break-words font-semibold text-foreground text-[13px] leading-tight">
+            {product.name}
+          </p>
+        </div>
         {/* Le stock IMPRIMÉ vient du montant restant APRÈS ce qui est déjà au panier, pas
             du stock brut : afficher 8 alors qu'il ne reste que 3 après 5 au panier
             ferait vendre un article qu'on n'a plus. Rupture/stock bas gardent leur
@@ -130,12 +134,14 @@ export const POSProductCard = memo(function POSProductCard({
         >
           {out ? "Rupture" : unlimited ? "Illimité" : `Stock : ${remaining}`}
         </p>
-        <div className="flex w-full items-end justify-between gap-2">
+        {/* Prix + bouton : `flex-wrap` — quand la largeur manque (mobile 2 colonnes),
+            le prix passe sur sa propre ligne AU-DESSUS du bouton : jamais coupé,
+            jamais chevauchant. Le prix se réduit légèrement sur libellé long. */}
+        <div className="mt-1.5 flex w-full flex-wrap items-end justify-between gap-x-2 gap-y-0.5">
           <span
             className={cn(
-              "font-bold leading-tight text-primary tabular-nums whitespace-nowrap text-lg",
-              // « Dès 18 999 FCFA » dépasse du card : réduire sans le couper.
-              priceText.length > 14 && "text-sm",
+              "font-bold leading-tight text-primary tabular-nums whitespace-nowrap",
+              priceText.length > 14 ? "text-xs xs:text-[13px]" : "text-[15px] xs:text-base",
               "min-w-0",
             )}
           >
@@ -158,7 +164,7 @@ export const POSProductCard = memo(function POSProductCard({
             disabled={out}
             aria-label={`Ajouter ${product.name}`}
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary",
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary",
               "text-primary-foreground transition-colors focus-visible:outline-none",
               "focus-visible:ring-2 focus-visible:ring-ring",
               out ? "bg-muted text-muted-foreground" : "hover:bg-primary/90 active:scale-95",
