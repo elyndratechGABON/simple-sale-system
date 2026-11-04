@@ -60,6 +60,9 @@ export interface Sale extends SyncFields {
   seller_name?: string;
   /** Identifiant d'appareil de la caisse qui a encaissé — relie la vente à son écran. */
   seller_device_id?: string;
+  /** Identifiant d'appareil de la caisse qui a OUVERT la table — pose dans
+   *  `table.opened` ; permet d'afficher « Moi » vs le nom du collègue/propriétaire. */
+  created_by_device_id?: string;
   /** QUI a ouvert cette table : « Propriétaire » ou le nom d'employé déclaré.
    *  Voyagé dans `table.opened` / `table.updated` — les autres écrans affichent
    *  « Servi par … » sur leur plan de salle. */

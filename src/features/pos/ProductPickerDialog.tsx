@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +54,9 @@ export function ProductPickerDialog({
     await pos.addToSaleMut.mutateAsync({ saleId, lines });
     onClose();
   }
+  // GUARDE ANTI-DOUBLE-CLIC : openTable/addRound émettent des ops P2P en transaction
+  // (et relancent le push relais) — pendant la course, le bouton est muet + spinner.
+  const busy = pos.openMut.isPending || pos.addToSaleMut.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -103,8 +106,16 @@ export function ProductPickerDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             <X className="h-4 w-4 mr-2" /> Annuler
           </Button>
-          <Button onClick={handleFinish} disabled={items.length === 0}>
-            <Check className="h-4 w-4 mr-2" /> Sauvegarder
+          <Button onClick={handleFinish} disabled={items.length === 0 || busy}>
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enregistrement…
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4 mr-2" /> Sauvegarder
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

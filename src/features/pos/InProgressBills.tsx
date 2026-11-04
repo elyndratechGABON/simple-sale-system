@@ -7,6 +7,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatFCFA } from "@/lib/format";
 import type { Sale } from "@/lib/db";
+import { getCachedIdentity } from "@/lib/syncengine/identity";
 import { PinDialog } from "@/components/PinDialog";
 import type { PosController } from "./usePos";
 
@@ -40,12 +41,21 @@ export function InProgressBills({ pos, onCheckout }: InProgressBillsProps) {
                 </span>
               </div>
               {sale.opened_at && (
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground truncate">
                   Ouverte à{" "}
                   {new Date(sale.opened_at).toLocaleTimeString("fr-FR", {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
+                  {/* QUI l'a ouverte : « Moi » (même appareil) ou le nom porté
+                      par l'op table.opened (employé / Propriétaire). */}
+                  {sale.employee_name
+                    ? ` · ${
+                        sale.created_by_device_id === getCachedIdentity()?.deviceId
+                          ? "Moi"
+                          : sale.employee_name
+                      }`
+                    : ""}
                 </div>
               )}
             </div>

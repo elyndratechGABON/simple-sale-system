@@ -63,6 +63,8 @@ export async function openTable(label: string, clientName?: string): Promise<Sal
     table: label,
     status: "open",
     employee_name,
+    // Attribution : le pair distingue « Moi » vs « Gérald » par cet id.
+    created_by_device_id: identity.deviceId,
     ...(clientName ? { client_name: clientName } : {}),
     ...touch(),
   };

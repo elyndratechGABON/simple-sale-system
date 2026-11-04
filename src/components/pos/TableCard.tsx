@@ -12,6 +12,7 @@ import { useRef } from "react";
 import { CreditCard, Layers } from "lucide-react";
 import type { Sale } from "@/lib/db";
 import { formatFCFA, formatTime } from "@/lib/format";
+import { getCachedIdentity } from "@/lib/syncengine/identity";
 import { cn } from "@/lib/utils";
 import { LONG_PRESS_MS } from "@/lib/pos/types";
 import type { TableVisualInfo } from "@/features/pos/usePosData";
@@ -55,6 +56,9 @@ export function TableCard({
   const avatars = info?.products ?? [];
   const rounds = info?.rounds ?? 0;
   const surplus = avatars.length - MAX_AVATARS;
+  // Attribution : « Moi » si CET écran a ouvert la table (id d'appareil porté
+  // par l'op `table.opened`), sinon le nom du serveur/propriétaire.
+  const meDeviceId = getCachedIdentity()?.deviceId;
 
   return (
     <div
@@ -173,10 +177,15 @@ export function TableCard({
                   )}
                   title={table.employee_name ?? undefined}
                 >
-                  {/* QUI sert la table : voyagé dans `table.opened` /
-                      `table.updated` — les autres écrans savent qui a l'addition. */}
-                  {table.employee_name ? `${table.employee_name}` : ""}
-                  {table.employee_name && table.opened_at ? " · " : ""}
+                  {/* QUI sert la table : « Moi » si l'écran courant a ouvert
+                      (created_by_device_id), sinon Servi par <nom> — porté par
+                      `table.opened` / `table.updated`. */}
+                  {table.employee_name
+                    ? table.created_by_device_id === meDeviceId
+                      ? "Moi"
+                      : `Servi par ${table.employee_name}`
+                    : ""}
+                  {table.opened_at ? " · " : ""}
                   {table.opened_at
                     ? formatTime(table.opened_at)
                     : !table.employee_name

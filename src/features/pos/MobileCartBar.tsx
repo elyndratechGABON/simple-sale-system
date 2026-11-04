@@ -1,5 +1,6 @@
 import { ShoppingCart } from "lucide-react";
 import { formatFCFA } from "@/lib/format";
+import { getCachedIdentity } from "@/lib/syncengine/identity";
 import type { PosController } from "./usePos";
 
 /**
@@ -21,6 +22,15 @@ export function MobileCartBar({ pos }: { pos: PosController }) {
       <span className="flex min-w-0 flex-col items-start leading-tight">
         <span className="truncate text-xs opacity-90">
           {pos.activeTable ? `Table ${pos.activeTable.table}` : "Comptoir"}
+          {/* QUI porte l'addition : « Moi » si l'écran courant l'a ouverte
+              (created_by_device_id), sinon le nom du serveur ou du patron. */}
+          {pos.activeTable?.employee_name
+            ? ` · ${
+                pos.activeTable.created_by_device_id === getCachedIdentity()?.deviceId
+                  ? "Moi"
+                  : pos.activeTable.employee_name
+              }`
+            : ""}
           {pos.lines.length > 0
             ? ` · ${pos.lines.length} article${pos.lines.length > 1 ? "s" : ""}`
             : ""}
