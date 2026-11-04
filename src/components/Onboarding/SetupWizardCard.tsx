@@ -1,8 +1,7 @@
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { savePreferences } from "@/lib/settings";
+import { finishSetup } from "./finishSetup";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { finishSetup } from "./finishSetup";
 import type { SetupWizardApi } from "./useSetupWizard";
 import { PrivacyStep } from "./steps/PrivacyStep";
 import { NameStep } from "./steps/NameStep";
@@ -43,35 +42,23 @@ export function SetupWizardCard({ w }: { w: SetupWizardApi }) {
         {w.step === 4 && <ActivityStep w={w} />}
       </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between gap-2 border-t pt-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            savePreferences({ onboarded: true });
-            w.qc.invalidateQueries({ queryKey: ["preferences"] });
-            w.onComplete();
-          }}
-        >
-          Passer
-        </Button>
-        <div className="flex gap-2">
-          {w.step > 0 && (
-            <Button variant="outline" onClick={w.goPrev}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> Retour
-            </Button>
-          )}
-          {w.step < w.totalSteps - 1 ? (
-            <Button onClick={w.goNext} disabled={!w.canNext()}>
-              Suivant <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          ) : (
-            <Button onClick={() => void finishSetup(w)} disabled={!w.canNext()}>
-              <Check className="h-4 w-4 mr-1" /> Terminer
-            </Button>
-          )}
-        </div>
+      {/* Navigation — plus de « Passer » : le wizard se complète (le retour par
+          « Retour »), les préférences ne marquent `onboarded` qu'à la fin. */}
+      <div className="flex items-center justify-end gap-2 border-t pt-4">
+        {w.step > 0 && (
+          <Button variant="outline" onClick={w.goPrev}>
+            <ChevronLeft className="h-4 w-4 mr-1" /> Retour
+          </Button>
+        )}
+        {w.step < w.totalSteps - 1 ? (
+          <Button onClick={w.goNext} disabled={!w.canNext()}>
+            Suivant <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        ) : (
+          <Button onClick={() => void finishSetup(w)} disabled={!w.canNext()}>
+            <Check className="h-4 w-4 mr-1" /> Terminer
+          </Button>
+        )}
       </div>
     </div>
   );

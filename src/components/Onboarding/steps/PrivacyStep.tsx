@@ -27,9 +27,9 @@ export function PrivacyStep({ w }: { w: SetupWizardApi }) {
         />
         <ul className="space-y-2.5 text-sm">
           {[
-            { icon: HardDrive, text: "100% local — tout vit sur votre appareil" },
-            { icon: CloudOff, text: "Aucun envoi vers nos serveurs sans votre accord" },
-            { icon: EyeOff, text: "Pas de tracking, pas de collecte de données" },
+            { icon: HardDrive, text: "100% local — vos données vivent sur votre téléphone." },
+            { icon: CloudOff, text: "Aucune donnée envoyée sans votre accord." },
+            { icon: EyeOff, text: "Fonctionne sans internet." },
           ].map((item) => (
             <li key={item.text} className="flex items-start gap-2.5">
               <item.icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
