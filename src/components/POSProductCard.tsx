@@ -89,8 +89,8 @@ export const POSProductCard = memo(function POSProductCard({
       title={`Ajouter au panier — Maj+Entrée : quantité manuelle${out ? " — rupture" : ""}`}
       aria-keyshortcuts="Shift+Enter"
       className={cn(
-        "relative flex flex-row overflow-hidden rounded-xl border border-border/50",
-        "min-h-[84px] shadow-sm transition-colors cursor-pointer",
+        "relative flex h-[96px] flex-row overflow-hidden rounded-xl border border-border/50",
+        "shadow-sm transition-colors cursor-pointer",
         "bg-card hover:bg-muted/50",
         out
           ? "opacity-60 cursor-not-allowed"
@@ -98,11 +98,11 @@ export const POSProductCard = memo(function POSProductCard({
         className,
       )}
     >
-      {/* IMAGE (gauche) : pleine hauteur de la carte, collage au bord gauche
-          (coins arrondis à gauche via l'overflow de la carte) — comme le mock :
-          `object-cover` remplit le cadre sans déformer. La hauteur étant fixée
-          par la colonne d'infos (min-h 84px), l'image est identique partout. */}
-      <div className="w-[35%] shrink-0 self-stretch overflow-hidden bg-muted/30">
+      {/* IMAGE (gauche) : pleine hauteur de la carte — qui a une hauteur FIXE de
+          96px : sans hauteur fixe, l'image reprenait sa hauteur INTRINSÈQUE
+          (captures téléphone 9:19 = cartes géantes et désalignées). Le collage
+          au bord gauche et l'ombre arrondie viennent de l'overflow de la carte. */}
+      <div className="h-full w-[35%] shrink-0 overflow-hidden bg-muted/30">
         {visuel ? (
           <img
             src={visuel}
@@ -122,7 +122,7 @@ export const POSProductCard = memo(function POSProductCard({
       {/* INFORMATIONS (droite) : nom UNE ligne (truncate), stock, badge variantes,
           prix cloués bas — chaque bloc a une hauteur constante d'une carte à
           l'autre ; le padding vit ICI (l'image est full-bleed à gauche). */}
-      <div className="py-2 pl-3 pr-3 flex min-w-0 flex-1 flex-col justify-between">
+      <div className="flex h-full min-w-0 flex-1 flex-col justify-between py-2 pl-3 pr-3">
         <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
           {product.name}
         </p>
