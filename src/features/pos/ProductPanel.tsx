@@ -2,6 +2,7 @@ import { Search, Scissors, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CategoryCard, FilterChip } from "@/components/pos";
 import { POSProductCard } from "@/components/POSProductCard";
+import { VirtualizedGrid } from "@/components/VirtualizedGrid";
 import { cn } from "@/lib/utils";
 import { PopularStrip } from "./PopularStrip";
 import { EmptyCatalog } from "./EmptyCatalog";
@@ -86,19 +87,22 @@ export function ProductPanel({
           suit la LARGEUR DU CONTENEUR, pas l'écran — une modale de table étroite
           reste en 2 colonnes même sur tablette ; l'écran plein écran s'élargit. */}
       <div className="@container mt-5">
-        <div
-          className={cn(
-            "@sm:grid-cols-3 @2xl:grid-cols-4 grid grid-cols-2 gap-2.5 xs:gap-3",
+        {/* Virtualisée (règle #23) : seules les lignes visibles sont rendues — le DOM
+            de la grille ne grandit plus avec le catalogue, le scroll reste fluide. */}
+        <VirtualizedGrid
+          items={pos.filtered}
+          itemKey={(p) => p.id}
+          rowClass={cn(
+            "grid grid-cols-2 gap-x-2.5 xs:gap-x-3 @sm:grid-cols-3 @2xl:grid-cols-4",
             !pos.hasTables && "@md:grid-cols-4",
           )}
-        >
-          {pos.filtered.map((p) => {
+          gapYClass="pb-2.5 xs:pb-3"
+          renderItem={(p) => {
             const inCart = Object.entries(pos.cart)
               .filter(([k]) => k === p.id || k.startsWith(`${p.id}::`))
               .reduce((s, [, e]) => s + e.qty, 0);
             return (
               <POSProductCard
-                key={p.id}
                 product={p}
                 inCart={inCart}
                 onAdd={onProductSelect ?? pos.onProductClick}
@@ -111,8 +115,8 @@ export function ProductPanel({
                 }}
               />
             );
-          })}
-        </div>
+          }}
+        />
       </div>
       {pos.products.length > 0 && pos.filtered.length === 0 && (
         <p className="mt-3 py-10 text-center text-sm text-muted-foreground">

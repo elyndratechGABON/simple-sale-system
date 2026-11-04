@@ -19,8 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProductCard } from "@/components/ProductCard";
+import { VirtualizedGrid } from "@/components/VirtualizedGrid";
 import { stateOf } from "./stock-state";
-
 /** Liste des produits : états vides, ligne de compte, grille et menu d'actions. */
 export function ProductGrid({
   products,
@@ -45,7 +45,6 @@ export function ProductGrid({
   onEdit: (p: Product) => void;
   onMovements: (p: Product) => void;
   onDelete: (p: Product) => void;
-  /** Requête produits encore en cours : 6 cards fantômes, la grille ne saute pas. */
   isLoading?: boolean;
 }) {
   if (isLoading) {
@@ -61,21 +60,6 @@ export function ProductGrid({
       </div>
     );
   }
-
-  if (products.length === 0) {
-    return (
-      <div className="flat-card text-center space-y-3 p-10">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
-          <Package className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <p className="text-title font-medium">Aucun produit</p>
-        <p className="text-small text-muted-foreground">
-          Cliquez sur « Ajouter du stock » pour commencer.
-        </p>
-      </div>
-    );
-  }
-
   if (visible.length === 0) {
     return (
       <p className="py-10 text-center text-body text-muted-foreground">
@@ -83,12 +67,8 @@ export function ProductGrid({
       </p>
     );
   }
-
   return (
     <>
-      {/* Le compte affiche la file réellement rendue APRÈS filtres et recherche,
-          pas le total du catalogue : « 2 » quand deux articles correspondent
-          évite de faire défiler pour le découvrir. */}
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-small text-muted-foreground">Produits</p>
         <p className="text-body tabular-nums text-muted-foreground">
@@ -96,11 +76,12 @@ export function ProductGrid({
           {visible.length < products.length && ` sur ${products.length}`}
         </p>
       </div>
-      {/* Deux colonnes dès 360 px (§24), jusqu'à cinq sur grand écran. Les
-          dimensions des cards ne dépendent PAS des champs cochés : la grille ne
-          bouge jamais quand on change l'affichage. */}
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        {visible.map((p) => {
+      <VirtualizedGrid
+        items={visible}
+        itemKey={(p) => p.id}
+        rowClass="grid grid-cols-2 gap-x-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+        gapYClass="pb-2"
+        renderItem={(p) => {
           const state = stateOf(p);
           const isServiceItem = state === "service";
           return (
@@ -155,8 +136,8 @@ export function ProductGrid({
               }
             />
           );
-        })}
-      </div>
+        }}
+      />
     </>
   );
 }
