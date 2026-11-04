@@ -1,5 +1,7 @@
+// Icône du mouvement (mission design historique) : une ENTRÉE (stock qui monte)
+// ou une SORTIE (stock qui descend) — le sens se lit à l'icône, la nature au texte.
 import { useQuery } from "@tanstack/react-query";
-import { History } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, History } from "lucide-react";
 import { listStockMovements, type StockMovement } from "@/lib/db";
 import { formatRelative, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -10,34 +12,45 @@ import { REASON_LABEL } from "./stock-state";
 
 function MovementRow({ movement }: { movement: StockMovement }) {
   const positive = movement.delta > 0;
+  const Icon = positive ? ArrowDownCircle : ArrowUpCircle;
+  const quantite = Math.abs(movement.delta);
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span
+    <div className="flex items-center gap-2.5 rounded-lg border px-2.5 py-1.5">
+      {/* Sens du mouvement, à gauche : icône seule, lisible d'un coup d'œil. */}
+      <span
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+          positive
+            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            : "bg-destructive/10 text-destructive",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      {/* Produit + nature, au centre (les deux tronquent, jamais de débordement). */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{movement.product_name}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {REASON_LABEL[movement.reason]}
+          {movement.supplier ? ` · ${movement.supplier}` : ""}
+          {movement.note ? ` · ${movement.note}` : ""}
+        </p>
+      </div>
+      {/* Quantité PUIS heure, à droite : la colonne qui se compare en balayant. */}
+      <div className="shrink-0 text-right">
+        <p
           className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-            positive
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : "bg-destructive/10 text-destructive",
+            "text-sm font-bold leading-tight tabular-nums",
+            positive ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
           )}
         >
           {positive ? "+" : "−"}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">
-            {movement.product_name} ×{Math.abs(movement.delta)}
-          </p>
-          <p className="truncate text-xs text-muted-foreground">
-            {REASON_LABEL[movement.reason]}
-            {movement.supplier ? ` · ${movement.supplier}` : ""}
-            {movement.note ? ` · ${movement.note}` : ""}
-          </p>
-        </div>
+          {quantite}
+        </p>
+        <p className="text-[11px] leading-tight text-muted-foreground">
+          {formatRelative(movement.created_at)} · {formatTime(movement.created_at)}
+        </p>
       </div>
-      <p className="shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-        {formatRelative(movement.created_at)}
-        <span className="block">{formatTime(movement.created_at)}</span>
-      </p>
     </div>
   );
 }
@@ -102,11 +115,9 @@ export function MovementsDialog({
 
   const content = (
     <>
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
-          <History className="h-4 w-4" /> Historique des mouvements
-        </DialogTitle>
-      </DialogHeader>
+      {/* TITRE EN DOUBLE CORRIGÉ (mission historique) : l'en-tête n'est rendu que
+          dans la modale desktop — sur mobile, le `DrawerTitle` joue ce rôle et le
+          second titre du contenu a été supprimé. */}
       {movements.length === 0 ? (
         <p className="rounded-lg border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
           Aucun mouvement enregistré. Réapprovisionnez un produit ou effectuez une vente.
@@ -138,7 +149,14 @@ export function MovementsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">{content}</DialogContent>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-4 w-4" /> Historique des mouvements
+          </DialogTitle>
+        </DialogHeader>
+        {content}
+      </DialogContent>
     </Dialog>
   );
 }
