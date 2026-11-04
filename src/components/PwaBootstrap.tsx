@@ -75,8 +75,13 @@ export function PwaBootstrap() {
     });
     // Vérifie stockage persistant au démarrage : si l'utilisateur accepte, les données
     // (historique des ventes, paramètres) ne seront plus évincées par le navigateur.
+    // TOAST ONE-SHOT (mission Étape 3) : le message ne part que LA PREMIÈRE fois —
+    // sinon il matraque l'écran à chaque lancement pour une information déjà acquise.
     void persistedStorageStatus().then((s) => {
       if (s === "persisted") {
+        const TOAST_KEY = "storage_toast_shown";
+        if (globalThis.localStorage.getItem(TOAST_KEY)) return;
+        globalThis.localStorage.setItem(TOAST_KEY, "1");
         toast("Stockage sécurisé activé", {
           description: "Vos données sont protégées même en cas de pression disque.",
           duration: 5000,
