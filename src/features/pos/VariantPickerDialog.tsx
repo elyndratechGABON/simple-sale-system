@@ -15,11 +15,10 @@ export function VariantPickerDialog({ pos }: { pos: PosController }) {
         </DialogHeader>
         {product && (
           <div className="grid gap-2 max-h-[65dvh] overflow-y-auto scroll-slim">
-            {/* Prix de BASE rappelé en tête : le marchant compare chaque déclinaison à
-                l'article simple — sinon il cherche le prix du produit quelque part
-                dans une liste de variantes. */}
+            {/* Prix de BASE rappelé en tête (mission variantes) : le vendeur compare
+                chaque déclinaison à l'article simple, en un regard. */}
             <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-              Produit de base&nbsp;:{" "}
+              Prix de base&nbsp;:{" "}
               <span className="font-semibold text-foreground tabular-nums">
                 {formatFCFA(product.price ?? 0)}
               </span>
@@ -51,16 +50,20 @@ export function VariantPickerDialog({ pos }: { pos: PosController }) {
                       className="h-11 w-11 shrink-0 rounded-lg border bg-muted/30 object-cover"
                     />
                   ) : null}
-                  <span className="flex-1 min-w-0 break-words">
-                    {v.name}
-                    {v.size ? ` · ${v.size}` : ""}
-                    {v.color ? ` · ${v.color}` : ""}
-                    {v.pointure ? ` · ${v.pointure}` : ""}
-                  </span>
-                  <span className="ml-2 flex shrink-0 items-center gap-2">
-                    <span className="font-semibold tabular-nums">
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate">
+                      {v.name}
+                      {v.size ? ` · ${v.size}` : ""}
+                      {v.color ? ` · ${v.color}` : ""}
+                      {v.pointure ? ` · ${v.pointure}` : ""}
+                    </span>
+                    {/* PRIX DE LA VARIANTE EN ÉVIDENCE (mission variantes) : c'est
+                        LE prix qui sera encaissé — plus de devinette. */}
+                    <span className="text-base font-bold text-primary tabular-nums">
                       {formatFCFA(v.price ?? product.price ?? 0)}
                     </span>
+                  </span>
+                  <span className="ml-2 flex shrink-0 items-center gap-2">
                     {Number.isFinite(v.stock) && (
                       <span className="text-xs opacity-60">
                         {(v.stock ?? 0) - cur} restant{(v.stock ?? 0) - cur !== 1 ? "s" : ""}

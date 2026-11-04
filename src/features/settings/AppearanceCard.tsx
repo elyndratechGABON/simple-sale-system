@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Trash2, Upload, UserRound } from "lucide-react";
 import { usePreferences } from "@/hooks/use-preferences";
 import { savePreferences } from "@/lib/settings";
-import { getSetting, setSetting } from "@/lib/db";
+import { getSetting, setSetting, getShopProfile } from "@/lib/db";
 import { ImageCropper } from "@/components/ImageCropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,12 @@ export function AppearanceCard({ showLogo = true }: { showLogo?: boolean }) {
   const { data: shopLogo } = useQuery({
     queryKey: ["shop_logo"],
     queryFn: async () => (await getSetting<string>(SETTING_SHOP_LOGO)) ?? null,
+  });
+  // Le PROPRIÉTAIRE, depuis la fiche (mission Identité) — jamais du champ libre.
+  const { data: profile } = useQuery({
+    queryKey: ["shop_profile"],
+    queryFn: getShopProfile,
+    staleTime: 60_000,
   });
   const photoInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +110,19 @@ export function AppearanceCard({ showLogo = true }: { showLogo?: boolean }) {
           Nom, photo de profil{showLogo ? " et logo" : ""} affichés dans l'en-tête.
         </p>
       </header>
+
+      {/* PROPRIÉTAIRE en tête de la carte (mission Identité) : c'est la première
+          information — qui tient cette caisse. `shop_profile` est la source, "Non
+          renseigné" plutôt qu'un champ vide. */}
+      <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+        <UserRound className="h-4 w-4 shrink-0 text-primary" />
+        <p className="min-w-0 flex-1 truncate text-small text-muted-foreground">
+          Propriétaire&nbsp;:{" "}
+          <span className="font-semibold text-foreground">
+            {profile?.ownerName?.trim() || "Non renseigné"}
+          </span>
+        </p>
+      </div>
 
       <div>
         <Label htmlFor="shop-name" className="text-body font-medium">

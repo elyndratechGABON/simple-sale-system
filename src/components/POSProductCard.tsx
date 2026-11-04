@@ -124,12 +124,15 @@ export const POSProductCard = memo(function POSProductCard({
         </div>
       </button>
 
-      {/* Prix + « + » dans UNE RANGÉE DE FLUX (mission Tecno) : le prix n'est plus
-          absolu SOUS le bouton vert — « 2 500 000 F CFA » sur un petit écran passait
-          dessous et disparaissait. `truncate` borne le prix à la place restante. */}
+      {/* Prix + « + » dans UNE RANGÉE DE FLUX (mission cartes produits) : le prix ne
+          descend JAMAIS à la ligne (`whitespace-nowrap` — « FCFA » ne se coupe plus),
+          la pastille "+" reste à droite. Un produit à VARIANTES affiche « Dès X FCFA » :
+          le prix réel dépend de la taille/couleur choisie. */}
       <div className="flex w-full items-center justify-between gap-2 px-2.5 pb-2.5">
-        <span className="min-w-0 flex-1 truncate text-base font-bold leading-tight text-primary tabular-nums">
-          {formatFCFA(product.price)}
+        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-base font-bold leading-tight text-primary tabular-nums">
+          {(product.variants?.length ?? 0) > 0
+            ? `Dès ${formatFCFA(product.price)}`
+            : formatFCFA(product.price)}
         </span>
         <button
           type="button"

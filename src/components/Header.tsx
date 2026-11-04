@@ -91,6 +91,14 @@ export function Header() {
     }
   }
 
+  // Rôle décide du nom affiché (mission header) : le PATRON voit le nom du
+  // PROPRIÉTAIRE (source shop_profile, repli préférences, défaut « Patron ») ;
+  // l'EMPLOYÉ voit le NOM DE LA BOUTIQUE — c'est l'enseigne qu'il sert.
+  const displayedName =
+    role === "owner"
+      ? profile?.ownerName?.trim() || ownerName?.trim() || "Patron"
+      : profile?.storeName?.trim() || workspaceName || "ECAISSE";
+
   return (
     // Header compact et sûr : hauteur minimale 64px sur téléphone
     // (`--header-h`), logo borné, nom du commerce TRONQUÉ.
@@ -110,15 +118,8 @@ export function Header() {
               height={48}
             />
           </span>
-          <span
-            className="truncate text-foreground"
-            title={profile?.ownerName?.trim() || ownerName || "Patron"}
-          >
-            {/* Nom du PROPRIÉTAIRE (mission header) : shop_profile est la source
-                (remplie à la création du compte), l'échelle des préférences la
-                duplique ensuite. Défaut affiché « Patron » — plus jamais le nom de
-                la boutique ici. */}
-            {profile?.ownerName?.trim() || ownerName?.trim() || "Patron"}
+          <span className="truncate text-foreground" title={displayedName}>
+            {displayedName}
           </span>
         </Link>
         {/* Sous `lg`, la navigation vit dans `BottomNav` — cf. src/components/Nav.tsx. */}
