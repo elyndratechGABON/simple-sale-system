@@ -116,8 +116,10 @@ export const POSProductCard = memo(function POSProductCard({
         )}
       </div>
 
-      {/* INFORMATIONS (droite) : nom, stock, badge variantes, prix cloués au bas. */}
-      <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between">
+      {/* INFORMATIONS (droite) : nom, stock, badge variantes, prix cloués au bas.
+          `h-full p-2` : la colonne étire à la hauteur de la carte (hauteur homogène
+          dans la grille) ; `min-w-0` autorise le truncate des textes longs. */}
+      <div className="ml-2 flex h-full p-2 min-w-0 flex-1 flex-col justify-between">
         <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
           {product.name}
         </p>
@@ -139,7 +141,10 @@ export const POSProductCard = memo(function POSProductCard({
             {variantCount === 1 ? "1 variante" : `${variantCount} variantes`}
           </span>
         )}
-        <span className="mt-auto pt-1 font-bold text-base text-primary tabular-nums whitespace-nowrap">
+        {/* `mt-auto` colle le prix EN BAS même quand le badge variantes s'ajoute ;
+            `truncate max-w-full` : le prix ne touche JAMAIS le bord droit de la
+            carte — la police rétrécit sur le petit écran (`text-sm lg:text-base`). */}
+        <span className="mt-auto max-w-full truncate pt-1 font-bold text-sm lg:text-base text-primary tabular-nums whitespace-nowrap">
           {priceText}
         </span>
       </div>
