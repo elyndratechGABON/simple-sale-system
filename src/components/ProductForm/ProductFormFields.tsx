@@ -92,39 +92,46 @@ export const ProductFormFields: FC<{ form: ProductFormState }> = ({ form }) => {
       {/* Photo et Prix */}
       <PhotoAndPricing form={form} />
 
-      {/* Unité de vente pour les produits */}
-      {productType === "product" && (
-        <div className="space-y-1">
-          <Label className="text-xs font-medium">Unité de vente</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {(
-              [
-                ["piece", "Pièce"],
-                ["kg", "Kg"],
-                ["liter", "Litre"],
-                ["meter", "Mètre"],
-              ] as const
-            ).map(([value, label]) => (
-              <Button
-                key={value}
-                type="button"
-                variant={unit === value ? "default" : "outline"}
-                size="sm"
-                onClick={() => setUnit(value)}
-                className="h-8 px-2.5 rounded-md text-xs"
-              >
-                {label}
-              </Button>
-            ))}
+      {/*.Unité de vente + Catégorie SUR LA MÊME LIGNE (mission formulaire compact):
+          quand le type a une unité, les deux partagent un grid 2 colonnes — chaque
+          enregistrement du formulaire. */}
+      {productType === "product" ? (
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs font-medium">Unité de vente</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["piece", "Pièce"],
+                  ["kg", "Kg"],
+                  ["liter", "Litre"],
+                  ["meter", "Mètre"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant={unit === value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setUnit(value)}
+                  className="h-8 px-2.5 rounded-md text-xs"
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-medium">Catégorie</Label>
+            <CategorySelect value={category} onChange={setCategory} />
           </div>
         </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs font-medium">Catégorie</Label>
+          <CategorySelect value={category} onChange={setCategory} />
+        </div>
       )}
-
-      {/* Catégorie */}
-      <div className="space-y-1">
-        <Label className="text-xs font-medium">Catégorie</Label>
-        <CategorySelect value={category} onChange={setCategory} />
-      </div>
 
       {/* Variantes : repliées par défaut (Collapsible) — le formulaire tient dans le
           viewport ; la section s'ouvre d'elle-même si on édite un produit qui EN A déjà. */}

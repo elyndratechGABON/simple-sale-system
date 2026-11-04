@@ -166,51 +166,43 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
         </p>
       )}
 
-      {/* Stock (produit sans variante) : toggle à droite du titre, stock et seuil
-          côtoyés sur une grille 2 colonnes — l'encart à bord est supprimé. */}
+      {/* Stock (produit sans variante) : le toggle "Stock illimité" vit DROITE du
+          titre "Stock initial" (mission formulaire compact) — un titre à gauche,
+          le toggle à droite, une seule ligne de moins dans le formulaire. */}
       {productType === "product" && variants.length === 0 && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs font-medium">Stock initial</Label>
+            <div className="flex items-center gap-1.5">
+              <Label htmlFor="unlimited" className="cursor-pointer text-xs font-medium">
+                Illimité
+              </Label>
               <Checkbox
                 id="unlimited"
                 checked={unlimited}
                 onCheckedChange={(v) => setUnlimited(Boolean(v))}
               />
-              <Label htmlFor="unlimited" className="cursor-pointer text-xs font-medium">
-                Stock illimité
-              </Label>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div>
-              <Label htmlFor="stock" className="text-xs">
-                Stock initial
-              </Label>
-              <Input
-                id="stock"
-                inputMode="numeric"
-                value={stock}
-                onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
-                placeholder="Ex : 50"
-                disabled={unlimited}
-                className="mt-0.5 h-10 text-sm"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              id="stock"
+              inputMode="numeric"
+              value={stock}
+              onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))}
+              placeholder="Ex : 50"
+              disabled={unlimited}
+              className="h-10 text-sm"
+            />
             {!unlimited && (
-              <div>
-                <Label htmlFor="min-stock" className="text-xs">
-                  Seuil d'alerte (5)
-                </Label>
-                <Input
-                  id="min-stock"
-                  inputMode="numeric"
-                  value={minStock}
-                  onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
-                  placeholder="5"
-                  className="mt-0.5 h-10 text-sm"
-                />
-              </div>
+              <Input
+                id="min-stock"
+                inputMode="numeric"
+                value={minStock}
+                onChange={(e) => setMinStock(e.target.value.replace(/\D/g, ""))}
+                placeholder="Seuil (5)"
+                className="h-10 text-sm"
+              />
             )}
           </div>
         </div>
