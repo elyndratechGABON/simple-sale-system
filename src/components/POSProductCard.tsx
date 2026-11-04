@@ -116,9 +116,10 @@ export const POSProductCard = memo(function POSProductCard({
         )}
       </div>
 
-      {/* INFORMATIONS (droite) : nom, stock, badge variantes, prix cloués au bas. */}
-      <div className="ml-3 flex min-w-0 flex-1 flex-col justify-between">
-        <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
+      {/* INFORMATIONS (droite) : respirant — p-2 + h-full ; le nom coupe sur DEUX
+          lignes (plus élégant que « degr… »), le prix plus petit si besoin. */}
+      <div className="ml-2 flex h-full p-2 min-w-0 flex-1 flex-col justify-between">
+        <p className="line-clamp-2 break-words font-semibold text-foreground text-[13px] leading-tight">
           {product.name}
         </p>
         {/* Le stock IMPRIMÉ vient du montant restant APRÈS ce qui est déjà au panier, pas
@@ -139,7 +140,9 @@ export const POSProductCard = memo(function POSProductCard({
             {variantCount === 1 ? "1 variante" : `${variantCount} variantes`}
           </span>
         )}
-        <span className="mt-auto pt-1 font-bold text-base text-primary tabular-nums whitespace-nowrap">
+        {/* Prix : `text-sm` sur PC standard (`text-base` au-delà) ; `truncate` en
+            dernier filet — avec 4 colonnes il NE coupe qu'au-delà de 99 999 FCFA. */}
+        <span className="mt-auto max-w-full truncate pt-1 font-bold text-sm lg:text-base text-primary tabular-nums whitespace-nowrap">
           {priceText}
         </span>
       </div>
