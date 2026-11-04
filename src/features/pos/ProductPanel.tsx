@@ -1,6 +1,7 @@
-import { Search, Scissors, Package } from "lucide-react";
+import { Search, Scissors, Package, Plus, ChevronUp } from "lucide-react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { CategoryCard, FilterChip } from "@/components/pos";
+import { FilterChip } from "@/components/pos";
 import { POSProductCard } from "@/components/POSProductCard";
 import { VirtualizedGrid } from "@/components/VirtualizedGrid";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,8 @@ export function ProductPanel({
   /** Tap alternatif : le sélecteur de table ajoute au panier de la table, pas à celui du comptoir. */
   onProductSelect?: (product: Product) => void;
 }) {
+  // Rangée catégories dépliée : toutes les puces affichées (le « + » bascule).
+  const [moreOpen, setMoreOpen] = useState(false);
   return (
     <div className="flex min-w-0 flex-col">
       {/* Titre seul sur sa ligne en mobile ; les catégories passent dans leur propre
@@ -47,40 +50,64 @@ export function ProductPanel({
           </div>
         )}
       </div>
-      {/* Recherche : l'input est fluide, la grille se resserre au silence de frappe
-          (debounce 300 ms, recette partagée avec Stocks).
-          La barre est cappée (`max-w-md`) : à ne pas contraindre, elle poussait la grille
-          hors de sa colonne (minmax(0, 1fr) l'élargissait à l'infini). */}
-      <div className="relative mt-3 w-full max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={pos.search}
-          onChange={(e) => pos.setSearch(e.target.value)}
-          placeholder="Rechercher un article…"
-          aria-label="Rechercher un article"
-          className="h-11 rounded-xl pl-9 pr-10 bg-muted/50 focus:ring-2 focus:ring-primary"
-        />
+      {/* Recherche + catégories EN LIGNE (mission PC) : l'input fluide (flex-1,
+          grille resserre au silence de frappe, debounce 300 ms) ; les catégories
+          vivent À SA DROITE en chips qui défilent horizontalement ; le bouton « + »
+          déplie la liste complète quand ça déborde. La colonne dédiée et son
+          bouton de repli ont été supprimés. */}
+      <div className="mt-3 flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={pos.search}
+            onChange={(e) => pos.setSearch(e.target.value)}
+            placeholder="Rechercher un article…"
+            aria-label="Rechercher un article"
+            className="h-11 rounded-xl pl-9 pr-10 bg-muted/50 focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        {!pos.isService && pos.categories.length > 0 && (
+          <>
+            {/* Chips : défilement horizontal (pas de wrap) — la rangée reste UNE
+                ligne, la recherche garde toute sa largeur utile. */}
+            <div className="flex max-w-[42%] shrink-0 items-center gap-1.5 overflow-x-hidden">
+              <FilterChip active={pos.filter === "Tous"} onClick={() => pos.setFilter("Tous")}>
+                Tous
+              </FilterChip>
+              {pos.categories.slice(0, 4).map((c) => (
+                <FilterChip key={c} active={pos.filter === c} onClick={() => pos.setFilter(c)}>
+                  {c}
+                </FilterChip>
+              ))}
+            </div>
+            {/* « + » : déplié, TOUTES les catégories (y compris celles cachées par
+                la troncature de la rangée) s'affichent en wrap sous la recherche. */}
+            <button
+              type="button"
+              onClick={() => setMoreOpen((v) => !v)}
+              aria-expanded={moreOpen}
+              aria-label={
+                moreOpen ? "Masquer toutes les catégories" : "Afficher toutes les catégories"
+              }
+              title={moreOpen ? "Masquer les catégories" : "Voir toutes les catégories"}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border bg-card text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+            >
+              {moreOpen ? <ChevronUp className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            </button>
+          </>
+        )}
       </div>
-      {/* Catégories : grille de cartes sous 1280 px. Au-dessus, elles vivent dans la
-          colonne de gauche (xl:block) — sinon ce sont deux fois les mêmes boutons. */}
-      {!pos.isService && pos.categories.length > 0 && (
-        <section className="mt-4 xl:hidden">
-          <div className="mt-3 grid grid-cols-2 gap-2.5 xs:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 xl:gap-3">
-            <CategoryCard
-              label="Tous"
-              active={pos.filter === "Tous"}
-              onClick={() => pos.setFilter("Tous")}
-            />
-            {pos.categories.map((c) => (
-              <CategoryCard
-                key={c}
-                label={c}
-                active={pos.filter === c}
-                onClick={() => pos.setFilter(c)}
-              />
-            ))}
-          </div>
-        </section>
+      {moreOpen && !pos.isService && pos.categories.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <FilterChip active={pos.filter === "Tous"} onClick={() => pos.setFilter("Tous")}>
+            Tous
+          </FilterChip>
+          {pos.categories.map((c) => (
+            <FilterChip key={c} active={pos.filter === c} onClick={() => pos.setFilter(c)}>
+              {c}
+            </FilterChip>
+          ))}
+        </div>
       )}
       <PopularStrip pos={pos} onProductSelect={onProductSelect} />
       {/* Container Queries (Tailwind v4, mission responsive) : le nombre de colonnes

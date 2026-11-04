@@ -90,7 +90,7 @@ export const POSProductCard = memo(function POSProductCard({
       aria-keyshortcuts="Shift+Enter"
       className={cn(
         "relative flex flex-row overflow-hidden rounded-xl border border-border/50",
-        "min-h-[84px] flex-row p-3 shadow-sm transition-colors cursor-pointer",
+        "min-h-[84px] shadow-sm transition-colors cursor-pointer",
         "bg-card hover:bg-muted/50",
         out
           ? "opacity-60 cursor-not-allowed"
@@ -98,11 +98,11 @@ export const POSProductCard = memo(function POSProductCard({
         className,
       )}
     >
-      {/* IMAGE : cadre FIXE 56 × 56 (`h-14 w-14 shrink-0 self-center`) — la taille
-          de l'image ne dépend plus de la largeur ni de la hauteur de la carte :
-          TOUTES les cartes ont la même silhouette, quel que soit le badge, le nom
-          ou la place dans la grille. `object-cover` remplit le cadre sans déformer. */}
-      <div className="h-14 w-14 shrink-0 self-center overflow-hidden rounded-lg bg-muted/30">
+      {/* IMAGE (gauche) : pleine hauteur de la carte, collage au bord gauche
+          (coins arrondis à gauche via l'overflow de la carte) — comme le mock :
+          `object-cover` remplit le cadre sans déformer. La hauteur étant fixée
+          par la colonne d'infos (min-h 84px), l'image est identique partout. */}
+      <div className="w-[35%] shrink-0 self-stretch overflow-hidden bg-muted/30">
         {visuel ? (
           <img
             src={visuel}
@@ -112,7 +112,7 @@ export const POSProductCard = memo(function POSProductCard({
             className="h-full w-full object-cover object-center"
           />
         ) : (
-          /* Même cadre qu'une image : la carte sans photo garde la même silhouette. */
+          /* Même cadre qu'une image : la carte sans photo garde sa silhouette. */
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
             <Package className="h-6 w-6" />
           </div>
@@ -121,8 +121,8 @@ export const POSProductCard = memo(function POSProductCard({
 
       {/* INFORMATIONS (droite) : nom UNE ligne (truncate), stock, badge variantes,
           prix cloués bas — chaque bloc a une hauteur constante d'une carte à
-          l'autre, d'où des rangées de la même taille partout. */}
-      <div className="ml-3 flex h-full p-2 min-w-0 flex-1 flex-col justify-between">
+          l'autre ; le padding vit ICI (l'image est full-bleed à gauche). */}
+      <div className="py-2 pl-3 pr-3 flex min-w-0 flex-1 flex-col justify-between">
         <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
           {product.name}
         </p>
