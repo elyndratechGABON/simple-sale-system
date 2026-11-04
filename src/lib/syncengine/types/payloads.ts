@@ -169,4 +169,15 @@ export interface TableOpenedPayload {
   label: string;
   /** La fiche de l'addition ouverte, telle que l'émetteur l'a écrite. */
   sale: import("@/lib/db").Sale;
+  /** QUI a ouvert : « Propriétaire », ou le nom d'employé déclaré. */
+  employee_name?: string;
+}
+
+/** Une table OUVERTE a changé d'état (tournée ajoutée, tournée encaissée) : le pair
+ *  met son total à jour SANS recevoir les lignes (elles ne vivent que chez
+ *  l'émetteur) — le plan de salle de tous les écrans montre le montant en cours. */
+export interface TableUpdatedPayload {
+  label: string;
+  sale: import("@/lib/db").Sale;
+  employee_name?: string;
 }

@@ -1,6 +1,6 @@
 import type { PosDatabase } from "../../db";
 import type { Sale } from "@/lib/db";
-import type { SyncOp, TableOpenedPayload } from "../types";
+import type { SyncOp, TableOpenedPayload, TableUpdatedPayload } from "../types";
 import { touch } from "./helpers";
 
 /**
@@ -24,11 +24,51 @@ export async function applyTableOpened(db: PosDatabase, op: SyncOp): Promise<voi
   const pl = op.payload as TableOpenedPayload;
   if (!pl?.label || !pl?.sale?.id) return;
   const existing = await db.sales.get(pl.sale.id);
-  if (existing && !existing.deleted_at) return; // fiche vivante : rien à faire
+  if (existing && !existing.deleted_at) {
+    // Fiche vivante : le total cumulé chez le pair n'est pas écrasé, mais QUI
+    // sert la table est rafraîchi (l'op peut venir d'un second écran de l'équipe).
+    if (pl.employee_name && pl.employee_name !== existing.employee_name) {
+      await db.sales.put({ ...existing, employee_name: pl.employee_name, ...touch() });
+    }
+    return;
+  }
   const sale: Sale = {
     ...pl.sale,
     status: "open",
+    ...(pl.employee_name ? { employee_name: pl.employee_name } : {}),
     ...touch(),
   };
   await db.sales.put(sale);
+}
+
+/**
+ * Miroir P2P d'un ÉTAT de table : tournée ajoutée ou encaissée. Les lignes ne
+ * vivent que chez l'émetteur — le pair ne reçoit que le MONTANT en cours et
+ * QUI le sert : son plan de salle affiche l'addition à jour en temps réel.
+ */
+export async function applyTableUpdated(db: PosDatabase, op: SyncOp): Promise<void> {
+  const pl = op.payload as TableUpdatedPayload;
+  if (!pl?.sale?.id) return;
+  const existing = await db.sales.get(pl.sale.id);
+  if (!existing || existing.deleted_at) {
+    // Table encore inconnue ici (l'op `table.opened` peut être plus loin
+    // dans la file) : créer la fiche ouverte directement à l'état reçu.
+    if (existing?.deleted_at) return;
+    const sale: Sale = {
+      ...pl.sale,
+      status: "open",
+      ...(pl.employee_name ? { employee_name: pl.employee_name } : {}),
+      ...touch(),
+    };
+    await db.sales.put(sale);
+    return;
+  }
+  if (existing.status !== "open") return; // déjà réglée : ne pas régresser
+  const updated: Sale = {
+    ...existing,
+    total: pl.sale.total ?? existing.total,
+    ...(pl.employee_name ? { employee_name: pl.employee_name } : {}),
+    ...touch(),
+  };
+  await db.sales.put(updated);
 }

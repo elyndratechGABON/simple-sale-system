@@ -23,6 +23,7 @@ export type OpType =
   | "stock.reserve"
   | "stock.release"
   | "table.opened"
+  | "table.updated"
   | "webrtc.offer"
   | "webrtc.answer";
 

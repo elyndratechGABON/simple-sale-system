@@ -49,8 +49,18 @@ export async function addRound(saleId: string, lines: CartLine[]): Promise<Sale>
       // a été écrite deux fois.
       const items = alive(await db.sale_items.where("sale_id").equals(sale.id).toArray());
       const total = items.reduce((s, i) => s + i.price_at_sale * i.quantity, 0);
-      const updated: Sale = { ...sale, total, ...touch() };
+      const identity = getIdentity();
+      const employee_name =
+        identity.role === "owner" ? "Propriétaire" : identity.employeeName?.trim() || "Employé";
+      const updated: Sale = { ...sale, total, employee_name, ...touch() };
       await db.sales.put(updated);
+      // `table.updated` : les AUTRES écrans mettent leur plan de salle à jour
+      // (montant en cours + Qui que ce serve) sans recevoir les lignes.
+      await emitOp(db, identity, {
+        type: "table.updated",
+        entity_id: updated.id,
+        payload: { label: updated.table ?? "", sale: updated, employee_name },
+      });
       return updated;
     },
   );
@@ -176,13 +186,23 @@ export async function payRound(
     // Le total de la table se recalcule sur ce qui n'a pas encore été encaissé : une
     // tournée payée sort de l'addition, la suite du service repart de ce qui reste dû.
     const remaining = alive(await db.sale_items.where("sale_id").equals(saleId).toArray());
-    await db.sales.put({
+    const employee_name =
+      identity.role === "owner" ? "Propriétaire" : identity.employeeName?.trim() || "Employé";
+    const afterRound: Sale = {
       ...sale,
       total: remaining.reduce((s, i) => s + i.price_at_sale * i.quantity, 0),
       // La table a maintenant déjà encaissé au moins une tournée : le plan de salle la
       // distingue d'une table servie mais rien payée.
       rounds_paid: (sale.rounds_paid ?? 0) + 1,
+      employee_name,
       ...touch(),
+    };
+    await db.sales.put(afterRound);
+    // Montant à jour en temps réel chez les autres écrans (table.updated).
+    await emitOp(db, identity, {
+      type: "table.updated",
+      entity_id: afterRound.id,
+      payload: { label: afterRound.table ?? "", sale: afterRound, employee_name },
     });
 
     return settled;

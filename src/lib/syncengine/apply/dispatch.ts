@@ -13,7 +13,7 @@ import {
 } from "./products";
 import { applySaleCancelled, applySaleCreated } from "./sales";
 import { applyStockReleaseOp, applyStockReserveOp } from "../reservations";
-import { applyTableOpened } from "./tables-p2p";
+import { applyTableOpened, applyTableUpdated } from "./tables-p2p";
 
 export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
   switch (op.type) {
@@ -167,6 +167,11 @@ export async function applyOp(db: PosDatabase, op: SyncOp): Promise<void> {
       // la fiche ouverte vit chez l'émetteur, le récepteur ne fait que marquer un
       // réservation-ish dans son plan local (cf. applyTableOpened).
       await applyTableOpened(db, op);
+      break;
+    case "table.updated":
+      // Un état de table a avancé (tournée ajoutée / encaissée) : le montant en cours
+      // et QUI le sert se mettent à jour chez les pairs sans recevoir les lignes.
+      await applyTableUpdated(db, op);
       break;
   }
 }

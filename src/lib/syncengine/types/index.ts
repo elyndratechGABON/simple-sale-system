@@ -36,5 +36,6 @@ export type {
   SaleCreatedPayload,
   StockAdjustedPayload,
   TableOpenedPayload,
+  TableUpdatedPayload,
 } from "./payloads";
 export type { PairedDevice, ShareMode } from "./peers";

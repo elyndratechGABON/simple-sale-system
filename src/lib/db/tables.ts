@@ -24,6 +24,11 @@ export async function listOpenTables(): Promise<Sale[]> {
 
 export async function openTable(label: string, clientName?: string): Promise<Sale> {
   const db = getDB();
+  const identity = getIdentity();
+  // QUI ouvre : « Propriétaire » pour le patron, sinon le nom d'employé déclaré —
+  // le plan de salle des AUTRES écrans l'affiche (res: TableOpenedPayload.payload).
+  const employee_name =
+    identity.role === "owner" ? "Propriétaire" : identity.employeeName?.trim() || "Employé";
   // DÉDUPLICATION : réutiliser la table existante si elle est déjà ouverte
   const existing = await db.sales
     .where("table")
@@ -31,12 +36,12 @@ export async function openTable(label: string, clientName?: string): Promise<Sal
     .and((s) => s.status === "open" && !s.deleted_at)
     .first();
   if (existing) {
-    // Table déjà ouverte : rafraîchir son op P2P si besoin, mais on la rend
-    // disponible immédiatement sans en créer une nouvelle.
-    await emitOp(db, getIdentity(), {
+    // Table déjà ouverte : rafraîchir son op P2P (avec QUI l'a prise) sans en
+    // créer une nouvelle — le total vivant n'est pas réécrit.
+    await emitOp(db, identity, {
       type: "table.opened",
       entity_id: existing.id,
-      payload: { label, sale: existing },
+      payload: { label, sale: existing, employee_name },
     });
     return existing;
   }
@@ -57,6 +62,7 @@ export async function openTable(label: string, clientName?: string): Promise<Sal
     customers_count: 1,
     table: label,
     status: "open",
+    employee_name,
     ...(clientName ? { client_name: clientName } : {}),
     ...touch(),
   };
@@ -65,8 +71,8 @@ export async function openTable(label: string, clientName?: string): Promise<Sal
   // pairs (deux serveurs viseraient la même table sans le savoir).
   await db.transaction("rw", db.sales, db.sync_ops, db.settings, async () => {
     await db.sales.put(sale);
-    const payload: TableOpenedPayload = { label, sale };
-    await emitOp(db, getIdentity(), {
+    const payload: TableOpenedPayload = { label, sale, employee_name };
+    await emitOp(db, identity, {
       type: "table.opened",
       entity_id: sale.id,
       payload,

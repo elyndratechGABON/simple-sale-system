@@ -168,11 +168,20 @@ export function TableCard({
                 )}
                 <span
                   className={cn(
-                    "text-xs leading-tight text-orange-600",
+                    "truncate text-xs leading-tight text-orange-600",
                     avatars.length === 0 && "ml-auto",
                   )}
+                  title={table.employee_name ?? undefined}
                 >
-                  {table.opened_at ? formatTime(table.opened_at) : "occupée"}
+                  {/* QUI sert la table : voyagé dans `table.opened` /
+                      `table.updated` — les autres écrans savent qui a l'addition. */}
+                  {table.employee_name ? `${table.employee_name}` : ""}
+                  {table.employee_name && table.opened_at ? " · " : ""}
+                  {table.opened_at
+                    ? formatTime(table.opened_at)
+                    : !table.employee_name
+                      ? "occupée"
+                      : ""}
                 </span>
               </span>
             )}
