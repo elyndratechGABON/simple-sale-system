@@ -50,6 +50,13 @@ export const POSProductCard = memo(function POSProductCard({
     onAdd(product);
   };
 
+  // Prix affiché avec son libellé : le texte complet sert AUSSI au choix de taille
+  // (« Dès 8 999 FCFA » plus long qu'un simple prix → réduction en `text-sm`).
+  const priceText =
+    (product.variants?.length ?? 0) > 0
+      ? `Dès ${formatFCFA(product.price)}`
+      : formatFCFA(product.price);
+
   return (
     <div
       className={cn(
@@ -124,15 +131,18 @@ export const POSProductCard = memo(function POSProductCard({
         </div>
       </button>
 
-      {/* Prix + « + » dans UNE RANGÉE DE FLUX (mission cartes produits) : le prix ne
-          descend JAMAIS à la ligne (`whitespace-nowrap` — « FCFA » ne se coupe plus),
-          la pastille "+" reste à droite. Un produit à VARIANTES affiche « Dès X FCFA » :
-          le prix réel dépend de la taille/couleur choisie. */}
-      <div className="flex w-full items-center justify-between gap-2 px-2.5 pb-2.5">
-        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-base font-bold leading-tight text-primary tabular-nums">
-          {(product.variants?.length ?? 0) > 0
-            ? `Dès ${formatFCFA(product.price)}`
-            : formatFCFA(product.price)}
+      {/* BANNIÈRE DU BAS (mission fin des prix coupés) : un bloc `mt-auto` à fond
+          subtil SUITE à la zone de texte bouton — le "+" ne peut plus chevaucher
+          le prix (« Dès 8 999 FCFA » tronqué : la carte réduit en `text-sm`
+          automatiquement, et « FCFA » ne descend jamais à la ligne). */}
+      <div className="mt-auto flex w-full items-center justify-between gap-2 rounded-b-xl bg-muted/30 px-2.5 py-2">
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate whitespace-nowrap font-bold leading-tight text-primary tabular-nums",
+            priceText.length > 14 ? "text-sm" : "text-base",
+          )}
+        >
+          {priceText}
         </span>
         <button
           type="button"
