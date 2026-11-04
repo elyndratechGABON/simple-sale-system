@@ -93,12 +93,12 @@ export function ProductPanel({
           items={pos.filtered}
           itemKey={(p) => p.id}
           rowClass={cn(
-            // MOBILE = 2 colonnes FIXES (@lg = conteneur ≥ 512 px) : à 360/390/430 px
-            // la grille reste 2×N, c'est l'intérieur de la carte qui se compacte.
-            "grid grid-cols-2 gap-x-2.5 xs:gap-x-3 @lg:grid-cols-3 @2xl:grid-cols-4",
-            !pos.hasTables && "@lg:grid-cols-4",
+            // Respiration (mission responsive desktop) : 2 mobile, 3 tablette,
+            // 4 desktop standard, 5 très grand écran — gap plus large sur PC.
+            "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5",
+            "lg:gap-4",
           )}
-          gapYClass="pb-2.5 xs:pb-3"
+          gapYClass="pb-3 lg:pb-4"
           renderItem={(p) => {
             const inCart = Object.entries(pos.cart)
               .filter(([k]) => k === p.id || k.startsWith(`${p.id}::`))
