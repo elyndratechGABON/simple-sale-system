@@ -180,7 +180,7 @@ export async function downloadFinancialSnapshotPdf(snapshot: FinancialSnapshot):
 </style></head>
 <body>
   <header>
-    ${logo ? `<img src="${logo}" alt="Logo" />` : ""}
+    ${logo && logo.startsWith("data:image/") ? `<img src="${esc(logo)}" alt="Logo" />` : ""}
     <div>
       <h1>${esc(shopName)}</h1>
       <p class="lead">État financier du ${label}</p>
