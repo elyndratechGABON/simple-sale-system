@@ -88,6 +88,9 @@ export interface HandshakeResult {
     | "fingerprint_conflict_auto_reset"
     /** Auto-réinitialisation après limite d'appareils — l'appelant retente le handshake. */
     | "device_limit_auto_reset"
+    /** La boutique a été supprimée par l'administrateur : l'écran se purge et repart
+     *  à l'accueil (rechargement complet déclenché par le gestionnaire du refus). */
+    | "shop_deleted"
     /** Nombre max de tentatives de retry atteint. */
     | "max_retries"
     /** Décision d'Elyndra : le compte est suspendu. */

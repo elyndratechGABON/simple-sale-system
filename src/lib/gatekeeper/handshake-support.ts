@@ -21,6 +21,20 @@ export async function handleHandshakeRefusal(res: Response): Promise<HandshakeRe
     if (data?.code === "account_password") {
       return { ok: false, sync_allowed: false, status: "unknown", reason: "account_password" };
     }
+    if (data?.code === "shop_deleted") {
+      // ÉJECTION (mission suppression dashboard) : la boutique a été supprimée par
+      // l'administrateur — l'écran se PURGE SEUL (données, identité, verrous) et
+      // repart à l'accueil, au lieu de ressusciter ou de tourner sur des données mortes.
+      const { purgeAllData } = await import("@/lib/db");
+      await purgeAllData();
+      await resetDeviceIdentity();
+      const { resetGatekeeper } = await import("./index");
+      resetGatekeeper();
+      const { savePreferences } = await import("@/lib/settings");
+      savePreferences({ onboarded: false });
+      if (typeof window !== "undefined") window.location.reload();
+      return { ok: false, sync_allowed: false, status: "unknown", reason: "shop_deleted" };
+    }
     if (data?.code === "keyword_invalid") {
       // Mot clé inconnu : blocage dur immédiat (cf. SuspendedScreen) tant que les
       // informations ne sont pas corrigées — c'est le pendant du 403 mot de passe.
