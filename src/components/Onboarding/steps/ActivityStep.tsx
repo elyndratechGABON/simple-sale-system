@@ -1,5 +1,5 @@
 import { Store } from "lucide-react";
-import { CLUSTER_MAP, WORKFLOW_DESCRIPTIONS, type ClusterId } from "@/lib/settings";
+import { CLUSTER_MAP, type ClusterId } from "@/lib/settings";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,9 @@ export function ActivityStep({ w }: { w: SetupWizardApi }) {
       title="Quel type d'activité gérez-vous ?"
       description="Choisissez votre secteur. L'application s'adaptera automatiquement."
     >
-      {/* Les 4 clusters actifs en grille 2×2 parfaitement symétrique. */}
+      {/* Les 4 clusters actifs en grille 2×2 parfaitement symétrique — la sélection
+          visuelle suffit : le grand encadré descriptif a été retiré (mission
+          onboarding), l'utilisateur avance au bouton Suivant. */}
       <div className="grid grid-cols-2 gap-2">
         {["restaurant", "bar", "service", "personnalise"].map((id) => {
           const c = CLUSTER_MAP[id as ClusterId];
@@ -46,26 +48,6 @@ export function ActivityStep({ w }: { w: SetupWizardApi }) {
           );
         })}
       </div>
-      {w.selectedCluster && w.clusterConfig && (
-        /* Carte de confirmation PERSONNALISÉE : le libellé, la description et les
-           étapes du workflow sont ceux du cluster choisi — l'utilisateur voit dès ici
-           ce que l'application fera pour lui. */
-        <div className="mt-2 space-y-2 rounded-xl border bg-accent/40 p-3 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground">{w.clusterConfig.label}</p>
-          <p>{w.clusterConfig.description}</p>
-          <p className="flex flex-wrap gap-1">
-            {(WORKFLOW_DESCRIPTIONS[w.clusterConfig.workflowType]?.steps ?? []).map((s, i) => (
-              <span
-                key={s}
-                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-              >
-                {i + 1}. {s}
-              </span>
-            ))}
-          </p>
-        </div>
-      )}
-
       {/* Cluster Personnalisé : domaine libre + mode de stock */}
       {w.selectedCluster === "personnalise" && (
         <div className="space-y-3 rounded-xl border bg-accent/40 p-3 mt-2">
