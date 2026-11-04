@@ -126,24 +126,37 @@ export const POSProductCard = memo(function POSProductCard({
         <p className="truncate font-semibold text-foreground text-[13px] leading-tight">
           {product.name}
         </p>
-        {/* Le stock IMPRIMÉ vient du montant restant APRÈS ce qui est déjà au panier, pas
-            du stock brut : afficher 8 alors qu'il ne reste que 3 après 5 au panier
-            ferait vendre un article qu'on n'a plus. */}
+        {/* Stock : UNE ligne non repliable — le repli « Stock : » / « 78 » de
+            l'ancienne configuration gonflait les cartes étroites de manière
+            INégale. */}
         <p
           className={cn(
-            "mt-0.5 text-xs text-muted-foreground",
+            "mt-0.5 whitespace-nowrap text-xs text-muted-foreground",
             out && "font-medium text-destructive",
             low && "font-medium text-amber-600 dark:text-amber-400",
           )}
         >
           {out ? "Rupture" : unlimited ? "Illimité" : `Stock : ${remaining}`}
         </p>
-        {variantCount > 0 && (
-          <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-            <Tag className="h-3 w-3" />
-            {variantCount === 1 ? "1 variante" : `${variantCount} variantes`}
-          </span>
-        )}
+        {/* Badge variantes : rendu pour TOUTES les cartes — sans variante, il est
+            `invisible` (pose tiplex occupée, hauteur constante). C'est LUI la
+            dernière cause de hauteurs inégales : les fiches sans badge étaient
+            plus courtes que celles avec badge. */}
+        <span
+          className={cn(
+            "mt-1 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium whitespace-nowrap",
+            variantCount > 0 ? "bg-primary/10 text-primary" : "invisible",
+          )}
+        >
+          {variantCount > 0 ? (
+            <>
+              <Tag className="h-3 w-3" />
+              {variantCount === 1 ? "1 variante" : `${variantCount} variantes`}
+            </>
+          ) : (
+            "0 variantes"
+          )}
+        </span>
         {/* Prix : `text-sm` sur PC standard (`text-base` au-delà) ; `truncate` en
             dernier filet — avec 4 colonnes il NE coupe qu'au-delà de 99 999 FCFA. */}
         <span className="mt-auto max-w-full truncate pt-1 font-bold text-sm lg:text-base text-primary tabular-nums whitespace-nowrap">
