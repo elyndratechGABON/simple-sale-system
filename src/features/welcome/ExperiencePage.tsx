@@ -119,6 +119,8 @@ export function ExperiencePage({
                 src={qrDataUrl}
                 alt="QR profil expérience"
                 className="mx-auto h-44 w-44 rounded-lg border"
+                decoding="async"
+                loading="lazy"
               />
               <p className="text-xs text-muted-foreground">
                 Présentez ce QR à un propriétaire pour prouver votre expérience.

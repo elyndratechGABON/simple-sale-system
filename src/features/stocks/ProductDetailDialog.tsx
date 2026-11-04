@@ -43,6 +43,8 @@ export function ProductDetailDialog({
                     src={product.photo}
                     alt=""
                     className="h-12 w-12 rounded-lg border object-cover"
+                    decoding="async"
+                    loading="lazy"
                   />
                 ) : (
                   <span className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted/40">

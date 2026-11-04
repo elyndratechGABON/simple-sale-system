@@ -16,7 +16,15 @@ export function AboutCard() {
       </CardHeader>
       <CardContent className="space-y-3 text-sm text-muted-foreground">
         <div className="flex items-center gap-3">
-          <img src="/icon-192.png" alt="ECAISSE" className="h-10 w-10" width={40} height={40} />
+          <img
+            src="/icon-192.png"
+            alt="ECAISSE"
+            className="h-10 w-10"
+            width={40}
+            height={40}
+            decoding="async"
+            loading="lazy"
+          />
           <div>
             <p className="font-semibold text-foreground">ELYNDRA CAISSE</p>
             <p>La caisse qui marche sans réseau.</p>

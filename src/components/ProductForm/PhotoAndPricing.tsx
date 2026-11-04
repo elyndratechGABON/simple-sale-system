@@ -8,7 +8,7 @@ import type { ProductFormState } from "./useProductForm";
 
 /**
  * Renvoie l'URL de la photo à afficher. La photo est un dataURL string —
- * cible directe `<img src>`, aucun object URL nécessaire.
+ * cible directe `<img src decoding="async" loading="lazy">`, aucun object URL nécessaire.
  */
 function photoUrl(photo: string | undefined): string {
   return photo || "";
@@ -64,6 +64,8 @@ export function PhotoAndPricing({ form }: { form: ProductFormState }) {
                   className="h-14 w-14 rounded-lg object-cover"
                   width={56}
                   height={56}
+                  decoding="async"
+                  loading="lazy"
                 />
               </div>
               <Button

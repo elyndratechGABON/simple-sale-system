@@ -81,6 +81,7 @@ export function ProductCard({
               alt=""
               loading="lazy"
               className="h-full w-full object-cover object-center"
+              decoding="async"
             />
           ) : (
             /* Même hauteur exactement qu'une image : la grille ne se décale pas. */

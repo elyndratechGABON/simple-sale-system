@@ -19,6 +19,8 @@ export function PlanChooser({ open, onOpenChange, onSelect }: PlanChooserProps) 
             width={1312}
             height={1199}
             className="h-24 w-auto mx-auto rounded-lg"
+            decoding="async"
+            loading="lazy"
           />
           <DialogTitle className="text-2xl">Choisissez votre abonnement</DialogTitle>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">

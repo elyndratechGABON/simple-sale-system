@@ -11,6 +11,8 @@ export function Footer() {
             className="h-12 w-12 object-contain"
             width={48}
             height={48}
+            decoding="async"
+            loading="lazy"
           />
           <div>
             <p className="font-bold">ELYNDRA CAISSE</p>

@@ -46,6 +46,7 @@ export function PopularStrip({
                 alt=""
                 className="h-8 w-8 rounded-lg object-cover"
                 loading="lazy"
+                decoding="async"
               />
             ) : null}
             <span className="font-medium whitespace-nowrap">{p.name}</span>

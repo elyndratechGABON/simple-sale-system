@@ -68,6 +68,8 @@ export function QRBlock({
           src={qrDataUrl}
           alt="QR d'appairage du compte marchand"
           className="aspect-square w-full max-w-72 rounded-lg object-contain"
+          decoding="async"
+          loading="lazy"
         />
       ) : (
         <div className="flex aspect-square w-full max-w-72 items-center justify-center rounded-lg border border-dashed">

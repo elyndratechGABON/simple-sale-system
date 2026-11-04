@@ -66,6 +66,7 @@ export function Hero() {
               alt="ELYNDRA CAISSE — gérez votre boutique simplement"
               className="w-full select-none object-contain"
               draggable={false}
+              decoding="async"
             />
           </div>
           <MockSaleToast />

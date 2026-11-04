@@ -48,6 +48,8 @@ export function VariantPickerDialog({ pos }: { pos: PosController }) {
                       src={v.photo ?? product.photo}
                       alt=""
                       className="h-11 w-11 shrink-0 rounded-lg border bg-muted/30 object-cover"
+                      decoding="async"
+                      loading="lazy"
                     />
                   ) : null}
                   <span className="flex min-w-0 flex-1 flex-col">

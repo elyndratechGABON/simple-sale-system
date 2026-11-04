@@ -47,6 +47,7 @@ export function WelcomePage() {
               width={560}
               height={582}
               className="w-40 h-auto rounded-xl sm:w-48"
+              decoding="async"
             />
 
             <div className="mt-5 space-y-2">

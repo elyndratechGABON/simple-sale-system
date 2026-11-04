@@ -62,6 +62,7 @@ export function StockPicker({
                     alt=""
                     className="h-9 w-9 shrink-0 rounded-md border object-cover"
                     loading="lazy"
+                    decoding="async"
                   />
                 ) : null}
                 <div className="min-w-0">

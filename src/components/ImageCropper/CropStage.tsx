@@ -46,6 +46,8 @@ export function CropStage({
             width: imgW,
             height: imgH,
           }}
+          decoding="async"
+          loading="lazy"
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">

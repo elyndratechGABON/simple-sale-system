@@ -116,6 +116,7 @@ export function Header() {
               className="h-full w-full object-contain"
               width={48}
               height={48}
+              decoding="async"
             />
           </span>
           <span className="truncate text-foreground" title={displayedName}>
@@ -196,7 +197,12 @@ export function Header() {
               className="ml-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 sm:h-9 sm:w-9"
             >
               {ownerPhoto ? (
-                <img src={ownerPhoto} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={ownerPhoto}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  decoding="async"
+                />
               ) : (
                 initials(ownerName || workspaceName)
               )}

@@ -17,6 +17,7 @@ export function LandingHeader() {
             className="h-14 w-14 object-contain"
             width={56}
             height={56}
+            decoding="async"
           />
           <span>
             <span className="block text-base font-bold leading-tight">ELYNDRA CAISSE</span>

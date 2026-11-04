@@ -49,7 +49,13 @@ export function VariantEditor({ form }: { form: ProductFormState }) {
               aria-label={`Photo de la variante ${v.name || "sans nom"}`}
             >
               {v.photo ? (
-                <img src={v.photo} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={v.photo}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  decoding="async"
+                  loading="lazy"
+                />
               ) : (
                 <ImagePlus className="h-5 w-5 text-muted-foreground" />
               )}

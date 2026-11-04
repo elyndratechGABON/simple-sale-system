@@ -104,6 +104,7 @@ export const POSProductCard = memo(function POSProductCard({
               // (aspect-square + overflow-hidden) : la reconnaissance de l'article passe
               // par la largeur de l'image, pas par ses marges.
               className="h-full w-full object-cover object-center"
+              decoding="async"
             />
           </div>
         ) : (

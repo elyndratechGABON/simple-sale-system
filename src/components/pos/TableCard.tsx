@@ -150,6 +150,7 @@ export function TableCard({
                             alt=""
                             loading="lazy"
                             className="h-full w-full object-cover"
+                            decoding="async"
                           />
                         ) : (
                           <span className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">

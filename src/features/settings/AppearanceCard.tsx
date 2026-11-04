@@ -150,6 +150,8 @@ export function AppearanceCard({ showLogo = true }: { showLogo?: boolean }) {
                 className="h-full w-full object-cover"
                 width={48}
                 height={48}
+                decoding="async"
+                loading="lazy"
               />
             ) : (
               <UserRound className="h-5 w-5" />
@@ -196,6 +198,8 @@ export function AppearanceCard({ showLogo = true }: { showLogo?: boolean }) {
                   className="h-full w-full object-contain"
                   width={64}
                   height={64}
+                  decoding="async"
+                  loading="lazy"
                 />
               ) : (
                 <img
@@ -204,6 +208,8 @@ export function AppearanceCard({ showLogo = true }: { showLogo?: boolean }) {
                   className="h-full w-full object-contain"
                   width={64}
                   height={64}
+                  decoding="async"
+                  loading="lazy"
                 />
               )}
             </span>
