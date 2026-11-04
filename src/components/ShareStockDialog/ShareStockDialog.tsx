@@ -50,7 +50,11 @@ export function ShareStockDialog({ open, onOpenChange, peer, onShared }: ShareSt
     queryKey: ["share_stock_products"],
     queryFn: listProducts,
     enabled: open,
-    staleTime: 15_000,
+    // refetchOnMount 'always' : un service (ou produit) créé depuis la DERNIÈRE
+    // ouverture arrive dans la liste immédiatement — la liste est le choix du
+    // transfert, pas un instantané de 15 s.
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 
   // Ouverture : on repart de la décision EN COURS pour cet écran, jamais d'un défaut.

@@ -64,7 +64,17 @@ export function StockSelectionList({
               >
                 {actif && <Check className="h-3 w-3" />}
               </span>
-              <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              <span className="min-w-0 flex-1 truncate">
+                {p.type === "service" && (
+                  // Marqueur visuel "Prestation" : un service avait l'air invisible
+                  // dans la liste (il l'affichait comme la catégorie badge un count
+                  // ∞ discret). Le patron le voit comme un élement transférable.
+                  <span className="mr-1.5 inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                    Prestation
+                  </span>
+                )}
+                {p.name}
+              </span>
               <Badge variant="secondary" className="shrink-0 text-[10px]">
                 {p.category}
               </Badge>
